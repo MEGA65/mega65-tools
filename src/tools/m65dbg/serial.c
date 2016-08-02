@@ -7,11 +7,13 @@
 #include <termios.h>
 #include <unistd.h>
 #include <stdio.h>
+#include "serial.h"
 
 #define error_message printf
 
-int
-set_interface_attribs (int fd, int speed, int parity)
+int fd;
+
+int set_interface_attribs (int fd, int speed, int parity)
 {
         struct termios tty;
         memset (&tty, 0, sizeof tty);
@@ -51,8 +53,7 @@ set_interface_attribs (int fd, int speed, int parity)
         return 0;
 }
 
-void
-set_blocking (int fd, int should_block)
+void set_blocking (int fd, int should_block)
 {
         struct termios tty;
         memset (&tty, 0, sizeof tty);
@@ -62,36 +63,112 @@ set_blocking (int fd, int should_block)
                 return;
         }
 
-        tty.c_cc[VMIN]  = should_block ? 1 : 0;
+        tty.c_cc[VMIN]  = should_block ? 2 : 0;
         tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
         if (tcsetattr (fd, TCSANOW, &tty) != 0)
                 error_message ("error %d setting term attributes", errno);
 }
 
-
-int main(int argc, char** argv)
+/**
+ * opens the desired serial port at the required 230400 bps
+ *
+ * portname = the desired "/dev/ttyS*" device portname to use
+ */
+bool serialOpen(char* portname)
 {
-  char *portname = "/dev/ttyS4";
-
-  int fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
+  fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
   if (fd < 0)
   {
           error_message ("error %d opening %s: %s", errno, portname, strerror (errno));
-          return -1;
+          return false;
   }
   
   set_interface_attribs (fd, B230400, 0);  // set speed to 230,400 bps, 8n1 (no parity)
   set_blocking (fd, 0);                // set no blocking
   
-  write (fd, "hello!\n", 7);           // send 7 character greeting
-  
-  usleep ((7 + 25) * 200);             // sleep enough to transmit the 7 plus
-                                       // receive 25:  approx 100 uS per char transmit
-  char buf [100];
-  int n = read (fd, buf, sizeof buf);  // read up to 100 characters if ready to read
+  return true;
+}
 
-  printf(buf);
 
-  return 0;
+/**
+ * closes the opened serial port
+ */
+bool serialClose(void)
+{
+  if (fd >= 0)
+  {
+    close(fd);
+    return true;
+  }
+
+  return false;
+}
+
+
+/**
+ * writes a string to the serial port
+ */
+void serialWrite(char* string)
+{ 
+  int i = strlen(string);
+  // do we need to add a carriage return to the end?
+  if (string[i-1] != '\n')
+  {
+    strcat(string, "\n");
+    i++;
+  }
+
+  write (fd, string, i);           // send string
+}
+
+
+/**
+ * reads serial data and feeds it into the provided buffer. The routine will read up
+ * until the next '.' prompt. It should also crop out the first line, which is just
+ * and echo of the command.
+ *
+ * returns:
+ *   true = read till the next '.' prompt.
+ *   false = could not read till next '.' prompt (eg, buffer was filled)
+ */
+bool serialRead(char* buf, int bufsize)
+{
+  char* ptr = buf;
+  char* secondline = NULL;
+  bool foundLF = false;
+
+  while (ptr - buf < bufsize)
+  {
+    int n = read (fd, ptr, bufsize);  // read up to 'bufsize' characters if ready to read
+
+    if (n == -1)
+      return false;
+
+    // check for "." prompt
+    for (int k = 0; k < n; k++)
+    {
+      if ( *(ptr+k) == '\n' )
+      {
+        foundLF = true;
+	if (!secondline)
+	  secondline = ptr+k+1;
+      }
+      else if (foundLF && *(ptr+k) == '.')
+      {
+        *(ptr+k) = '\0';
+
+        int len = strlen(secondline) + 1;
+        for (int z = 0; z < len; z++)
+	  *(buf+z) = *(secondline+z);
+        return true;
+      }
+      else
+        foundLF = false;
+    }
+
+    ptr += n;
+  }
+
+  return false;
 }
