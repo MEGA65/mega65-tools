@@ -3,7 +3,7 @@
 
 CC=gcc
 CFLAGS=-c -Wall -g
-LDFLAGS=
+LDFLAGS=-L/usr/bin -lreadline7
 SOURCES=main.c serial.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=m65dbg
@@ -17,4 +17,4 @@ $(EXECUTABLE): $(OBJECTS)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm $(OBJECTS) $(EXECUTABLE)
+	rm -f $(OBJECTS) $(EXECUTABLE)

@@ -4,21 +4,23 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <readline/readline.h>
+#include <readline/history.h>
+#include <stdlib.h>
 #include "serial.h"
 
 #define VERSION "v1.00"
 #define BUFSIZE 4096
 
-char outbuf[BUFSIZE];
-char inbuf[BUFSIZE];
+char* outbuf = NULL;	// the buffer of what command is output to the remote monitor
+char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
 
 /**
  * retrieves a command via user input
  */
 char* get_command(void)
 {
-  printf("<dbg> ");
-  fgets(outbuf, BUFSIZE, stdin);
+  outbuf = readline("<dbg>");
 
   return NULL;
 }
@@ -38,6 +40,8 @@ void parse_command(char* strInput)
  */
 int main(int argc, char** argv)
 {
+  rl_initialize();
+
   printf("m65dbg - " VERSION "\n");
   printf("======\n");
 
@@ -49,12 +53,21 @@ int main(int argc, char** argv)
   {
     char *strInput = get_command();
 
-    if (strcmp(outbuf, "exit\n") == 0)
+    if (strcmp(outbuf, "exit") == 0)
       return 0;
 
     if (strlen(outbuf) == 0)
       continue;
 
+    if (outbuf && *outbuf)
+      add_history(outbuf);
+
     parse_command(strInput);
+
+    if (outbuf != NULL)
+    {
+      free(outbuf);
+      outbuf = NULL;
+    }
   }
 }
