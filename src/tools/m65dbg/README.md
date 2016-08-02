@@ -10,3 +10,5 @@ I'll try to document my various goals/ambitions/ideas here.
 * provide some ability to assess the stack easily, perhaps with up/down commands as in gdb (if possible)
 * make use of .map files output from Ophis, to try substitute address values with symbol-names
 * How about live assembly, direct into the mega65's memory?
+* Offer redirection of command output to a file
+  * This could provide an easy way to dump current memory contents to a file
