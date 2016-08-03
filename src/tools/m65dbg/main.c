@@ -8,28 +8,88 @@
 #include <readline/history.h>
 #include <stdlib.h>
 #include "serial.h"
+#include "commands.h"
 
 #define VERSION "v1.00"
 #define BUFSIZE 4096
 
-char* outbuf = NULL;	// the buffer of what command is output to the remote monitor
+
+char outbuf[BUFSIZE] = { 0 };	// the buffer of what command is output to the remote monitor
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
+char *strInput = NULL;
+
+typedef struct
+{
+  char* name;
+  void (*func)(void);
+} type_command_details;
+
+type_command_details command_details[] =
+{
+  { "help", cmd_help },
+  { "dis", cmd_disassemble },
+  { "n", cmd_next }  // equate to pressing 'enter' in raw monitor
+};
 
 /**
- * retrieves a command via user input
+ * retrieves a command via user input and places it in global strInput
  */
-char* get_command(void)
+void get_command(void)
 {
-  outbuf = readline("<dbg>");
-
-  return NULL;
+  strInput = readline("<dbg>");
 }
 
-void parse_command(char* strInput)
+
+void parse_command(void)
 {
-  serialWrite(outbuf);
-  serialRead(inbuf, BUFSIZE);
-  printf(inbuf);
+  char* token;
+  bool handled = false;
+  int cmd_cnt = sizeof(command_details) / sizeof(type_command_details);
+
+  printf("strlen = %d!\n", strlen(strInput));
+  // if command is empty, then repeat last command
+  if (strlen(strInput) == 0)
+  {
+    free(strInput);
+    strInput = (char*)malloc(strlen(outbuf)+1);
+    strcpy(strInput, outbuf);
+  }
+
+  // ignore no command
+  if (strlen(strInput) == 0)
+    return;
+
+  // preserve a copy of original command
+  strcpy(outbuf, strInput);
+
+  // tokenise command
+  token = strtok(strInput, " ");
+
+  // test for special commands provided by the m65dbg app
+  for (int k = 0; k < cmd_cnt; k++)
+  {
+    if (strcmp(token, command_details[k].name) == 0)
+    {
+      command_details[k].func();
+      handled = true;
+      break;
+    }
+  }
+
+  // if command is not handled by m65dbg, then just pass across raw command
+  if (!handled)
+  {
+    serialWrite(strInput);
+    serialRead(inbuf, BUFSIZE);
+    printf(inbuf);
+  }
+  
+  if (strInput != NULL)
+  {
+    free(strInput);
+    strInput = NULL;
+  }
+
 }
 
 /**
@@ -51,23 +111,15 @@ int main(int argc, char** argv)
 
   while(1)
   {
-    char *strInput = get_command();
+    get_command();
 
-    if (strcmp(outbuf, "exit") == 0)
+    if (strcmp(strInput, "exit") == 0)
       return 0;
 
-    if (strlen(outbuf) == 0)
-      continue;
+    if (strInput && *strInput)
+      add_history(strInput);
 
-    if (outbuf && *outbuf)
-      add_history(outbuf);
+    parse_command();
 
-    parse_command(strInput);
-
-    if (outbuf != NULL)
-    {
-      free(outbuf);
-      outbuf = NULL;
-    }
   }
 }
