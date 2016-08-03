@@ -46,7 +46,6 @@ void parse_command(void)
   bool handled = false;
   int cmd_cnt = sizeof(command_details) / sizeof(type_command_details);
 
-  printf("strlen = %d!\n", strlen(strInput));
   // if command is empty, then repeat last command
   if (strlen(strInput) == 0)
   {
