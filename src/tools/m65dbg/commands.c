@@ -137,9 +137,9 @@ void cmdDisassemble(void)
       break;
     case M_rr:
       if (mem.b[1] & 0x80)
-        sprintf(s, " $%04X", (reg.pc + 2 + mem.b[1]) );
-      else
         sprintf(s, " $%04X", (reg.pc + 2 - 256 + mem.b[1]) );
+      else
+        sprintf(s, " $%04X", (reg.pc + 2 + mem.b[1]) );
       strcat(str, s);
       break;
     case M_InnY:
