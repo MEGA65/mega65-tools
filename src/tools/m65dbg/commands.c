@@ -92,7 +92,6 @@ void cmdDisassemble(void)
   strcat(str, s);
 
   last_bytecount = mode.val + 1;
-  printf("last_bytecount=%d\n", last_bytecount);
 
   if (last_bytecount == 1)
   {
