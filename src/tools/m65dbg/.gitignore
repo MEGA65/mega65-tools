@@ -33,3 +33,5 @@
 *.su
 
 *.stackdump
+*.swp
+tags

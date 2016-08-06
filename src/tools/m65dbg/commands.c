@@ -83,11 +83,16 @@ void cmdDisassemble(void)
   // Program counter
   sprintf(str, "$%04X ", reg.pc);
 
+  type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
+  sprintf(s, " %10s:%d ", mode.name, mode.val);
+  strcat(str, s);
+
   // Opcode and arguments
   sprintf(s, "%02X ", mem.b[0]);
   strcat(str, s);
 
-  last_bytecount = mode_lut[mem.b[0]] + 1;
+  last_bytecount = mode.val + 1;
+  printf("last_bytecount=%d\n", last_bytecount);
 
   if (last_bytecount == 1)
   {
@@ -100,7 +105,7 @@ void cmdDisassemble(void)
   }
   if (last_bytecount == 3)
   {
-    sprintf(s, "%02X ", mem.b[2]);
+    sprintf(s, "%02X %02X ", mem.b[1], mem.b[2]);
     strcat(str, s);
   }
 

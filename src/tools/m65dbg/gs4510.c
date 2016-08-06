@@ -1,3 +1,5 @@
+#include "gs4510.h"
+
 char* instruction_lut[] = 
 {
   // 4502 personality
@@ -38,29 +40,30 @@ char* instruction_lut[] =
     "BEQ","SBC","KIL","ISC","NOP","SBC","INC","ISC","SED","SBC","NOP","ISC","NOP","SBC","INC","ISC"
     };
 
+type_opcode_mode opcode_mode[] =
+{
+  { "M_impl", 0 },
+  { "M_InnX", 1 },
+  { "M_nn", 1 },
+  { "M_immnn", 1 },
+  { "M_A", 0 },
+  { "M_nnnn", 2 },
+  { "M_nnrr", 2 },
+  { "M_rr", 1 },
+  { "M_InnY", 1 },
+  { "M_InnZ", 1 },
+  { "M_rrrr", 2 },
+  { "M_nnX", 1 },
+  { "M_nnnnY", 2 },
+  { "M_nnnnX", 2 },
+  { "M_Innnn", 2 },
+  { "M_InnnnX", 2 },
+  { "M_InnSPY", 1 },
+  { "M_nnY", 1 },
+  { "M_immnnnn", 2 }
+};
 
-// constant : mode_list := (
-#define M_impl 0
-#define M_InnX 1
-#define M_nn 1
-#define M_immnn 1
-#define M_A 0
-#define M_nnnn 2
-#define M_nnrr 2
-#define M_rr 1
-#define M_InnY 1
-#define M_InnZ 1
-#define M_rrrr 2
-#define M_nnX 1
-#define M_nnnnY 2
-#define M_nnnnX 2
-#define M_Innnn 2
-#define M_InnnnX 2
-#define M_InnSPY 1
-#define M_nnY 1
-#define M_immnnnn 2
-
-int mode_lut[] = 
+mode_list mode_lut[] = 
 {
   // 4502 personality first
     M_impl,  M_InnX,  M_impl,  M_impl,  M_nn,    M_nn,    M_nn,    M_nn,    
