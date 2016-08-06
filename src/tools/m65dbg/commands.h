@@ -1,3 +1,8 @@
-void cmd_help(void);
-void cmd_disassemble(void);
-void cmd_next(void);
+void cmdHelp(void);
+void cmdDisassemble(void);
+void cmdNext(void);
+
+#define BUFSIZE 4096
+
+extern char outbuf[];
+extern char inbuf[];

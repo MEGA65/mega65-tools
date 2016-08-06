@@ -4,7 +4,7 @@
 CC=gcc
 CFLAGS=-c -Wall -g
 LDFLAGS=-L/usr/bin -lreadline7
-SOURCES=main.c serial.c commands.c
+SOURCES=main.c serial.c commands.c gs4510.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=m65dbg
 

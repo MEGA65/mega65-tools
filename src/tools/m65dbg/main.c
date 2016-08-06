@@ -11,11 +11,7 @@
 #include "commands.h"
 
 #define VERSION "v1.00"
-#define BUFSIZE 4096
 
-
-char outbuf[BUFSIZE] = { 0 };	// the buffer of what command is output to the remote monitor
-char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
 char *strInput = NULL;
 
 typedef struct
@@ -26,9 +22,9 @@ typedef struct
 
 type_command_details command_details[] =
 {
-  { "help", cmd_help },
-  { "dis", cmd_disassemble },
-  { "n", cmd_next }  // equate to pressing 'enter' in raw monitor
+  { "help", cmdHelp },
+  { "dis", cmdDisassemble },
+  { "n", cmdNext }  // equate to pressing 'enter' in raw monitor
 };
 
 /**
@@ -112,7 +108,9 @@ int main(int argc, char** argv)
   {
     get_command();
 
-    if (strcmp(strInput, "exit") == 0)
+    if (strcmp(strInput, "exit") == 0 ||
+        strcmp(strInput, "x") == 0 ||
+        strcmp(strInput, "q") == 0)
       return 0;
 
     if (strInput && *strInput)
