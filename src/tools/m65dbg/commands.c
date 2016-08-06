@@ -61,6 +61,9 @@ void cmdHelp(void)
 	 "dis = disassemble\n"
 	 "n = step to next instruction\n"
 	 "[ENTER] = repeat last command\n"
+   "pb <addr> = print byte\n"
+   "pw <addr> = print word\n"
+   "pd <addr> = print dword\n"
    "q/x/exit = exit the program\n"
    );
 }
@@ -200,4 +203,49 @@ void cmdNext(void)
   printf(inbuf);
 
   cmdDisassemble();
+}
+
+void cmdPrintByte(void)
+{
+  char* token = strtok(NULL, " ");
+  
+  if (token != NULL)
+  {
+    int val;
+    sscanf(token, "%X", &val);
+
+    mem_data mem = get_mem(val);
+
+    printf("- %02X\n", mem.b[0]);
+  }
+}
+
+void cmdPrintWord(void)
+{
+  char* token = strtok(NULL, " ");
+  
+  if (token != NULL)
+  {
+    int val;
+    sscanf(token, "%X", &val);
+
+    mem_data mem = get_mem(val);
+
+    printf("- %02X%02X\n", mem.b[1], mem.b[0]);
+  }
+}
+
+void cmdPrintDWord(void)
+{
+  char* token = strtok(NULL, " ");
+  
+  if (token != NULL)
+  {
+    int val;
+    sscanf(token, "%X", &val);
+
+    mem_data mem = get_mem(val);
+
+    printf("- %02X%02X%02X%02X\n", mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
+  }
 }

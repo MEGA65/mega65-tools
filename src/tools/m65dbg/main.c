@@ -24,7 +24,10 @@ type_command_details command_details[] =
 {
   { "help", cmdHelp },
   { "dis", cmdDisassemble },
-  { "n", cmdNext }  // equate to pressing 'enter' in raw monitor
+  { "n", cmdNext }, // equate to pressing 'enter' in raw monitor
+  { "pb", cmdPrintByte },
+  { "pw", cmdPrintWord },
+  { "pd", cmdPrintDWord }
 };
 
 /**
