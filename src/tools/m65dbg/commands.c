@@ -112,6 +112,83 @@ void cmdDisassemble(void)
   // Instruction name
   strcat(str, instruction_lut[mem.b[0]]);
 
+  switch(mode_lut[mem.b[0]])
+  {
+    case M_impl: break;
+    case M_InnX:
+      sprintf(s, " ($%02X,X)", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nn:
+      sprintf(s, " $%02X", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_immnn:
+      sprintf(s, " #$%02X", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_A: break;
+    case M_nnnn:
+      sprintf(s, " $%02X%02X", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nnrr:
+      sprintf(s, " $%02X,$%04X", mem.b[1], (reg.pc + 3 + mem.b[2]) );
+      strcat(str, s);
+      break;
+    case M_rr:
+      if (mem.b[1] & 0x80)
+        sprintf(s, " $%04X", (reg.pc + 2 + mem.b[1]) );
+      else
+        sprintf(s, " $%04X", (reg.pc + 2 - 256 + mem.b[1]) );
+      strcat(str, s);
+      break;
+    case M_InnY:
+      sprintf(s, " ($%02X),Y", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_InnZ:
+      sprintf(s, " ($%02X),Z", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_rrrr:
+      sprintf(s, " $%04X", (reg.pc + 2 + (mem.b[2] << 8) + mem.b[1]) );
+      strcat(str, s);
+      break;
+    case M_nnX:
+      sprintf(s, " $%02X,X", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nnnnY:
+      sprintf(s, " $%02X%02X,Y", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nnnnX:
+      sprintf(s, " $%02X%02X,X", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_Innnn:
+      sprintf(s, " ($%02X%02X)", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_InnnnX:
+      sprintf(s, " ($%02X%02X,X)", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_InnSPY:
+      sprintf(s, " ($%02X,SP),Y", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nnY:
+      sprintf(s, " $%02X,Y", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_immnnnn:
+      sprintf(s, " #$%02X%02X", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+  }
+
   printf("%s\n", str);
 }
 
