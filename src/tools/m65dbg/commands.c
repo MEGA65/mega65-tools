@@ -154,7 +154,7 @@ void cmdDisassemble(void)
       strcat(str, s);
       break;
     case M_rrrr:
-      sprintf(s, " $%04X", (reg.pc + 2 + (mem.b[2] << 8) + mem.b[1]) );
+      sprintf(s, " $%04X", (reg.pc + 2 + (mem.b[2] << 8) + mem.b[1]) & 0xffff );
       strcat(str, s);
       break;
     case M_nnX:
