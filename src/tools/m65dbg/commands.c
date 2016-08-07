@@ -36,6 +36,7 @@ type_command_details command_details[] =
   { "dis", cmdDisassemble, NULL, "Disassembles the instruction at the PC" },
   { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
   { "n", cmdNext, NULL, "Step over to next instruction" },
+  { "finish", cmdFinish, NULL, "Continue running until function returns (ie, step-out-from)" },
   { "pb", cmdPrintByte, "<addr>", "Prints the byte-value of the given address" },
   { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
   { "pd", cmdPrintDWord, "<addr>", "Prints the dword-value of the given address" },
@@ -434,15 +435,19 @@ void cmdDisassemble(void)
   printf("%s\n", str);
 }
 
+bool outputFlag = true;
+
 void cmdStep(void)
 {
   // just send an enter command
   serialWrite("\n");
   serialRead(inbuf, BUFSIZE);
 
-  printf(inbuf);
-
-  cmdDisassemble();
+  if (outputFlag)
+	{
+		printf(inbuf);
+		cmdDisassemble();
+	}
 }
 
 void cmdNext(void)
@@ -476,9 +481,35 @@ void cmdNext(void)
     // show disassembly of current position
 		serialWrite("r\n");
 		serialRead(inbuf, BUFSIZE);
-		cmdDisassemble();
+		if (outputFlag)
+			cmdDisassemble();
 	}
 }
+
+
+void cmdFinish(void)
+{
+  reg_data reg = get_regs();
+
+  int cur_sp = reg.sp;
+	bool function_returning = false;
+
+  //outputFlag = false;
+  while (!function_returning)
+	{
+	  reg = get_regs();
+		mem_data mem = get_mem(reg.pc);
+
+		if (strcmp(instruction_lut[mem.b[0]], "RTS") == 0
+				&& reg.sp == cur_sp)
+			function_returning = true;
+
+		cmdNext();
+	}
+	//outputFlag = true;
+	cmdDisassemble();
+}
+
 
 void cmdPrintByte(void)
 {

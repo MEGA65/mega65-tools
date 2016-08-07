@@ -4,6 +4,7 @@ void cmdDump(void);
 void cmdDisassemble(void);
 void cmdStep(void);
 void cmdNext(void);
+void cmdFinish(void);
 void cmdPrintByte(void);
 void cmdPrintWord(void);
 void cmdPrintDWord(void);
