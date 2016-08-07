@@ -1,6 +1,7 @@
 void listSearch(void);
 void cmdHelp(void);
 void cmdDisassemble(void);
+void cmdStep(void);
 void cmdNext(void);
 void cmdPrintByte(void);
 void cmdPrintWord(void);

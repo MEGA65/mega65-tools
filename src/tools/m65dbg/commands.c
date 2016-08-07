@@ -32,7 +32,8 @@ type_command_details command_details[] =
 {
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
   { "dis", cmdDisassemble, NULL, "Disassembles the instruction at the PC" },
-  { "n", cmdNext, NULL, "Step to next instruction" }, // equate to pressing 'enter' in raw monitor
+  { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
+  { "n", cmdNext, NULL, "Step over to next instruction" },
   { "pb", cmdPrintByte, "<addr>", "Prints the byte-value of the given address" },
   { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
   { "pd", cmdPrintDWord, "<addr>", "Prints the dword-value of the given address" },
@@ -269,7 +270,7 @@ void cmdDisassemble(void)
   // Program counter
   sprintf(str, "$%04X ", reg.pc);
 
-  type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
+  type_opcode_mode mode = opcode_mode[mode_lut[mem.b[1]]];
   sprintf(s, " %10s:%d ", mode.name, mode.val);
   strcat(str, s);
 
@@ -383,7 +384,7 @@ void cmdDisassemble(void)
   printf("%s\n", str);
 }
 
-void cmdNext(void)
+void cmdStep(void)
 {
   // just send an enter command
   serialWrite("\n");
@@ -392,6 +393,41 @@ void cmdNext(void)
   printf(inbuf);
 
   cmdDisassemble();
+}
+
+void cmdNext(void)
+{
+  // check if this is a JSR command
+  reg_data reg = get_regs();
+	mem_data mem = get_mem(reg.pc);
+		
+	// if not, then just do a normal step
+	if (strcmp(instruction_lut[mem.b[0]], "JSR") != 0)
+	{
+		cmdStep();
+	}
+	else
+	{
+		// if it is JSR, then keep doing step into until it returns to the next command after the JSR
+
+		type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
+		int last_bytecount = mode.val + 1;
+		int next_addr = reg.pc + last_bytecount;
+
+		while (reg.pc != next_addr)
+		{
+			// just send an enter command
+			serialWrite("\n");
+			serialRead(inbuf, BUFSIZE);
+
+			reg = get_regs();
+		}
+
+    // show disassembly of current position
+		serialWrite("r\n");
+		serialRead(inbuf, BUFSIZE);
+		cmdDisassemble();
+	}
 }
 
 void cmdPrintByte(void)
