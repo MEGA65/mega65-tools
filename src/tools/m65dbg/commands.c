@@ -39,6 +39,7 @@ type_command_details command_details[] =
   { "pb", cmdPrintByte, "<addr>", "Prints the byte-value of the given address" },
   { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
   { "pd", cmdPrintDWord, "<addr>", "Prints the dword-value of the given address" },
+  { "ps", cmdPrintString, "<addr>", "Prints the null-terminated string-value found at the given address" },
 	{ NULL, NULL }
 };
 
@@ -485,10 +486,10 @@ void cmdPrintByte(void)
   
   if (token != NULL)
   {
-    int val;
-    sscanf(token, "%X", &val);
+    int addr;
+    sscanf(token, "%X", &addr);
 
-    mem_data mem = get_mem(val);
+    mem_data mem = get_mem(addr);
 
     printf("- %02X\n", mem.b[0]);
   }
@@ -500,10 +501,10 @@ void cmdPrintWord(void)
   
   if (token != NULL)
   {
-    int val;
-    sscanf(token, "%X", &val);
+    int addr;
+    sscanf(token, "%X", &addr);
 
-    mem_data mem = get_mem(val);
+    mem_data mem = get_mem(addr);
 
     printf("- %02X%02X\n", mem.b[1], mem.b[0]);
   }
@@ -515,11 +516,44 @@ void cmdPrintDWord(void)
   
   if (token != NULL)
   {
-    int val;
-    sscanf(token, "%X", &val);
+    int addr;
+    sscanf(token, "%X", &addr);
 
-    mem_data mem = get_mem(val);
+    mem_data mem = get_mem(addr);
 
     printf("- %02X%02X%02X%02X\n", mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
+  }
+}
+
+void cmdPrintString(void)
+{
+  char* token = strtok(NULL, " ");
+	static char string[2048] = { 0 };
+	char c[2] = { 0 };
+  
+  if (token != NULL)
+  {
+    int addr;
+    sscanf(token, "%X", &addr);
+
+    int cnt = 0;
+		string[0] = '\0';
+
+    while (1)
+		{
+			mem_data mem = get_mem(addr+cnt);
+
+			for (int k = 0; k < 16; k++)
+			{
+			  c[0] = mem.b[k];
+			  strcat(string, c);
+				if (mem.b[k] == 0)
+				{
+				  printf("%s\n", string);
+					return;
+				}
+			  cnt++;
+			}
+		}
   }
 }
