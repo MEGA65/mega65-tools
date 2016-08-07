@@ -2,6 +2,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "commands.h"
 #include "serial.h"
 #include "gs4510.h"
@@ -31,6 +32,7 @@ char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote mo
 type_command_details command_details[] =
 {
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
+	{ "dump", cmdDump, "<addr> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
   { "dis", cmdDisassemble, NULL, "Disassembles the instruction at the PC" },
   { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
   { "n", cmdNext, NULL, "Step over to next instruction" },
@@ -206,7 +208,7 @@ void listSearch(void)
 
 reg_data get_regs(void)
 {
-  reg_data reg;
+  reg_data reg = { 0 };
   char* line;
   serialWrite("r\n");
   serialRead(inbuf, BUFSIZE);
@@ -220,7 +222,7 @@ reg_data get_regs(void)
 
 mem_data get_mem(int addr)
 {
-  mem_data mem;
+  mem_data mem = { 0 };
   char str[100];
   sprintf(str, "d%04X\n", addr); // use 'd' instead of 'm' (for memory in cpu context)
   serialWrite(str);
@@ -250,6 +252,53 @@ void cmdHelp(void)
 	 "[ENTER] = repeat last command\n"
    "q/x/exit = exit the program\n"
    );
+}
+
+
+void cmdDump(void)
+{
+	char* strAddr = strtok(NULL, " ");
+
+	if (strAddr == NULL)
+	{
+	  printf("Missing <addr> parameter!\n");
+		return;
+	}
+
+	int addr;
+	sscanf(strAddr, "%X", &addr);
+
+	int total = 16;
+	char* strTotal = strtok(NULL, " ");
+
+	if (strTotal != NULL)
+	{
+	  sscanf(strTotal, "%X", &total);
+	}
+
+  int cnt = 0;
+	while (cnt < total)
+	{
+		// get memory at current pc
+		mem_data mem = get_mem(addr + cnt);
+
+		printf(" :%07X ", mem.addr);
+		for (int k = 0; k < 16; k++)
+			printf("%02X ", mem.b[k]);
+		
+		printf(" | ");
+
+		for (int k = 0; k < 16; k++)
+		{
+			int c = mem.b[k];
+			if (isprint(c))
+				printf("%c", c);
+			else
+				printf(".");
+		}
+		printf("\n");
+		cnt+=16;
+	}
 }
 
 
