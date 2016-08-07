@@ -28,6 +28,17 @@ typedef struct
 char outbuf[BUFSIZE] = { 0 };	// the buffer of what command is output to the remote monitor
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
 
+type_command_details command_details[] =
+{
+  { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
+  { "dis", cmdDisassemble, NULL, "Disassembles the instruction at the PC" },
+  { "n", cmdNext, NULL, "Step to next instruction" }, // equate to pressing 'enter' in raw monitor
+  { "pb", cmdPrintByte, "<addr>", "Prints the byte-value of the given address" },
+  { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
+  { "pd", cmdPrintDWord, "<addr>", "Prints the dword-value of the given address" },
+	{ NULL, NULL }
+};
+
 char* get_extension(char* fname)
 {
   return strrchr(fname, '.');
@@ -219,17 +230,23 @@ mem_data get_mem(int addr)
   return mem;
 }
 
-
 void cmdHelp(void)
 {
   printf("m65dbg commands\n"
-         "===============\n"
-	 "dis = disassemble\n"
-	 "n = step to next instruction\n"
+         "===============\n");
+
+  for (int k = 0; command_details[k].name != NULL; k++)
+  {
+	  type_command_details cd = command_details[k];
+
+		if (cd.params == NULL)
+			printf("%s = %s\n", cd.name, cd.help);
+		else
+			printf("%s %s = %s\n", cd.name, cd.params, cd.help);
+  }
+
+  printf(
 	 "[ENTER] = repeat last command\n"
-   "pb <addr> = print byte\n"
-   "pw <addr> = print word\n"
-   "pd <addr> = print dword\n"
    "q/x/exit = exit the program\n"
    );
 }

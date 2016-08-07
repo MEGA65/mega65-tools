@@ -14,22 +14,6 @@
 
 char *strInput = NULL;
 
-typedef struct
-{
-  char* name;
-  void (*func)(void);
-} type_command_details;
-
-type_command_details command_details[] =
-{
-  { "help", cmdHelp },
-  { "dis", cmdDisassemble },
-  { "n", cmdNext }, // equate to pressing 'enter' in raw monitor
-  { "pb", cmdPrintByte },
-  { "pw", cmdPrintWord },
-  { "pd", cmdPrintDWord }
-};
-
 /**
  * retrieves a command via user input and places it in global strInput
  */
@@ -43,7 +27,6 @@ void parse_command(void)
 {
   char* token;
   bool handled = false;
-  int cmd_cnt = sizeof(command_details) / sizeof(type_command_details);
 
   // if command is empty, then repeat last command
   if (strlen(strInput) == 0)
@@ -64,7 +47,7 @@ void parse_command(void)
   token = strtok(strInput, " ");
 
   // test for special commands provided by the m65dbg app
-  for (int k = 0; k < cmd_cnt; k++)
+  for (int k = 0; command_details[k].name != NULL; k++)
   {
     if (strcmp(token, command_details[k].name) == 0)
     {

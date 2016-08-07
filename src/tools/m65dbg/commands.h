@@ -10,3 +10,13 @@ void cmdPrintDWord(void);
 
 extern char outbuf[];
 extern char inbuf[];
+
+typedef struct
+{
+  char* name;
+  void (*func)(void);
+  char* params;
+  char* help;
+} type_command_details;
+
+extern type_command_details command_details[];
