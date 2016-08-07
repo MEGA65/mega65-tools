@@ -33,6 +33,7 @@ type_command_details command_details[] =
 {
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
 	{ "dump", cmdDump, "<addr> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
+	{ "mdump", cmdMDump, "<addr> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
   { "dis", cmdDisassemble, NULL, "Disassembles the instruction at the PC" },
   { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
   { "n", cmdNext, NULL, "Step over to next instruction" },
@@ -235,6 +236,19 @@ mem_data get_mem(int addr)
   return mem;
 }
 
+mem_data get_mem28(int addr)
+{
+  mem_data mem = { 0 };
+  char str[100];
+  sprintf(str, "m%04X\n", addr); // use 'd' instead of 'm' (for memory in cpu context)
+  serialWrite(str);
+  serialRead(inbuf, BUFSIZE);
+  sscanf(inbuf, " :%X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+  &mem.addr, &mem.b[0], &mem.b[1], &mem.b[2], &mem.b[3], &mem.b[4], &mem.b[5], &mem.b[6], &mem.b[7], &mem.b[8], &mem.b[9], &mem.b[10], &mem.b[11], &mem.b[12], &mem.b[13], &mem.b[14], &mem.b[15]); 
+
+  return mem;
+}
+
 void cmdHelp(void)
 {
   printf("m65dbg commands\n"
@@ -303,6 +317,51 @@ void cmdDump(void)
 	}
 }
 
+void cmdMDump(void)
+{
+	char* strAddr = strtok(NULL, " ");
+
+	if (strAddr == NULL)
+	{
+	  printf("Missing <addr> parameter!\n");
+		return;
+	}
+
+	int addr;
+	sscanf(strAddr, "%X", &addr);
+
+	int total = 16;
+	char* strTotal = strtok(NULL, " ");
+
+	if (strTotal != NULL)
+	{
+	  sscanf(strTotal, "%X", &total);
+	}
+
+  int cnt = 0;
+	while (cnt < total)
+	{
+		// get memory at current pc
+		mem_data mem = get_mem28(addr + cnt);
+
+		printf(" :%07X ", mem.addr);
+		for (int k = 0; k < 16; k++)
+			printf("%02X ", mem.b[k]);
+		
+		printf(" | ");
+
+		for (int k = 0; k < 16; k++)
+		{
+			int c = mem.b[k];
+			if (isprint(c))
+				printf("%c", c);
+			else
+				printf(".");
+		}
+		printf("\n");
+		cnt+=16;
+	}
+}
 
 void cmdDisassemble(void)
 {
