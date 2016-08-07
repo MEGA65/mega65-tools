@@ -32,6 +32,8 @@ typedef struct
 char outbuf[BUFSIZE] = { 0 };	// the buffer of what command is output to the remote monitor
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
 
+bool autocls = false; // auto-clearscreen flag
+
 type_command_details command_details[] =
 {
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
@@ -46,6 +48,7 @@ type_command_details command_details[] =
   { "pd", cmdPrintDWord, "<addr>", "Prints the dword-value of the given address" },
   { "ps", cmdPrintString, "<addr>", "Prints the null-terminated string-value found at the given address" },
   { "cls", cmdClearScreen, NULL, "Clears the screen" },
+  { "autocls", cmdAutoClearScreen, "0/1", "If set to 1, clears the screen prior to every step/next command" },
 	{ NULL, NULL }
 };
 
@@ -627,6 +630,8 @@ void cmdStep(void)
 
   if (outputFlag)
 	{
+		if (autocls)
+			cmdClearScreen();
 		printf(inbuf);
 		cmdDisassemble();
 	}
@@ -634,6 +639,9 @@ void cmdStep(void)
 
 void cmdNext(void)
 {
+	if (autocls)
+		cmdClearScreen();
+
   // check if this is a JSR command
   reg_data reg = get_regs();
 	mem_data mem = get_mem(reg.pc);
@@ -664,7 +672,12 @@ void cmdNext(void)
 		serialWrite("r\n");
 		serialRead(inbuf, BUFSIZE);
 		if (outputFlag)
+		{
+			if (autocls)
+				cmdClearScreen();
+			printf(inbuf);
 			cmdDisassemble();
+		}
 	}
 }
 
@@ -788,4 +801,19 @@ void cmdPrintString(void)
 void cmdClearScreen(void)
 {
   printf("%s%s", KCLEAR, KPOS0_0);
+}
+
+void cmdAutoClearScreen(void)
+{
+  char* token = strtok(NULL, " ");
+
+  // if no parameter, then just toggle it
+	if (token == NULL)
+		autocls = !autocls;
+	else if (strcmp(token, "1") == 0)
+		autocls = true;
+	else if (strcmp(token, "0") == 0)
+		autocls = false;
+	
+	printf(" - autocls is turned %s.\n", autocls ? "on" : "off");
 }
