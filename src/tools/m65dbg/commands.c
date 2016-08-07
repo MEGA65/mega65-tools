@@ -150,6 +150,26 @@ void load_list(char* fname)
 	}
 }
 
+
+void show_location(type_fileloc* fl)
+{
+  FILE* f = fopen(fl->file, "rt");
+	char line[1024];
+	int cnt = 1;
+
+	while (!feof(f))
+	{
+		fgets(line, 1024, f);
+		if (cnt == fl->lineno)
+		{
+			printf("> %s", line);
+			break;
+		}
+		cnt++;
+	}
+	fclose(f);
+}
+
 // search the current directory for *.list files
 void listSearch(void)
 {
@@ -339,7 +359,10 @@ void cmdDisassemble(void)
 
   type_fileloc *found = find_in_list(reg.pc);
 	if (found)
+	{
 	  printf("> %s:%d\n", found->file, found->lineno);
+		show_location(found);
+	}
   printf("%s\n", str);
 }
 
