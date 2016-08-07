@@ -10,6 +10,7 @@ void cmdPrintByte(void);
 void cmdPrintWord(void);
 void cmdPrintDWord(void);
 void cmdPrintString(void);
+void cmdClearScreen(void);
 
 #define BUFSIZE 4096
 

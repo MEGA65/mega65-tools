@@ -45,6 +45,7 @@ type_command_details command_details[] =
   { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
   { "pd", cmdPrintDWord, "<addr>", "Prints the dword-value of the given address" },
   { "ps", cmdPrintString, "<addr>", "Prints the null-terminated string-value found at the given address" },
+  { "cls", cmdClearScreen, NULL, "Clears the screen" },
 	{ NULL, NULL }
 };
 
@@ -284,6 +285,8 @@ void load_list(char* fname)
 #define KCYN  "\x1B[36m"
 #define KWHT  "\x1B[37m"
 #define KINV  "\x1B[7m"
+#define KCLEAR "\x1B[2J"
+#define KPOS0_0 "\x1B[1;1H"
 
 void show_location(type_fileloc* fl)
 {
@@ -683,6 +686,7 @@ void cmdFinish(void)
 				&& reg.sp == cur_sp)
 			function_returning = true;
 
+    cmdClearScreen();
 		cmdNext();
 	}
 	//outputFlag = true;
@@ -779,4 +783,9 @@ void cmdPrintString(void)
 			}
 		}
   }
+}
+
+void cmdClearScreen(void)
+{
+  printf("%s%s", KCLEAR, KPOS0_0);
 }
