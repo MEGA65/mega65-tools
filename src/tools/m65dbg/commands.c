@@ -33,6 +33,7 @@ char outbuf[BUFSIZE] = { 0 };	// the buffer of what command is output to the rem
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
 
 bool autocls = false; // auto-clearscreen flag
+bool ctrlcflag = false; // a flag to keep track of whether ctrl-c was caught
 
 type_command_details command_details[] =
 {
@@ -666,6 +667,9 @@ void cmdNext(void)
 			serialRead(inbuf, BUFSIZE);
 
 			reg = get_regs();
+
+			if (ctrlcflag)
+				break;
 		}
 
     // show disassembly of current position
@@ -701,6 +705,9 @@ void cmdFinish(void)
 
     cmdClearScreen();
 		cmdNext();
+
+		if (ctrlcflag)
+			break;
 	}
 	//outputFlag = true;
 	cmdDisassemble();

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <signal.h>
 #include <stdlib.h>
 #include "serial.h"
 #include "commands.h"
@@ -73,6 +74,12 @@ void parse_command(void)
 
 }
 
+// use ctrl-c to break out of any commands that loop (eg, finish/next)
+void ctrlc_handler(int s)
+{
+  ctrlcflag = true;
+}
+
 /**
  * main entry point of program
  *
@@ -81,6 +88,7 @@ void parse_command(void)
  */
 int main(int argc, char** argv)
 {
+  signal(SIGINT, ctrlc_handler);
   rl_initialize();
 
   printf("m65dbg - " VERSION "\n");
@@ -94,6 +102,7 @@ int main(int argc, char** argv)
 
   while(1)
   {
+    ctrlcflag = false;
     get_command();
 
     if (strcmp(strInput, "exit") == 0 ||

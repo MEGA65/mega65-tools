@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 void listSearch(void);
 void cmdHelp(void);
 void cmdDump(void);
@@ -17,6 +19,7 @@ void cmdAutoClearScreen(void);
 
 extern char outbuf[];
 extern char inbuf[];
+extern bool ctrlcflag;
 
 typedef struct
 {
