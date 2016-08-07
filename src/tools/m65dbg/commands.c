@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <dirent.h>
+#include <stdlib.h>
 #include "commands.h"
 #include "serial.h"
 #include "gs4510.h"
@@ -25,6 +27,150 @@ typedef struct
 
 char outbuf[BUFSIZE] = { 0 };	// the buffer of what command is output to the remote monitor
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
+
+char* get_extension(char* fname)
+{
+  return strrchr(fname, '.');
+}
+
+typedef struct tfl
+{
+	int addr;
+  char* file;
+	int lineno;
+	struct tfl *next;
+} type_fileloc;
+
+type_fileloc* lstFileLoc = NULL;
+
+void add_to_list(type_fileloc fl)
+{
+	type_fileloc* iter = lstFileLoc;
+
+  // first entry in list?
+  if (lstFileLoc == NULL)
+	{
+		lstFileLoc = malloc(sizeof(type_fileloc));
+		lstFileLoc->addr = fl.addr;
+		lstFileLoc->file = strdup(fl.file);
+		lstFileLoc->lineno = fl.lineno;
+		lstFileLoc->next = NULL;
+		return;
+	}
+
+  while (iter != NULL)
+	{
+	  // replace existing?
+	  if (iter->addr == fl.addr)
+		{
+			iter->file = strdup(fl.file);
+			iter->lineno = fl.lineno;
+			return;
+		}
+		// insert entry?
+		if (iter->addr > fl.addr)
+		{
+		  type_fileloc* flcpy = malloc(sizeof(type_fileloc));
+			flcpy->addr = iter->addr;
+			flcpy->file = iter->file;
+			flcpy->lineno = iter->lineno;
+			flcpy->next = iter->next;
+
+			iter->addr = fl.addr;
+			iter->file = strdup(fl.file);
+			iter->lineno = fl.lineno;
+			iter->next = flcpy;
+			return;
+		}
+		// add to end?
+		if (iter->next == NULL)
+		{
+		  type_fileloc* flnew = malloc(sizeof(type_fileloc));
+			flnew->addr = fl.addr;
+			flnew->file = strdup(fl.file);
+			flnew->lineno = fl.lineno;
+			flnew->next = NULL;
+
+			iter->next = flnew;
+			return;
+		}
+
+		iter = iter->next;
+	}
+}
+
+type_fileloc* find_in_list(int addr)
+{
+	type_fileloc* iter = lstFileLoc;
+
+	while (iter != NULL)
+	{
+	  if (iter->addr == addr)
+			return iter;
+
+		iter = iter->next;
+	}
+
+	return NULL;
+}
+
+void load_list(char* fname)
+{
+  FILE* f = fopen(fname, "rt");
+	char line[1024];
+
+  while (!feof(f))
+	{
+	  fgets(line, 1024, f);
+
+		if (strlen(line) == 0)
+		  continue;
+
+		char *s = strrchr(line, '|');
+		if (s != NULL && *s != '\0')
+		{
+			s++;
+			if (strlen(s) < 5)
+			  continue;
+
+			int addr;
+      char file[1024];
+			int lineno;
+			strcpy(file, &strtok(s, ":")[1]);
+			sscanf(strtok(NULL, ":"), "%d", &lineno);
+			sscanf(line, " %X", &addr);
+
+			//printf("%04X : %s:%d\n", addr, file, lineno);
+			type_fileloc fl;
+			fl.addr = addr;
+			fl.file = file;
+			fl.lineno = lineno;
+			add_to_list(fl);
+		}
+	}
+}
+
+// search the current directory for *.list files
+void listSearch(void)
+{
+  DIR           *d;
+  struct dirent *dir;
+  d = opendir(".");
+  if (d)
+  {
+    while ((dir = readdir(d)) != NULL)
+    {
+		  char* ext = get_extension(dir->d_name);
+		  if (ext != NULL && strcmp(ext, ".list") == 0)
+			{
+				printf("Loading \"%s\"...\n", dir->d_name);
+				load_list(dir->d_name);
+			}
+    }
+
+    closedir(d);
+  }
+}
 
 reg_data get_regs(void)
 {
@@ -191,6 +337,9 @@ void cmdDisassemble(void)
       break;
   }
 
+  type_fileloc *found = find_in_list(reg.pc);
+	if (found)
+	  printf("> %s:%d\n", found->file, found->lineno);
   printf("%s\n", str);
 }
 

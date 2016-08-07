@@ -107,6 +107,8 @@ int main(int argc, char** argv)
   serialOpen("/dev/ttyS4");
   printf("- Type 'h' for help\n");
 
+  listSearch();
+
   while(1)
   {
     get_command();

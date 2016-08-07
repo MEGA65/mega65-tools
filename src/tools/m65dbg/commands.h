@@ -1,3 +1,4 @@
+void listSearch(void);
 void cmdHelp(void);
 void cmdDisassemble(void);
 void cmdNext(void);
