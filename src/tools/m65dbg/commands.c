@@ -8,6 +8,8 @@
 #include "serial.h"
 #include "gs4510.h"
 
+int get_sym_value(char* token);
+
 typedef struct
 {
   int pc;
@@ -401,8 +403,7 @@ void cmdDump(void)
 		return;
 	}
 
-	int addr;
-	sscanf(strAddr, "%X", &addr);
+	int addr = get_sym_value(strAddr);
 
 	int total = 16;
 	char* strTotal = strtok(NULL, " ");
@@ -447,8 +448,7 @@ void cmdMDump(void)
 		return;
 	}
 
-	int addr;
-	sscanf(strAddr, "%X", &addr);
+	int addr = get_sym_value(strAddr);
 
 	int total = 16;
 	char* strTotal = strtok(NULL, " ");
