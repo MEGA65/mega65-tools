@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <unistd.h>
 #include "commands.h"
 #include "serial.h"
 #include "gs4510.h"
@@ -50,6 +51,13 @@ char* get_extension(char* fname)
   return strrchr(fname, '.');
 }
 
+typedef struct tse
+{
+  int addr;
+	char* symbol;
+  struct tse* next;
+} type_symmap_entry;
+
 typedef struct tfl
 {
 	int addr;
@@ -59,6 +67,7 @@ typedef struct tfl
 } type_fileloc;
 
 type_fileloc* lstFileLoc = NULL;
+type_symmap_entry* lstSymMap = NULL;
 
 void add_to_list(type_fileloc fl)
 {
@@ -116,6 +125,51 @@ void add_to_list(type_fileloc fl)
 	}
 }
 
+void add_to_symmap(type_symmap_entry sme)
+{
+	type_symmap_entry* iter = lstSymMap;
+
+  // first entry in list?
+  if (lstSymMap == NULL)
+	{
+		lstSymMap = malloc(sizeof(type_symmap_entry));
+		lstSymMap->addr = sme.addr;
+		lstSymMap->symbol = strdup(sme.symbol);
+		lstSymMap->next = NULL;
+		return;
+	}
+
+  while (iter != NULL)
+	{
+		// insert entry?
+		if (iter->addr >= sme.addr)
+		{
+		  type_symmap_entry* smecpy = malloc(sizeof(type_symmap_entry));
+			smecpy->addr = iter->addr;
+			smecpy->symbol = iter->symbol;
+			smecpy->next = iter->next;
+
+			iter->addr = sme.addr;
+			iter->symbol = strdup(sme.symbol);
+			iter->next = smecpy;
+			return;
+		}
+		// add to end?
+		if (iter->next == NULL)
+		{
+		  type_symmap_entry* smenew = malloc(sizeof(type_symmap_entry));
+			smenew->addr = sme.addr;
+			smenew->symbol = strdup(sme.symbol);
+			smenew->next = NULL;
+
+			iter->next = smenew;
+			return;
+		}
+
+		iter = iter->next;
+	}
+}
+
 type_fileloc* find_in_list(int addr)
 {
 	type_fileloc* iter = lstFileLoc;
@@ -131,6 +185,56 @@ type_fileloc* find_in_list(int addr)
 	return NULL;
 }
 
+type_symmap_entry* find_in_symmap(char* sym)
+{
+	type_symmap_entry* iter = lstSymMap;
+
+	while (iter != NULL)
+	{
+	  if (strcmp(sym, iter->symbol) == 0)
+			return iter;
+
+		iter = iter->next;
+	}
+
+	return NULL;
+}
+
+// loads the *.map file corresponding to the provided *.list file (if one exists)
+void load_map(char* fname)
+{
+  char strMapFile[200];
+	strcpy(strMapFile, fname);
+	char* sdot = strrchr(strMapFile, '.');
+	*sdot = '\0';
+	strcat(strMapFile, ".map");
+
+  // check if file exists
+	if (access(strMapFile, F_OK) != -1)
+	{
+		printf("Loading \"%s\"...\n", strMapFile);
+
+		// load the map file
+		FILE* f = fopen(strMapFile, "rt");
+
+		while (!feof(f))
+		{
+			char line[1024];
+			fgets(line, 1024, f);
+
+			int addr;
+			char sym[1024];
+			sscanf(line, "$%04X %s", &addr, sym);
+			//printf("%s : %04X\n", sym, addr);
+			type_symmap_entry sme;
+			sme.addr = addr;
+			sme.symbol = sym;
+			add_to_symmap(sme);
+		}
+	}
+}
+
+// loads the given *.list file
 void load_list(char* fname)
 {
   FILE* f = fopen(fname, "rt");
@@ -165,6 +269,8 @@ void load_list(char* fname)
 			add_to_list(fl);
 		}
 	}
+
+	load_map(fname);
 }
 
 
@@ -569,6 +675,23 @@ void cmdFinish(void)
 	cmdDisassemble();
 }
 
+// check symbol-map for value. If not found there, just return
+// the hex-value of the string
+int get_sym_value(char* token)
+{
+  int addr = 0;
+
+	type_symmap_entry* sme = find_in_symmap(token);
+	if (sme != NULL)
+	{
+		return sme->addr;
+	}
+	else
+	{
+    sscanf(token, "%X", &addr);
+    return addr;
+	}
+}
 
 void cmdPrintByte(void)
 {
@@ -576,12 +699,11 @@ void cmdPrintByte(void)
   
   if (token != NULL)
   {
-    int addr;
-    sscanf(token, "%X", &addr);
+		int addr = get_sym_value(token);
 
     mem_data mem = get_mem(addr);
 
-    printf("- %02X\n", mem.b[0]);
+    printf(" %s: %02X\n", token, mem.b[0]);
   }
 }
 
@@ -591,12 +713,11 @@ void cmdPrintWord(void)
   
   if (token != NULL)
   {
-    int addr;
-    sscanf(token, "%X", &addr);
+		int addr = get_sym_value(token);
 
     mem_data mem = get_mem(addr);
 
-    printf("- %02X%02X\n", mem.b[1], mem.b[0]);
+    printf(" %s: %02X%02X\n", token, mem.b[1], mem.b[0]);
   }
 }
 
@@ -606,12 +727,11 @@ void cmdPrintDWord(void)
   
   if (token != NULL)
   {
-    int addr;
-    sscanf(token, "%X", &addr);
+		int addr = get_sym_value(token);
 
     mem_data mem = get_mem(addr);
 
-    printf("- %02X%02X%02X%02X\n", mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
+    printf(" %s: %02X%02X%02X%02X\n", token, mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
   }
 }
 
@@ -623,8 +743,7 @@ void cmdPrintString(void)
   
   if (token != NULL)
   {
-    int addr;
-    sscanf(token, "%X", &addr);
+		int addr = get_sym_value(token);
 
     int cnt = 0;
 		string[0] = '\0';
@@ -639,7 +758,7 @@ void cmdPrintString(void)
 			  strcat(string, c);
 				if (mem.b[k] == 0)
 				{
-				  printf("%s\n", string);
+				  printf(" %s: %s\n", token, string);
 					return;
 				}
 			  cnt++;
