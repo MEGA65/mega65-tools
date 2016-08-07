@@ -273,6 +273,15 @@ void load_list(char* fname)
 	load_map(fname);
 }
 
+#define KNRM  "\x1B[0m"
+#define KRED  "\x1B[31m"
+#define KGRN  "\x1B[32m"
+#define KYEL  "\x1B[33m"
+#define KBLU  "\x1B[34m"
+#define KMAG  "\x1B[35m"
+#define KCYN  "\x1B[36m"
+#define KWHT  "\x1B[37m"
+#define KINV  "\x1B[7m"
 
 void show_location(type_fileloc* fl)
 {
@@ -283,10 +292,15 @@ void show_location(type_fileloc* fl)
 	while (!feof(f))
 	{
 		fgets(line, 1024, f);
-		if (cnt == fl->lineno)
+		if (cnt >= (fl->lineno - 10) && cnt <= (fl->lineno + 10) )
 		{
-			printf("> %s", line);
-			break;
+		  if (cnt == fl->lineno)
+		  {
+				printf("%s> %d: %s%s", KINV, cnt, line, KNRM);
+			}
+			else
+				printf("> %d: %s", cnt, line);
+			//break;
 		}
 		cnt++;
 	}
