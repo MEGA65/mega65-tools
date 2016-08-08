@@ -2,7 +2,8 @@
 # - http://mrbook.org/blog/tutorials/make/
 
 # Add some logic to detect cygwin
-ifneq "`test -d /cygdrive && echo cygwin`" ""
+TEST:=$(shell test -d /cygdrive && echo cygwin)
+ifneq "$(TEST)" ""
   LDFLAGS=-L/usr/bin -lreadline7
 else
   LDFLAGS=-lreadline

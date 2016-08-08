@@ -14,6 +14,7 @@ void cmdPrintDWord(void);
 void cmdPrintString(void);
 void cmdClearScreen(void);
 void cmdAutoClearScreen(void);
+void cmdSetBreakpoint(void);
 
 #define BUFSIZE 4096
 
@@ -29,4 +30,12 @@ typedef struct
   char* help;
 } type_command_details;
 
+typedef struct tse
+{
+  int addr;
+	char* symbol;
+  struct tse* next;
+} type_symmap_entry;
+
 extern type_command_details command_details[];
+extern type_symmap_entry* lstSymMap;

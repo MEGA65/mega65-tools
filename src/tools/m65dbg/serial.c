@@ -105,12 +105,20 @@ bool serialClose(void)
   return false;
 }
 
+void serialFlush(void)
+{
+  // http://stackoverflow.com/questions/13013387/clearing-the-serial-ports-buffer
+  //  sleep(2); //required to make flush work, for some reason (for USB serial ports?)
+  tcflush(fd,TCIOFLUSH);
+}
 
 /**
  * writes a string to the serial port
  */
 void serialWrite(char* string)
 { 
+  serialFlush();
+
   int i = strlen(string);
   // do we need to add a carriage return to the end?
   if (string[i-1] != '\n')
