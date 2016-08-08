@@ -58,13 +58,6 @@ char* get_extension(char* fname)
   return strrchr(fname, '.');
 }
 
-typedef struct tse
-{
-  int addr;
-	char* symbol;
-  struct tse* next;
-} type_symmap_entry;
-
 typedef struct tfl
 {
 	int addr;
@@ -74,6 +67,7 @@ typedef struct tfl
 } type_fileloc;
 
 type_fileloc* lstFileLoc = NULL;
+
 type_symmap_entry* lstSymMap = NULL;
 
 void add_to_list(type_fileloc fl)
