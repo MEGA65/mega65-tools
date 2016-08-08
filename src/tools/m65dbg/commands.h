@@ -14,6 +14,7 @@ void cmdPrintDWord(void);
 void cmdPrintString(void);
 void cmdClearScreen(void);
 void cmdAutoClearScreen(void);
+void cmdSetBreakpoint(void);
 
 #define BUFSIZE 4096
 

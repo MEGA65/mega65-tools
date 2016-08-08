@@ -50,6 +50,7 @@ type_command_details command_details[] =
   { "ps", cmdPrintString, "<addr>", "Prints the null-terminated string-value found at the given address" },
   { "cls", cmdClearScreen, NULL, "Clears the screen" },
   { "autocls", cmdAutoClearScreen, "0/1", "If set to 1, clears the screen prior to every step/next command" },
+	{ "break", cmdSetBreakpoint, "<addr>", "Sets the hardware breakpoint to the desired address" },
 	{ NULL, NULL }
 };
 
@@ -817,4 +818,20 @@ void cmdAutoClearScreen(void)
 		autocls = false;
 	
 	printf(" - autocls is turned %s.\n", autocls ? "on" : "off");
+}
+
+void cmdSetBreakpoint(void)
+{
+  char* token = strtok(NULL, " ");
+  char str[100];
+  
+  if (token != NULL)
+  {
+		int addr = get_sym_value(token);
+		printf("- Setting hardware breakpoint to $%04X\n", addr);
+
+    sprintf(str, "b%04X\n", addr);
+    serialWrite(str);
+    serialRead(inbuf, BUFSIZE);
+	}
 }
