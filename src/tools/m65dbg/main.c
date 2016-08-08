@@ -88,14 +88,39 @@ void ctrlc_handler(int s)
  */
 int main(int argc, char** argv)
 {
+  char devSerial[100] = "/dev/ttyS4";
+
   signal(SIGINT, ctrlc_handler);
   rl_initialize();
 
   printf("m65dbg - " VERSION "\n");
   printf("======\n");
 
+  // check parameters
+  for (int k = 1; k < argc; k++)
+  {
+    if (strcmp(argv[k], "--help") == 0 ||
+	strcmp(argv[k], "-h") == 0)
+    {
+      printf("--help/-h = display this help\n"
+	     "--device/-d </dev/tty*> = select a tty device-name to use as the serial port to communicate with the Nexys hardware\n");
+      exit(0);
+    }
+    if (strcmp(argv[k], "--device") == 0 ||
+	strcmp(argv[k], "-d") == 0)
+    {
+      if (k+1 >= argc)
+      {
+        printf("Device name for serial port is missing (e.g., /dev/ttyS0)\n");
+	exit(0);
+      }
+      k++;
+      strcpy(devSerial, argv[k]);
+    }
+  }
+
   // open the serial port
-  serialOpen("/dev/ttyS4");
+  serialOpen(devSerial);
   printf("- Type 'h' for help\n");
 
   listSearch();
