@@ -45,7 +45,7 @@ type_command_details command_details[] =
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
 	{ "dump", cmdDump, "<addr> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
 	{ "mdump", cmdMDump, "<addr> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
-  { "dis", cmdDisassemble, NULL, "Disassembles the instruction at the PC" },
+  { "dis", cmdDisassemble, "[<addr> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
   { "n", cmdNext, NULL, "Step over to next instruction" },
   { "finish", cmdFinish, NULL, "Continue running until function returns (ie, step-out-from)" },
@@ -606,129 +606,176 @@ void cmdDisassemble(void)
   if (autowatch)
 	  cmdWatches();
 
-  // get current register values
-  reg_data reg = get_regs();
+  int addr;
+	int cnt = 1; // number of lines to disassemble
 
-  // get memory at current pc
-  mem_data mem = get_mem(reg.pc);
-
-  // now, try to disassemble it
-
-  // Program counter
-  sprintf(str, "$%04X ", reg.pc);
-
-  type_opcode_mode mode = opcode_mode[mode_lut[mem.b[1]]];
-  sprintf(s, " %10s:%d ", mode.name, mode.val);
-  strcat(str, s);
-
-  // Opcode and arguments
-  sprintf(s, "%02X ", mem.b[0]);
-  strcat(str, s);
-
-  last_bytecount = mode.val + 1;
-
-  if (last_bytecount == 1)
-  {
-    strcat(str, "      ");
-  }
-  if (last_bytecount == 2)
-  {
-    sprintf(s, "%02X    ", mem.b[1]);
-    strcat(str, s);
-  }
-  if (last_bytecount == 3)
-  {
-    sprintf(s, "%02X %02X ", mem.b[1], mem.b[2]);
-    strcat(str, s);
-  }
-
-  // Instruction name
-  strcat(str, instruction_lut[mem.b[0]]);
-
-  switch(mode_lut[mem.b[0]])
-  {
-    case M_impl: break;
-    case M_InnX:
-      sprintf(s, " ($%02X,X)", mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_nn:
-      sprintf(s, " $%02X", mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_immnn:
-      sprintf(s, " #$%02X", mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_A: break;
-    case M_nnnn:
-      sprintf(s, " $%02X%02X", mem.b[2], mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_nnrr:
-      sprintf(s, " $%02X,$%04X", mem.b[1], (reg.pc + 3 + mem.b[2]) );
-      strcat(str, s);
-      break;
-    case M_rr:
-      if (mem.b[1] & 0x80)
-        sprintf(s, " $%04X", (reg.pc + 2 - 256 + mem.b[1]) );
-      else
-        sprintf(s, " $%04X", (reg.pc + 2 + mem.b[1]) );
-      strcat(str, s);
-      break;
-    case M_InnY:
-      sprintf(s, " ($%02X),Y", mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_InnZ:
-      sprintf(s, " ($%02X),Z", mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_rrrr:
-      sprintf(s, " $%04X", (reg.pc + 2 + (mem.b[2] << 8) + mem.b[1]) & 0xffff );
-      strcat(str, s);
-      break;
-    case M_nnX:
-      sprintf(s, " $%02X,X", mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_nnnnY:
-      sprintf(s, " $%02X%02X,Y", mem.b[2], mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_nnnnX:
-      sprintf(s, " $%02X%02X,X", mem.b[2], mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_Innnn:
-      sprintf(s, " ($%02X%02X)", mem.b[2], mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_InnnnX:
-      sprintf(s, " ($%02X%02X,X)", mem.b[2], mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_InnSPY:
-      sprintf(s, " ($%02X,SP),Y", mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_nnY:
-      sprintf(s, " $%02X,Y", mem.b[1]);
-      strcat(str, s);
-      break;
-    case M_immnnnn:
-      sprintf(s, " #$%02X%02X", mem.b[2], mem.b[1]);
-      strcat(str, s);
-      break;
-  }
-
-  type_fileloc *found = find_in_list(reg.pc);
-	if (found)
+	// get address from parameter?
+  char* token = strtok(NULL, " ");
+  
+  if (token != NULL)
 	{
-	  printf("> %s:%d\n", found->file, found->lineno);
-		show_location(found);
+	  if (strcmp(token, "-") == 0) // '-' equates to current pc
+		{
+      // get current register values
+      reg_data reg = get_regs();
+  		addr = reg.pc;
+		}
+		else
+      addr = get_sym_value(token);
+
+		token = strtok(NULL, " ");
+
+		if (token != NULL)
+		{
+		  cnt = get_sym_value(token);
+		}
 	}
-  printf("%s\n", str);
+	// default to current pc
+	else
+	{
+    // get current register values
+    reg_data reg = get_regs();
+		addr = reg.pc;
+  }
+
+  int idx = 0;
+
+	while (idx < cnt)
+	{
+		// get memory at current pc
+		mem_data mem = get_mem(addr);
+
+		// now, try to disassemble it
+
+		// Program counter
+		sprintf(str, "$%04X ", addr);
+
+		type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
+		sprintf(s, " %10s:%d ", mode.name, mode.val);
+		strcat(str, s);
+
+		// Opcode and arguments
+		sprintf(s, "%02X ", mem.b[0]);
+		strcat(str, s);
+
+		last_bytecount = mode.val + 1;
+
+		if (last_bytecount == 1)
+		{
+			strcat(str, "      ");
+		}
+		if (last_bytecount == 2)
+		{
+			sprintf(s, "%02X    ", mem.b[1]);
+			strcat(str, s);
+		}
+		if (last_bytecount == 3)
+		{
+			sprintf(s, "%02X %02X ", mem.b[1], mem.b[2]);
+			strcat(str, s);
+		}
+
+		// Instruction name
+		strcat(str, instruction_lut[mem.b[0]]);
+
+		switch(mode_lut[mem.b[0]])
+		{
+			case M_impl: break;
+			case M_InnX:
+				sprintf(s, " ($%02X,X)", mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_nn:
+				sprintf(s, " $%02X", mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_immnn:
+				sprintf(s, " #$%02X", mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_A: break;
+			case M_nnnn:
+				sprintf(s, " $%02X%02X", mem.b[2], mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_nnrr:
+				sprintf(s, " $%02X,$%04X", mem.b[1], (addr + 3 + mem.b[2]) );
+				strcat(str, s);
+				break;
+			case M_rr:
+				if (mem.b[1] & 0x80)
+					sprintf(s, " $%04X", (addr + 2 - 256 + mem.b[1]) );
+				else
+					sprintf(s, " $%04X", (addr + 2 + mem.b[1]) );
+				strcat(str, s);
+				break;
+			case M_InnY:
+				sprintf(s, " ($%02X),Y", mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_InnZ:
+				sprintf(s, " ($%02X),Z", mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_rrrr:
+				sprintf(s, " $%04X", (addr + 2 + (mem.b[2] << 8) + mem.b[1]) & 0xffff );
+				strcat(str, s);
+				break;
+			case M_nnX:
+				sprintf(s, " $%02X,X", mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_nnnnY:
+				sprintf(s, " $%02X%02X,Y", mem.b[2], mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_nnnnX:
+				sprintf(s, " $%02X%02X,X", mem.b[2], mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_Innnn:
+				sprintf(s, " ($%02X%02X)", mem.b[2], mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_InnnnX:
+				sprintf(s, " ($%02X%02X,X)", mem.b[2], mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_InnSPY:
+				sprintf(s, " ($%02X,SP),Y", mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_nnY:
+				sprintf(s, " $%02X,Y", mem.b[1]);
+				strcat(str, s);
+				break;
+			case M_immnnnn:
+				sprintf(s, " #$%02X%02X", mem.b[2], mem.b[1]);
+				strcat(str, s);
+				break;
+		}
+
+    // print from .list ref? (i.e., find source in .a65 file?)
+    if (idx == 0)
+		{
+			type_fileloc *found = find_in_list(addr);
+			if (found)
+			{
+				printf("> %s:%d\n", found->file, found->lineno);
+				show_location(found);
+        printf("---------------------------------------\n");
+			}
+		}
+
+		// just print the raw disassembly line
+		if (cnt != 1 && idx == 0)
+			printf("%s%s%s\n", KINV, str, KNRM);
+		else
+			printf("%s\n", str);
+
+    addr += last_bytecount;
+		idx++;
+	} // end while
 }
 
 void cmdStep(void)
