@@ -50,6 +50,7 @@ type_command_details command_details[] =
   { "ps", cmdPrintString, "<addr>", "Prints the null-terminated string-value found at the given address" },
   { "cls", cmdClearScreen, NULL, "Clears the screen" },
   { "autocls", cmdAutoClearScreen, "0/1", "If set to 1, clears the screen prior to every step/next command" },
+	{ "break", cmdSetBreakpoint, "<addr>", "Sets the hardware breakpoint to the desired address" },
 	{ NULL, NULL }
 };
 
@@ -57,13 +58,6 @@ char* get_extension(char* fname)
 {
   return strrchr(fname, '.');
 }
-
-typedef struct tse
-{
-  int addr;
-	char* symbol;
-  struct tse* next;
-} type_symmap_entry;
 
 typedef struct tfl
 {
@@ -74,6 +68,7 @@ typedef struct tfl
 } type_fileloc;
 
 type_fileloc* lstFileLoc = NULL;
+
 type_symmap_entry* lstSymMap = NULL;
 
 void add_to_list(type_fileloc fl)
@@ -823,4 +818,20 @@ void cmdAutoClearScreen(void)
 		autocls = false;
 	
 	printf(" - autocls is turned %s.\n", autocls ? "on" : "off");
+}
+
+void cmdSetBreakpoint(void)
+{
+  char* token = strtok(NULL, " ");
+  char str[100];
+  
+  if (token != NULL)
+  {
+		int addr = get_sym_value(token);
+		printf("- Setting hardware breakpoint to $%04X\n", addr);
+
+    sprintf(str, "b%04X\n", addr);
+    serialWrite(str);
+    serialRead(inbuf, BUFSIZE);
+	}
 }

@@ -80,6 +80,47 @@ void ctrlc_handler(int s)
   ctrlcflag = true;
 }
 
+//static int nf;
+//static char** files;
+
+char* my_generator(const char* text, int state)
+{
+    static int len;
+    static type_symmap_entry* iter = NULL;
+
+    if( !state )
+    {
+        len = strlen(text);
+	iter = lstSymMap;
+    }
+
+    while(iter != NULL)
+    {
+        if( strncmp(iter->symbol, text, len) == 0 )
+	{
+	  char *s = strdup(iter->symbol);
+	  iter = iter->next;
+	  return s;
+	}
+
+	iter = iter->next;
+    }
+    return((char *)NULL);
+}
+
+static char** my_completion(const char * text, int start, int end)
+{
+    char **matches;
+    matches = (char **)NULL;
+    //if( start == 0 )
+    //{
+        matches = rl_completion_matches((char*)text, &my_generator);
+    //}
+    //else
+    //  rl_bind_key('\t',rl_insert);
+    return( matches );
+}
+
 /**
  * main entry point of program
  *
@@ -128,6 +169,9 @@ int main(int argc, char** argv)
   while(1)
   {
     ctrlcflag = false;
+
+    rl_attempted_completion_function = my_completion;
+
     get_command();
 
     if (strcmp(strInput, "exit") == 0 ||
