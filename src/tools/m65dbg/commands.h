@@ -23,6 +23,7 @@ void cmdWatchString(void);
 void cmdWatches(void);
 void cmdDeleteWatch(void);
 void cmdAutoWatch(void);
+void cmdSymbolValue(void);
 
 #define BUFSIZE 4096
 
@@ -40,8 +41,9 @@ typedef struct
 
 typedef struct tse
 {
-  int addr;
-	char* symbol;
+  char* symbol;
+  int addr;   // integer value of symbol
+  char* sval; // string value of symbol
   struct tse* next;
 } type_symmap_entry;
 

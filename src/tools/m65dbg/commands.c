@@ -63,6 +63,7 @@ type_command_details command_details[] =
   { "watches", cmdWatches, NULL, "Lists all watches and their present values" },
   { "wdel", cmdDeleteWatch, "<watch#>/all", "Deletes the watch number specified (use 'watches' command to get a list of existing watch numbers)" },
   { "autowatch", cmdAutoWatch, "0/1", "If set to 1, shows all watches prior to every step/next/dis command" },
+  { "symbol", cmdSymbolValue, "<symbol>", "retrieves the value of the symbol from the .map file" },
 	{ NULL, NULL }
 };
 
@@ -150,6 +151,7 @@ void add_to_symmap(type_symmap_entry sme)
 	{
 		lstSymMap = malloc(sizeof(type_symmap_entry));
 		lstSymMap->addr = sme.addr;
+		lstSymMap->sval = strdup(sme.sval);
 		lstSymMap->symbol = strdup(sme.symbol);
 		lstSymMap->next = NULL;
 		return;
@@ -162,10 +164,12 @@ void add_to_symmap(type_symmap_entry sme)
 		{
 		  type_symmap_entry* smecpy = malloc(sizeof(type_symmap_entry));
 			smecpy->addr = iter->addr;
+			smecpy->sval = iter->sval;
 			smecpy->symbol = iter->symbol;
 			smecpy->next = iter->next;
 
 			iter->addr = sme.addr;
+			iter->sval = strdup(sme.sval);
 			iter->symbol = strdup(sme.symbol);
 			iter->next = smecpy;
 			return;
@@ -175,6 +179,7 @@ void add_to_symmap(type_symmap_entry sme)
 		{
 		  type_symmap_entry* smenew = malloc(sizeof(type_symmap_entry));
 			smenew->addr = sme.addr;
+			smenew->sval = strdup(sme.sval);
 			smenew->symbol = strdup(sme.symbol);
 			smenew->next = NULL;
 
@@ -325,14 +330,18 @@ void load_map(char* fname)
 		while (!feof(f))
 		{
 			char line[1024];
+			char sval[256];
 			fgets(line, 1024, f);
 
 			int addr;
 			char sym[1024];
 			sscanf(line, "$%04X %s", &addr, sym);
+			sscanf(line, "%s", sval);
+
 			//printf("%s : %04X\n", sym, addr);
 			type_symmap_entry sme;
 			sme.addr = addr;
+			sme.sval = sval; 
 			sme.symbol = sym;
 			add_to_symmap(sme);
 		}
@@ -1073,4 +1082,17 @@ void cmdAutoWatch(void)
 		autowatch = false;
 	
 	printf(" - autowatch is turned %s.\n", autowatch ? "on" : "off");
+}
+
+void cmdSymbolValue(void)
+{
+  char* token = strtok(NULL, " ");
+  
+  if (token != NULL)
+  {
+    type_symmap_entry* sme = find_in_symmap(token);
+
+		if (sme != NULL)
+		  printf("%s : %s\n", sme->sval, sme->symbol);
+	}
 }
