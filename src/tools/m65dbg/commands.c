@@ -29,10 +29,15 @@ typedef struct
   unsigned int b[16];
 } mem_data;
 
+bool outputFlag = true;
+
 char outbuf[BUFSIZE] = { 0 };	// the buffer of what command is output to the remote monitor
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
 
+char* type_names[] = { "BYTE  ", "WORD  ", "DWORD ", "STRING" };
+
 bool autocls = false; // auto-clearscreen flag
+bool autowatch = false; // auto-watch flag
 bool ctrlcflag = false; // a flag to keep track of whether ctrl-c was caught
 
 type_command_details command_details[] =
@@ -51,6 +56,13 @@ type_command_details command_details[] =
   { "cls", cmdClearScreen, NULL, "Clears the screen" },
   { "autocls", cmdAutoClearScreen, "0/1", "If set to 1, clears the screen prior to every step/next command" },
 	{ "break", cmdSetBreakpoint, "<addr>", "Sets the hardware breakpoint to the desired address" },
+  { "wb", cmdWatchByte, "<addr>", "Watches the byte-value of the given address" },
+  { "ww", cmdWatchWord, "<addr>", "Watches the word-value of the given address" },
+  { "wd", cmdWatchDWord, "<addr>", "Watches the dword-value of the given address" },
+  { "ws", cmdWatchString, "<addr>", "Watches the null-terminated string-value found at the given address" },
+  { "watches", cmdWatches, NULL, "Lists all watches and their present values" },
+  { "wdel", cmdDeleteWatch, "<watch#>/all", "Deletes the watch number specified (use 'watches' command to get a list of existing watch numbers)" },
+  { "autowatch", cmdAutoWatch, "0/1", "If set to 1, shows all watches prior to every step/next/dis command" },
 	{ NULL, NULL }
 };
 
@@ -70,6 +82,8 @@ typedef struct tfl
 type_fileloc* lstFileLoc = NULL;
 
 type_symmap_entry* lstSymMap = NULL;
+
+type_watch_entry* lstWatches = NULL;
 
 void add_to_list(type_fileloc fl)
 {
@@ -172,6 +186,38 @@ void add_to_symmap(type_symmap_entry sme)
 	}
 }
 
+void add_to_watchlist(type_watch_entry we)
+{
+  type_watch_entry* iter = lstWatches;
+
+	// first entry in list?
+	if (lstWatches == NULL)
+	{
+	  lstWatches = malloc(sizeof(type_watch_entry));
+		lstWatches->type = we.type;
+    lstWatches->name = strdup(we.name);
+		lstWatches->next = NULL;
+		return;
+	}
+
+	while (iter != NULL)
+	{
+	  // add to end?
+		if (iter->next == NULL)
+		{
+		  type_watch_entry* wenew = malloc(sizeof(type_watch_entry));
+			wenew->type = we.type;
+			wenew->name = strdup(we.name);
+			wenew->next = NULL;
+
+			iter->next = wenew;
+			return;
+		}
+
+		iter = iter->next;
+	}
+}
+
 type_fileloc* find_in_list(int addr)
 {
 	type_fileloc* iter = lstFileLoc;
@@ -200,6 +246,63 @@ type_symmap_entry* find_in_symmap(char* sym)
 	}
 
 	return NULL;
+}
+
+type_watch_entry* find_in_watchlist(char* name)
+{
+  type_watch_entry* iter = lstWatches;
+
+	while (iter != NULL)
+	{
+	  if (strcmp(iter->name, name) == 0)
+		  return iter;
+
+		iter = iter->next;
+	}
+
+	return NULL;
+}
+
+bool delete_from_watchlist(int wnum)
+{
+  int cnt = 0;
+
+	type_watch_entry* iter = lstWatches;
+	type_watch_entry* prev = NULL;
+
+	while (iter != NULL)
+	{
+	  cnt++;
+
+    // we found the item to delete?
+		if (cnt == wnum)
+		{
+		  // first entry of list?
+		  if (prev == NULL)
+			{
+			  lstWatches = iter->next;
+				free(iter->name);
+				free(iter);
+				if (outputFlag)
+					printf("watch#%d deleted!\n", wnum);
+				return true;
+			}
+			else
+			{
+			  prev->next = iter->next;
+				free(iter->name);
+				free(iter);
+				if (outputFlag)
+					printf("watch#%d deleted!\n", wnum);
+				return true;
+			}
+		}
+
+    prev = iter;
+		iter = iter->next;
+	}
+
+	return false;
 }
 
 // loads the *.map file corresponding to the provided *.list file (if one exists)
@@ -491,6 +594,9 @@ void cmdDisassemble(void)
   char s[32] = { 0 };
   int last_bytecount = 0;
 
+  if (autowatch)
+	  cmdWatches();
+
   // get current register values
   reg_data reg = get_regs();
 
@@ -616,8 +722,6 @@ void cmdDisassemble(void)
   printf("%s\n", str);
 }
 
-bool outputFlag = true;
-
 void cmdStep(void)
 {
   // just send an enter command
@@ -726,18 +830,32 @@ int get_sym_value(char* token)
 	}
 }
 
+void print_byte(char *token)
+{
+	int addr = get_sym_value(token);
+
+	mem_data mem = get_mem(addr);
+
+	printf(" %s: %02X\n", token, mem.b[0]);
+}
+
 void cmdPrintByte(void)
 {
   char* token = strtok(NULL, " ");
   
   if (token != NULL)
   {
-		int addr = get_sym_value(token);
-
-    mem_data mem = get_mem(addr);
-
-    printf(" %s: %02X\n", token, mem.b[0]);
+	  print_byte(token);
   }
+}
+
+void print_word(char* token)
+{
+	int addr = get_sym_value(token);
+
+	mem_data mem = get_mem(addr);
+
+	printf(" %s: %02X%02X\n", token, mem.b[1], mem.b[0]);
 }
 
 void cmdPrintWord(void)
@@ -746,12 +864,17 @@ void cmdPrintWord(void)
   
   if (token != NULL)
   {
-		int addr = get_sym_value(token);
-
-    mem_data mem = get_mem(addr);
-
-    printf(" %s: %02X%02X\n", token, mem.b[1], mem.b[0]);
+	  print_word(token);
   }
+}
+
+void print_dword(char* token)
+{
+	int addr = get_sym_value(token);
+
+	mem_data mem = get_mem(addr);
+
+	printf(" %s: %02X%02X%02X%02X\n", token, mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
 }
 
 void cmdPrintDWord(void)
@@ -760,43 +883,44 @@ void cmdPrintDWord(void)
   
   if (token != NULL)
   {
-		int addr = get_sym_value(token);
-
-    mem_data mem = get_mem(addr);
-
-    printf(" %s: %02X%02X%02X%02X\n", token, mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
+	  print_dword(token);
   }
+}
+
+void print_string(char* token)
+{
+	int addr = get_sym_value(token);
+	static char string[2048] = { 0 };
+	char c[2] = { 0 };
+
+	int cnt = 0;
+	string[0] = '\0';
+
+	while (1)
+	{
+		mem_data mem = get_mem(addr+cnt);
+
+		for (int k = 0; k < 16; k++)
+		{
+			c[0] = mem.b[k];
+			strcat(string, c);
+			if (mem.b[k] == 0)
+			{
+				printf(" %s: %s\n", token, string);
+				return;
+			}
+			cnt++;
+		}
+	}
 }
 
 void cmdPrintString(void)
 {
   char* token = strtok(NULL, " ");
-	static char string[2048] = { 0 };
-	char c[2] = { 0 };
   
   if (token != NULL)
   {
-		int addr = get_sym_value(token);
-
-    int cnt = 0;
-		string[0] = '\0';
-
-    while (1)
-		{
-			mem_data mem = get_mem(addr+cnt);
-
-			for (int k = 0; k < 16; k++)
-			{
-			  c[0] = mem.b[k];
-			  strcat(string, c);
-				if (mem.b[k] == 0)
-				{
-				  printf(" %s: %s\n", token, string);
-					return;
-				}
-			  cnt++;
-			}
-		}
+	  print_string(token);
   }
 }
 
@@ -834,4 +958,119 @@ void cmdSetBreakpoint(void)
     serialWrite(str);
     serialRead(inbuf, BUFSIZE);
 	}
+}
+
+void cmd_watch(type_watch type)
+{
+  char* token = strtok(NULL, " ");
+  
+  if (token != NULL)
+  {
+	  if (find_in_watchlist(token))
+		{
+		  printf("watch already exists!\n");
+			return;
+		}
+
+	  type_watch_entry we;
+		we.type = type;
+		we.name = token;
+		add_to_watchlist(we);
+
+		printf("watch added!\n");
+	}
+}
+
+void cmdWatchByte(void)
+{
+  cmd_watch(TYPE_BYTE);
+}
+
+void cmdWatchWord(void)
+{
+  cmd_watch(TYPE_WORD);
+}
+
+void cmdWatchDWord(void)
+{
+  cmd_watch(TYPE_DWORD);
+}
+
+void cmdWatchString(void)
+{
+  cmd_watch(TYPE_STRING);
+}
+
+void cmdWatches(void)
+{
+  type_watch_entry* iter = lstWatches;
+	int cnt = 0;
+
+  printf("---------------------------------------\n");
+	
+	while (iter != NULL)
+	{
+	  cnt++;
+
+		printf("#%d: %s ", cnt, type_names[iter->type]);
+
+		switch (iter->type)
+		{
+		  case TYPE_BYTE:   print_byte(iter->name);   break;
+		  case TYPE_WORD:   print_word(iter->name);   break;
+		  case TYPE_DWORD:  print_dword(iter->name);  break;
+		  case TYPE_STRING: print_string(iter->name); break;
+		}
+
+		iter = iter->next;
+	}
+
+	if (cnt == 0)
+	  printf("no watches in list\n");
+  printf("---------------------------------------\n");
+}
+
+void cmdDeleteWatch(void)
+{
+  char* token = strtok(NULL, " ");
+  
+  if (token != NULL)
+  {
+	  // user wants to delete all watches?
+	  if (strcmp(token, "all") == 0)
+		{
+		  // TODO: add a confirm yes/no prompt...
+			outputFlag = false;
+			while (delete_from_watchlist(1))
+			  ;
+			outputFlag = true;
+			printf("deleted all watches!\n");
+		}
+		else
+		{
+		  int wnum;
+		  int n = sscanf(token, "%d", &wnum);
+
+			if (n == 1)
+			{
+			  delete_from_watchlist(wnum);
+			}
+		}
+	}
+}
+
+
+void cmdAutoWatch(void)
+{
+  char* token = strtok(NULL, " ");
+
+  // if no parameter, then just toggle it
+	if (token == NULL)
+		autowatch = !autowatch;
+	else if (strcmp(token, "1") == 0)
+		autowatch = true;
+	else if (strcmp(token, "0") == 0)
+		autowatch = false;
+	
+	printf(" - autowatch is turned %s.\n", autowatch ? "on" : "off");
 }
