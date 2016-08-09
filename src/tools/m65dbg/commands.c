@@ -551,6 +551,9 @@ void cmdDump(void)
 		}
 		printf("\n");
 		cnt+=16;
+
+		if (ctrlcflag)
+			break;
 	}
 }
 
@@ -596,6 +599,9 @@ void cmdMDump(void)
 		}
 		printf("\n");
 		cnt+=16;
+
+		if (ctrlcflag)
+			break;
 	}
 }
 
@@ -774,6 +780,9 @@ void cmdDisassemble(void)
 			printf("%s%s%s\n", KINV, str, KNRM);
 		else
 			printf("%s\n", str);
+
+		if (ctrlcflag)
+			break;
 
     addr += last_bytecount;
 		idx++;
