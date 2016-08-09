@@ -402,6 +402,8 @@ void load_list(char* fname)
 void show_location(type_fileloc* fl)
 {
   FILE* f = fopen(fl->file, "rt");
+  if (f == NULL)
+    return;
 	char line[1024];
 	int cnt = 1;
 
