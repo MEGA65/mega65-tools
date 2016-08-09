@@ -109,7 +109,7 @@ void serialFlush(void)
 {
   // http://stackoverflow.com/questions/13013387/clearing-the-serial-ports-buffer
   //  sleep(2); //required to make flush work, for some reason (for USB serial ports?)
-  tcflush(fd,TCIOFLUSH);
+//  tcflush(fd,TCIOFLUSH);
 }
 
 /**
