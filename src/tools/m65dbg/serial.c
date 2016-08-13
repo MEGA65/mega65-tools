@@ -115,7 +115,11 @@ void serialFlush(void)
   // I'll now try a 'manual' flush, to see if that works for Ralph's mac and my mac...
   int bytes_available;
   static char tmp[16384];
+#ifdef FIONREAD
   ioctl(fd, FIONREAD, &bytes_available);
+#else
+  ioctl(fd, TIOCINQ, &bytes_available);
+#endif
   read(fd, tmp, bytes_available);
 }
 

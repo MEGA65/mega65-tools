@@ -1286,4 +1286,4 @@ void cmdBackTrace(void)
 	  disassemble_addr_into_string(str, addr);
     printf("#%d: %s\n", k+1, str);
 	}
-
+}
