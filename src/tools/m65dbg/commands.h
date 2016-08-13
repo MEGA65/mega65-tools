@@ -24,6 +24,7 @@ void cmdWatches(void);
 void cmdDeleteWatch(void);
 void cmdAutoWatch(void);
 void cmdSymbolValue(void);
+void cmdBackTrace(void);
 
 #define BUFSIZE 4096
 

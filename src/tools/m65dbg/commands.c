@@ -64,6 +64,7 @@ type_command_details command_details[] =
   { "wdel", cmdDeleteWatch, "<watch#>/all", "Deletes the watch number specified (use 'watches' command to get a list of existing watch numbers)" },
   { "autowatch", cmdAutoWatch, "0/1", "If set to 1, shows all watches prior to every step/next/dis command" },
   { "symbol", cmdSymbolValue, "<symbol>", "retrieves the value of the symbol from the .map file" },
+	{ "back", cmdBackTrace, NULL, "produces a rough backtrace from the current contents of the stack" },
 	{ NULL, NULL }
 };
 
@@ -535,7 +536,12 @@ void cmdDump(void)
 
 		printf(" :%07X ", mem.addr);
 		for (int k = 0; k < 16; k++)
+		{
+		  if (k == 8) // add extra space prior to 8th byte
+			  printf(" ");
+
 			printf("%02X ", mem.b[k]);
+		}
 		
 		printf(" | ");
 
@@ -580,7 +586,12 @@ void cmdMDump(void)
 
 		printf(" :%07X ", mem.addr);
 		for (int k = 0; k < 16; k++)
+		{
+		  if (k == 8) // add extra space prior to 8th byte
+			  printf(" ");
+
 			printf("%02X ", mem.b[k]);
+		}
 		
 		printf(" | ");
 
@@ -597,10 +608,131 @@ void cmdMDump(void)
 	}
 }
 
+// return the last byte count
+int disassemble_addr_into_string(char* str, int addr)
+{
+  int last_bytecount = 0;
+  char s[32] = { 0 };
+
+	// get memory at current pc
+	mem_data mem = get_mem(addr);
+
+	// now, try to disassemble it
+
+	// Program counter
+	sprintf(str, "$%04X ", addr & 0xffff);
+
+	type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
+	sprintf(s, " %10s:%d ", mode.name, mode.val);
+	strcat(str, s);
+
+	// Opcode and arguments
+	sprintf(s, "%02X ", mem.b[0]);
+	strcat(str, s);
+
+	last_bytecount = mode.val + 1;
+
+	if (last_bytecount == 1)
+	{
+		strcat(str, "      ");
+	}
+	if (last_bytecount == 2)
+	{
+		sprintf(s, "%02X    ", mem.b[1]);
+		strcat(str, s);
+	}
+	if (last_bytecount == 3)
+	{
+		sprintf(s, "%02X %02X ", mem.b[1], mem.b[2]);
+		strcat(str, s);
+	}
+
+	// Instruction name
+	strcat(str, instruction_lut[mem.b[0]]);
+
+	switch(mode_lut[mem.b[0]])
+	{
+		case M_impl: break;
+		case M_InnX:
+			sprintf(s, " ($%02X,X)", mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_nn:
+			sprintf(s, " $%02X", mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_immnn:
+			sprintf(s, " #$%02X", mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_A: break;
+		case M_nnnn:
+			sprintf(s, " $%02X%02X", mem.b[2], mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_nnrr:
+			sprintf(s, " $%02X,$%04X", mem.b[1], (addr + 3 + mem.b[2]) );
+			strcat(str, s);
+			break;
+		case M_rr:
+			if (mem.b[1] & 0x80)
+				sprintf(s, " $%04X", (addr + 2 - 256 + mem.b[1]) );
+			else
+				sprintf(s, " $%04X", (addr + 2 + mem.b[1]) );
+			strcat(str, s);
+			break;
+		case M_InnY:
+			sprintf(s, " ($%02X),Y", mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_InnZ:
+			sprintf(s, " ($%02X),Z", mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_rrrr:
+			sprintf(s, " $%04X", (addr + 2 + (mem.b[2] << 8) + mem.b[1]) & 0xffff );
+			strcat(str, s);
+			break;
+		case M_nnX:
+			sprintf(s, " $%02X,X", mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_nnnnY:
+			sprintf(s, " $%02X%02X,Y", mem.b[2], mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_nnnnX:
+			sprintf(s, " $%02X%02X,X", mem.b[2], mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_Innnn:
+			sprintf(s, " ($%02X%02X)", mem.b[2], mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_InnnnX:
+			sprintf(s, " ($%02X%02X,X)", mem.b[2], mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_InnSPY:
+			sprintf(s, " ($%02X,SP),Y", mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_nnY:
+			sprintf(s, " $%02X,Y", mem.b[1]);
+			strcat(str, s);
+			break;
+		case M_immnnnn:
+			sprintf(s, " #$%02X%02X", mem.b[2], mem.b[1]);
+			strcat(str, s);
+			break;
+	}
+
+  return last_bytecount;
+}
+
 void cmdDisassemble(void)
 {
   char str[128] = { 0 };
-  char s[32] = { 0 };
   int last_bytecount = 0;
 
   if (autowatch)
@@ -642,118 +774,8 @@ void cmdDisassemble(void)
 
 	while (idx < cnt)
 	{
-		// get memory at current pc
-		mem_data mem = get_mem(addr);
+    last_bytecount = disassemble_addr_into_string(str, addr);
 
-		// now, try to disassemble it
-
-		// Program counter
-		sprintf(str, "$%04X ", addr);
-
-		type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
-		sprintf(s, " %10s:%d ", mode.name, mode.val);
-		strcat(str, s);
-
-		// Opcode and arguments
-		sprintf(s, "%02X ", mem.b[0]);
-		strcat(str, s);
-
-		last_bytecount = mode.val + 1;
-
-		if (last_bytecount == 1)
-		{
-			strcat(str, "      ");
-		}
-		if (last_bytecount == 2)
-		{
-			sprintf(s, "%02X    ", mem.b[1]);
-			strcat(str, s);
-		}
-		if (last_bytecount == 3)
-		{
-			sprintf(s, "%02X %02X ", mem.b[1], mem.b[2]);
-			strcat(str, s);
-		}
-
-		// Instruction name
-		strcat(str, instruction_lut[mem.b[0]]);
-
-		switch(mode_lut[mem.b[0]])
-		{
-			case M_impl: break;
-			case M_InnX:
-				sprintf(s, " ($%02X,X)", mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_nn:
-				sprintf(s, " $%02X", mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_immnn:
-				sprintf(s, " #$%02X", mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_A: break;
-			case M_nnnn:
-				sprintf(s, " $%02X%02X", mem.b[2], mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_nnrr:
-				sprintf(s, " $%02X,$%04X", mem.b[1], (addr + 3 + mem.b[2]) );
-				strcat(str, s);
-				break;
-			case M_rr:
-				if (mem.b[1] & 0x80)
-					sprintf(s, " $%04X", (addr + 2 - 256 + mem.b[1]) );
-				else
-					sprintf(s, " $%04X", (addr + 2 + mem.b[1]) );
-				strcat(str, s);
-				break;
-			case M_InnY:
-				sprintf(s, " ($%02X),Y", mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_InnZ:
-				sprintf(s, " ($%02X),Z", mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_rrrr:
-				sprintf(s, " $%04X", (addr + 2 + (mem.b[2] << 8) + mem.b[1]) & 0xffff );
-				strcat(str, s);
-				break;
-			case M_nnX:
-				sprintf(s, " $%02X,X", mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_nnnnY:
-				sprintf(s, " $%02X%02X,Y", mem.b[2], mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_nnnnX:
-				sprintf(s, " $%02X%02X,X", mem.b[2], mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_Innnn:
-				sprintf(s, " ($%02X%02X)", mem.b[2], mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_InnnnX:
-				sprintf(s, " ($%02X%02X,X)", mem.b[2], mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_InnSPY:
-				sprintf(s, " ($%02X,SP),Y", mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_nnY:
-				sprintf(s, " $%02X,Y", mem.b[1]);
-				strcat(str, s);
-				break;
-			case M_immnnnn:
-				sprintf(s, " #$%02X%02X", mem.b[2], mem.b[1]);
-				strcat(str, s);
-				break;
-		}
 
     // print from .list ref? (i.e., find source in .a65 file?)
     if (idx == 0)
@@ -1141,5 +1163,26 @@ void cmdSymbolValue(void)
 
 		if (sme != NULL)
 		  printf("%s : %s\n", sme->sval, sme->symbol);
+	}
+}
+
+void cmdBackTrace(void)
+{
+  char str[128] = { 0 };
+
+	// get current register values
+	reg_data reg = get_regs();
+
+	disassemble_addr_into_string(str, reg.pc);
+  printf("#0: %s\n", str);
+
+	// get memory at current pc
+	mem_data mem = get_mem(reg.sp+1);
+	for (int k = 0; k < 8; k++)
+	{
+	  int addr = mem.b[k*2] + (mem.b[k*2+1] << 8);
+		addr -= 2;
+	  disassemble_addr_into_string(str, addr);
+    printf("#%d: %s\n", k+1, str);
 	}
 }
