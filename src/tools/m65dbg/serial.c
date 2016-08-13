@@ -7,6 +7,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <sys/ioctl.h>
 #include "serial.h"
 
 #define error_message printf
@@ -109,7 +110,13 @@ void serialFlush(void)
 {
   // http://stackoverflow.com/questions/13013387/clearing-the-serial-ports-buffer
   //  sleep(2); //required to make flush work, for some reason (for USB serial ports?)
-  tcflush(fd,TCIOFLUSH);
+//  tcflush(fd,TCIOFLUSH);
+
+  // I'll now try a 'manual' flush, to see if that works for Ralph's mac and my mac...
+  int bytes_available;
+  static char tmp[16384];
+  ioctl(fd, FIONREAD, &bytes_available);
+  read(fd, tmp, bytes_available);
 }
 
 /**

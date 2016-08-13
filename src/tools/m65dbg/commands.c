@@ -64,6 +64,8 @@ type_command_details command_details[] =
   { "wdel", cmdDeleteWatch, "<watch#>/all", "Deletes the watch number specified (use 'watches' command to get a list of existing watch numbers)" },
   { "autowatch", cmdAutoWatch, "0/1", "If set to 1, shows all watches prior to every step/next/dis command" },
   { "symbol", cmdSymbolValue, "<symbol>", "retrieves the value of the symbol from the .map file" },
+  { "save", cmdSave, "<binfile> <addr28> <count>", "saves out a memory dump to <binfile> starting from <addr28> and for <count> bytes" },
+  { "load", cmdLoad, "<binfile> <addr28>", "loads in <binfile> to <addr28>" },
 	{ "back", cmdBackTrace, NULL, "produces a rough backtrace from the current contents of the stack" },
 	{ NULL, NULL }
 };
@@ -403,6 +405,8 @@ void load_list(char* fname)
 void show_location(type_fileloc* fl)
 {
   FILE* f = fopen(fl->file, "rt");
+  if (f == NULL)
+    return;
 	char line[1024];
 	int cnt = 1;
 
@@ -477,13 +481,34 @@ mem_data get_mem28(int addr)
 {
   mem_data mem = { 0 };
   char str[100];
-  sprintf(str, "m%04X\n", addr); // use 'd' instead of 'm' (for memory in cpu context)
+  sprintf(str, "m%04X\n", addr);
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
   sscanf(inbuf, " :%X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
   &mem.addr, &mem.b[0], &mem.b[1], &mem.b[2], &mem.b[3], &mem.b[4], &mem.b[5], &mem.b[6], &mem.b[7], &mem.b[8], &mem.b[9], &mem.b[10], &mem.b[11], &mem.b[12], &mem.b[13], &mem.b[14], &mem.b[15]); 
 
   return mem;
+}
+
+// read all 32 lines at once (to hopefully speed things up for saving memory dumps)
+mem_data* get_mem28array(int addr)
+{
+  static mem_data multimem[32];
+  mem_data* mem;
+  char str[100];
+  sprintf(str, "M%04X\n", addr);
+  serialWrite(str);
+  serialRead(inbuf, BUFSIZE);
+  char* strLine = strtok(inbuf, "\n");
+  for (int k = 0; k < 32; k++)
+  {
+    mem = &multimem[k];
+    sscanf(strLine, " :%X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+    &mem->addr, &mem->b[0], &mem->b[1], &mem->b[2], &mem->b[3], &mem->b[4], &mem->b[5], &mem->b[6], &mem->b[7], &mem->b[8], &mem->b[9], &mem->b[10], &mem->b[11], &mem->b[12], &mem->b[13], &mem->b[14], &mem->b[15]); 
+    strLine = strtok(NULL, "\n");
+  }
+
+  return multimem;
 }
 
 void cmdHelp(void)
@@ -555,6 +580,9 @@ void cmdDump(void)
 		}
 		printf("\n");
 		cnt+=16;
+
+		if (ctrlcflag)
+			break;
 	}
 }
 
@@ -605,6 +633,9 @@ void cmdMDump(void)
 		}
 		printf("\n");
 		cnt+=16;
+
+		if (ctrlcflag)
+			break;
 	}
 }
 
@@ -794,6 +825,9 @@ void cmdDisassemble(void)
 			printf("%s%s%s\n", KINV, str, KNRM);
 		else
 			printf("%s\n", str);
+
+		if (ctrlcflag)
+			break;
 
     addr += last_bytecount;
 		idx++;
@@ -1166,6 +1200,73 @@ void cmdSymbolValue(void)
 	}
 }
 
+void cmdSave(void)
+{
+  char* strBinFile = strtok(NULL, " ");
+
+  if (!strBinFile)
+  {
+    printf("Missing <binfile> parameter!\n");
+    return;
+  }
+
+	char* strAddr = strtok(NULL, " ");
+	if (!strAddr)
+	{
+	  printf("Missing <addr> parameter!\n");
+		return;
+	}
+
+  char* strCount = strtok(NULL, " ");
+  if (!strCount)
+  {
+    printf("Missing <count> parameter!\n");
+    return;
+  }
+
+	int addr = get_sym_value(strAddr);
+  int count;
+  sscanf(strCount, "%X", &count);
+
+  int cnt = 0;
+  FILE* fsave = fopen(strBinFile, "wb");
+	while (cnt < count)
+	{
+		// get memory at current pc
+		mem_data* multimem = get_mem28array(addr + cnt);
+
+    for (int line = 0; line < 32; line++)
+    {
+      mem_data* mem = &multimem[line];
+
+      for (int k = 0; k < 16; k++)
+      {
+        fputc(mem->b[k], fsave);
+
+        cnt++;
+
+        if (cnt >= count)
+          break;
+      }
+
+      printf("0x%X bytes saved...\r", cnt);
+      if (cnt >= count)
+        break;
+    }
+
+		if (ctrlcflag)
+			break;
+	}
+
+  printf("\n0x%X bytes saved to \"%s\"\n", cnt, strBinFile);
+  fclose(fsave);
+}
+
+void cmdLoad(void)
+{
+  printf("Sorry, not implemented yet!\n");
+}
+
 void cmdBackTrace(void)
 {
   char str[128] = { 0 };
@@ -1185,4 +1286,4 @@ void cmdBackTrace(void)
 	  disassemble_addr_into_string(str, addr);
     printf("#%d: %s\n", k+1, str);
 	}
-}
+
