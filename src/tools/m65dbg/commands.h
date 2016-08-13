@@ -27,6 +27,8 @@ void cmdSymbolValue(void);
 void cmdSave(void);
 void cmdLoad(void);
 void cmdBackTrace(void);
+void cmdUpFrame(void);
+void cmdDownFrame(void);
 
 #define BUFSIZE 4096
 

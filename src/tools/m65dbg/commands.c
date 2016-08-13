@@ -39,6 +39,7 @@ char* type_names[] = { "BYTE  ", "WORD  ", "DWORD ", "STRING" };
 bool autocls = false; // auto-clearscreen flag
 bool autowatch = false; // auto-watch flag
 bool ctrlcflag = false; // a flag to keep track of whether ctrl-c was caught
+int  traceframe = 0;  // tracks which frame within the backtrace
 
 type_command_details command_details[] =
 {
@@ -67,6 +68,8 @@ type_command_details command_details[] =
   { "save", cmdSave, "<binfile> <addr28> <count>", "saves out a memory dump to <binfile> starting from <addr28> and for <count> bytes" },
   { "load", cmdLoad, "<binfile> <addr28>", "loads in <binfile> to <addr28>" },
 	{ "back", cmdBackTrace, NULL, "produces a rough backtrace from the current contents of the stack" },
+	{ "up", cmdUpFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level up from the current frame" },
+	{ "down", cmdDownFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level down from the current frame" },
 	{ NULL, NULL }
 };
 
@@ -761,6 +764,25 @@ int disassemble_addr_into_string(char* str, int addr)
   return last_bytecount;
 }
 
+int* get_backtrace_addresses(void)
+{
+	// get current register values
+	reg_data reg = get_regs();
+
+  static int addresses[8];
+
+	// get memory at current pc
+	mem_data mem = get_mem(reg.sp+1);
+	for (int k = 0; k < 8; k++)
+	{
+	  int addr = mem.b[k*2] + (mem.b[k*2+1] << 8);
+		addr -= 2;
+    addresses[k] = addr;
+	}
+
+	return addresses;
+}
+
 void cmdDisassemble(void)
 {
   char str[128] = { 0 };
@@ -772,6 +794,9 @@ void cmdDisassemble(void)
   int addr;
 	int cnt = 1; // number of lines to disassemble
 
+	// get current register values
+	reg_data reg = get_regs();
+
 	// get address from parameter?
   char* token = strtok(NULL, " ");
   
@@ -780,7 +805,6 @@ void cmdDisassemble(void)
 	  if (strcmp(token, "-") == 0) // '-' equates to current pc
 		{
       // get current register values
-      reg_data reg = get_regs();
   		addr = reg.pc;
 		}
 		else
@@ -796,17 +820,23 @@ void cmdDisassemble(void)
 	// default to current pc
 	else
 	{
-    // get current register values
-    reg_data reg = get_regs();
 		addr = reg.pc;
   }
+
+  // are we in a different frame?
+  if (addr == reg.pc && traceframe != 0)
+	{
+	  int* addresses = get_backtrace_addresses();
+		addr = addresses[traceframe-1];
+
+		printf("<<< FRAME#: %d >>>\n", traceframe);
+	}
 
   int idx = 0;
 
 	while (idx < cnt)
 	{
     last_bytecount = disassemble_addr_into_string(str, addr);
-
 
     // print from .list ref? (i.e., find source in .a65 file?)
     if (idx == 0)
@@ -836,6 +866,8 @@ void cmdDisassemble(void)
 
 void cmdStep(void)
 {
+  traceframe = 0;
+
   // just send an enter command
   serialWrite("\n");
   serialRead(inbuf, BUFSIZE);
@@ -851,6 +883,8 @@ void cmdStep(void)
 
 void cmdNext(void)
 {
+  traceframe = 0;
+
 	if (autocls)
 		cmdClearScreen();
 
@@ -899,6 +933,8 @@ void cmdNext(void)
 
 void cmdFinish(void)
 {
+  traceframe = 0;
+
   reg_data reg = get_regs();
 
   int cur_sp = reg.sp;
@@ -1275,15 +1311,50 @@ void cmdBackTrace(void)
 	reg_data reg = get_regs();
 
 	disassemble_addr_into_string(str, reg.pc);
-  printf("#0: %s\n", str);
+	if (traceframe == 0)
+		printf(KINV "#0: %s\n" KNRM, str);
+	else
+		printf("#0: %s\n", str);
 
 	// get memory at current pc
-	mem_data mem = get_mem(reg.sp+1);
+	int* addresses = get_backtrace_addresses();
+
 	for (int k = 0; k < 8; k++)
 	{
-	  int addr = mem.b[k*2] + (mem.b[k*2+1] << 8);
-		addr -= 2;
-	  disassemble_addr_into_string(str, addr);
-    printf("#%d: %s\n", k+1, str);
+	  disassemble_addr_into_string(str, addresses[k]);
+		if (traceframe-1 == k)
+		  printf(KINV "#%d: %s\n" KNRM, k+1, str);
+		else
+			printf("#%d: %s\n", k+1, str);
 	}
+}
+
+void cmdUpFrame(void)
+{
+  if (traceframe == 0)
+	{
+	  printf("Already at highest frame! (frame#0)\n");
+		return;
+	}
+
+	traceframe--;
+
+  if (autocls)
+		cmdClearScreen();
+	cmdDisassemble();
+}
+
+void cmdDownFrame(void)
+{
+  if (traceframe == 8)
+	{
+	  printf("Already at lowest frame! (frame#8)\n");
+		return;
+	}
+
+	traceframe++;
+
+  if (autocls)
+		cmdClearScreen();
+	cmdDisassemble();
 }
