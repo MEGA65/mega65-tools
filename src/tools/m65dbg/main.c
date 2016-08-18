@@ -174,7 +174,8 @@ int main(int argc, char** argv)
 
     get_command();
 
-    if (strcmp(strInput, "exit") == 0 ||
+    if (!strInput ||
+        strcmp(strInput, "exit") == 0 ||
         strcmp(strInput, "x") == 0 ||
         strcmp(strInput, "q") == 0)
       return 0;
