@@ -1,6 +1,11 @@
 // serial code routine borrowed from:
 // http://stackoverflow.com/questions/6947413/how-to-open-read-and-write-from-serial-port-in-c
 
+
+// Note: enable unix domain socket support is untested on Windows/Cygwin so
+// it's better to leave commented out by default ...
+//#define SUPPORT_UNIX_DOMAIN_SOCKET
+
 #include <errno.h>
 #include <fcntl.h> 
 #include <string.h>
@@ -8,6 +13,10 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
+#ifdef SUPPORT_UNIX_DOMAIN_SOCKET
+#include <sys/un.h>
+#include <sys/socket.h>
+#endif
 #include "serial.h"
 
 #define error_message printf
@@ -54,7 +63,7 @@ int set_interface_attribs (int fd, int speed, int parity)
         return 0;
 }
 
-void set_blocking (int fd, int should_block)
+void set_blocking_serial (int fd, int should_block)
 {
         struct termios tty;
         memset (&tty, 0, sizeof tty);
@@ -72,21 +81,43 @@ void set_blocking (int fd, int should_block)
 }
 
 /**
- * opens the desired serial port at the required 230400 bps
+ * opens the desired serial port at the required 230400 bps, or to a unix-domain socket
  *
  * portname = the desired "/dev/ttyS*" device portname to use
+ *            "unix#..path.." defines a unix-domain named stream socket to connect to (emulator)
  */
 bool serialOpen(char* portname)
 {
-  fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
-  if (fd < 0)
-  {
+  if (!strncasecmp(portname, "unix#", 5)) {
+#ifdef SUPPORT_UNIX_DOMAIN_SOCKET
+    struct sockaddr_un sock_st;
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) {
+      error_message("error %d creating UNIX-domain socket: %s\n", errno, strerror (errno));
+      return false;
+    }
+    sock_st.sun_family = AF_UNIX;
+    strcpy(sock_st.sun_path, portname + 5);
+    if (connect(fd, (struct sockaddr*)&sock_st, sizeof(struct sockaddr_un))) {
+      error_message("error %d connecting to UNIX-domain socket %s: %s\n", errno, portname + 5, strerror (errno));
+      close(fd);
+      return false;
+    }
+    //set_blocking_std (fd, 0);		// set no blocking
+#else
+    error_message("unix domain socket is not compiled in this time!\n");
+    return false;
+#endif
+  } else {
+    fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
+    if (fd < 0)
+    {
           error_message ("error %d opening %s: %s\n", errno, portname, strerror (errno));
           return false;
+    }
+    set_interface_attribs (fd, B230400, 0);  // set speed to 230,400 bps, 8n1 (no parity)
+    set_blocking_serial (fd, 0);	// set no blocking
   }
-  
-  set_interface_attribs (fd, B230400, 0);  // set speed to 230,400 bps, 8n1 (no parity)
-  set_blocking (fd, 0);                // set no blocking
   
   return true;
 }
