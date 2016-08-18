@@ -876,7 +876,7 @@ void cmdStep(void)
 	{
 		if (autocls)
 			cmdClearScreen();
-		printf(inbuf);
+		printf("%s", inbuf);
 		cmdDisassemble();
 	}
 }
@@ -924,7 +924,7 @@ void cmdNext(void)
 		{
 			if (autocls)
 				cmdClearScreen();
-			printf(inbuf);
+			printf("%s", inbuf);
 			cmdDisassemble();
 		}
 	}

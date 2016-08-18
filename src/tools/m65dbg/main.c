@@ -63,7 +63,7 @@ void parse_command(void)
   {
     serialWrite(strInput);
     serialRead(inbuf, BUFSIZE);
-    printf(inbuf);
+    printf("%s", inbuf);
   }
   
   if (strInput != NULL)
