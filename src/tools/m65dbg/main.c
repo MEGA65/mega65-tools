@@ -61,7 +61,7 @@ void parse_command(void)
   // if command is not handled by m65dbg, then just pass across raw command
   if (!handled)
   {
-    serialWrite(strInput);
+    serialWrite(outbuf);
     serialRead(inbuf, BUFSIZE);
     printf("%s", inbuf);
   }
