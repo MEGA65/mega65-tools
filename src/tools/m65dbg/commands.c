@@ -514,6 +514,25 @@ mem_data* get_mem28array(int addr)
   return multimem;
 }
 
+// write buffer to client ram
+void put_mem28array(int addr, unsigned char* data, int size)
+{
+  char str[10];
+  sprintf(outbuf, "s%08X", addr);
+
+  int i = 0;
+  while(i < size) 
+  {
+    sprintf(str, " %02X", data[i]);
+    strcat(outbuf, str);
+    i++;
+  }
+  strcat(outbuf, "\n");
+
+  serialWrite(outbuf);
+  serialRead(inbuf, BUFSIZE);
+}
+
 void cmdHelp(void)
 {
   printf("m65dbg commands\n"
@@ -1300,7 +1319,54 @@ void cmdSave(void)
 
 void cmdLoad(void)
 {
-  printf("Sorry, not implemented yet!\n");
+	char* strBinFile = strtok(NULL, " ");
+
+	if (!strBinFile)
+	{
+		printf("Missing <binfile> parameter!\n");
+		return;
+	}
+
+	char* strAddr = strtok(NULL, " ");
+	if (!strAddr)
+	{
+		printf("Missing <addr> parameter!\n");
+		return;
+	}
+
+	int addr = get_sym_value(strAddr);
+
+  	FILE* fload = fopen(strBinFile, "rb");
+	if(fload)
+	{
+		fseek(fload, 0, SEEK_END);
+		int fsize = ftell(fload);	
+		rewind(fload);      		
+		char* buffer = (char *)malloc(fsize*sizeof(char));
+		if(buffer) 
+		{
+			fread(buffer, fsize, 1, fload);
+		
+			int i = 0;
+			while(i < fsize)
+			{
+				int outSize = fsize - i;
+				if(outSize > 16) {
+					outSize = 16;
+				}
+
+				put_mem28array(addr + i, (unsigned char*) (buffer + i), outSize);
+				i += outSize;
+			}	
+
+			free(buffer);
+		}
+  		fclose(fload);
+	}
+	else 
+	{
+		printf("Error opening the file '%s'!\n", strBinFile);
+	}
 }
 
 void cmdBackTrace(void)
