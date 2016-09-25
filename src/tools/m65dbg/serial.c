@@ -6,9 +6,11 @@
 // it's better to leave commented out by default ...
 //#define SUPPORT_UNIX_DOMAIN_SOCKET
 
+#define _BSD_SOURCE _BSD_SOURCE
 #include <errno.h>
 #include <fcntl.h> 
 #include <string.h>
+#include <strings.h>
 #include <termios.h>
 #include <unistd.h>
 #include <stdio.h>

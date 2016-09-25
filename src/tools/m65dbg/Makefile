@@ -10,7 +10,7 @@ else
 endif
 
 CC=gcc
-CFLAGS=-c -Wall -g
+CFLAGS=-c -Wall -g -std=c99
 SOURCES=main.c serial.c commands.c gs4510.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=m65dbg
