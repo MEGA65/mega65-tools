@@ -1,6 +1,7 @@
 #include <stdbool.h>
 
 void listSearch(void);
+void cmdRawHelp(void);
 void cmdHelp(void);
 void cmdDump(void);
 void cmdMDump(void);

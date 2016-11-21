@@ -44,6 +44,7 @@ int  traceframe = 0;  // tracks which frame within the backtrace
 
 type_command_details command_details[] =
 {
+  { "?", cmdRawHelp, NULL, "Shows help information for raw/native monitor commands" },
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
 	{ "dump", cmdDump, "<addr> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
 	{ "mdump", cmdMDump, "<addr> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
@@ -532,6 +533,32 @@ void put_mem28array(int addr, unsigned char* data, int size)
 
   serialWrite(outbuf);
   serialRead(inbuf, BUFSIZE);
+}
+
+void cmdRawHelp(void)
+{
+  serialWrite("?\n");
+  serialRead(inbuf, BUFSIZE);
+  printf("%s", inbuf);
+
+  printf("! - reset machine\n"
+         "f<low> <high> <byte> - Fill memory\n"
+         "g<addr> - Set PC\n"
+         "m<addr28> - Dump 16-bytes of memory (28bit addresses)\n"
+         "M<addr28> - Dump 512-bytes of memory (28bit addresses)\n"
+         "d<addr> - Dump 16-bytes of memory (CPU context)\n"
+         "D<addr> - Dump 512-bytes of memory (CPU context)\n"
+         "r - display CPU registers and last instruction executed\n"
+         "s<addr28> <value> ... - Set memory (28bit addresses)\n"
+         "S<addr> <value> ... - Set memory (CPU memory context)\n"
+         "b[<addr>] - Set or clear CPU breakpoint\n"
+         "t<0|1> - Enable/disable tracing\n"
+         "tc - Traced execution until keypress\n"
+         "t|BLANK LINE - Step one cpu cycle if in trace mode\n"
+         "w<addr> - Sets a watchpoint to trigger when specified address is modified\n"
+         "w - clear 'w' watchpoint\n"
+         "e - set a breakpoint to occur based on CPU flags\n"
+  );
 }
 
 void cmdHelp(void)
