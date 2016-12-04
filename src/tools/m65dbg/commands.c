@@ -993,7 +993,8 @@ void cmdFinish(void)
 	  reg = get_regs();
 		mem_data mem = get_mem(reg.pc);
 
-		if (strcmp(instruction_lut[mem.b[0]], "RTS") == 0
+		if ((strcmp(instruction_lut[mem.b[0]], "RTS") == 0 ||
+                     strcmp(instruction_lut[mem.b[0]], "RTI") == 0)
 				&& reg.sp == cur_sp)
 			function_returning = true;
 
