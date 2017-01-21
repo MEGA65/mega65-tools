@@ -2,9 +2,12 @@
 // http://stackoverflow.com/questions/6947413/how-to-open-read-and-write-from-serial-port-in-c
 
 
-// Note: enable unix domain socket support is untested on Windows/Cygwin so
+// Note1: enable unix domain socket support is untested on Windows/Cygwin so
 // it's better to leave commented out by default ...
-//#define SUPPORT_UNIX_DOMAIN_SOCKET
+// -------------------------------------------------
+// Note2 (GI): I'm leaving this always enabled now, as I've gotten 
+// unix-sockets to work in winxp+cygwin
+#define SUPPORT_UNIX_DOMAIN_SOCKET
 
 #define _BSD_SOURCE _BSD_SOURCE
 #include <errno.h>
@@ -146,14 +149,15 @@ void serialFlush(void)
 //  tcflush(fd,TCIOFLUSH);
 
   // I'll now try a 'manual' flush, to see if that works for Ralph's mac and my mac...
-  int bytes_available;
+  int bytes_available = 0;
   static char tmp[16384];
 #ifdef FIONREAD
   ioctl(fd, FIONREAD, &bytes_available);
 #else
   ioctl(fd, TIOCINQ, &bytes_available);
 #endif
-  read(fd, tmp, bytes_available);
+  if (bytes_available > 0)
+    read(fd, tmp, bytes_available);
 }
 
 /**
