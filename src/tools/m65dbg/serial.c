@@ -86,7 +86,7 @@ void set_blocking_serial (int fd, int should_block)
 }
 
 /**
- * opens the desired serial port at the required 230400 bps, or to a unix-domain socket
+ * opens the desired serial port at the required 2000000 bps, or to a unix-domain socket
  *
  * portname = the desired "/dev/ttyS*" device portname to use
  *            "unix#..path.." defines a unix-domain named stream socket to connect to (emulator)
@@ -120,7 +120,7 @@ bool serialOpen(char* portname)
           error_message ("error %d opening %s: %s\n", errno, portname, strerror (errno));
           return false;
     }
-    set_interface_attribs (fd, B230400, 0);  // set speed to 230,400 bps, 8n1 (no parity)
+    set_interface_attribs (fd, B2000000, 0);  // set speed to 2,000,000 bps, 8n1 (no parity)
     set_blocking_serial (fd, 0);	// set no blocking
   }
   
