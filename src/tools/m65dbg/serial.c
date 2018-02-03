@@ -105,7 +105,7 @@ bool serialOpen(char* portname)
       close(fd);
       return false;
     }
-    //set_blocking_std (fd, 0);		// set no blocking
+    //set_blocking_std (fd, 0);    // set no blocking
 #else
     error_message("unix domain socket is not compiled in this time!\n");
     return false;
@@ -118,7 +118,7 @@ bool serialOpen(char* portname)
           return false;
     }
     set_interface_attribs (fd, B230400, 0);  // set speed to 230,400 bps, 8n1 (no parity)
-    set_blocking_serial (fd, 0);	// set no blocking
+    set_blocking_serial (fd, 0);  // set no blocking
   }
   
   return true;
@@ -203,8 +203,8 @@ bool serialRead(char* buf, int bufsize)
       if ( *(ptr+k) == '\n' )
       {
         foundLF = true;
-	if (!secondline)
-	  secondline = ptr+k+1;
+        if (!secondline)
+          secondline = ptr+k+1;
       }
       else if (foundLF && *(ptr+k) == '.')
       {
@@ -212,7 +212,7 @@ bool serialRead(char* buf, int bufsize)
 
         int len = strlen(secondline) + 1;
         for (int z = 0; z < len; z++)
-	  *(buf+z) = *(secondline+z);
+          *(buf+z) = *(secondline+z);
         return true;
       }
       else

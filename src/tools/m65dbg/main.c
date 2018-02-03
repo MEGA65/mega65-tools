@@ -92,19 +92,19 @@ char* my_generator(const char* text, int state)
     if( !state )
     {
         len = strlen(text);
-	iter = lstSymMap;
+        iter = lstSymMap;
     }
 
     while(iter != NULL)
     {
         if( strncmp(iter->symbol, text, len) == 0 )
-	{
-	  char *s = strdup(iter->symbol);
-	  iter = iter->next;
-	  return s;
-	}
+        {
+          char *s = strdup(iter->symbol);
+          iter = iter->next;
+          return s;
+        }
 
-	iter = iter->next;
+        iter = iter->next;
     }
     return((char *)NULL);
 }
@@ -142,19 +142,19 @@ int main(int argc, char** argv)
   for (int k = 1; k < argc; k++)
   {
     if (strcmp(argv[k], "--help") == 0 ||
-	strcmp(argv[k], "-h") == 0)
+        strcmp(argv[k], "-h") == 0)
     {
       printf("--help/-h = display this help\n"
-	     "--device/-d </dev/tty*> = select a tty device-name to use as the serial port to communicate with the Nexys hardware\n");
+             "--device/-d </dev/tty*> = select a tty device-name to use as the serial port to communicate with the Nexys hardware\n");
       exit(0);
     }
     if (strcmp(argv[k], "--device") == 0 ||
-	strcmp(argv[k], "-d") == 0)
+        strcmp(argv[k], "-d") == 0)
     {
       if (k+1 >= argc)
       {
         printf("Device name for serial port is missing (e.g., /dev/ttyS0)\n");
-	exit(0);
+        exit(0);
       }
       k++;
       strcpy(devSerial, argv[k]);
