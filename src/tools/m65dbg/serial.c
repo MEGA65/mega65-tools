@@ -4,7 +4,9 @@
 
 // Note: enable unix domain socket support is untested on Windows/Cygwin so
 // it's better to leave commented out by default ...
-//#define SUPPORT_UNIX_DOMAIN_SOCKET
+// GI. (04/02/2018) I think it's safe to say most users of this tool will be on 
+// linux-based systems, so we can leave this setting on
+#define SUPPORT_UNIX_DOMAIN_SOCKET
 
 #define _BSD_SOURCE _BSD_SOURCE
 #include <errno.h>
