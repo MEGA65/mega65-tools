@@ -1182,7 +1182,6 @@ void print_string(char* token)
 {
   int addr = get_sym_value(token);
   static char string[2048] = { 0 };
-  char c[2] = { 0 };
 
   int cnt = 0;
   string[0] = '\0';
@@ -1193,8 +1192,17 @@ void print_string(char* token)
 
     for (int k = 0; k < 16; k++)
     {
-      c[0] = mem.b[k];
-      strcat(string, c);
+      // If string is over 100 chars, let's truncate it, for safety...
+      if (cnt > 100)
+      {
+        string[cnt++] = '.';
+        string[cnt++] = '.';
+        string[cnt++] = '.';
+        mem.b[k] = 0;
+      }
+
+      string[cnt] = mem.b[k];
+
       if (mem.b[k] == 0)
       {
         printf(" %s: %s\n", token, string);
