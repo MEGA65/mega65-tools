@@ -79,6 +79,15 @@ void parse_command(void)
 void ctrlc_handler(int s)
 {
   ctrlcflag = true;
+
+  if (cmdGetContinueMode())
+  {
+    // just send an enter command
+    serialWrite("t1\n");
+    serialRead(inbuf, BUFSIZE);
+
+    cmdSetContinueMode(false);
+  }
 }
 
 //static int nf;

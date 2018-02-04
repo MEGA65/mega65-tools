@@ -31,6 +31,7 @@ typedef struct
 } mem_data;
 
 bool outputFlag = true;
+bool continue_mode = false;
 
 char outbuf[BUFSIZE] = { 0 };  // the buffer of what command is output to the remote monitor
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
@@ -49,6 +50,7 @@ type_command_details command_details[] =
   { "dump", cmdDump, "<addr> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
   { "mdump", cmdMDump, "<addr> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
   { "dis", cmdDisassemble, "[<addr> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
+  { "c", cmdContinue, NULL, "continue (equivalent to t0, but more m65dbg-friendly)"},
   { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
   { "n", cmdNext, NULL, "Step over to next instruction" },
   { "finish", cmdFinish, NULL, "Continue running until function returns (ie, step-out-from)" },
@@ -909,6 +911,52 @@ void cmdDisassemble(void)
     addr += last_bytecount;
     idx++;
   } // end while
+}
+
+void cmdContinue(void)
+{
+  traceframe = 0;
+
+  // just send an enter command
+  serialWrite("t0\n");
+  serialRead(inbuf, BUFSIZE);
+
+  // Try keep this in a loop that tests for a breakpoint
+  // getting hit, or the user pressing CTRL-C to force
+  // a "t1" command to turn trace mode back on
+  int cur_pc = -1;
+  int same_cnt = 0;
+  continue_mode = true;
+  while ( 1 )
+  {
+    usleep(10000);
+
+    // get current register values
+    reg_data reg = get_regs();
+
+    if (reg.pc == cur_pc)
+    {
+      same_cnt++;
+      if (same_cnt == 5)
+        break;
+    }
+    else
+    {
+      same_cnt = 0;
+      cur_pc = reg.pc;
+    }
+  }
+  continue_mode = false;
+}
+
+bool cmdGetContinueMode(void)
+{
+  return continue_mode;
+}
+
+void cmdSetContinueMode(bool val)
+{
+  continue_mode = val;
 }
 
 void cmdStep(void)
