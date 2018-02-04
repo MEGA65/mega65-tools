@@ -120,7 +120,12 @@ bool serialOpen(char* portname)
           error_message ("error %d opening %s: %s\n", errno, portname, strerror (errno));
           return false;
     }
+#ifdef __APPLE__
+    // WARNING: This slower bps won't work with newer bitstreams
+    set_interface_attribs (fd, B230400, 0);  // set speed to slower 230,400 bps, 8n1 (no parity)
+#else
     set_interface_attribs (fd, B2000000, 0);  // set speed to 2,000,000 bps, 8n1 (no parity)
+#endif
     set_blocking_serial (fd, 0);	// set no blocking
   }
   
