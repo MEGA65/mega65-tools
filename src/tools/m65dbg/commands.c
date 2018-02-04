@@ -1083,6 +1083,28 @@ int get_sym_value(char* token)
 {
   int addr = 0;
 
+  // if token starts with ":", then let's assume it is
+  // for a line number of the current file
+  if (token[0] == ':')
+  {
+    int lineno = 0;
+    sscanf(&token[1], "%d", &lineno);
+    type_fileloc* fl = find_lineno_in_list(lineno);
+    if (!cur_file_loc)
+    {
+      printf("- Current source file unknown\n");
+      return -1;
+    }
+    if (!fl)
+    {
+      printf("- Could not locate code at \"%s:%d\"\n", cur_file_loc->file, lineno);
+      return -1;
+    }
+    addr = fl->addr;
+    return addr;
+  }
+
+  // otherwise assume it is a symbol (which will fall back to a raw address anyway)
   type_symmap_entry* sme = find_in_symmap(token);
   if (sme != NULL)
   {
@@ -1216,32 +1238,10 @@ void cmdSetBreakpoint(void)
   
   if (token != NULL)
   {
-    int addr = 0;
+    int addr = get_sym_value(token);
 
-    // if token starts with ":", then let's assume it is
-    // for a line number of the current file
-    if (token[0] == ':')
-    {
-      int lineno = 0;
-      sscanf(&token[1], "%d", &lineno);
-      type_fileloc* fl = find_lineno_in_list(lineno);
-      if (!cur_file_loc)
-      {
-        printf("- Current source file unknown\n");
-        return;
-      }
-      if (!fl)
-      {
-        printf("- Could not locate code at \"%s:%d\"\n", cur_file_loc->file, lineno);
-        return;
-      }
-      addr = fl->addr;
-    }
-    // otherwise assume it is a symbol (which will fall back to a raw address anyway)
-    else
-    {
-      addr = get_sym_value(token);
-    }
+    if (addr == -1)
+      return;
 
     printf("- Setting hardware breakpoint to $%04X\n", addr);
 
