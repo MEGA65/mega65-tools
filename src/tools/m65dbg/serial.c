@@ -2,10 +2,11 @@
 // http://stackoverflow.com/questions/6947413/how-to-open-read-and-write-from-serial-port-in-c
 
 
-// Note: enable unix domain socket support is untested on Windows/Cygwin so
+// Note1: enable unix domain socket support is untested on Windows/Cygwin so
 // it's better to leave commented out by default ...
-// GI. (04/02/2018) I think it's safe to say most users of this tool will be on 
-// linux-based systems, so we can leave this setting on
+// -------------------------------------------------
+// Note2 (GI): I'm leaving this always enabled now, as I've gotten 
+// unix-sockets to work in winxp+cygwin
 #define SUPPORT_UNIX_DOMAIN_SOCKET
 
 #define _BSD_SOURCE _BSD_SOURCE
@@ -85,7 +86,7 @@ void set_blocking_serial (int fd, int should_block)
 }
 
 /**
- * opens the desired serial port at the required 230400 bps, or to a unix-domain socket
+ * opens the desired serial port at the required 2000000 bps, or to a unix-domain socket
  *
  * portname = the desired "/dev/ttyS*" device portname to use
  *            "unix#..path.." defines a unix-domain named stream socket to connect to (emulator)
@@ -119,8 +120,8 @@ bool serialOpen(char* portname)
           error_message ("error %d opening %s: %s\n", errno, portname, strerror (errno));
           return false;
     }
-    set_interface_attribs (fd, B230400, 0);  // set speed to 230,400 bps, 8n1 (no parity)
-    set_blocking_serial (fd, 0);  // set no blocking
+    set_interface_attribs (fd, B2000000, 0);  // set speed to 2,000,000 bps, 8n1 (no parity)
+    set_blocking_serial (fd, 0);	// set no blocking
   }
   
   return true;
@@ -148,14 +149,15 @@ void serialFlush(void)
 //  tcflush(fd,TCIOFLUSH);
 
   // I'll now try a 'manual' flush, to see if that works for Ralph's mac and my mac...
-  int bytes_available;
+  int bytes_available = 0;
   static char tmp[16384];
 #ifdef FIONREAD
   ioctl(fd, FIONREAD, &bytes_available);
 #else
   ioctl(fd, TIOCINQ, &bytes_available);
 #endif
-  read(fd, tmp, bytes_available);
+  if (bytes_available > 0)
+    read(fd, tmp, bytes_available);
 }
 
 /**
