@@ -79,6 +79,15 @@ void parse_command(void)
 void ctrlc_handler(int s)
 {
   ctrlcflag = true;
+
+  if (cmdGetContinueMode())
+  {
+    // just send an enter command
+    serialWrite("t1\n");
+    serialRead(inbuf, BUFSIZE);
+
+    cmdSetContinueMode(false);
+  }
 }
 
 //static int nf;
@@ -86,27 +95,42 @@ void ctrlc_handler(int s)
 
 char* my_generator(const char* text, int state)
 {
-    static int len;
-    static type_symmap_entry* iter = NULL;
+  static int len;
+  static type_symmap_entry* iter = NULL;
+  static int cmd_idx = 0;
 
-    if( !state )
+  if( !state )
+  {
+    len = strlen(text);
+    iter = lstSymMap;
+    cmd_idx = 0;
+  }
+
+  // check if it is a symbol name
+  while(iter != NULL)
+  {
+    if( strncmp(iter->symbol, text, len) == 0 )
     {
-        len = strlen(text);
-	iter = lstSymMap;
+      char *s = strdup(iter->symbol);
+      iter = iter->next;
+      return s;
     }
 
-    while(iter != NULL)
-    {
-        if( strncmp(iter->symbol, text, len) == 0 )
-	{
-	  char *s = strdup(iter->symbol);
-	  iter = iter->next;
-	  return s;
-	}
+    iter = iter->next;
+  }
 
-	iter = iter->next;
+  while (cmd_idx < cmdGetCmdCount())
+  {
+    if (strncmp(cmdGetCmdName(cmd_idx), text, len) == 0 )
+    {
+      char *s = strdup(cmdGetCmdName(cmd_idx));
+      cmd_idx++;
+      return s;
     }
-    return((char *)NULL);
+    cmd_idx++;
+  }
+
+  return((char *)NULL);
 }
 
 static char** my_completion(const char * text, int start, int end)
@@ -142,19 +166,19 @@ int main(int argc, char** argv)
   for (int k = 1; k < argc; k++)
   {
     if (strcmp(argv[k], "--help") == 0 ||
-	strcmp(argv[k], "-h") == 0)
+        strcmp(argv[k], "-h") == 0)
     {
       printf("--help/-h = display this help\n"
-	     "--device/-d </dev/tty*> = select a tty device-name to use as the serial port to communicate with the Nexys hardware\n");
+             "--device/-d </dev/tty*> = select a tty device-name to use as the serial port to communicate with the Nexys hardware\n");
       exit(0);
     }
     if (strcmp(argv[k], "--device") == 0 ||
-	strcmp(argv[k], "-d") == 0)
+        strcmp(argv[k], "-d") == 0)
     {
       if (k+1 >= argc)
       {
         printf("Device name for serial port is missing (e.g., /dev/ttyS0)\n");
-	exit(0);
+        exit(0);
       }
       k++;
       strcpy(devSerial, argv[k]);
