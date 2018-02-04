@@ -286,13 +286,13 @@ type_symmap_entry* find_in_symmap(char* sym)
   return NULL;
 }
 
-type_watch_entry* find_in_watchlist(char* name)
+type_watch_entry* find_in_watchlist(type_watch type, char* name)
 {
   type_watch_entry* iter = lstWatches;
 
   while (iter != NULL)
   {
-    if (strcmp(iter->name, name) == 0)
+    if (strcmp(iter->name, name) == 0 && type == iter->type)
       return iter;
 
     iter = iter->next;
@@ -1314,7 +1314,7 @@ void cmd_watch(type_watch type)
   
   if (token != NULL)
   {
-    if (find_in_watchlist(token))
+    if (find_in_watchlist(type, token))
     {
       printf("watch already exists!\n");
       return;
