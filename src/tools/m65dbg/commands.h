@@ -30,6 +30,8 @@ void cmdLoad(void);
 void cmdBackTrace(void);
 void cmdUpFrame(void);
 void cmdDownFrame(void);
+int  cmdGetCmdCount(void);
+char* cmdGetCmdName(int idx);
 
 #define BUFSIZE 4096
 

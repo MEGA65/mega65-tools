@@ -72,7 +72,7 @@ type_command_details command_details[] =
   { "back", cmdBackTrace, NULL, "produces a rough backtrace from the current contents of the stack" },
   { "up", cmdUpFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level up from the current frame" },
   { "down", cmdDownFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level down from the current frame" },
-  { NULL, NULL }
+  { NULL, NULL, NULL, NULL }
 };
 
 char* get_extension(char* fname)
@@ -1452,4 +1452,14 @@ void cmdDownFrame(void)
   if (autocls)
     cmdClearScreen();
   cmdDisassemble();
+}
+
+int cmdGetCmdCount(void)
+{
+  return sizeof(command_details) / sizeof(type_command_details) - 1;
+}
+
+char* cmdGetCmdName(int idx)
+{
+  return command_details[idx].name;
 }

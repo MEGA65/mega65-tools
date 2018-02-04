@@ -86,27 +86,42 @@ void ctrlc_handler(int s)
 
 char* my_generator(const char* text, int state)
 {
-    static int len;
-    static type_symmap_entry* iter = NULL;
+  static int len;
+  static type_symmap_entry* iter = NULL;
+  static int cmd_idx = 0;
 
-    if( !state )
+  if( !state )
+  {
+    len = strlen(text);
+    iter = lstSymMap;
+    cmd_idx = 0;
+  }
+
+  // check if it is a symbol name
+  while(iter != NULL)
+  {
+    if( strncmp(iter->symbol, text, len) == 0 )
     {
-        len = strlen(text);
-        iter = lstSymMap;
+      char *s = strdup(iter->symbol);
+      iter = iter->next;
+      return s;
     }
 
-    while(iter != NULL)
-    {
-        if( strncmp(iter->symbol, text, len) == 0 )
-        {
-          char *s = strdup(iter->symbol);
-          iter = iter->next;
-          return s;
-        }
+    iter = iter->next;
+  }
 
-        iter = iter->next;
+  while (cmd_idx < cmdGetCmdCount())
+  {
+    if (strncmp(cmdGetCmdName(cmd_idx), text, len) == 0 )
+    {
+      char *s = strdup(cmdGetCmdName(cmd_idx));
+      cmd_idx++;
+      return s;
     }
-    return((char *)NULL);
+    cmd_idx++;
+  }
+
+  return((char *)NULL);
 }
 
 static char** my_completion(const char * text, int start, int end)
