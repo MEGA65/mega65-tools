@@ -967,7 +967,11 @@ void cmdContinue(void)
       cur_pc = reg.pc;
     }
   }
+
   continue_mode = false;
+  if (autocls)
+    cmdClearScreen();
+  cmdDisassemble();
 }
 
 bool cmdGetContinueMode(void)
