@@ -23,5 +23,8 @@ $(EXECUTABLE): $(OBJECTS)
 .c.o:
 	$(CC) $(CFLAGS) $< -o $@
 
+install: m65dbg
+	ln -s $(CURDIR)/m65dbg /usr/local/bin/m65dbg
+
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE)
