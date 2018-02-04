@@ -51,7 +51,7 @@ type_command_details command_details[] =
   { "mdump", cmdMDump, "<addr> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
   { "dis", cmdDisassemble, "[<addr> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "c", cmdContinue, NULL, "continue (equivalent to t0, but more m65dbg-friendly)"},
-  { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
+  { "step", cmdStep, "[<count>]", "Step into next instruction. If <count> is specifed, perform that many steps" }, // equate to pressing 'enter' in raw monitor
   { "n", cmdNext, NULL, "Step over to next instruction" },
   { "finish", cmdFinish, NULL, "Continue running until function returns (ie, step-out-from)" },
   { "pb", cmdPrintByte, "<addr>", "Prints the byte-value of the given address" },
@@ -988,9 +988,23 @@ void cmdStep(void)
 {
   traceframe = 0;
 
-  // just send an enter command
-  serialWrite("\n");
-  serialRead(inbuf, BUFSIZE);
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
+
+  int count = 1;
+
+  // if <count> field is provided, use it
+  if (token)
+  {
+    sscanf(token, "%d", &count);
+  }
+
+  for (int k = 0; k < count; k++)
+  {
+    // just send an enter command
+    serialWrite("\n");
+    serialRead(inbuf, BUFSIZE);
+  }
 
   if (outputFlag)
   {
