@@ -92,6 +92,8 @@ typedef struct tfl
 
 type_fileloc* lstFileLoc = NULL;
 
+type_fileloc* cur_file_loc = NULL;
+
 type_symmap_entry* lstSymMap = NULL;
 
 type_watch_entry* lstWatches = NULL;
@@ -240,6 +242,24 @@ type_fileloc* find_in_list(int addr)
   while (iter != NULL)
   {
     if (iter->addr == addr)
+      return iter;
+
+    iter = iter->next;
+  }
+
+  return NULL;
+}
+
+type_fileloc* find_lineno_in_list(int lineno)
+{
+  type_fileloc* iter = lstFileLoc;
+
+  if (!cur_file_loc)
+    return NULL;
+
+  while (iter != NULL)
+  {
+    if (strcmp(cur_file_loc->file, iter->file) == 0 && iter->lineno == lineno)
       return iter;
 
     iter = iter->next;
@@ -891,6 +911,7 @@ void cmdDisassemble(void)
     if (idx == 0)
     {
       type_fileloc *found = find_in_list(addr);
+      cur_file_loc = found;
       if (found)
       {
         printf("> %s:%d\n", found->file, found->lineno);
@@ -1195,7 +1216,33 @@ void cmdSetBreakpoint(void)
   
   if (token != NULL)
   {
-    int addr = get_sym_value(token);
+    int addr = 0;
+
+    // if token starts with ":", then let's assume it is
+    // for a line number of the current file
+    if (token[0] == ':')
+    {
+      int lineno = 0;
+      sscanf(&token[1], "%d", &lineno);
+      type_fileloc* fl = find_lineno_in_list(lineno);
+      if (!cur_file_loc)
+      {
+        printf("- Current source file unknown\n");
+        return;
+      }
+      if (!fl)
+      {
+        printf("- Could not locate code at \"%s:%d\"\n", cur_file_loc->file, lineno);
+        return;
+      }
+      addr = fl->addr;
+    }
+    // otherwise assume it is a symbol (which will fall back to a raw address anyway)
+    else
+    {
+      addr = get_sym_value(token);
+    }
+
     printf("- Setting hardware breakpoint to $%04X\n", addr);
 
     sprintf(str, "b%04X\n", addr);
