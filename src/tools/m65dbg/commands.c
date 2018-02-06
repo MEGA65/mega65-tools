@@ -1373,7 +1373,10 @@ void cmd_watch(type_watch type)
 
     add_to_watchlist(we);
 
-    printf("watch added!\n");
+    if (we.param1 != NULL)
+      printf("watch added! (%s : %s %s)\n", type_names[type], we.name, we.param1);
+    else
+      printf("watch added! (%s : %s)\n", type_names[type], we.name);
   }
 }
 

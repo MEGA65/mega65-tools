@@ -9,6 +9,7 @@
 #include <readline/history.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "serial.h"
 #include "commands.h"
 
@@ -146,6 +147,48 @@ static char** my_completion(const char * text, int start, int end)
     return( matches );
 }
 
+/** Look for a "~/.m65dbginit" file.
+ *
+ * If one exists, load it and run the commands within it.
+*/
+void run_m65dbg_init_file_commands()
+{
+  // file exists
+  char* HOME = getenv("HOME");
+  char filepath[256];
+  sprintf(filepath, "%s/.m65dbg_init", HOME);
+  if( access( filepath, F_OK ) != -1 )
+  {
+    printf("Loading \"%s\"...\n", filepath);
+
+    FILE* f = fopen(filepath, "r");
+    char* line = NULL;
+    size_t len = 0;
+
+    while (getline(&line, &len, f) != -1)
+    {
+      // remove any newline character at end of line
+      line[strcspn(line, "\n")] = 0;
+
+      // ignore empty lines
+      if (strlen(line) == 0)
+        continue;
+
+      // ignore any lines that start with '#', treat these as comments
+      if (strlen(line) > 0 && line[0] == '#')
+        continue;
+
+      // execute each line
+      strInput = strdup(line);
+      parse_command();
+    }
+
+    if (line != NULL)
+      free(line);
+  }
+}
+
+
 /**
  * main entry point of program
  *
@@ -190,6 +233,8 @@ int main(int argc, char** argv)
   printf("- Type 'help' for new commands, '?'/'h' for raw commands.\n");
 
   listSearch();
+
+  run_m65dbg_init_file_commands();
 
   while(1)
   {
