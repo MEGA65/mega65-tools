@@ -51,8 +51,8 @@ type_command_details command_details[] =
   { "mdump", cmdMDump, "<addr> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
   { "dis", cmdDisassemble, "[<addr> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "c", cmdContinue, NULL, "continue (equivalent to t0, but more m65dbg-friendly)"},
-  { "step", cmdStep, "[<count>]", "Step into next instruction. If <count> is specifed, perform that many steps" }, // equate to pressing 'enter' in raw monitor
-  { "n", cmdNext, NULL, "Step over to next instruction" },
+  { "step", cmdStep, "[<count>]", "Step into next instruction. If <count> is specified, perform that many steps" }, // equate to pressing 'enter' in raw monitor
+  { "n", cmdNext, "[<count>]", "Step over to next instruction. If <count> is specified, perform that many steps" },
   { "finish", cmdFinish, NULL, "Continue running until function returns (ie, step-out-from)" },
   { "pb", cmdPrintByte, "<addr>", "Prints the byte-value of the given address" },
   { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
@@ -1001,6 +1001,13 @@ void cmdSetContinueMode(bool val)
   continue_mode = val;
 }
 
+void step(void)
+{
+  // just send an enter command
+  serialWrite("\n");
+  serialRead(inbuf, BUFSIZE);
+}
+
 void cmdStep(void)
 {
   traceframe = 0;
@@ -1018,9 +1025,7 @@ void cmdStep(void)
 
   for (int k = 0; k < count; k++)
   {
-    // just send an enter command
-    serialWrite("\n");
-    serialRead(inbuf, BUFSIZE);
+    step();
   }
 
   if (outputFlag)
@@ -1036,48 +1041,60 @@ void cmdNext(void)
 {
   traceframe = 0;
 
-  if (autocls)
-    cmdClearScreen();
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
 
-  // check if this is a JSR command
-  reg_data reg = get_regs();
-  mem_data mem = get_mem(reg.pc);
-    
-  // if not, then just do a normal step
-  if (strcmp(instruction_lut[mem.b[0]], "JSR") != 0)
+  int count = 1;
+
+  // if <count> field is provided, use it
+  if (token)
   {
-    cmdStep();
+    sscanf(token, "%d", &count);
   }
-  else
+
+  for (int k = 0; k < count; k++)
   {
-    // if it is JSR, then keep doing step into until it returns to the next command after the JSR
-
-    type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
-    int last_bytecount = mode.val + 1;
-    int next_addr = reg.pc + last_bytecount;
-
-    while (reg.pc != next_addr)
+    // check if this is a JSR command
+    reg_data reg = get_regs();
+    mem_data mem = get_mem(reg.pc);
+      
+    // if not, then just do a normal step
+    if (strcmp(instruction_lut[mem.b[0]], "JSR") != 0)
     {
-      // just send an enter command
-      serialWrite("\n");
+      step();
+    }
+    else
+    {
+      // if it is JSR, then keep doing step into until it returns to the next command after the JSR
+
+      type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
+      int last_bytecount = mode.val + 1;
+      int next_addr = reg.pc + last_bytecount;
+
+      while (reg.pc != next_addr)
+      {
+        // just send an enter command
+        serialWrite("\n");
+        serialRead(inbuf, BUFSIZE);
+
+        reg = get_regs();
+
+        if (ctrlcflag)
+          break;
+      }
+
+      // show disassembly of current position
+      serialWrite("r\n");
       serialRead(inbuf, BUFSIZE);
+    } // end if
+  } // end for
 
-      reg = get_regs();
-
-      if (ctrlcflag)
-        break;
-    }
-
-    // show disassembly of current position
-    serialWrite("r\n");
-    serialRead(inbuf, BUFSIZE);
-    if (outputFlag)
-    {
-      if (autocls)
-        cmdClearScreen();
-      printf("%s", inbuf);
-      cmdDisassemble();
-    }
+  if (outputFlag)
+  {
+    if (autocls)
+      cmdClearScreen();
+    printf("%s", inbuf);
+    cmdDisassemble();
   }
 }
 
