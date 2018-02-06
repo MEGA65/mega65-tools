@@ -36,7 +36,7 @@ bool continue_mode = false;
 char outbuf[BUFSIZE] = { 0 };  // the buffer of what command is output to the remote monitor
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
 
-char* type_names[] = { "BYTE  ", "WORD  ", "DWORD ", "STRING", "DUMP  " };
+char* type_names[] = { "BYTE  ", "WORD  ", "DWORD ", "STRING", "DUMP  ", "MDUMP " };
 
 bool autocls = false; // auto-clearscreen flag
 bool autowatch = false; // auto-watch flag
@@ -66,6 +66,7 @@ type_command_details command_details[] =
   { "wd", cmdWatchDWord, "<addr>", "Watches the dword-value of the given address" },
   { "ws", cmdWatchString, "<addr>", "Watches the null-terminated string-value found at the given address" },
   { "wdump", cmdWatchDump, "<addr> [<count>]", "Watches a dump of bytes at the given address" },
+  { "wmdump", cmdWatchMDump, "<addr28> [<count>]", "Watches an mdump of bytes at the given 28-bit address" },
   { "watches", cmdWatches, NULL, "Lists all watches and their present values" },
   { "wdel", cmdDeleteWatch, "<watch#>/all", "Deletes the watch number specified (use 'watches' command to get a list of existing watch numbers)" },
   { "autowatch", cmdAutoWatch, "0/1", "If set to 1, shows all watches prior to every step/next/dis command" },
@@ -204,6 +205,14 @@ void add_to_symmap(type_symmap_entry sme)
   }
 }
 
+void copy_watch(type_watch_entry* dest, type_watch_entry* src)
+{
+  dest->type = src->type;
+  dest->name = strdup(src->name);
+  dest->param1 = src->param1 ? strdup(src->param1) : NULL;
+  dest->next = NULL;
+}
+
 void add_to_watchlist(type_watch_entry we)
 {
   type_watch_entry* iter = lstWatches;
@@ -212,10 +221,7 @@ void add_to_watchlist(type_watch_entry we)
   if (lstWatches == NULL)
   {
     lstWatches = malloc(sizeof(type_watch_entry));
-    lstWatches->type = we.type;
-    lstWatches->name = strdup(we.name);
-    lstWatches->param1 = we.param1 ? strdup(we.param1) : NULL;
-    lstWatches->next = NULL;
+    copy_watch(lstWatches, &we);
     return;
   }
 
@@ -225,11 +231,7 @@ void add_to_watchlist(type_watch_entry we)
     if (iter->next == NULL)
     {
       type_watch_entry* wenew = malloc(sizeof(type_watch_entry));
-      wenew->type = we.type;
-      wenew->name = strdup(we.name);
-      wenew->param1 = we.param1 ? strdup(we.param1) : NULL;
-      wenew->next = NULL;
-
+      copy_watch(wenew, &we);
       iter->next = wenew;
       return;
     }
@@ -301,6 +303,16 @@ type_watch_entry* find_in_watchlist(type_watch type, char* name)
   return NULL;
 }
 
+void free_watch(type_watch_entry* iter, int wnum)
+{
+  free(iter->name);
+  if (iter->param1)
+    free(iter->param1);
+  free(iter);
+  if (outputFlag)
+    printf("watch#%d deleted!\n", wnum);
+}
+
 bool delete_from_watchlist(int wnum)
 {
   int cnt = 0;
@@ -319,21 +331,13 @@ bool delete_from_watchlist(int wnum)
       if (prev == NULL)
       {
         lstWatches = iter->next;
-        free(iter->name);
-        if (iter->param1)
-          free(iter->param1);
-        free(iter);
-        if (outputFlag)
-          printf("watch#%d deleted!\n", wnum);
+        free_watch(iter, wnum);
         return true;
       }
       else
       {
         prev->next = iter->next;
-        free(iter->name);
-        free(iter);
-        if (outputFlag)
-          printf("watch#%d deleted!\n", wnum);
+        free_watch(iter, wnum);
         return true;
       }
     }
@@ -667,26 +671,8 @@ void cmdDump(void)
   dump(addr, total);
 }
 
-void cmdMDump(void)
+void mdump(int addr, int total)
 {
-  char* strAddr = strtok(NULL, " ");
-
-  if (strAddr == NULL)
-  {
-    printf("Missing <addr> parameter!\n");
-    return;
-  }
-
-  int addr = get_sym_value(strAddr);
-
-  int total = 16;
-  char* strTotal = strtok(NULL, " ");
-
-  if (strTotal != NULL)
-  {
-    sscanf(strTotal, "%X", &total);
-  }
-
   int cnt = 0;
   while (cnt < total)
   {
@@ -718,6 +704,29 @@ void cmdMDump(void)
     if (ctrlcflag)
       break;
   }
+}
+
+void cmdMDump(void)
+{
+  char* strAddr = strtok(NULL, " ");
+
+  if (strAddr == NULL)
+  {
+    printf("Missing <addr> parameter!\n");
+    return;
+  }
+
+  int addr = get_sym_value(strAddr);
+
+  int total = 16;
+  char* strTotal = strtok(NULL, " ");
+
+  if (strTotal != NULL)
+  {
+    sscanf(strTotal, "%X", &total);
+  }
+
+  mdump(addr, total);
 }
 
 // return the last byte count
@@ -1275,6 +1284,20 @@ void print_dump(type_watch_entry* watch)
   dump(addr, count);
 }
 
+void print_mdump(type_watch_entry* watch)
+{
+  int count = 16; //default count
+
+  if (watch->param1)
+    sscanf(watch->param1, "%X", &count);
+
+  printf(" %s:\n", watch->name);
+
+  int addr = get_sym_value(watch->name);
+
+  mdump(addr, count);
+}
+
 void cmdPrintString(void)
 {
   char* token = strtok(NULL, " ");
@@ -1379,6 +1402,11 @@ void cmdWatchDump(void)
   cmd_watch(TYPE_DUMP);
 }
 
+void cmdWatchMDump(void)
+{
+  cmd_watch(TYPE_MDUMP);
+}
+
 void cmdWatches(void)
 {
   type_watch_entry* iter = lstWatches;
@@ -1398,7 +1426,8 @@ void cmdWatches(void)
       case TYPE_WORD:   print_word(iter->name);   break;
       case TYPE_DWORD:  print_dword(iter->name);  break;
       case TYPE_STRING: print_string(iter->name); break;
-      case TYPE_DUMP:   print_dump(iter); break;
+      case TYPE_DUMP:   print_dump(iter);         break;
+      case TYPE_MDUMP:  print_mdump(iter);        break;
     }
 
     iter = iter->next;
