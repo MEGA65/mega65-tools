@@ -10,6 +10,7 @@ void cmdContinue(void);
 bool cmdGetContinueMode(void);
 void cmdSetContinueMode(bool val);
 void cmdStep(void);
+void cmdHardNext(void);
 void cmdNext(void);
 void cmdFinish(void);
 void cmdPrintByte(void);

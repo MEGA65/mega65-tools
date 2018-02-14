@@ -50,9 +50,10 @@ type_command_details command_details[] =
   { "dump", cmdDump, "<addr> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
   { "mdump", cmdMDump, "<addr> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
   { "dis", cmdDisassemble, "[<addr> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
-  { "c", cmdContinue, NULL, "continue (equivalent to t0, but more m65dbg-friendly)"},
+  { "c", cmdContinue, "[<addr>]", "continue (until optional <addr>) (equivalent to t0, but more m65dbg-friendly)"},
   { "step", cmdStep, "[<count>]", "Step into next instruction. If <count> is specified, perform that many steps" }, // equate to pressing 'enter' in raw monitor
-  { "n", cmdNext, "[<count>]", "Step over to next instruction. If <count> is specified, perform that many steps" },
+  { "n", cmdNext, "[<count>]", "Step over to next instruction (software-based, slow). If <count> is specified, perform that many steps" },
+  { "next", cmdHardNext, "[<count>]", "Step over to next instruction (hardware-based, fast, xemu-only, for now). If <count> is specified, perform that many steps" },
   { "finish", cmdFinish, NULL, "Continue running until function returns (ie, step-out-from)" },
   { "pb", cmdPrintByte, "<addr>", "Prints the byte-value of the given address" },
   { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
@@ -964,6 +965,21 @@ void cmdContinue(void)
 {
   traceframe = 0;
 
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
+
+  // if <addr> field is provided, use it
+  if (token)
+  {
+    int addr = get_sym_value(token);
+
+    // set a breakpoint
+    char str[100];
+    sprintf(str, "b%04X\n", addr);
+    serialWrite(str);
+    serialRead(inbuf, BUFSIZE);
+  }
+
   // just send an enter command
   serialWrite("t0\n");
   serialRead(inbuf, BUFSIZE);
@@ -1010,11 +1026,46 @@ void cmdSetContinueMode(bool val)
   continue_mode = val;
 }
 
+void hard_next(void)
+{
+  serialWrite("N\n");
+  serialRead(inbuf, BUFSIZE);
+}
+
 void step(void)
 {
   // just send an enter command
   serialWrite("\n");
   serialRead(inbuf, BUFSIZE);
+}
+
+void cmdHardNext(void)
+{
+  traceframe = 0;
+
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
+
+  int count = 1;
+
+  // if <count> field is provided, use it
+  if (token)
+  {
+    sscanf(token, "%d", &count);
+  }
+
+  for (int k = 0; k < count; k++)
+  {
+    hard_next();
+  }
+
+  if (outputFlag)
+  {
+    if (autocls)
+      cmdClearScreen();
+    printf("%s", inbuf);
+    cmdDisassemble();
+  }
 }
 
 void cmdStep(void)
