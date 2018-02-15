@@ -1013,6 +1013,12 @@ void cmdContinue(void)
   continue_mode = false;
   if (autocls)
     cmdClearScreen();
+
+  // show the registers
+  serialWrite("r\n");
+  serialRead(inbuf, BUFSIZE);
+  printf("%s", inbuf);
+
   cmdDisassemble();
 }
 
