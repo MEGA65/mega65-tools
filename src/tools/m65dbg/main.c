@@ -229,7 +229,9 @@ int main(int argc, char** argv)
   }
 
   // open the serial port
-  serialOpen(devSerial);
+  if (!serialOpen(devSerial))
+    return 1;
+
   printf("- Type 'help' for new commands, '?'/'h' for raw commands.\n");
 
   listSearch();
