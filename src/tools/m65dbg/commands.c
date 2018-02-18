@@ -14,14 +14,14 @@ int get_sym_value(char* token);
 typedef struct
 {
   int pc;
-	int a;
-	int x;
-	int y;
-	int z;
-	int b;
-	int sp;
-	int mapl;
-	int maph;
+  int a;
+  int x;
+  int y;
+  int z;
+  int b;
+  int sp;
+  int mapl;
+  int maph;
 } reg_data;
 
 typedef struct
@@ -31,11 +31,12 @@ typedef struct
 } mem_data;
 
 bool outputFlag = true;
+bool continue_mode = false;
 
-char outbuf[BUFSIZE] = { 0 };	// the buffer of what command is output to the remote monitor
+char outbuf[BUFSIZE] = { 0 };  // the buffer of what command is output to the remote monitor
 char inbuf[BUFSIZE] = { 0 }; // the buffer of what is read in from the remote monitor
 
-char* type_names[] = { "BYTE  ", "WORD  ", "DWORD ", "STRING" };
+char* type_names[] = { "BYTE  ", "WORD  ", "DWORD ", "STRING", "DUMP  ", "MDUMP " };
 
 bool autocls = false; // auto-clearscreen flag
 bool autowatch = false; // auto-watch flag
@@ -46,12 +47,14 @@ type_command_details command_details[] =
 {
   { "?", cmdRawHelp, NULL, "Shows help information for raw/native monitor commands" },
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
-	{ "dump", cmdDump, "<addr16> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
-	{ "mdump", cmdMDump, "<addr28> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
+  { "dump", cmdDump, "<addr16> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
+  { "mdump", cmdMDump, "<addr28> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
   { "dis", cmdDisassemble, "[<addr16> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "mdis", cmdMDisassemble, "[<addr28> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
-  { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
-  { "n", cmdNext, NULL, "Step over to next instruction" },
+  { "c", cmdContinue, "[<addr>]", "continue (until optional <addr>) (equivalent to t0, but more m65dbg-friendly)"},
+  { "step", cmdStep, "[<count>]", "Step into next instruction. If <count> is specified, perform that many steps" }, // equate to pressing 'enter' in raw monitor
+  { "n", cmdNext, "[<count>]", "Step over to next instruction (software-based, slow). If <count> is specified, perform that many steps" },
+  { "next", cmdHardNext, "[<count>]", "Step over to next instruction (hardware-based, fast, xemu-only, for now). If <count> is specified, perform that many steps" },
   { "finish", cmdFinish, NULL, "Continue running until function returns (ie, step-out-from)" },
   { "pb", cmdPrintByte, "<addr>", "Prints the byte-value of the given address" },
   { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
@@ -59,21 +62,23 @@ type_command_details command_details[] =
   { "ps", cmdPrintString, "<addr>", "Prints the null-terminated string-value found at the given address" },
   { "cls", cmdClearScreen, NULL, "Clears the screen" },
   { "autocls", cmdAutoClearScreen, "0/1", "If set to 1, clears the screen prior to every step/next command" },
-	{ "break", cmdSetBreakpoint, "<addr>", "Sets the hardware breakpoint to the desired address" },
+  { "break", cmdSetBreakpoint, "<addr>", "Sets the hardware breakpoint to the desired address" },
   { "wb", cmdWatchByte, "<addr>", "Watches the byte-value of the given address" },
   { "ww", cmdWatchWord, "<addr>", "Watches the word-value of the given address" },
   { "wd", cmdWatchDWord, "<addr>", "Watches the dword-value of the given address" },
   { "ws", cmdWatchString, "<addr>", "Watches the null-terminated string-value found at the given address" },
+  { "wdump", cmdWatchDump, "<addr> [<count>]", "Watches a dump of bytes at the given address" },
+  { "wmdump", cmdWatchMDump, "<addr28> [<count>]", "Watches an mdump of bytes at the given 28-bit address" },
   { "watches", cmdWatches, NULL, "Lists all watches and their present values" },
   { "wdel", cmdDeleteWatch, "<watch#>/all", "Deletes the watch number specified (use 'watches' command to get a list of existing watch numbers)" },
   { "autowatch", cmdAutoWatch, "0/1", "If set to 1, shows all watches prior to every step/next/dis command" },
   { "symbol", cmdSymbolValue, "<symbol>", "retrieves the value of the symbol from the .map file" },
   { "save", cmdSave, "<binfile> <addr28> <count>", "saves out a memory dump to <binfile> starting from <addr28> and for <count> bytes" },
   { "load", cmdLoad, "<binfile> <addr28>", "loads in <binfile> to <addr28>" },
-	{ "back", cmdBackTrace, NULL, "produces a rough backtrace from the current contents of the stack" },
-	{ "up", cmdUpFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level up from the current frame" },
-	{ "down", cmdDownFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level down from the current frame" },
-	{ NULL, NULL }
+  { "back", cmdBackTrace, NULL, "produces a rough backtrace from the current contents of the stack" },
+  { "up", cmdUpFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level up from the current frame" },
+  { "down", cmdDownFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level down from the current frame" },
+  { NULL, NULL, NULL, NULL }
 };
 
 char* get_extension(char* fname)
@@ -83,13 +88,15 @@ char* get_extension(char* fname)
 
 typedef struct tfl
 {
-	int addr;
+  int addr;
   char* file;
-	int lineno;
-	struct tfl *next;
+  int lineno;
+  struct tfl *next;
 } type_fileloc;
 
 type_fileloc* lstFileLoc = NULL;
+
+type_fileloc* cur_file_loc = NULL;
 
 type_symmap_entry* lstSymMap = NULL;
 
@@ -97,303 +104,328 @@ type_watch_entry* lstWatches = NULL;
 
 void add_to_list(type_fileloc fl)
 {
-	type_fileloc* iter = lstFileLoc;
+  type_fileloc* iter = lstFileLoc;
 
   // first entry in list?
   if (lstFileLoc == NULL)
-	{
-		lstFileLoc = malloc(sizeof(type_fileloc));
-		lstFileLoc->addr = fl.addr;
-		lstFileLoc->file = strdup(fl.file);
-		lstFileLoc->lineno = fl.lineno;
-		lstFileLoc->next = NULL;
-		return;
-	}
+  {
+    lstFileLoc = malloc(sizeof(type_fileloc));
+    lstFileLoc->addr = fl.addr;
+    lstFileLoc->file = strdup(fl.file);
+    lstFileLoc->lineno = fl.lineno;
+    lstFileLoc->next = NULL;
+    return;
+  }
 
   while (iter != NULL)
-	{
-	  // replace existing?
-	  if (iter->addr == fl.addr)
-		{
-			iter->file = strdup(fl.file);
-			iter->lineno = fl.lineno;
-			return;
-		}
-		// insert entry?
-		if (iter->addr > fl.addr)
-		{
-		  type_fileloc* flcpy = malloc(sizeof(type_fileloc));
-			flcpy->addr = iter->addr;
-			flcpy->file = iter->file;
-			flcpy->lineno = iter->lineno;
-			flcpy->next = iter->next;
+  {
+    // replace existing?
+    if (iter->addr == fl.addr)
+    {
+      iter->file = strdup(fl.file);
+      iter->lineno = fl.lineno;
+      return;
+    }
+    // insert entry?
+    if (iter->addr > fl.addr)
+    {
+      type_fileloc* flcpy = malloc(sizeof(type_fileloc));
+      flcpy->addr = iter->addr;
+      flcpy->file = iter->file;
+      flcpy->lineno = iter->lineno;
+      flcpy->next = iter->next;
 
-			iter->addr = fl.addr;
-			iter->file = strdup(fl.file);
-			iter->lineno = fl.lineno;
-			iter->next = flcpy;
-			return;
-		}
-		// add to end?
-		if (iter->next == NULL)
-		{
-		  type_fileloc* flnew = malloc(sizeof(type_fileloc));
-			flnew->addr = fl.addr;
-			flnew->file = strdup(fl.file);
-			flnew->lineno = fl.lineno;
-			flnew->next = NULL;
+      iter->addr = fl.addr;
+      iter->file = strdup(fl.file);
+      iter->lineno = fl.lineno;
+      iter->next = flcpy;
+      return;
+    }
+    // add to end?
+    if (iter->next == NULL)
+    {
+      type_fileloc* flnew = malloc(sizeof(type_fileloc));
+      flnew->addr = fl.addr;
+      flnew->file = strdup(fl.file);
+      flnew->lineno = fl.lineno;
+      flnew->next = NULL;
 
-			iter->next = flnew;
-			return;
-		}
+      iter->next = flnew;
+      return;
+    }
 
-		iter = iter->next;
-	}
+    iter = iter->next;
+  }
 }
 
 void add_to_symmap(type_symmap_entry sme)
 {
-	type_symmap_entry* iter = lstSymMap;
+  type_symmap_entry* iter = lstSymMap;
 
   // first entry in list?
   if (lstSymMap == NULL)
-	{
-		lstSymMap = malloc(sizeof(type_symmap_entry));
-		lstSymMap->addr = sme.addr;
-		lstSymMap->sval = strdup(sme.sval);
-		lstSymMap->symbol = strdup(sme.symbol);
-		lstSymMap->next = NULL;
-		return;
-	}
+  {
+    lstSymMap = malloc(sizeof(type_symmap_entry));
+    lstSymMap->addr = sme.addr;
+    lstSymMap->sval = strdup(sme.sval);
+    lstSymMap->symbol = strdup(sme.symbol);
+    lstSymMap->next = NULL;
+    return;
+  }
 
   while (iter != NULL)
-	{
-		// insert entry?
-		if (iter->addr >= sme.addr)
-		{
-		  type_symmap_entry* smecpy = malloc(sizeof(type_symmap_entry));
-			smecpy->addr = iter->addr;
-			smecpy->sval = iter->sval;
-			smecpy->symbol = iter->symbol;
-			smecpy->next = iter->next;
+  {
+    // insert entry?
+    if (iter->addr >= sme.addr)
+    {
+      type_symmap_entry* smecpy = malloc(sizeof(type_symmap_entry));
+      smecpy->addr = iter->addr;
+      smecpy->sval = iter->sval;
+      smecpy->symbol = iter->symbol;
+      smecpy->next = iter->next;
 
-			iter->addr = sme.addr;
-			iter->sval = strdup(sme.sval);
-			iter->symbol = strdup(sme.symbol);
-			iter->next = smecpy;
-			return;
-		}
-		// add to end?
-		if (iter->next == NULL)
-		{
-		  type_symmap_entry* smenew = malloc(sizeof(type_symmap_entry));
-			smenew->addr = sme.addr;
-			smenew->sval = strdup(sme.sval);
-			smenew->symbol = strdup(sme.symbol);
-			smenew->next = NULL;
+      iter->addr = sme.addr;
+      iter->sval = strdup(sme.sval);
+      iter->symbol = strdup(sme.symbol);
+      iter->next = smecpy;
+      return;
+    }
+    // add to end?
+    if (iter->next == NULL)
+    {
+      type_symmap_entry* smenew = malloc(sizeof(type_symmap_entry));
+      smenew->addr = sme.addr;
+      smenew->sval = strdup(sme.sval);
+      smenew->symbol = strdup(sme.symbol);
+      smenew->next = NULL;
 
-			iter->next = smenew;
-			return;
-		}
+      iter->next = smenew;
+      return;
+    }
 
-		iter = iter->next;
-	}
+    iter = iter->next;
+  }
+}
+
+void copy_watch(type_watch_entry* dest, type_watch_entry* src)
+{
+  dest->type = src->type;
+  dest->name = strdup(src->name);
+  dest->param1 = src->param1 ? strdup(src->param1) : NULL;
+  dest->next = NULL;
 }
 
 void add_to_watchlist(type_watch_entry we)
 {
   type_watch_entry* iter = lstWatches;
 
-	// first entry in list?
-	if (lstWatches == NULL)
-	{
-	  lstWatches = malloc(sizeof(type_watch_entry));
-		lstWatches->type = we.type;
-    lstWatches->name = strdup(we.name);
-		lstWatches->next = NULL;
-		return;
-	}
+  // first entry in list?
+  if (lstWatches == NULL)
+  {
+    lstWatches = malloc(sizeof(type_watch_entry));
+    copy_watch(lstWatches, &we);
+    return;
+  }
 
-	while (iter != NULL)
-	{
-	  // add to end?
-		if (iter->next == NULL)
-		{
-		  type_watch_entry* wenew = malloc(sizeof(type_watch_entry));
-			wenew->type = we.type;
-			wenew->name = strdup(we.name);
-			wenew->next = NULL;
+  while (iter != NULL)
+  {
+    // add to end?
+    if (iter->next == NULL)
+    {
+      type_watch_entry* wenew = malloc(sizeof(type_watch_entry));
+      copy_watch(wenew, &we);
+      iter->next = wenew;
+      return;
+    }
 
-			iter->next = wenew;
-			return;
-		}
-
-		iter = iter->next;
-	}
+    iter = iter->next;
+  }
 }
 
 type_fileloc* find_in_list(int addr)
 {
-	type_fileloc* iter = lstFileLoc;
+  type_fileloc* iter = lstFileLoc;
 
-	while (iter != NULL)
-	{
-	  if (iter->addr == addr)
-			return iter;
+  while (iter != NULL)
+  {
+    if (iter->addr == addr)
+      return iter;
 
-		iter = iter->next;
-	}
+    iter = iter->next;
+  }
 
-	return NULL;
+  return NULL;
+}
+
+type_fileloc* find_lineno_in_list(int lineno)
+{
+  type_fileloc* iter = lstFileLoc;
+
+  if (!cur_file_loc)
+    return NULL;
+
+  while (iter != NULL)
+  {
+    if (strcmp(cur_file_loc->file, iter->file) == 0 && iter->lineno == lineno)
+      return iter;
+
+    iter = iter->next;
+  }
+
+  return NULL;
 }
 
 type_symmap_entry* find_in_symmap(char* sym)
 {
-	type_symmap_entry* iter = lstSymMap;
+  type_symmap_entry* iter = lstSymMap;
 
-	while (iter != NULL)
-	{
-	  if (strcmp(sym, iter->symbol) == 0)
-			return iter;
+  while (iter != NULL)
+  {
+    if (strcmp(sym, iter->symbol) == 0)
+      return iter;
 
-		iter = iter->next;
-	}
+    iter = iter->next;
+  }
 
-	return NULL;
+  return NULL;
 }
 
-type_watch_entry* find_in_watchlist(char* name)
+type_watch_entry* find_in_watchlist(type_watch type, char* name)
 {
   type_watch_entry* iter = lstWatches;
 
-	while (iter != NULL)
-	{
-	  if (strcmp(iter->name, name) == 0)
-		  return iter;
+  while (iter != NULL)
+  {
+    if (strcmp(iter->name, name) == 0 && type == iter->type)
+      return iter;
 
-		iter = iter->next;
-	}
+    iter = iter->next;
+  }
 
-	return NULL;
+  return NULL;
+}
+
+void free_watch(type_watch_entry* iter, int wnum)
+{
+  free(iter->name);
+  if (iter->param1)
+    free(iter->param1);
+  free(iter);
+  if (outputFlag)
+    printf("watch#%d deleted!\n", wnum);
 }
 
 bool delete_from_watchlist(int wnum)
 {
   int cnt = 0;
 
-	type_watch_entry* iter = lstWatches;
-	type_watch_entry* prev = NULL;
+  type_watch_entry* iter = lstWatches;
+  type_watch_entry* prev = NULL;
 
-	while (iter != NULL)
-	{
-	  cnt++;
+  while (iter != NULL)
+  {
+    cnt++;
 
     // we found the item to delete?
-		if (cnt == wnum)
-		{
-		  // first entry of list?
-		  if (prev == NULL)
-			{
-			  lstWatches = iter->next;
-				free(iter->name);
-				free(iter);
-				if (outputFlag)
-					printf("watch#%d deleted!\n", wnum);
-				return true;
-			}
-			else
-			{
-			  prev->next = iter->next;
-				free(iter->name);
-				free(iter);
-				if (outputFlag)
-					printf("watch#%d deleted!\n", wnum);
-				return true;
-			}
-		}
+    if (cnt == wnum)
+    {
+      // first entry of list?
+      if (prev == NULL)
+      {
+        lstWatches = iter->next;
+        free_watch(iter, wnum);
+        return true;
+      }
+      else
+      {
+        prev->next = iter->next;
+        free_watch(iter, wnum);
+        return true;
+      }
+    }
 
     prev = iter;
-		iter = iter->next;
-	}
+    iter = iter->next;
+  }
 
-	return false;
+  return false;
 }
 
 // loads the *.map file corresponding to the provided *.list file (if one exists)
 void load_map(char* fname)
 {
   char strMapFile[200];
-	strcpy(strMapFile, fname);
-	char* sdot = strrchr(strMapFile, '.');
-	*sdot = '\0';
-	strcat(strMapFile, ".map");
+  strcpy(strMapFile, fname);
+  char* sdot = strrchr(strMapFile, '.');
+  *sdot = '\0';
+  strcat(strMapFile, ".map");
 
   // check if file exists
-	if (access(strMapFile, F_OK) != -1)
-	{
-		printf("Loading \"%s\"...\n", strMapFile);
+  if (access(strMapFile, F_OK) != -1)
+  {
+    printf("Loading \"%s\"...\n", strMapFile);
 
-		// load the map file
-		FILE* f = fopen(strMapFile, "rt");
+    // load the map file
+    FILE* f = fopen(strMapFile, "rt");
 
-		while (!feof(f))
-		{
-			char line[1024];
-			char sval[256];
-			fgets(line, 1024, f);
+    while (!feof(f))
+    {
+      char line[1024];
+      char sval[256];
+      fgets(line, 1024, f);
 
-			int addr;
-			char sym[1024];
-			sscanf(line, "$%04X %s", &addr, sym);
-			sscanf(line, "%s", sval);
+      int addr;
+      char sym[1024];
+      sscanf(line, "$%04X %s", &addr, sym);
+      sscanf(line, "%s", sval);
 
-			//printf("%s : %04X\n", sym, addr);
-			type_symmap_entry sme;
-			sme.addr = addr;
-			sme.sval = sval; 
-			sme.symbol = sym;
-			add_to_symmap(sme);
-		}
-	}
+      //printf("%s : %04X\n", sym, addr);
+      type_symmap_entry sme;
+      sme.addr = addr;
+      sme.sval = sval; 
+      sme.symbol = sym;
+      add_to_symmap(sme);
+    }
+  }
 }
 
 // loads the given *.list file
 void load_list(char* fname)
 {
   FILE* f = fopen(fname, "rt");
-	char line[1024];
+  char line[1024];
 
   while (!feof(f))
-	{
-	  fgets(line, 1024, f);
+  {
+    fgets(line, 1024, f);
 
-		if (strlen(line) == 0)
-		  continue;
+    if (strlen(line) == 0)
+      continue;
 
-		char *s = strrchr(line, '|');
-		if (s != NULL && *s != '\0')
-		{
-			s++;
-			if (strlen(s) < 5)
-			  continue;
+    char *s = strrchr(line, '|');
+    if (s != NULL && *s != '\0')
+    {
+      s++;
+      if (strlen(s) < 5)
+        continue;
 
-			int addr;
+      int addr;
       char file[1024];
-			int lineno;
-			strcpy(file, &strtok(s, ":")[1]);
-			sscanf(strtok(NULL, ":"), "%d", &lineno);
-			sscanf(line, " %X", &addr);
+      int lineno;
+      strcpy(file, &strtok(s, ":")[1]);
+      sscanf(strtok(NULL, ":"), "%d", &lineno);
+      sscanf(line, " %X", &addr);
 
-			//printf("%04X : %s:%d\n", addr, file, lineno);
-			type_fileloc fl;
-			fl.addr = addr;
-			fl.file = file;
-			fl.lineno = lineno;
-			add_to_list(fl);
-		}
-	}
+      //printf("%04X : %s:%d\n", addr, file, lineno);
+      type_fileloc fl;
+      fl.addr = addr;
+      fl.file = file;
+      fl.lineno = lineno;
+      add_to_list(fl);
+    }
+  }
 
-	load_map(fname);
+  load_map(fname);
 }
 
 #define KNRM  "\x1B[0m"
@@ -413,25 +445,25 @@ void show_location(type_fileloc* fl)
   FILE* f = fopen(fl->file, "rt");
   if (f == NULL)
     return;
-	char line[1024];
-	int cnt = 1;
+  char line[1024];
+  int cnt = 1;
 
-	while (!feof(f))
-	{
-		fgets(line, 1024, f);
-		if (cnt >= (fl->lineno - 10) && cnt <= (fl->lineno + 10) )
-		{
-		  if (cnt == fl->lineno)
-		  {
-				printf("%s> %d: %s%s", KINV, cnt, line, KNRM);
-			}
-			else
-				printf("> %d: %s", cnt, line);
-			//break;
-		}
-		cnt++;
-	}
-	fclose(f);
+  while (!feof(f))
+  {
+    fgets(line, 1024, f);
+    if (cnt >= (fl->lineno - 10) && cnt <= (fl->lineno + 10) )
+    {
+      if (cnt == fl->lineno)
+      {
+        printf("%s> %d: %s%s", KINV, cnt, line, KNRM);
+      }
+      else
+        printf("> %d: %s", cnt, line);
+      //break;
+    }
+    cnt++;
+  }
+  fclose(f);
 }
 
 // search the current directory for *.list files
@@ -444,12 +476,12 @@ void listSearch(void)
   {
     while ((dir = readdir(d)) != NULL)
     {
-		  char* ext = get_extension(dir->d_name);
-		  if (ext != NULL && strcmp(ext, ".list") == 0)
-			{
-				printf("Loading \"%s\"...\n", dir->d_name);
-				load_list(dir->d_name);
-			}
+      char* ext = get_extension(dir->d_name);
+      if (ext != NULL && strcmp(ext, ".list") == 0)
+      {
+        printf("Loading \"%s\"...\n", dir->d_name);
+        load_list(dir->d_name);
+      }
     }
 
     closedir(d);
@@ -474,10 +506,10 @@ mem_data get_mem(int addr, bool useAddr28)
 {
   mem_data mem = { 0 };
   char str[100];
-	if (useAddr28)
-  	sprintf(str, "m%07X\n", addr); // use 'm' (for 28-bit memory addresses)
-	else
-	  sprintf(str, "d%04X\n", addr); // use 'd' instead of 'm' (for memory in cpu context)
+  if (useAddr28)
+    sprintf(str, "m%07X\n", addr); // use 'm' (for 28-bit memory addresses)
+  else
+    sprintf(str, "d%04X\n", addr); // use 'd' instead of 'm' (for memory in cpu context)
 
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
@@ -561,125 +593,134 @@ void cmdHelp(void)
 
   for (int k = 0; command_details[k].name != NULL; k++)
   {
-	  type_command_details cd = command_details[k];
+    type_command_details cd = command_details[k];
 
-		if (cd.params == NULL)
-			printf("%s = %s\n", cd.name, cd.help);
-		else
-			printf("%s %s = %s\n", cd.name, cd.params, cd.help);
+    if (cd.params == NULL)
+      printf("%s = %s\n", cd.name, cd.help);
+    else
+      printf("%s %s = %s\n", cd.name, cd.params, cd.help);
   }
 
   printf(
-	 "[ENTER] = repeat last command\n"
+   "[ENTER] = repeat last command\n"
    "q/x/exit = exit the program\n"
    );
 }
 
+void dump(int addr, int total)
+{
+  int cnt = 0;
+  while (cnt < total)
+  {
+    // get memory at current pc
+    mem_data mem = get_mem(addr + cnt, false);
+
+    printf(" :%07X ", mem.addr);
+    for (int k = 0; k < 16; k++)
+    {
+      if (k == 8) // add extra space prior to 8th byte
+        printf(" ");
+
+      printf("%02X ", mem.b[k]);
+    }
+    
+    printf(" | ");
+
+    for (int k = 0; k < 16; k++)
+    {
+      int c = mem.b[k];
+      if (isprint(c))
+        printf("%c", c);
+      else
+        printf(".");
+    }
+    printf("\n");
+    cnt+=16;
+
+    if (ctrlcflag)
+      break;
+  }
+}
 
 void cmdDump(void)
 {
-	char* strAddr = strtok(NULL, " ");
+  char* strAddr = strtok(NULL, " ");
 
-	if (strAddr == NULL)
-	{
-	  printf("Missing <addr> parameter!\n");
-		return;
-	}
+  if (strAddr == NULL)
+  {
+    printf("Missing <addr> parameter!\n");
+    return;
+  }
 
-	int addr = get_sym_value(strAddr);
+  int addr = get_sym_value(strAddr);
 
-	int total = 16;
-	char* strTotal = strtok(NULL, " ");
+  int total = 16;
+  char* strTotal = strtok(NULL, " ");
 
-	if (strTotal != NULL)
-	{
-	  sscanf(strTotal, "%X", &total);
-	}
+  if (strTotal != NULL)
+  {
+    sscanf(strTotal, "%X", &total);
+  }
 
+  dump(addr, total);
+}
+
+void mdump(int addr, int total)
+{
   int cnt = 0;
-	while (cnt < total)
-	{
-		// get memory at current pc
-		mem_data mem = get_mem(addr + cnt, false);
+  while (cnt < total)
+  {
+    // get memory at current pc
+    mem_data mem = get_mem(addr + cnt, true);
 
-		printf(" :%07X ", mem.addr);
-		for (int k = 0; k < 16; k++)
-		{
-		  if (k == 8) // add extra space prior to 8th byte
-			  printf(" ");
+    printf(" :%07X ", mem.addr);
+    for (int k = 0; k < 16; k++)
+    {
+      if (k == 8) // add extra space prior to 8th byte
+        printf(" ");
 
-			printf("%02X ", mem.b[k]);
-		}
-		
-		printf(" | ");
+      printf("%02X ", mem.b[k]);
+    }
+    
+    printf(" | ");
 
-		for (int k = 0; k < 16; k++)
-		{
-			int c = mem.b[k];
-			if (isprint(c))
-				printf("%c", c);
-			else
-				printf(".");
-		}
-		printf("\n");
-		cnt+=16;
+    for (int k = 0; k < 16; k++)
+    {
+      int c = mem.b[k];
+      if (isprint(c))
+        printf("%c", c);
+      else
+        printf(".");
+    }
+    printf("\n");
+    cnt+=16;
 
-		if (ctrlcflag)
-			break;
-	}
+    if (ctrlcflag)
+      break;
+  }
 }
 
 void cmdMDump(void)
 {
-	char* strAddr = strtok(NULL, " ");
+  char* strAddr = strtok(NULL, " ");
 
-	if (strAddr == NULL)
-	{
-	  printf("Missing <addr> parameter!\n");
-		return;
-	}
+  if (strAddr == NULL)
+  {
+    printf("Missing <addr> parameter!\n");
+    return;
+  }
 
-	int addr = get_sym_value(strAddr);
+  int addr = get_sym_value(strAddr);
 
-	int total = 16;
-	char* strTotal = strtok(NULL, " ");
+  int total = 16;
+  char* strTotal = strtok(NULL, " ");
 
-	if (strTotal != NULL)
-	{
-	  sscanf(strTotal, "%X", &total);
-	}
+  if (strTotal != NULL)
+  {
+    sscanf(strTotal, "%X", &total);
+  }
 
-  int cnt = 0;
-	while (cnt < total)
-	{
-		// get memory at current pc
-		mem_data mem = get_mem(addr + cnt, true);
-
-		printf(" :%07X ", mem.addr);
-		for (int k = 0; k < 16; k++)
-		{
-		  if (k == 8) // add extra space prior to 8th byte
-			  printf(" ");
-
-			printf("%02X ", mem.b[k]);
-		}
-		
-		printf(" | ");
-
-		for (int k = 0; k < 16; k++)
-		{
-			int c = mem.b[k];
-			if (isprint(c))
-				printf("%c", c);
-			else
-				printf(".");
-		}
-		printf("\n");
-		cnt+=16;
-
-		if (ctrlcflag)
-			break;
-	}
+  mdump(addr, total);
 }
 
 // return the last byte count
@@ -688,144 +729,143 @@ int disassemble_addr_into_string(char* str, int addr, bool useAddr28)
   int last_bytecount = 0;
   char s[32] = { 0 };
 
-	// get memory at current pc
-	mem_data mem = get_mem(addr, useAddr28);
+  // get memory at current pc
+  mem_data mem = get_mem(addr, useAddr28);
 
-	// now, try to disassemble it
+  // now, try to disassemble it
 
-	// Program counter
+  // Program counter
   if (useAddr28)
-		sprintf(str, "$%07X ", addr & 0xfffffff);
-	else
-		sprintf(str, "$%04X ", addr & 0xffff);
+    sprintf(str, "$%07X ", addr & 0xfffffff);
+  else
+    sprintf(str, "$%04X ", addr & 0xffff);
 
-	type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
-	sprintf(s, " %10s:%d ", mode.name, mode.val);
-	strcat(str, s);
+  type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
+  sprintf(s, " %10s:%d ", mode.name, mode.val);
+  strcat(str, s);
 
-	// Opcode and arguments
-	sprintf(s, "%02X ", mem.b[0]);
-	strcat(str, s);
+  // Opcode and arguments
+  sprintf(s, "%02X ", mem.b[0]);
+  strcat(str, s);
 
-	last_bytecount = mode.val + 1;
+  last_bytecount = mode.val + 1;
 
-	if (last_bytecount == 1)
-	{
-		strcat(str, "      ");
-	}
-	if (last_bytecount == 2)
-	{
-		sprintf(s, "%02X    ", mem.b[1]);
-		strcat(str, s);
-	}
-	if (last_bytecount == 3)
-	{
-		sprintf(s, "%02X %02X ", mem.b[1], mem.b[2]);
-		strcat(str, s);
-	}
+  if (last_bytecount == 1)
+  {
+    strcat(str, "      ");
+  }
+  if (last_bytecount == 2)
+  {
+    sprintf(s, "%02X    ", mem.b[1]);
+    strcat(str, s);
+  }
+  if (last_bytecount == 3)
+  {
+    sprintf(s, "%02X %02X ", mem.b[1], mem.b[2]);
+    strcat(str, s);
+  }
 
-	// Instruction name
-	strcat(str, instruction_lut[mem.b[0]]);
+  // Instruction name
+  strcat(str, instruction_lut[mem.b[0]]);
 
-	switch(mode_lut[mem.b[0]])
-	{
-		case M_impl: break;
-		case M_InnX:
-			sprintf(s, " ($%02X,X)", mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_nn:
-			sprintf(s, " $%02X", mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_immnn:
-			sprintf(s, " #$%02X", mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_A: break;
-		case M_nnnn:
-			sprintf(s, " $%02X%02X", mem.b[2], mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_nnrr:
-			sprintf(s, " $%02X,$%04X", mem.b[1], (addr + 3 + mem.b[2]) );
-			strcat(str, s);
-			break;
-		case M_rr:
-			if (mem.b[1] & 0x80)
-				sprintf(s, " $%04X", (addr + 2 - 256 + mem.b[1]) );
-			else
-				sprintf(s, " $%04X", (addr + 2 + mem.b[1]) );
-			strcat(str, s);
-			break;
-		case M_InnY:
-			sprintf(s, " ($%02X),Y", mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_InnZ:
-			sprintf(s, " ($%02X),Z", mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_rrrr:
-			sprintf(s, " $%04X", (addr + 2 + (mem.b[2] << 8) + mem.b[1]) & 0xffff );
-			strcat(str, s);
-			break;
-		case M_nnX:
-			sprintf(s, " $%02X,X", mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_nnnnY:
-			sprintf(s, " $%02X%02X,Y", mem.b[2], mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_nnnnX:
-			sprintf(s, " $%02X%02X,X", mem.b[2], mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_Innnn:
-			sprintf(s, " ($%02X%02X)", mem.b[2], mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_InnnnX:
-			sprintf(s, " ($%02X%02X,X)", mem.b[2], mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_InnSPY:
-			sprintf(s, " ($%02X,SP),Y", mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_nnY:
-			sprintf(s, " $%02X,Y", mem.b[1]);
-			strcat(str, s);
-			break;
-		case M_immnnnn:
-			sprintf(s, " #$%02X%02X", mem.b[2], mem.b[1]);
-			strcat(str, s);
-			break;
-	}
+  switch(mode_lut[mem.b[0]])
+  {
+    case M_impl: break;
+    case M_InnX:
+      sprintf(s, " ($%02X,X)", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nn:
+      sprintf(s, " $%02X", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_immnn:
+      sprintf(s, " #$%02X", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_A: break;
+    case M_nnnn:
+      sprintf(s, " $%02X%02X", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nnrr:
+      sprintf(s, " $%02X,$%04X", mem.b[1], (addr + 3 + mem.b[2]) );
+      strcat(str, s);
+      break;
+    case M_rr:
+      if (mem.b[1] & 0x80)
+        sprintf(s, " $%04X", (addr + 2 - 256 + mem.b[1]) );
+      else
+        sprintf(s, " $%04X", (addr + 2 + mem.b[1]) );
+      strcat(str, s);
+      break;
+    case M_InnY:
+      sprintf(s, " ($%02X),Y", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_InnZ:
+      sprintf(s, " ($%02X),Z", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_rrrr:
+      sprintf(s, " $%04X", (addr + 2 + (mem.b[2] << 8) + mem.b[1]) & 0xffff );
+      strcat(str, s);
+      break;
+    case M_nnX:
+      sprintf(s, " $%02X,X", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nnnnY:
+      sprintf(s, " $%02X%02X,Y", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nnnnX:
+      sprintf(s, " $%02X%02X,X", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_Innnn:
+      sprintf(s, " ($%02X%02X)", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_InnnnX:
+      sprintf(s, " ($%02X%02X,X)", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_InnSPY:
+      sprintf(s, " ($%02X,SP),Y", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_nnY:
+      sprintf(s, " $%02X,Y", mem.b[1]);
+      strcat(str, s);
+      break;
+    case M_immnnnn:
+      sprintf(s, " #$%02X%02X", mem.b[2], mem.b[1]);
+      strcat(str, s);
+      break;
+  }
 
   return last_bytecount;
 }
 
 int* get_backtrace_addresses(void)
 {
-	// get current register values
-	reg_data reg = get_regs();
+  // get current register values
+  reg_data reg = get_regs();
 
   static int addresses[8];
 
-	// get memory at current pc
-	mem_data mem = get_mem(reg.sp+1, false);
-	for (int k = 0; k < 8; k++)
-	{
-	  int addr = mem.b[k*2] + (mem.b[k*2+1] << 8);
-		addr -= 2;
+  // get memory at current pc
+  mem_data mem = get_mem(reg.sp+1, false);
+  for (int k = 0; k < 8; k++)
+  {
+    int addr = mem.b[k*2] + (mem.b[k*2+1] << 8);
+    addr -= 2;
     addresses[k] = addr;
-	}
+  }
 
-	return addresses;
+  return addresses;
 }
-
 
 void disassemble(bool useAddr28)
 {
@@ -833,157 +873,294 @@ void disassemble(bool useAddr28)
   int last_bytecount = 0;
 
   if (autowatch)
-	  cmdWatches();
+    cmdWatches();
 
   int addr;
-	int cnt = 1; // number of lines to disassemble
+  int cnt = 1; // number of lines to disassemble
 
-	// get current register values
-	reg_data reg = get_regs();
+  // get current register values
+  reg_data reg = get_regs();
 
-	// get address from parameter?
+  // get address from parameter?
   char* token = strtok(NULL, " ");
   
   if (token != NULL)
-	{
-	  if (strcmp(token, "-") == 0) // '-' equates to current pc
-		{
+  {
+    if (strcmp(token, "-") == 0) // '-' equates to current pc
+    {
       // get current register values
-  		addr = reg.pc;
-		}
-		else
+      addr = reg.pc;
+    }
+    else
       addr = get_sym_value(token);
 
-		token = strtok(NULL, " ");
+    token = strtok(NULL, " ");
 
-		if (token != NULL)
-		{
-		  cnt = get_sym_value(token);
-		}
-	}
-	// default to current pc
-	else
-	{
-		addr = reg.pc;
+    if (token != NULL)
+    {
+      cnt = get_sym_value(token);
+    }
+  }
+  // default to current pc
+  else
+  {
+    addr = reg.pc;
   }
 
   // are we in a different frame?
   if (addr == reg.pc && traceframe != 0)
-	{
-	  int* addresses = get_backtrace_addresses();
-		addr = addresses[traceframe-1];
+  {
+    int* addresses = get_backtrace_addresses();
+    addr = addresses[traceframe-1];
 
-		printf("<<< FRAME#: %d >>>\n", traceframe);
-	}
+    printf("<<< FRAME#: %d >>>\n", traceframe);
+  }
 
   int idx = 0;
 
-	while (idx < cnt)
-	{
+  while (idx < cnt)
+  {
     last_bytecount = disassemble_addr_into_string(str, addr, useAddr28);
 
     // print from .list ref? (i.e., find source in .a65 file?)
     if (idx == 0)
-		{
-			type_fileloc *found = find_in_list(addr);
-			if (found)
-			{
-				printf("> %s:%d\n", found->file, found->lineno);
-				show_location(found);
+    {
+      type_fileloc *found = find_in_list(addr);
+      if (found)
+      {
+        printf("> %s:%d\n", found->file, found->lineno);
+        show_location(found);
         printf("---------------------------------------\n");
-			}
-		}
+      }
+    }
 
-		// just print the raw disassembly line
-		if (cnt != 1 && idx == 0)
-			printf("%s%s%s\n", KINV, str, KNRM);
-		else
-			printf("%s\n", str);
+    // just print the raw disassembly line
+    if (cnt != 1 && idx == 0)
+      printf("%s%s%s\n", KINV, str, KNRM);
+    else
+      printf("%s\n", str);
 
-		if (ctrlcflag)
-			break;
+    if (ctrlcflag)
+      break;
 
     addr += last_bytecount;
-		idx++;
-	} // end while
+    idx++;
+  } // end while
 }
 
 
 void cmdDisassemble(void)
 {
-	disassemble(false);
+  disassemble(false);
 }
 
 void cmdMDisassemble(void)
 {
-	disassemble(true);
+  disassemble(true);
 }
 
+
+void cmdContinue(void)
+{
+  traceframe = 0;
+
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
+
+  // if <addr> field is provided, use it
+  if (token)
+  {
+    int addr = get_sym_value(token);
+
+    // set a breakpoint
+    char str[100];
+    sprintf(str, "b%04X\n", addr);
+    serialWrite(str);
+    serialRead(inbuf, BUFSIZE);
+  }
+
+  // just send an enter command
+  serialWrite("t0\n");
+  serialRead(inbuf, BUFSIZE);
+
+  // Try keep this in a loop that tests for a breakpoint
+  // getting hit, or the user pressing CTRL-C to force
+  // a "t1" command to turn trace mode back on
+  int cur_pc = -1;
+  int same_cnt = 0;
+  continue_mode = true;
+  while ( 1 )
+  {
+    usleep(10000);
+
+    // get current register values
+    reg_data reg = get_regs();
+
+    if (reg.pc == cur_pc)
+    {
+      same_cnt++;
+      if (same_cnt == 5)
+        break;
+    }
+    else
+    {
+      same_cnt = 0;
+      cur_pc = reg.pc;
+    }
+  }
+
+  continue_mode = false;
+  if (autocls)
+    cmdClearScreen();
+
+  // show the registers
+  serialWrite("r\n");
+  serialRead(inbuf, BUFSIZE);
+  printf("%s", inbuf);
+
+  cmdDisassemble();
+}
+
+bool cmdGetContinueMode(void)
+{
+  return continue_mode;
+}
+
+void cmdSetContinueMode(bool val)
+{
+  continue_mode = val;
+}
+
+void hard_next(void)
+{
+  serialWrite("N\n");
+  serialRead(inbuf, BUFSIZE);
+}
+
+void step(void)
+{
+  // just send an enter command
+  serialWrite("\n");
+  serialRead(inbuf, BUFSIZE);
+}
+
+void cmdHardNext(void)
+{
+  traceframe = 0;
+
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
+
+  int count = 1;
+
+  // if <count> field is provided, use it
+  if (token)
+  {
+    sscanf(token, "%d", &count);
+  }
+
+  for (int k = 0; k < count; k++)
+  {
+    hard_next();
+  }
+
+  if (outputFlag)
+  {
+    if (autocls)
+      cmdClearScreen();
+    printf("%s", inbuf);
+    cmdDisassemble();
+  }
+}
 
 void cmdStep(void)
 {
   traceframe = 0;
 
-  // just send an enter command
-  serialWrite("\n");
-  serialRead(inbuf, BUFSIZE);
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
+
+  int count = 1;
+
+  // if <count> field is provided, use it
+  if (token)
+  {
+    sscanf(token, "%d", &count);
+  }
+
+  for (int k = 0; k < count; k++)
+  {
+    step();
+  }
 
   if (outputFlag)
-	{
-		if (autocls)
-			cmdClearScreen();
-		printf("%s", inbuf);
-		cmdDisassemble();
-	}
+  {
+    if (autocls)
+      cmdClearScreen();
+    printf("%s", inbuf);
+    cmdDisassemble();
+  }
 }
 
 void cmdNext(void)
 {
   traceframe = 0;
 
-	if (autocls)
-		cmdClearScreen();
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
 
-  // check if this is a JSR command
-  reg_data reg = get_regs();
-	mem_data mem = get_mem(reg.pc, false);
-		
-	// if not, then just do a normal step
-	if (strcmp(instruction_lut[mem.b[0]], "JSR") != 0)
-	{
-		cmdStep();
-	}
-	else
-	{
-		// if it is JSR, then keep doing step into until it returns to the next command after the JSR
+  int count = 1;
 
-		type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
-		int last_bytecount = mode.val + 1;
-		int next_addr = reg.pc + last_bytecount;
+  // if <count> field is provided, use it
+  if (token)
+  {
+    sscanf(token, "%d", &count);
+  }
 
-		while (reg.pc != next_addr)
-		{
-			// just send an enter command
-			serialWrite("\n");
-			serialRead(inbuf, BUFSIZE);
+  for (int k = 0; k < count; k++)
+  {
+    // check if this is a JSR command
+    reg_data reg = get_regs();
+    mem_data mem = get_mem(reg.pc, false);
+      
+    // if not, then just do a normal step
+    if (strcmp(instruction_lut[mem.b[0]], "JSR") != 0)
+    {
+      step();
+    }
+    else
+    {
+      // if it is JSR, then keep doing step into until it returns to the next command after the JSR
 
-			reg = get_regs();
+      type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
+      int last_bytecount = mode.val + 1;
+      int next_addr = reg.pc + last_bytecount;
 
-			if (ctrlcflag)
-				break;
-		}
+      while (reg.pc != next_addr)
+      {
+        // just send an enter command
+        serialWrite("\n");
+        serialRead(inbuf, BUFSIZE);
 
-    // show disassembly of current position
-		serialWrite("r\n");
-		serialRead(inbuf, BUFSIZE);
-		if (outputFlag)
-		{
-			if (autocls)
-				cmdClearScreen();
-			printf("%s", inbuf);
-			cmdDisassemble();
-		}
-	}
+        reg = get_regs();
+
+        if (ctrlcflag)
+          break;
+      }
+
+      // show disassembly of current position
+      serialWrite("r\n");
+      serialRead(inbuf, BUFSIZE);
+    } // end if
+  } // end for
+
+  if (outputFlag)
+  {
+    if (autocls)
+      cmdClearScreen();
+    printf("%s", inbuf);
+    cmdDisassemble();
+  }
 }
 
 
@@ -994,27 +1171,27 @@ void cmdFinish(void)
   reg_data reg = get_regs();
 
   int cur_sp = reg.sp;
-	bool function_returning = false;
+  bool function_returning = false;
 
   //outputFlag = false;
   while (!function_returning)
-	{
-	  reg = get_regs();
-		mem_data mem = get_mem(reg.pc, false);
+  {
+    reg = get_regs();
+    mem_data mem = get_mem(reg.pc, false);
 
-		if ((strcmp(instruction_lut[mem.b[0]], "RTS") == 0 ||
+    if ((strcmp(instruction_lut[mem.b[0]], "RTS") == 0 ||
                      strcmp(instruction_lut[mem.b[0]], "RTI") == 0)
-				&& reg.sp == cur_sp)
-			function_returning = true;
+        && reg.sp == cur_sp)
+      function_returning = true;
 
     cmdClearScreen();
-		cmdNext();
+    cmdNext();
 
-		if (ctrlcflag)
-			break;
-	}
-	//outputFlag = true;
-	cmdDisassemble();
+    if (ctrlcflag)
+      break;
+  }
+  //outputFlag = true;
+  cmdDisassemble();
 }
 
 // check symbol-map for value. If not found there, just return
@@ -1023,25 +1200,47 @@ int get_sym_value(char* token)
 {
   int addr = 0;
 
-	type_symmap_entry* sme = find_in_symmap(token);
-	if (sme != NULL)
-	{
-		return sme->addr;
-	}
-	else
-	{
+  // if token starts with ":", then let's assume it is
+  // for a line number of the current file
+  if (token[0] == ':')
+  {
+    int lineno = 0;
+    sscanf(&token[1], "%d", &lineno);
+    type_fileloc* fl = find_lineno_in_list(lineno);
+    if (!cur_file_loc)
+    {
+      printf("- Current source file unknown\n");
+      return -1;
+    }
+    if (!fl)
+    {
+      printf("- Could not locate code at \"%s:%d\"\n", cur_file_loc->file, lineno);
+      return -1;
+    }
+    addr = fl->addr;
+    return addr;
+  }
+
+  // otherwise assume it is a symbol (which will fall back to a raw address anyway)
+  type_symmap_entry* sme = find_in_symmap(token);
+  if (sme != NULL)
+  {
+    return sme->addr;
+  }
+  else
+  {
     sscanf(token, "%X", &addr);
     return addr;
-	}
+  }
 }
 
 void print_byte(char *token)
 {
-	int addr = get_sym_value(token);
+  int addr = get_sym_value(token);
 
-	mem_data mem = get_mem(addr, false);
+  mem_data mem = get_mem(addr, false);
 
-	printf(" %s: %02X\n", token, mem.b[0]);
+  printf(" %s: %02X\n", token, mem.b[0]);
 }
 
 void cmdPrintByte(void)
@@ -1050,17 +1249,17 @@ void cmdPrintByte(void)
   
   if (token != NULL)
   {
-	  print_byte(token);
+    print_byte(token);
   }
 }
 
 void print_word(char* token)
 {
-	int addr = get_sym_value(token);
+  int addr = get_sym_value(token);
 
-	mem_data mem = get_mem(addr, false);
+  mem_data mem = get_mem(addr, false);
 
-	printf(" %s: %02X%02X\n", token, mem.b[1], mem.b[0]);
+  printf(" %s: %02X%02X\n", token, mem.b[1], mem.b[0]);
 }
 
 void cmdPrintWord(void)
@@ -1069,17 +1268,17 @@ void cmdPrintWord(void)
   
   if (token != NULL)
   {
-	  print_word(token);
+    print_word(token);
   }
 }
 
 void print_dword(char* token)
 {
-	int addr = get_sym_value(token);
+  int addr = get_sym_value(token);
 
-	mem_data mem = get_mem(addr, false);
+  mem_data mem = get_mem(addr, false);
 
-	printf(" %s: %02X%02X%02X%02X\n", token, mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
+  printf(" %s: %02X%02X%02X%02X\n", token, mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
 }
 
 void cmdPrintDWord(void)
@@ -1088,35 +1287,71 @@ void cmdPrintDWord(void)
   
   if (token != NULL)
   {
-	  print_dword(token);
+    print_dword(token);
   }
 }
 
 void print_string(char* token)
 {
-	int addr = get_sym_value(token);
-	static char string[2048] = { 0 };
-	char c[2] = { 0 };
+  int addr = get_sym_value(token);
+  static char string[2048] = { 0 };
 
-	int cnt = 0;
-	string[0] = '\0';
+  int cnt = 0;
+  string[0] = '\0';
 
-	while (1)
-	{
-		mem_data mem = get_mem(addr+cnt, false);
+  while (1)
+  {
+    mem_data mem = get_mem(addr+cnt, false);
 
-		for (int k = 0; k < 16; k++)
-		{
-			c[0] = mem.b[k];
-			strcat(string, c);
-			if (mem.b[k] == 0)
-			{
-				printf(" %s: %s\n", token, string);
-				return;
-			}
-			cnt++;
-		}
-	}
+    for (int k = 0; k < 16; k++)
+    {
+      // If string is over 100 chars, let's truncate it, for safety...
+      if (cnt > 100)
+      {
+        string[cnt++] = '.';
+        string[cnt++] = '.';
+        string[cnt++] = '.';
+        mem.b[k] = 0;
+      }
+
+      string[cnt] = mem.b[k];
+
+      if (mem.b[k] == 0)
+      {
+        printf(" %s: %s\n", token, string);
+        return;
+      }
+      cnt++;
+    }
+  }
+}
+
+void print_dump(type_watch_entry* watch)
+{
+  int count = 16; //default count
+
+  if (watch->param1)
+    sscanf(watch->param1, "%X", &count);
+
+  printf(" %s:\n", watch->name);
+
+  int addr = get_sym_value(watch->name);
+
+  dump(addr, count);
+}
+
+void print_mdump(type_watch_entry* watch)
+{
+  int count = 16; //default count
+
+  if (watch->param1)
+    sscanf(watch->param1, "%X", &count);
+
+  printf(" %s:\n", watch->name);
+
+  int addr = get_sym_value(watch->name);
+
+  mdump(addr, count);
 }
 
 void cmdPrintString(void)
@@ -1125,7 +1360,7 @@ void cmdPrintString(void)
   
   if (token != NULL)
   {
-	  print_string(token);
+    print_string(token);
   }
 }
 
@@ -1139,14 +1374,14 @@ void cmdAutoClearScreen(void)
   char* token = strtok(NULL, " ");
 
   // if no parameter, then just toggle it
-	if (token == NULL)
-		autocls = !autocls;
-	else if (strcmp(token, "1") == 0)
-		autocls = true;
-	else if (strcmp(token, "0") == 0)
-		autocls = false;
-	
-	printf(" - autocls is turned %s.\n", autocls ? "on" : "off");
+  if (token == NULL)
+    autocls = !autocls;
+  else if (strcmp(token, "1") == 0)
+    autocls = true;
+  else if (strcmp(token, "0") == 0)
+    autocls = false;
+  
+  printf(" - autocls is turned %s.\n", autocls ? "on" : "off");
 }
 
 void cmdSetBreakpoint(void)
@@ -1156,13 +1391,17 @@ void cmdSetBreakpoint(void)
   
   if (token != NULL)
   {
-		int addr = get_sym_value(token);
-		printf("- Setting hardware breakpoint to $%04X\n", addr);
+    int addr = get_sym_value(token);
+
+    if (addr == -1)
+      return;
+
+    printf("- Setting hardware breakpoint to $%04X\n", addr);
 
     sprintf(str, "b%04X\n", addr);
     serialWrite(str);
     serialRead(inbuf, BUFSIZE);
-	}
+  }
 }
 
 void cmd_watch(type_watch type)
@@ -1171,19 +1410,30 @@ void cmd_watch(type_watch type)
   
   if (token != NULL)
   {
-	  if (find_in_watchlist(token))
-		{
-		  printf("watch already exists!\n");
-			return;
-		}
+    if (find_in_watchlist(type, token))
+    {
+      printf("watch already exists!\n");
+      return;
+    }
 
-	  type_watch_entry we;
-		we.type = type;
-		we.name = token;
-		add_to_watchlist(we);
+    type_watch_entry we;
+    we.type = type;
+    we.name = token;
+    we.param1 = NULL;
 
-		printf("watch added!\n");
-	}
+    token = strtok(NULL, " ");
+    if (token != NULL)
+    {
+      we.param1 = token;
+    }
+
+    add_to_watchlist(we);
+
+    if (we.param1 != NULL)
+      printf("watch added! (%s : %s %s)\n", type_names[type], we.name, we.param1);
+    else
+      printf("watch added! (%s : %s)\n", type_names[type], we.name);
+  }
 }
 
 void cmdWatchByte(void)
@@ -1206,32 +1456,44 @@ void cmdWatchString(void)
   cmd_watch(TYPE_STRING);
 }
 
+void cmdWatchDump(void)
+{
+  cmd_watch(TYPE_DUMP);
+}
+
+void cmdWatchMDump(void)
+{
+  cmd_watch(TYPE_MDUMP);
+}
+
 void cmdWatches(void)
 {
   type_watch_entry* iter = lstWatches;
-	int cnt = 0;
+  int cnt = 0;
 
   printf("---------------------------------------\n");
-	
-	while (iter != NULL)
-	{
-	  cnt++;
+  
+  while (iter != NULL)
+  {
+    cnt++;
 
-		printf("#%d: %s ", cnt, type_names[iter->type]);
+    printf("#%d: %s ", cnt, type_names[iter->type]);
 
-		switch (iter->type)
-		{
-		  case TYPE_BYTE:   print_byte(iter->name);   break;
-		  case TYPE_WORD:   print_word(iter->name);   break;
-		  case TYPE_DWORD:  print_dword(iter->name);  break;
-		  case TYPE_STRING: print_string(iter->name); break;
-		}
+    switch (iter->type)
+    {
+      case TYPE_BYTE:   print_byte(iter->name);   break;
+      case TYPE_WORD:   print_word(iter->name);   break;
+      case TYPE_DWORD:  print_dword(iter->name);  break;
+      case TYPE_STRING: print_string(iter->name); break;
+      case TYPE_DUMP:   print_dump(iter);         break;
+      case TYPE_MDUMP:  print_mdump(iter);        break;
+    }
 
-		iter = iter->next;
-	}
+    iter = iter->next;
+  }
 
-	if (cnt == 0)
-	  printf("no watches in list\n");
+  if (cnt == 0)
+    printf("no watches in list\n");
   printf("---------------------------------------\n");
 }
 
@@ -1241,27 +1503,27 @@ void cmdDeleteWatch(void)
   
   if (token != NULL)
   {
-	  // user wants to delete all watches?
-	  if (strcmp(token, "all") == 0)
-		{
-		  // TODO: add a confirm yes/no prompt...
-			outputFlag = false;
-			while (delete_from_watchlist(1))
-			  ;
-			outputFlag = true;
-			printf("deleted all watches!\n");
-		}
-		else
-		{
-		  int wnum;
-		  int n = sscanf(token, "%d", &wnum);
+    // user wants to delete all watches?
+    if (strcmp(token, "all") == 0)
+    {
+      // TODO: add a confirm yes/no prompt...
+      outputFlag = false;
+      while (delete_from_watchlist(1))
+        ;
+      outputFlag = true;
+      printf("deleted all watches!\n");
+    }
+    else
+    {
+      int wnum;
+      int n = sscanf(token, "%d", &wnum);
 
-			if (n == 1)
-			{
-			  delete_from_watchlist(wnum);
-			}
-		}
-	}
+      if (n == 1)
+      {
+        delete_from_watchlist(wnum);
+      }
+    }
+  }
 }
 
 
@@ -1270,14 +1532,14 @@ void cmdAutoWatch(void)
   char* token = strtok(NULL, " ");
 
   // if no parameter, then just toggle it
-	if (token == NULL)
-		autowatch = !autowatch;
-	else if (strcmp(token, "1") == 0)
-		autowatch = true;
-	else if (strcmp(token, "0") == 0)
-		autowatch = false;
-	
-	printf(" - autowatch is turned %s.\n", autowatch ? "on" : "off");
+  if (token == NULL)
+    autowatch = !autowatch;
+  else if (strcmp(token, "1") == 0)
+    autowatch = true;
+  else if (strcmp(token, "0") == 0)
+    autowatch = false;
+  
+  printf(" - autowatch is turned %s.\n", autowatch ? "on" : "off");
 }
 
 void cmdSymbolValue(void)
@@ -1288,9 +1550,9 @@ void cmdSymbolValue(void)
   {
     type_symmap_entry* sme = find_in_symmap(token);
 
-		if (sme != NULL)
-		  printf("%s : %s\n", sme->sval, sme->symbol);
-	}
+    if (sme != NULL)
+      printf("%s : %s\n", sme->sval, sme->symbol);
+  }
 }
 
 void cmdSave(void)
@@ -1303,12 +1565,12 @@ void cmdSave(void)
     return;
   }
 
-	char* strAddr = strtok(NULL, " ");
-	if (!strAddr)
-	{
-	  printf("Missing <addr> parameter!\n");
-		return;
-	}
+  char* strAddr = strtok(NULL, " ");
+  if (!strAddr)
+  {
+    printf("Missing <addr> parameter!\n");
+    return;
+  }
 
   char* strCount = strtok(NULL, " ");
   if (!strCount)
@@ -1317,16 +1579,16 @@ void cmdSave(void)
     return;
   }
 
-	int addr = get_sym_value(strAddr);
+  int addr = get_sym_value(strAddr);
   int count;
   sscanf(strCount, "%X", &count);
 
   int cnt = 0;
   FILE* fsave = fopen(strBinFile, "wb");
-	while (cnt < count)
-	{
-		// get memory at current pc
-		mem_data* multimem = get_mem28array(addr + cnt);
+  while (cnt < count)
+  {
+    // get memory at current pc
+    mem_data* multimem = get_mem28array(addr + cnt);
 
     for (int line = 0; line < 32; line++)
     {
@@ -1347,9 +1609,9 @@ void cmdSave(void)
         break;
     }
 
-		if (ctrlcflag)
-			break;
-	}
+    if (ctrlcflag)
+      break;
+  }
 
   printf("\n0x%X bytes saved to \"%s\"\n", cnt, strBinFile);
   fclose(fsave);
@@ -1357,108 +1619,118 @@ void cmdSave(void)
 
 void cmdLoad(void)
 {
-	char* strBinFile = strtok(NULL, " ");
+  char* strBinFile = strtok(NULL, " ");
 
-	if (!strBinFile)
-	{
-		printf("Missing <binfile> parameter!\n");
-		return;
-	}
+  if (!strBinFile)
+  {
+    printf("Missing <binfile> parameter!\n");
+    return;
+  }
 
-	char* strAddr = strtok(NULL, " ");
-	if (!strAddr)
-	{
-		printf("Missing <addr> parameter!\n");
-		return;
-	}
+  char* strAddr = strtok(NULL, " ");
+  if (!strAddr)
+  {
+    printf("Missing <addr> parameter!\n");
+    return;
+  }
 
-	int addr = get_sym_value(strAddr);
+  int addr = get_sym_value(strAddr);
 
-  	FILE* fload = fopen(strBinFile, "rb");
-	if(fload)
-	{
-		fseek(fload, 0, SEEK_END);
-		int fsize = ftell(fload);	
-		rewind(fload);      		
-		char* buffer = (char *)malloc(fsize*sizeof(char));
-		if(buffer) 
-		{
-			fread(buffer, fsize, 1, fload);
-		
-			int i = 0;
-			while(i < fsize)
-			{
-				int outSize = fsize - i;
-				if(outSize > 16) {
-					outSize = 16;
-				}
+    FILE* fload = fopen(strBinFile, "rb");
+  if(fload)
+  {
+    fseek(fload, 0, SEEK_END);
+    int fsize = ftell(fload);  
+    rewind(fload);          
+    char* buffer = (char *)malloc(fsize*sizeof(char));
+    if(buffer) 
+    {
+      fread(buffer, fsize, 1, fload);
+    
+      int i = 0;
+      while(i < fsize)
+      {
+        int outSize = fsize - i;
+        if(outSize > 16) {
+          outSize = 16;
+        }
 
-				put_mem28array(addr + i, (unsigned char*) (buffer + i), outSize);
-				i += outSize;
-			}	
+        put_mem28array(addr + i, (unsigned char*) (buffer + i), outSize);
+        i += outSize;
+      }  
 
-			free(buffer);
-		}
-  		fclose(fload);
-	}
-	else 
-	{
-		printf("Error opening the file '%s'!\n", strBinFile);
-	}
+      free(buffer);
+    }
+      fclose(fload);
+  }
+  else 
+  {
+    printf("Error opening the file '%s'!\n", strBinFile);
+  }
 }
 
 void cmdBackTrace(void)
 {
   char str[128] = { 0 };
 
-	// get current register values
-	reg_data reg = get_regs();
+  // get current register values
+  reg_data reg = get_regs();
 
-	disassemble_addr_into_string(str, reg.pc, false);
-	if (traceframe == 0)
-		printf(KINV "#0: %s\n" KNRM, str);
-	else
-		printf("#0: %s\n", str);
+  disassemble_addr_into_string(str, reg.pc, false);
+  if (traceframe == 0)
+    printf(KINV "#0: %s\n" KNRM, str);
+  else
+    printf("#0: %s\n", str);
 
-	// get memory at current pc
-	int* addresses = get_backtrace_addresses();
+  // get memory at current pc
+  int* addresses = get_backtrace_addresses();
 
-	for (int k = 0; k < 8; k++)
-	{
-	  disassemble_addr_into_string(str, addresses[k], false);
-		if (traceframe-1 == k)
-		  printf(KINV "#%d: %s\n" KNRM, k+1, str);
-		else
-			printf("#%d: %s\n", k+1, str);
-	}
+  for (int k = 0; k < 8; k++)
+  {
+    disassemble_addr_into_string(str, addresses[k], false);
+    if (traceframe-1 == k)
+      printf(KINV "#%d: %s\n" KNRM, k+1, str);
+    else
+      printf("#%d: %s\n", k+1, str);
+  }
 }
 
 void cmdUpFrame(void)
 {
   if (traceframe == 0)
-	{
-	  printf("Already at highest frame! (frame#0)\n");
-		return;
-	}
+  {
+    printf("Already at highest frame! (frame#0)\n");
+    return;
+  }
 
-	traceframe--;
+  traceframe--;
 
   if (autocls)
-		cmdClearScreen();
-	cmdDisassemble();
+    cmdClearScreen();
+  cmdDisassemble();
 }
 
 void cmdDownFrame(void)
 {
   if (traceframe == 8)
-	{
-	  printf("Already at lowest frame! (frame#8)\n");
-		return;
-	}
+  {
+    printf("Already at lowest frame! (frame#8)\n");
+    return;
+  }
 
-	traceframe++;
+  traceframe++;
 
   if (autocls)
-		cmdClearScreen();
-	cmdDisassemble();
+    cmdClearScreen();
+  cmdDisassemble();
+}
+
+int cmdGetCmdCount(void)
+{
+  return sizeof(command_details) / sizeof(type_command_details) - 1;
+}
+
+char* cmdGetCmdName(int idx)
+{
+  return command_details[idx].name;
 }
