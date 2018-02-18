@@ -46,9 +46,10 @@ type_command_details command_details[] =
 {
   { "?", cmdRawHelp, NULL, "Shows help information for raw/native monitor commands" },
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
-	{ "dump", cmdDump, "<addr> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
-	{ "mdump", cmdMDump, "<addr> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
-  { "dis", cmdDisassemble, "[<addr> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
+	{ "dump", cmdDump, "<addr16> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
+	{ "mdump", cmdMDump, "<addr28> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
+  { "dis", cmdDisassemble, "[<addr16> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
+  { "mdis", cmdMDisassemble, "[<addr28> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "step", cmdStep, NULL, "Step into next instruction" }, // equate to pressing 'enter' in raw monitor
   { "n", cmdNext, NULL, "Step over to next instruction" },
   { "finish", cmdFinish, NULL, "Continue running until function returns (ie, step-out-from)" },
@@ -469,11 +470,15 @@ reg_data get_regs(void)
 }
 
 
-mem_data get_mem(int addr)
+mem_data get_mem(int addr, bool useAddr28)
 {
   mem_data mem = { 0 };
   char str[100];
-  sprintf(str, "d%04X\n", addr); // use 'd' instead of 'm' (for memory in cpu context)
+	if (useAddr28)
+  	sprintf(str, "m%07X\n", addr); // use 'm' (for 28-bit memory addresses)
+	else
+	  sprintf(str, "d%04X\n", addr); // use 'd' instead of 'm' (for memory in cpu context)
+
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
   sscanf(inbuf, " :%X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
@@ -482,18 +487,6 @@ mem_data get_mem(int addr)
   return mem;
 }
 
-mem_data get_mem28(int addr)
-{
-  mem_data mem = { 0 };
-  char str[100];
-  sprintf(str, "m%04X\n", addr);
-  serialWrite(str);
-  serialRead(inbuf, BUFSIZE);
-  sscanf(inbuf, " :%X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
-  &mem.addr, &mem.b[0], &mem.b[1], &mem.b[2], &mem.b[3], &mem.b[4], &mem.b[5], &mem.b[6], &mem.b[7], &mem.b[8], &mem.b[9], &mem.b[10], &mem.b[11], &mem.b[12], &mem.b[13], &mem.b[14], &mem.b[15]); 
-
-  return mem;
-}
 
 // read all 32 lines at once (to hopefully speed things up for saving memory dumps)
 mem_data* get_mem28array(int addr)
@@ -607,7 +600,7 @@ void cmdDump(void)
 	while (cnt < total)
 	{
 		// get memory at current pc
-		mem_data mem = get_mem(addr + cnt);
+		mem_data mem = get_mem(addr + cnt, false);
 
 		printf(" :%07X ", mem.addr);
 		for (int k = 0; k < 16; k++)
@@ -660,7 +653,7 @@ void cmdMDump(void)
 	while (cnt < total)
 	{
 		// get memory at current pc
-		mem_data mem = get_mem28(addr + cnt);
+		mem_data mem = get_mem(addr + cnt, true);
 
 		printf(" :%07X ", mem.addr);
 		for (int k = 0; k < 16; k++)
@@ -690,18 +683,21 @@ void cmdMDump(void)
 }
 
 // return the last byte count
-int disassemble_addr_into_string(char* str, int addr)
+int disassemble_addr_into_string(char* str, int addr, bool useAddr28)
 {
   int last_bytecount = 0;
   char s[32] = { 0 };
 
 	// get memory at current pc
-	mem_data mem = get_mem(addr);
+	mem_data mem = get_mem(addr, useAddr28);
 
 	// now, try to disassemble it
 
 	// Program counter
-	sprintf(str, "$%04X ", addr & 0xffff);
+  if (useAddr28)
+		sprintf(str, "$%07X ", addr & 0xfffffff);
+	else
+		sprintf(str, "$%04X ", addr & 0xffff);
 
 	type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
 	sprintf(s, " %10s:%d ", mode.name, mode.val);
@@ -819,7 +815,7 @@ int* get_backtrace_addresses(void)
   static int addresses[8];
 
 	// get memory at current pc
-	mem_data mem = get_mem(reg.sp+1);
+	mem_data mem = get_mem(reg.sp+1, false);
 	for (int k = 0; k < 8; k++)
 	{
 	  int addr = mem.b[k*2] + (mem.b[k*2+1] << 8);
@@ -830,7 +826,8 @@ int* get_backtrace_addresses(void)
 	return addresses;
 }
 
-void cmdDisassemble(void)
+
+void disassemble(bool useAddr28)
 {
   char str[128] = { 0 };
   int last_bytecount = 0;
@@ -883,7 +880,7 @@ void cmdDisassemble(void)
 
 	while (idx < cnt)
 	{
-    last_bytecount = disassemble_addr_into_string(str, addr);
+    last_bytecount = disassemble_addr_into_string(str, addr, useAddr28);
 
     // print from .list ref? (i.e., find source in .a65 file?)
     if (idx == 0)
@@ -911,6 +908,18 @@ void cmdDisassemble(void)
 	} // end while
 }
 
+
+void cmdDisassemble(void)
+{
+	disassemble(false);
+}
+
+void cmdMDisassemble(void)
+{
+	disassemble(true);
+}
+
+
 void cmdStep(void)
 {
   traceframe = 0;
@@ -937,7 +946,7 @@ void cmdNext(void)
 
   // check if this is a JSR command
   reg_data reg = get_regs();
-	mem_data mem = get_mem(reg.pc);
+	mem_data mem = get_mem(reg.pc, false);
 		
 	// if not, then just do a normal step
 	if (strcmp(instruction_lut[mem.b[0]], "JSR") != 0)
@@ -991,7 +1000,7 @@ void cmdFinish(void)
   while (!function_returning)
 	{
 	  reg = get_regs();
-		mem_data mem = get_mem(reg.pc);
+		mem_data mem = get_mem(reg.pc, false);
 
 		if ((strcmp(instruction_lut[mem.b[0]], "RTS") == 0 ||
                      strcmp(instruction_lut[mem.b[0]], "RTI") == 0)
@@ -1030,7 +1039,7 @@ void print_byte(char *token)
 {
 	int addr = get_sym_value(token);
 
-	mem_data mem = get_mem(addr);
+	mem_data mem = get_mem(addr, false);
 
 	printf(" %s: %02X\n", token, mem.b[0]);
 }
@@ -1049,7 +1058,7 @@ void print_word(char* token)
 {
 	int addr = get_sym_value(token);
 
-	mem_data mem = get_mem(addr);
+	mem_data mem = get_mem(addr, false);
 
 	printf(" %s: %02X%02X\n", token, mem.b[1], mem.b[0]);
 }
@@ -1068,7 +1077,7 @@ void print_dword(char* token)
 {
 	int addr = get_sym_value(token);
 
-	mem_data mem = get_mem(addr);
+	mem_data mem = get_mem(addr, false);
 
 	printf(" %s: %02X%02X%02X%02X\n", token, mem.b[3], mem.b[2], mem.b[1], mem.b[0]);
 }
@@ -1094,7 +1103,7 @@ void print_string(char* token)
 
 	while (1)
 	{
-		mem_data mem = get_mem(addr+cnt);
+		mem_data mem = get_mem(addr+cnt, false);
 
 		for (int k = 0; k < 16; k++)
 		{
@@ -1405,7 +1414,7 @@ void cmdBackTrace(void)
 	// get current register values
 	reg_data reg = get_regs();
 
-	disassemble_addr_into_string(str, reg.pc);
+	disassemble_addr_into_string(str, reg.pc, false);
 	if (traceframe == 0)
 		printf(KINV "#0: %s\n" KNRM, str);
 	else
@@ -1416,7 +1425,7 @@ void cmdBackTrace(void)
 
 	for (int k = 0; k < 8; k++)
 	{
-	  disassemble_addr_into_string(str, addresses[k]);
+	  disassemble_addr_into_string(str, addresses[k], false);
 		if (traceframe-1 == k)
 		  printf(KINV "#%d: %s\n" KNRM, k+1, str);
 		else
