@@ -351,6 +351,93 @@ bool delete_from_watchlist(int wnum)
   return false;
 }
 
+char* get_string_token(char* p, char* name)
+{
+  int found_start = 0;
+  int idx = 0;
+
+  while (1)
+  {
+    if (!found_start)
+    {
+      if (*p == 0 || *p == '\r' || *p == '\n')
+        return 0;
+
+      if (*p != ' ')
+      {
+        found_start = 1;
+        continue;
+      }
+
+      p++;
+    }
+
+    if (found_start) // found start of token, now look for end;
+    {
+      if (*p == ' ' || *p == '\r' || *p == '\n')
+      {
+        name[idx] = 0;
+        return ++p;
+      }
+
+      name[idx] = *p;
+      p++;
+      idx++;
+    }
+  }
+}
+
+bool starts_with(const char *str, const char *pre)
+{
+      return strncmp(pre, str, strlen(pre)) == 0;
+}
+
+void load_ca65_map(FILE* f)
+{
+  char line[1024];
+  char name[128];
+  char sval[128];
+  int  val;
+  char str[64];
+
+  int parse_symbols = 0;
+  while (!feof(f))
+  {
+    fgets(line, 1024, f);
+    
+    if (starts_with(line, "Exports list by name:"))
+    {
+      fgets(line, 1024, f); // ignore following "----" line
+      parse_symbols = 1;
+      continue;
+    }
+
+    if (parse_symbols)
+    {
+      if (starts_with(line, "zerobss"))
+        printf(line);
+
+      char* p = line;
+      for (int k = 0; k < 2; k++)
+      {
+        if (!(p = get_string_token(p, name)))
+          return;
+
+        p = get_string_token(p,sval);
+        val = strtol(sval, NULL, 16);
+        
+        p = get_string_token(p,str); // ignore this 3rd one...
+
+        type_symmap_entry sme;
+        sme.addr = val;
+        sme.sval = sval; 
+        sme.symbol = name;
+        add_to_symmap(sme);
+      }
+    }
+  }
+}
+
 // loads the *.map file corresponding to the provided *.list file (if one exists)
 void load_map(char* fname)
 {
@@ -367,12 +454,23 @@ void load_map(char* fname)
 
     // load the map file
     FILE* f = fopen(strMapFile, "rt");
+    int first_line = 1;
 
     while (!feof(f))
     {
       char line[1024];
       char sval[256];
       fgets(line, 1024, f);
+
+      if (first_line)
+      {
+        first_line = 0;
+        if (starts_with(line, "Modules list:"))
+        {
+          load_ca65_map(f);
+          break;
+        }
+      }
 
       int addr;
       char sym[1024];
@@ -386,6 +484,16 @@ void load_map(char* fname)
       sme.symbol = sym;
       add_to_symmap(sme);
     }
+    fclose(f);
+  }
+}
+
+void load_ca65_list(FILE* f)
+{
+  char line[1024];
+  while (!feof(f))
+  {
+    fgets(line, 1024, f);
   }
 }
 
@@ -394,10 +502,21 @@ void load_list(char* fname)
 {
   FILE* f = fopen(fname, "rt");
   char line[1024];
+  int first_line = 1;
 
   while (!feof(f))
   {
     fgets(line, 1024, f);
+
+    if (first_line)
+    {
+      first_line = 0;
+      if (starts_with(line, "ca65"))
+      {
+        load_ca65_list(f);
+        break;
+      }
+    }
 
     if (strlen(line) == 0)
       continue;
@@ -424,6 +543,7 @@ void load_list(char* fname)
       add_to_list(fl);
     }
   }
+  fclose(f);
 
   load_map(fname);
 }
