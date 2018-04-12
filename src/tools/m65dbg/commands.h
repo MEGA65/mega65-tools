@@ -62,6 +62,18 @@ typedef struct tse
   struct tse* next;
 } type_symmap_entry;
 
+typedef struct t_o
+{
+  char modulename[256];
+  int code;
+  int rodata;
+  int bss;
+  int data;
+  int zeropage;
+  int null;
+  struct t_o* next;
+} type_offsets;
+
 typedef enum { TYPE_BYTE, TYPE_WORD, TYPE_DWORD, TYPE_STRING, TYPE_DUMP, TYPE_MDUMP } type_watch;
 extern char* type_names[];
 

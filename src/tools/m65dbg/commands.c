@@ -100,7 +100,41 @@ type_fileloc* cur_file_loc = NULL;
 
 type_symmap_entry* lstSymMap = NULL;
 
+type_offsets segmentOffsets = { 0 };
+
+type_offsets* lstModuleOffsets = NULL;
+
 type_watch_entry* lstWatches = NULL;
+
+void add_to_offsets_list(type_offsets mo)
+{
+  type_offsets* iter = lstModuleOffsets;
+
+  if (iter == NULL)
+  {
+    lstModuleOffsets = malloc(sizeof(type_offsets));
+    memcpy(lstModuleOffsets, &mo, sizeof(type_offsets));
+    lstModuleOffsets->next = NULL;
+    return;
+  }
+
+  while (iter != NULL)
+  {
+    //printf("iterating %s\n", iter->modulename);
+    // add to end?
+    if (iter->next == NULL)
+    {
+      type_offsets* mo_new = malloc(sizeof(type_offsets));
+      memcpy(mo_new, &mo, sizeof(type_offsets));
+      mo_new->next = NULL;
+      //printf("adding %s\n\n", mo_new->modulename);
+
+      iter->next = mo_new;
+      return;
+    }
+    iter = iter->next;
+  }
+}
 
 void add_to_list(type_fileloc fl)
 {
@@ -389,57 +423,166 @@ char* get_string_token(char* p, char* name)
 
 bool starts_with(const char *str, const char *pre)
 {
-      return strncmp(pre, str, strlen(pre)) == 0;
+  return strncmp(pre, str, strlen(pre)) == 0;
 }
 
-void load_ca65_map(FILE* f)
+void parse_ca65_segments(FILE* f, char* line)
 {
-  char line[1024];
+  char name[128];
+  char sval[128];
+  int val;
+  char *p;
+
+  while (!feof(f))
+  {
+    fgets(line, 1024, f);
+
+    if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n')
+    {
+      return;
+    }
+
+    p = line;
+    if (!(p = get_string_token(p, name)))
+      return;
+
+    if (!(p = get_string_token(p, sval)))
+      return;
+
+    val = strtol(sval, NULL, 16);
+    if (strcmp(name, "CODE") == 0)     segmentOffsets.code     = val;
+    if (strcmp(name, "RODATA") == 0)   segmentOffsets.rodata   = val;
+    if (strcmp(name, "BSS") == 0)      segmentOffsets.bss      = val;
+    if (strcmp(name, "DATA") == 0)     segmentOffsets.data     = val;
+    if (strcmp(name, "ZEROPAGE") == 0) segmentOffsets.zeropage = val;
+    if (strcmp(name, "NULL") == 0)     segmentOffsets.null     = val;
+  }
+}
+
+void parse_ca65_modules(FILE* f, char* line)
+{
+  char name[128];
+  char sval[128];
+  int val;
+  int state = 0;
+  char *p;
+  type_offsets mo = { 0 };
+
+  while (!feof(f))
+  {
+    fgets(line, 1024, f);
+
+    if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n')
+    {
+      if (state == 1)
+        add_to_offsets_list(mo);
+      return;
+    }
+
+    if (strchr(line, ':') != NULL)
+    {
+      line[(int)(strchr(line, ':') - line)] = '\0';
+      if (state == 1)
+        add_to_offsets_list(mo);
+      state = 0;
+    }
+
+    switch(state)
+    {
+      case 0: // get module name
+        strcpy(mo.modulename, line);
+        state = 1;
+        break;
+
+      case 1: // get segment offsets
+        p = line;
+        if (!(p = get_string_token(p, name)))
+          return;
+
+        if (!(p = get_string_token(p, sval)))
+          return;
+
+        if (!starts_with(sval, "Offs="))
+          return;
+
+        p = sval + 5;
+        val = strtol(p, NULL, 16);
+        if (strcmp(name, "CODE") == 0)     mo.code     = val;
+        if (strcmp(name, "RODATA") == 0)   mo.rodata   = val;
+        if (strcmp(name, "BSS") == 0)      mo.bss      = val;
+        if (strcmp(name, "DATA") == 0)     mo.data     = val;
+        if (strcmp(name, "ZEROPAGE") == 0) mo.zeropage = val;
+        if (strcmp(name, "NULL") == 0)     mo.null     = val;
+    }
+  }
+}
+
+void parse_ca65_symbols(FILE* f, char* line)
+{
   char name[128];
   char sval[128];
   int  val;
   char str[64];
 
-  int parse_symbols = 0;
+  while (!feof(f))
+  {
+    fgets(line, 1024, f);
+
+    //if (starts_with(line, "zerobss"))
+    //  printf(line);
+
+    char* p = line;
+    for (int k = 0; k < 2; k++)
+    {
+      if (!(p = get_string_token(p, name)))
+        return;
+
+      p = get_string_token(p,sval);
+      val = strtol(sval, NULL, 16);
+      
+      p = get_string_token(p,str); // ignore this 3rd one...
+
+      type_symmap_entry sme;
+      sme.addr = val;
+      sme.sval = sval; 
+      sme.symbol = name;
+      add_to_symmap(sme);
+    }
+  }
+}
+
+void load_ca65_map(FILE* f)
+{
+  char line[1024];
+  rewind(f);
   while (!feof(f))
   {
     fgets(line, 1024, f);
     
+    if (starts_with(line, "Modules list:"))
+    {
+      fgets(line, 1024, f); // ignore following "----" line
+      parse_ca65_modules(f, line);
+      continue;
+    }
+    if (starts_with(line, "Segment list:"))
+    {
+      fgets(line, 1024, f); // ignore following "----" line
+      fgets(line, 1024, f); // ignore following "Name" line
+      fgets(line, 1024, f); // ignore following "----" line
+      parse_ca65_segments(f, line);
+    }
     if (starts_with(line, "Exports list by name:"))
     {
       fgets(line, 1024, f); // ignore following "----" line
-      parse_symbols = 1;
+      parse_ca65_symbols(f, line);
       continue;
-    }
-
-    if (parse_symbols)
-    {
-      if (starts_with(line, "zerobss"))
-        printf(line);
-
-      char* p = line;
-      for (int k = 0; k < 2; k++)
-      {
-        if (!(p = get_string_token(p, name)))
-          return;
-
-        p = get_string_token(p,sval);
-        val = strtol(sval, NULL, 16);
-        
-        p = get_string_token(p,str); // ignore this 3rd one...
-
-        type_symmap_entry sme;
-        sme.addr = val;
-        sme.sval = sval; 
-        sme.symbol = name;
-        add_to_symmap(sme);
-      }
     }
   }
 }
 
 // loads the *.map file corresponding to the provided *.list file (if one exists)
-void load_map(char* fname)
+void load_map(const char* fname)
 {
   char strMapFile[200];
   strcpy(strMapFile, fname);
@@ -488,8 +631,10 @@ void load_map(char* fname)
   }
 }
 
-void load_ca65_list(FILE* f)
+void load_ca65_list(const char* fname, FILE* f)
 {
+  load_map(fname); // load the ca65 map file first, as it contains details that will help us parse the list file
+
   char line[1024];
   while (!feof(f))
   {
@@ -513,8 +658,9 @@ void load_list(char* fname)
       first_line = 0;
       if (starts_with(line, "ca65"))
       {
-        load_ca65_list(f);
-        break;
+        load_ca65_list(fname, f);
+        fclose(f);
+        return;
       }
     }
 
