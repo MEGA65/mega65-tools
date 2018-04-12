@@ -433,6 +433,8 @@ void parse_ca65_segments(FILE* f, char* line)
   int val;
   char *p;
 
+  memset(&segmentOffsets, 0, sizeof(segmentOffsets));
+
   while (!feof(f))
   {
     fgets(line, 1024, f);
@@ -450,12 +452,9 @@ void parse_ca65_segments(FILE* f, char* line)
       return;
 
     val = strtol(sval, NULL, 16);
-    if (strcmp(name, "CODE") == 0)     segmentOffsets.code     = val;
-    if (strcmp(name, "RODATA") == 0)   segmentOffsets.rodata   = val;
-    if (strcmp(name, "BSS") == 0)      segmentOffsets.bss      = val;
-    if (strcmp(name, "DATA") == 0)     segmentOffsets.data     = val;
-    if (strcmp(name, "ZEROPAGE") == 0) segmentOffsets.zeropage = val;
-    if (strcmp(name, "NULL") == 0)     segmentOffsets.null     = val;
+    strcpy(segmentOffsets.segments[segmentOffsets.seg_cnt].name, name);
+    segmentOffsets.segments[segmentOffsets.seg_cnt].offset = val;
+    segmentOffsets.seg_cnt++;
   }
 }
 
@@ -483,7 +482,10 @@ void parse_ca65_modules(FILE* f, char* line)
     {
       line[(int)(strchr(line, ':') - line)] = '\0';
       if (state == 1)
+      {
         add_to_offsets_list(mo);
+        memset(&mo, 0, sizeof(mo));
+      }
       state = 0;
     }
 
@@ -507,12 +509,9 @@ void parse_ca65_modules(FILE* f, char* line)
 
         p = sval + 5;
         val = strtol(p, NULL, 16);
-        if (strcmp(name, "CODE") == 0)     mo.code     = val;
-        if (strcmp(name, "RODATA") == 0)   mo.rodata   = val;
-        if (strcmp(name, "BSS") == 0)      mo.bss      = val;
-        if (strcmp(name, "DATA") == 0)     mo.data     = val;
-        if (strcmp(name, "ZEROPAGE") == 0) mo.zeropage = val;
-        if (strcmp(name, "NULL") == 0)     mo.null     = val;
+        strcpy(mo.segments[mo.seg_cnt].name, name);
+        mo.segments[mo.seg_cnt].offset = val;
+        mo.seg_cnt++;
     }
   }
 }

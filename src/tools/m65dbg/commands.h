@@ -62,15 +62,17 @@ typedef struct tse
   struct tse* next;
 } type_symmap_entry;
 
+typedef struct tseg
+{
+  char name[64];
+  int offset;
+} type_segment;
+
 typedef struct t_o
 {
   char modulename[256];
-  int code;
-  int rodata;
-  int bss;
-  int data;
-  int zeropage;
-  int null;
+  type_segment segments[32];
+  int seg_cnt;
   struct t_o* next;
 } type_offsets;
 
