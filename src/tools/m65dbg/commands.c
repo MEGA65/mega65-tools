@@ -385,16 +385,20 @@ bool delete_from_watchlist(int wnum)
   return false;
 }
 
+char* get_string_token(char* p, char* name);
+
 char* get_nth_token(char* p, int n)
 {
   static char token[128];
 
-  for (int k = 0; k < n; k++)
+  for (int k = 0; k <= n; k++)
   {
     p = get_string_token(p, token);
     if (p == 0)
       return NULL;
   }
+
+  return token;
 }
 
 char* get_string_token(char* p, char* name)
@@ -409,7 +413,7 @@ char* get_string_token(char* p, char* name)
       if (*p == 0 || *p == '\r' || *p == '\n')
         return 0;
 
-      if (*p != ' ')
+      if (*p != ' ' && *p != '\t')
       {
         found_start = 1;
         continue;
@@ -420,7 +424,7 @@ char* get_string_token(char* p, char* name)
 
     if (found_start) // found start of token, now look for end;
     {
-      if (*p == ' ' || *p == '\r' || *p == '\n')
+      if (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')
       {
         name[idx] = 0;
         return ++p;
@@ -642,6 +646,39 @@ void load_map(const char* fname)
   }
 }
 
+int get_segment_offset(const char* current_segment)
+{
+  for (int k = 0; k < segmentOffsets.seg_cnt; k++)
+  {
+    if (strcmp(current_segment, segmentOffsets.segments[k].name) == 0)
+    {
+      return segmentOffsets.segments[k].offset;
+    }
+  }
+  return 0;
+}
+
+int get_module_offset(const char* current_module, const char* current_segment)
+{
+  type_offsets* iter = lstModuleOffsets;
+
+  while (iter != NULL)
+  {
+    if (strcmp(current_module, iter->modulename) == 0)
+    {
+      for (int k = 0; k < iter->seg_cnt; k++)
+      {
+        if (strcmp(current_segment, iter->segments[k].name) == 0)
+        {
+          return iter->segments[k].offset;
+        }
+      }
+    }
+    iter = iter->next;
+  }
+  return 0;
+}
+
 void load_ca65_list(const char* fname, FILE* f)
 {
   load_map(fname); // load the ca65 map file first, as it contains details that will help us parse the list file
@@ -649,22 +686,28 @@ void load_ca65_list(const char* fname, FILE* f)
   char line[1024];
   char current_module[256] = { 0 };
   char current_segment[64] = { 0 };
+  int lineno = 0;
 
   while (!feof(f))
   {
+    lineno++;
     fgets(line, 1024, f);
 
     if (starts_with(line, "Current file:"))
     {
       // Retrieve the current file/module that was assembled
       strcpy(current_module, strchr(line, ':') + 2);
+      current_module[strlen(current_module)-1] = '\0';
+      current_module[strlen(current_module)-1] = 'o';
+      current_segment[0] = '\0';
     }
 
     if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n')
       continue;
 
     // new .segment specified in code?
-    if (strcmp(get_nth_token(line, 2), ".segment") == 0)
+    char *p = get_nth_token(line, 2);
+    if (p != NULL && strcmp(p, ".segment") == 0)
     {
       char* p = get_nth_token(line, 3);
       strncpy(current_segment, p+1, strlen(p+1)-1);
@@ -672,7 +715,7 @@ void load_ca65_list(const char* fname, FILE* f)
     }
 
     // did we find a line with a relocatable address at the start of it
-    if (line[0] != ' ' && line[1] != ' ' && line[2] != ' ' && line[3] != ' ' && line[4] != ' ' & line[5] != ' '
+    if (line[0] != ' ' && line[1] != ' ' && line[2] != ' ' && line[3] != ' ' && line[4] != ' ' && line[5] != ' '
         && line[6] == 'r' && line[7] == ' ' && line[8] != ' ')
     {
       char saddr[8];
@@ -684,8 +727,11 @@ void load_ca65_list(const char* fname, FILE* f)
       // convert relocatable address into absolute address
       addr += get_segment_offset(current_segment);
       addr += get_module_offset(current_module, current_segment);
+
+      //printf("mod=%s:seg=%s : %08X : %s", current_module, current_segment, addr, line);
     }
 
+    /*
       int addr;
       char file[1024];
       int lineno;
@@ -699,6 +745,7 @@ void load_ca65_list(const char* fname, FILE* f)
       fl.file = file;
       fl.lineno = lineno;
       add_to_list(fl);
+    */
   }
 }
 
