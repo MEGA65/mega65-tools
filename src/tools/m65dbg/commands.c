@@ -681,12 +681,15 @@ int get_module_offset(const char* current_module, const char* current_segment)
 
 void load_ca65_list(const char* fname, FILE* f)
 {
+  static char list_file_name[256];
+  strcpy(list_file_name, fname); // preserve a copy of this eternally
+
   load_map(fname); // load the ca65 map file first, as it contains details that will help us parse the list file
 
   char line[1024];
   char current_module[256] = { 0 };
   char current_segment[64] = { 0 };
-  int lineno = 0;
+  int lineno = 1;
 
   while (!feof(f))
   {
@@ -729,23 +732,12 @@ void load_ca65_list(const char* fname, FILE* f)
       addr += get_module_offset(current_module, current_segment);
 
       //printf("mod=%s:seg=%s : %08X : %s", current_module, current_segment, addr, line);
-    }
-
-    /*
-      int addr;
-      char file[1024];
-      int lineno;
-      strcpy(file, &strtok(s, ":")[1]);
-      sscanf(strtok(NULL, ":"), "%d", &lineno);
-      sscanf(line, " %X", &addr);
-
-      //printf("%04X : %s:%d\n", addr, file, lineno);
       type_fileloc fl;
       fl.addr = addr;
-      fl.file = file;
+      fl.file = list_file_name;
       fl.lineno = lineno;
       add_to_list(fl);
-    */
+    }
   }
 }
 
@@ -1299,6 +1291,7 @@ void disassemble(bool useAddr28)
     if (idx == 0)
     {
       type_fileloc *found = find_in_list(addr);
+      cur_file_loc = found;
       if (found)
       {
         printf("> %s:%d\n", found->file, found->lineno);
