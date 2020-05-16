@@ -41,11 +41,11 @@ SDCARD_DIR=	sdcard-files
 #
 # NOTE: that all files listed below will be embedded within the "MEGA65.D81".
 #
-UTILITIES=	$(UTILDIR)/ethertest.prg \
-		$(UTILDIR)/etherload.prg \
-		$(UTILDIR)/test01prg.prg
+UTILITIES=	$(B65DIR)/ethertest.prg \
+		$(B65DIR)/etherload.prg
 
-TESTS=		$(TESTDIR)/ascii.prg
+TESTS=		$(TESTDIR)/ascii.prg \
+		$(TESTDIR)/vicii.prg
 
 TOOLDIR=	$(SRCDIR)/tools
 TOOLS=	$(BINDIR)/etherload \
@@ -119,6 +119,14 @@ $(SDCARD_DIR)/M65TESTS.D81:	$(TESTS) $(CBMCONVERT)
 	$(warning =============================================================)
 	$(warning ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
+
+bin65/ethertest.prg:	$(UTILDIR)/ethertest.a65 $(OPHIS)
+	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
+
+%.prg:	utilities/%.a65 $(OPHIS)
+	$(warning =============================================================)
+	$(warning ~~~~~~~~~~~~~~~~> Making: $@)
+	$(OPHIS) $(OPHISOPT) utilities/$< -l $*.list -m $*.map -o $*.prg
 
 %.bin:	%.a65 $(OPHIS)
 	$(warning =============================================================)

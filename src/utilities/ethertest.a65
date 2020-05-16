@@ -250,4 +250,4 @@ arptemplate:
 
 	.scend
 
-	.outfile "utilities/ethertest.prg"
+	.outfile "bin65/ethertest.prg"
