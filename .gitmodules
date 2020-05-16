@@ -1,0 +1,12 @@
+[submodule "Ophis"]
+	path = Ophis
+	url = https://github.com/gardners/Ophis.git
+[submodule "cc65"]
+	path = cc65
+	url = https://github.com/cc65/cc65.git
+[submodule "cbmconvert"]
+	path = cbmconvert
+	url = https://github.com/sasq64/cbmconvert.git
+[submodule "src/mega65-libc"]
+	path = src/mega65-libc
+	url = https://github.com/MEGA65/mega65-libc.git
