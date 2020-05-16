@@ -1683,6 +1683,7 @@ void *run_boundary_scan(void *argp)
   xilinx_boundaryscan(boundary_xdc[0]?boundary_xdc:NULL,
 		      boundary_bsdl[0]?boundary_bsdl:NULL,
 		      jtag_sensitivity[0]?jtag_sensitivity:NULL);
+  return (void *)NULL;
 }
 
 #define MAX_THREADS 16

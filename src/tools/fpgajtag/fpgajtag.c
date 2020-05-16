@@ -41,6 +41,7 @@
 #include <inttypes.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <libusb.h>
 #include "util.h"
 #include "fpga.h"
 
@@ -823,8 +824,8 @@ int fpgajtag_main(char *bitstream,char *serialport)
 {
   ENTER();
     uint32_t ret;
-    int i, rflag = 0, lflag = 0, mflag = 0, cflag = 0, xflag = 0, rescan = 0;
-    const char *serialno = serialport;
+    int rflag = 0, mflag = 0, cflag = 0, xflag = 0, rescan = 0;
+//    const char *serialno = serialport;
 
     match_any_idcode = 1;
     logfile = stdout;
@@ -835,7 +836,7 @@ int fpgajtag_main(char *bitstream,char *serialport)
     /*
      * Read input file
      */
-    uint32_t file_idcode = read_inputfile(filename);
+    /* uint32_t file_idcode = */ read_inputfile(filename);
 
     if (mflag)
 	setuid( 0 );
