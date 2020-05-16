@@ -1,0 +1,171 @@
+         .org $07ff
+
+	 .byte 1,8
+
+         .byte $4c,$16,$08,$00,$97,$32
+         .byte $2c,$30,$3a,$9e,$32,$30
+         .byte $37,$30,$00,$00,$00,$a9
+         .byte $01,$85,$02
+
+	 ; no interrupts
+	 sei
+
+	 ; clear screen
+	 jsr $e544
+
+	 ; put something on alternate screen
+	 lda #$20
+	 tax
+*	 sta $3c00,x
+	 sta $3d00,x
+	 sta $3e00,x
+	 sta $3f00,x
+	 dex
+	 bne -
+	 ldx #$30
+	 stx $3c00
+	 inx
+	 stx $3c28
+	 inx
+	 stx $3c50
+	 inx
+	 stx $3c78
+	 inx
+	 stx $3ca0
+	 inx
+	 stx $3cc8
+	 inx
+	 stx $3cf0
+	 inx
+	 stx $3d18
+	 inx
+	 stx $3d40
+	 inx
+	 stx $3d68
+	 inx
+	 stx $3d80
+	 inx
+	 stx $3da8
+
+	 lda #<irq
+	 sta $0314
+	 lda #>irq
+	 sta $0315
+	 lda #$81
+	 sta $d01a
+	 lda #$7f
+	 sta $dc0d
+
+	 lda #$80
+	 sta $d012
+	 sta rasterlo
+	 lda #$00
+	 sta rasterhi
+	 ora #$1b
+	 sta $d011
+
+	 jsr printraster
+
+	 cli
+
+loop:
+	; show all rasters we see
+	lda $d052
+	sta $fd
+	lda $d053
+	and #$01
+	clc
+	adc #$05
+	sta $fe
+	ldy #$00
+	lda #$2a
+	sta ($fd),y
+
+	jsr $ffe4
+	cmp #$00
+	beq loop
+	cmp #$11
+	beq down
+	cmp #$91
+	beq up
+
+	jsr printraster
+
+	jmp loop
+
+rasterlo:   .byte 0
+rasterhi:   .byte 0
+
+up:
+	lda rasterlo
+	sec
+	sbc #$01
+	sta rasterlo
+	lda rasterhi
+	sbc #$00
+	sta rasterhi
+	jsr printraster
+	jmp loop
+
+down:
+	lda rasterlo
+	clc
+	adc #$01
+	sta rasterlo
+	lda rasterhi
+	adc #$00
+	sta rasterhi
+	jsr printraster
+	jmp loop
+
+
+printraster:
+	jsr $e544
+	ldx rasterlo
+	stx $d012
+	lda rasterhi
+	jsr $bdcd
+	; and update match raster for IRQ
+	lda #$1b
+	bit rasterhi
+	beq +
+	ora #$80
+*	sta $d011
+	rts
+
+
+irq:
+
+	; Set vertical scrolling differently so we can see effect
+	lda #$1f
+	sta $d011
+
+	lda $d019
+	bpl notrasterirq
+
+	; move screen to $3c00-$3FFF
+	lda #$f5
+	sta $d018
+
+	inc $0427
+	lda #$01
+	sta $d020
+
+	; Wait a while
+	ldx #$00
+*	dex
+	bne -
+
+	; put screen back to $0400
+	lda #$15
+	sta $d018
+
+	; back to normal VIC-II verticl scroll position
+	lda #$1b
+	sta $D011
+
+	lda #$00
+	sta $d020
+	inc $d019
+notrasterirq:
+	jmp $ea31

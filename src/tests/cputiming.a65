@@ -1,0 +1,42 @@
+	.outfile "cputiming.prg"
+	.org $07ff
+
+	 ; load address
+	 .byte 1,8
+
+	 ; basic headder
+         .byte $4c,$16,$08,$00,$97,$32
+         .byte $2c,$30,$3a,$9e,$32,$30
+         .byte $37,$30,$00,$00,$00,$a9
+         .byte $01,$85,$02
+
+main:
+
+	sei
+
+	lda #$01
+	ldx #$00
+
+loop:
+	; 63-cycle loop that should give stable colour bars
+
+	; 56 cycles of colour changing
+	sta $d020  ; 4 
+	stx $d020  ; 4
+	sta $d020  ; 4 
+	stx $d020  ; 4
+	sta $d020  ; 4 
+	stx $d020  ; 4
+	sta $d020  ; 4 
+	stx $d020  ; 4
+	sta $d020  ; 4 
+	stx $d020  ; 4
+	sta $d020  ; 4 
+	stx $d020  ; 4
+	sta $d020  ; 4 
+	stx $d020  ; 4
+
+	; need 3 cycles
+	ldy $10    ; 3
+
+	jmp loop   ; 4

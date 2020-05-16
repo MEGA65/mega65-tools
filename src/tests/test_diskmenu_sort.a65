@@ -1,0 +1,109 @@
+
+	.outfile "test_diskmenu_sort.prg"
+
+	 ; List of disk names begins at $1000 - $9FFF
+	 ; 16 bytes each, so 36KB can hold 2,304 disks
+	 .alias disknamearray $1000
+	 ; Where to get Hypervisor to copy dirent structures
+	 .alias dirent $0f00
+	 ; temporary filename structure (must also be <32KB)
+	 .alias scratch_filename $0e00
+	 ; 16-bit pointers to current disk and number of
+	 ; disks.
+	 .alias displaydiskpointer $40
+	 .alias diskpointer $fe
+	 .alias sortpointer $f7
+	 ; pointer for where we are drawing on screen
+	 .alias screenpointer $f9
+
+	 .word $0801
+	 .org $0801
+
+	 .scope
+	 .word _next, 10                       ; Next line and current line number
+	 .byte $97, "2,0:", $9e, " 2014", $AA, "65",0      ; POKE 2,0 : SYS 2014+65
+_next:	 .word 0
+    
+	 .checkpc 2079
+	 .advance 2079
+
+
+	 ; Test goes here
+	 ; Basically add pseudo random entries, call sort, and see if they end up
+	 ; sorted at the end.  This is nice and easy to arrange, as we can just have
+	 ; the list of entries at $1000 ready, and increase diskpointer to incorporate
+	 ; more of the list each iteration.
+
+addnextentry:
+	 ; 1. Add next entry
+	 ; diskpointer++
+	 lda diskpointer
+	 clc
+	 adc #$10
+	 sta diskpointer
+	 lda diskpointer+1
+	 adc #$00
+	 sta diskpointer+1
+
+	 ; See if we have gone past the end of the test data, if so, stop.
+	 lda diskpointer+1
+	 cmp #>endoftestdata
+	 bcc definitelyok
+	 lda diskpointer
+	 cmp #<endoftestdata
+	 bcc definitelyok
+
+	 ; end of test
+
+	 ; XXX - Finally compare sorted list with what we think it should look like.
+
+
+	 rts
+
+definitelyok:
+	; 2. Apply sort.
+	jsr sortnames
+
+	; 3. Check that it worked
+
+
+	jmp addnextentry
+
+	 ; Include sort routine that we are testing
+	 .include "diskmenu_sort.a65"
+
+	 .checkpc $1000
+	 .advance $1000
+
+	 ; Test data goes here
+	 ; We need to have entries that should go to the start, end, and in the middle of the list
+	 ; and have enough entries to cover more than one page of RAM, to exercise the 16-bit calculations
+	 .byte "abcdefghijklmnop"
+	 .byte "0000000000000002"
+	 .byte "0000000000000001"
+	 .byte "zzzzzzzzzzzzzzzz"
+	 .byte "potato sauce    "
+	 .byte "A               "
+	 .byte "J               "
+	 .byte "D               "
+	 .byte "O               "
+	 .byte "G               "
+	 .byte "F               "
+	 .byte "O               "
+	 .byte "O               "
+	 .byte "D               "
+	 .byte "I               "
+	 .byte "S               "
+	 .byte "YUMMY           "
+	 .byte "We              "
+	 .byte "need            "
+	 .byte "to              "
+	 .byte "have            "
+	 .byte "more            "
+	 .byte "test            "
+	 .byte "entries         "
+	 
+	 
+endoftestdata:
+
+	 .scend

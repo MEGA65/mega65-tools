@@ -1,0 +1,94 @@
+         .org $07ff
+
+	 ; load address
+	 .byte 1,8
+
+	 ; basic headder
+         .byte $4c,$16,$08,$00,$97,$32
+         .byte $2c,$30,$3a,$9e,$32,$30
+         .byte $37,$30,$00,$00,$00,$a9
+         .byte $01,$85,$02
+
+	 ; fast cpu
+	 lda #65
+	 sta 0
+
+	 ; VIC-IV registers
+	 lda #$47
+	 sta $d02f
+	 lda #$53
+	 sta $d02f
+
+
+	 ; set up our DMA job
+	 ; As the DMA list will be in the bottom 64KB RAM, we can clear
+	 ; the registers that set the high address bits for the list:
+	lda #$0
+	sta $d702
+	sta $d704
+
+	; We can also set the high byte for the DMA list address once,
+	; since it is writing the low byte of the address that triggers
+	; the DMA
+	lda #>dmalist
+	sta $d701
+
+	; We will be using M65 enhanced DMA jobs, since they have some
+	; really fun features.  So we write to $D705, not $D700 to trigger
+	; the DMA.  So this is what we will use each time we want to trigger
+	; our DMA
+	;	lda #<dmalist
+	;	sta $d705
+
+	; Next we need our DMA list.  This should be in a data section
+	; somewhere. But for convenience, we put it here so you can see
+	; everything all together. This means we have to JMP over it
+	jmp after_dmalist
+
+dmalist:
+	; This DMA list will copy 200 bytes from $8000 to $FFD305A,
+	; the MEGA65 horizontal scaling register
+	; (because each DMA copy takes 2 CPU cycles = 4 video cycles)
+
+		; MEGA65 Enhanced DMA options
+		.byte $0A  ; Request format is F018A (instead of F018B)
+		.byte $80,$00 ; Source is $00xxxxx
+		.byte $81,$FF ; Destination is $FFxxxxx
+		.byte $00  ; No more options
+		; copy $0008000-$0007FFF to $FFF8000-$FFFBFFF
+		; F018A DMA list
+		; (MB offsets get set in routine)
+		.byte $08 ; copy + last request in chain + hold destination addr ($08)
+		.word 200 ; size of copy is 800 bytes
+		.word $8000 ; starting at $8000
+		.byte $00   ; of bank $0
+		.word $305A ; destination address is $305A
+		.byte $0D   ; of bank $D
+		.word $0000 ; modulo (unused)
+
+
+after_dmalist:
+
+	; Now lets make some nice data in $8000 to warp the text with.
+	; Normal scale is 120 ($78).  Bigger numbers make for more narrow output, while smaller numbers
+	; make for wider output
+	; Basically the number in the register gets added to the current X position in 120ths of pixels.
+	; For now, we will just start with $78, and reduce the number as we go along. This should make the text
+	; get wider for a while, and then go narrow again as we wrap around
+
+	lda #$78
+	ldx #$00
+*	sta $8000,x
+	dec
+	inx
+	bne -
+
+	; now lets just try to apply this every raster line, although our timing won't be super accurate
+	sei
+loop:   lda $d012
+*	cmp $d012
+	beq -
+
+	lda #<dmalist
+	sta $d705
+	jmp loop

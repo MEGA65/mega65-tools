@@ -1,0 +1,33 @@
+         .org $07ff
+
+	 .byte 1,8
+
+         .byte $4c,$16,$08,$00,$97,$32
+         .byte $2c,$30,$3a,$9e,$32,$30
+         .byte $37,$30,$00,$00,$00,$a9
+         .byte $01,$85,$02
+
+	 LDA #$47
+	 STA $D02F
+	 LDA #$53
+	 STA $D02F
+	 LDA #64
+	 STA 0
+
+	 SEI
+	 LDX #$00
+loop:
+	LDA $D610
+;	CMP #$00
+;	BEQ loop
+;	CMP #$08
+;	BEQ loop
+	STA $0400,X
+	INX
+	LDA #$a0
+	STA $0400,X
+	STA $D610
+l1:	LDA $D012
+	CMP #$FF
+	bne l1
+	JMP loop

@@ -1,0 +1,39 @@
+         .org $07ff
+
+	 ; load address
+	 .byte 1,8
+
+	 ; basic headder
+         .byte $4c,$16,$08,$00,$97,$32
+         .byte $2c,$30,$3a,$9e,$32,$30
+         .byte $37,$30,$00,$00,$00,$a9
+         .byte $01,$85,$02
+
+	 ; fast cpu
+	 lda #65
+	 sta 0
+
+	 ; VIC-IV registers
+	 lda #$47
+	 sta $d02f
+	 lda #$53
+	 sta $d02f
+
+	; Setup a pointer to $1000000 for setting the pin to probe
+	; The pin prober doesn't car about address, just the data written
+	lda #$00
+	sta $fc
+	sta $fd
+	sta $fe
+	lda #$01
+	sta $ff
+
+	; now lets just try to apply this every raster line, although our timing won't be super accurate
+	lda #$00
+loop:   
+	nop
+	nop
+	sta ($fc),y
+	sta $0400
+	inc
+	jmp loop

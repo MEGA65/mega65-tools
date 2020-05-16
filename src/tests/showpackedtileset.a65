@@ -1,0 +1,396 @@
+	.outfile "showpackedtileset.prg"
+
+	 .word $0801
+	 .org $0801
+
+	 .scope
+	 .word _next, 10                       ; Next line and current line number
+	 .byte $97, "2,0:", $9e, " 2014", $AA, "65",0      ; POKE 2,0 : SYS 2014+65
+_next:	 .word 0
+
+iter1:	 .byte 0
+
+	 .checkpc 2079
+	 .advance 2079
+
+	 ; C65GS IO
+	 lda #$47
+	 sta $d02f
+	 lda #$53
+	 sta $d02f
+
+	 ; FAST cpu
+	 LDA #65
+	 sta 0
+
+	 ; Unpack the tile set
+	 jsr unpack
+
+	 ; How many tiles do we have?
+	 lda #<$0010
+	 sta $f9
+	 lda #>$0010
+	 sta $fa
+	 lda #<$0004
+	 sta $fb
+	 lda #>$0004
+	 sta $fc
+	 nop
+	 nop
+	 lda ($f9),z
+	 sta tilecount+0
+	 inz
+	 nop
+	 nop
+	 lda ($f9),z
+	 sta tilecount+1
+	 ldz #$00
+
+	 ; screen address = $040040 + (24 bit address at $4003d )
+	 LDA #<$003d
+	 sta $f9
+	 LDA #>$003d
+	 sta $fa
+	 lda #<$0004
+	 sta $fb
+	 lda #>$0004
+	 sta $fc
+
+	 ldz #$00
+
+	 nop
+	 nop
+	 lda ($f9),z
+	 sta $0400
+	 inz
+	 nop
+	 nop
+	 lda ($f9),z
+	 sta $0401
+	 inz
+	 nop
+	 nop
+	 lda ($f9),z
+	 sta $0402
+	 inz
+	 nop
+	 nop
+	 lda ($f9),z
+	 sta $0403
+	 inz
+
+	 ldz #$00
+
+	 lda #<$0040
+	 clc
+	 nop
+	 nop
+	 adc ($f9),z
+	 sta screen_addr+0
+	 lda #>$0040
+	 inz
+	 nop
+	 nop
+	 adc ($f9),z
+	 sta screen_addr+1
+	 lda #$04
+	 inz
+	 nop
+	 nop
+	 adc ($f9),z
+	 sta screen_addr+2
+
+	 ldz #$00
+	 
+	 ; Patch tile numbers ($40000 / $40 = $1000 as constant offset to add to tile numbers)
+
+	 ; Get pointer to screen memory lists
+	 ldx #3
+*	 lda screen_addr,x
+	 sta $f9,x
+	 dex
+	 bpl -
+
+	 ; We assume 800x480 = 100x60 chars = 6000 screen char byte pairs to patch
+	 lda #<6000
+	 sta $fd
+	 lda #>6000
+	 sta $fe
+
+	 lda #$00
+	 sta $0400
+	 sta $0401
+
+@patchTileNumberLoop:
+	; read high byte
+	ldz #$00	
+	nop
+	nop
+	lda ($f9),z
+	clc
+	adc #<$100d           ; $0340 / $40 = $0D
+	nop
+	nop
+	sta ($f9),z
+
+	inz
+	nop
+	nop
+	lda ($f9),z
+	adc #>$100d           ; $40000 / $40 = $1000
+	nop
+	nop
+	sta ($f9),z
+	
+	ldz #$00
+
+	; advance pointer
+	inw $f9
+	inw $f9
+	bne +
+	inw $fb
+*
+	; Have we done it all yet?
+	inc $0400
+	bne +
+	inc $0401
+*
+	dew $fd
+	bne @patchTileNumberLoop
+
+	; Copy palette into place using DMA
+	; (and clear colour RAM at the same time)
+	lda #>palette_dmalist
+	sta $d701
+	lda #$00
+	sta $D702
+	sta $d703
+	sta $d704
+	lda #<palette_dmalist
+	sta $D705
+
+	 ; Set border and screen to black
+	 LDA #$00
+	 STA $D020
+	 STA $D021
+
+	 ; Switch to the appropriate video mode
+	 LDA #$00     ; No side borders
+	 STA $D05C
+	 LDA #$C8     ; V400, H640
+	 STA $D031
+
+	 ; Cause hot-register update
+	 LDA #$1B
+	 STA $D011
+
+	 ; Post hot register changes
+
+	 LDA #$45     ; full colour mode, full speed CPU
+	 STA $D054
+	 LDA #<60     ; Top border position
+	 STA $D048
+	 LDA #>60
+	 STA $D049
+	 LDA #<[60+480] ; Bottom border position
+	 STA $D04A
+	 LDA #>[60+480]
+	 STA $D04B
+
+	 ; Chargen X and Y positions
+	 LDA #<16
+	 STA $D04C
+	 LDA #>16
+	 STA $D04D
+	 LDA #<60
+	 STA $D04E
+	 LDA #>60
+	 STA $D04F
+
+	 ; Logical and physical line lengths
+	 LDA #<200     ; 100 x 2 bytes
+	 STA $D058
+	 LDA #>200
+	 STA $D059
+	 LDA #100      ; draw 100 chars 
+	 STA $D05E
+
+	 ; Screen memory start
+	 ldx #3
+*	 lda screen_addr,x
+	 STA $D060,x
+	 dex
+	 bpl -
+	 
+
+	 rts
+
+tilecount:	.word 0
+screen_addr:	.word 0,0
+
+palette_dmalist:
+		; copy palette
+
+		; MEGA65 Enhanced DMA options
+		.byte $0A      ; Request format is F018A
+		.byte $80,$00 ; source MB is $00xxxxx
+		.byte $81,$FF ; dest MB $FFxxxxx
+		.byte $00 ; end of options marker
+		; F018A format request follows
+		.byte $04 ; COPY + chain
+		.word $0300 ; 3x$100 palettes = $300
+		; source address
+		.word $0040
+		.byte $04
+		; destination address ($xxD3100)
+		.word $3100
+		.byte $0D 
+		.byte $00,00 ; Modulo
+
+		; Clear colour RAM
+		;
+		; MEGA65 DMA options
+		.byte $00     ; no more options
+		; F018A dma list
+		.byte $03     ; FILL + not chained
+		.word 12000   ; 100x60x2 bytes per char
+		.byte $00     ; fill with $00
+		.byte $00,$00 ; rest of source address is ignored in fill
+		.word $0000   ;
+		.byte $08     ; 
+		.word $0000   ; modulo (unused)
+
+
+unpack:
+
+	; Save the bits of screen we use for displaying what we are doing
+	lda $d020
+	pha
+	lda $0427
+	pha
+
+	 ; setup pointer to packed data
+	 lda #<packed_data
+	 sta $fd
+	 lda #>packed_data
+	 sta $fe
+
+	 ; setup pointer for uncompression at $40000
+	 ; (i.e., the chip ram after the ROM area)
+	 lda #$00
+	 sta $f9
+	 sta $fa
+	 sta $fc
+	 lda #$04
+	 sta $fb
+
+	 ldy #$00
+
+unpack_loop:
+	; 
+	lda ($fd),y
+	; show we are doing something
+	sta $d020
+	sta $0427
+	; $00 code byte = end of packed stream
+	bne +
+
+	; Restore bits of screen we used to show unpack activity
+	pla
+	sta $0427
+	pla
+	sta $d020
+
+	rts
+*	bmi @isRLEToken
+
+	; Literal string: copy A bytes
+	inw $fd
+	tax
+@literalCopyLoop:
+	lda ($fd),y
+	nop
+	nop
+	sta ($f9),z
+
+	; Update source and destination addresses
+	inw $fd
+	inw $f9
+	bne +
+	inw $fb
+*
+	dex
+	bne @literalCopyLoop
+	jmp unpack_loop
+@isRLEToken:
+	cmp #$80
+	beq @isRLE2Token
+	; Get number of copies of the byte
+	and #$7f
+	tax
+	; Advance source pointer to the byte to fill with
+	inw $fd
+	; Read the fill byte
+	lda ($fd),y
+	inw $fd
+@RLEFillLoop:
+	nop
+	nop
+	sta ($f9),z
+
+	; Update destination address
+	inw $f9
+	bne +
+	inw $fb
+*
+	; more bytes to go?
+	dex
+	bne @RLEFillLoop
+	jmp unpack_loop
+	
+@isRLE2Token:
+	; get number of iterations
+	inw $fd
+	lda ($fd),y
+	tax
+	inw $fd
+	; get the two bytes to fill with
+	lda ($fd),y
+	sta byte1
+	inw $fd
+	lda ($fd),y
+	sta byte2
+	inw $fd
+
+@RLE2FillLoop:
+
+	lda byte1
+	nop
+	nop
+	sta ($f9),z
+
+	; Update destination address
+	inw $f9
+	bne +
+	inw $fb
+*
+	lda byte2
+	nop
+	nop
+	sta ($f9),z
+
+	; Update destination address
+	inw $f9
+	bne +
+	inw $fb
+*
+	; more bytes to go?
+	dex
+	bne @RLE2FillLoop
+	jmp unpack_loop
+
+byte1:	.byte 0
+byte2: 	.byte 0
+
+packed_data:
+	 .scend
