@@ -1,0 +1,880 @@
+loop20:
+	lda $d6a0
+	sta $2000,y
+	iny
+	bne loop20
+loop21:
+	lda $d6a0
+	sta $2100,y
+	iny
+	bne loop21
+loop22:
+	lda $d6a0
+	sta $2200,y
+	iny
+	bne loop22
+loop23:
+	lda $d6a0
+	sta $2300,y
+	iny
+	bne loop23
+loop24:
+	lda $d6a0
+	sta $2400,y
+	iny
+	bne loop24
+loop25:
+	lda $d6a0
+	sta $2500,y
+	iny
+	bne loop25
+loop26:
+	lda $d6a0
+	sta $2600,y
+	iny
+	bne loop26
+loop27:
+	lda $d6a0
+	sta $2700,y
+	iny
+	bne loop27
+loop28:
+	lda $d6a0
+	sta $2800,y
+	iny
+	bne loop28
+loop29:
+	lda $d6a0
+	sta $2900,y
+	iny
+	bne loop29
+loop2a:
+	lda $d6a0
+	sta $2A00,y
+	iny
+	bne loop2a
+loop2b:
+	lda $d6a0
+	sta $2B00,y
+	iny
+	bne loop2b
+loop2c:
+	lda $d6a0
+	sta $2C00,y
+	iny
+	bne loop2c
+loop2d:
+	lda $d6a0
+	sta $2D00,y
+	iny
+	bne loop2d
+loop2e:
+	lda $d6a0
+	sta $2E00,y
+	iny
+	bne loop2e
+loop2f:
+	lda $d6a0
+	sta $2F00,y
+	iny
+	bne loop2f
+loop30:
+	lda $d6a0
+	sta $3000,y
+	iny
+	bne loop30
+loop31:
+	lda $d6a0
+	sta $3100,y
+	iny
+	bne loop31
+loop32:
+	lda $d6a0
+	sta $3200,y
+	iny
+	bne loop32
+loop33:
+	lda $d6a0
+	sta $3300,y
+	iny
+	bne loop33
+loop34:
+	lda $d6a0
+	sta $3400,y
+	iny
+	bne loop34
+loop35:
+	lda $d6a0
+	sta $3500,y
+	iny
+	bne loop35
+loop36:
+	lda $d6a0
+	sta $3600,y
+	iny
+	bne loop36
+loop37:
+	lda $d6a0
+	sta $3700,y
+	iny
+	bne loop37
+loop38:
+	lda $d6a0
+	sta $3800,y
+	iny
+	bne loop38
+loop39:
+	lda $d6a0
+	sta $3900,y
+	iny
+	bne loop39
+loop3a:
+	lda $d6a0
+	sta $3A00,y
+	iny
+	bne loop3a
+loop3b:
+	lda $d6a0
+	sta $3B00,y
+	iny
+	bne loop3b
+loop3c:
+	lda $d6a0
+	sta $3C00,y
+	iny
+	bne loop3c
+loop3d:
+	lda $d6a0
+	sta $3D00,y
+	iny
+	bne loop3d
+loop3e:
+	lda $d6a0
+	sta $3E00,y
+	iny
+	bne loop3e
+loop3f:
+	lda $d6a0
+	sta $3F00,y
+	iny
+	bne loop3f
+loop40:
+	lda $d6a0
+	sta $4000,y
+	iny
+	bne loop40
+loop41:
+	lda $d6a0
+	sta $4100,y
+	iny
+	bne loop41
+loop42:
+	lda $d6a0
+	sta $4200,y
+	iny
+	bne loop42
+loop43:
+	lda $d6a0
+	sta $4300,y
+	iny
+	bne loop43
+loop44:
+	lda $d6a0
+	sta $4400,y
+	iny
+	bne loop44
+loop45:
+	lda $d6a0
+	sta $4500,y
+	iny
+	bne loop45
+loop46:
+	lda $d6a0
+	sta $4600,y
+	iny
+	bne loop46
+loop47:
+	lda $d6a0
+	sta $4700,y
+	iny
+	bne loop47
+loop48:
+	lda $d6a0
+	sta $4800,y
+	iny
+	bne loop48
+loop49:
+	lda $d6a0
+	sta $4900,y
+	iny
+	bne loop49
+loop4a:
+	lda $d6a0
+	sta $4A00,y
+	iny
+	bne loop4a
+loop4b:
+	lda $d6a0
+	sta $4B00,y
+	iny
+	bne loop4b
+loop4c:
+	lda $d6a0
+	sta $4C00,y
+	iny
+	bne loop4c
+loop4d:
+	lda $d6a0
+	sta $4D00,y
+	iny
+	bne loop4d
+loop4e:
+	lda $d6a0
+	sta $4E00,y
+	iny
+	bne loop4e
+loop4f:
+	lda $d6a0
+	sta $4F00,y
+	iny
+	bne loop4f
+loop50:
+	lda $d6a0
+	sta $5000,y
+	iny
+	bne loop50
+loop51:
+	lda $d6a0
+	sta $5100,y
+	iny
+	bne loop51
+loop52:
+	lda $d6a0
+	sta $5200,y
+	iny
+	bne loop52
+loop53:
+	lda $d6a0
+	sta $5300,y
+	iny
+	bne loop53
+loop54:
+	lda $d6a0
+	sta $5400,y
+	iny
+	bne loop54
+loop55:
+	lda $d6a0
+	sta $5500,y
+	iny
+	bne loop55
+loop56:
+	lda $d6a0
+	sta $5600,y
+	iny
+	bne loop56
+loop57:
+	lda $d6a0
+	sta $5700,y
+	iny
+	bne loop57
+loop58:
+	lda $d6a0
+	sta $5800,y
+	iny
+	bne loop58
+loop59:
+	lda $d6a0
+	sta $5900,y
+	iny
+	bne loop59
+loop5a:
+	lda $d6a0
+	sta $5A00,y
+	iny
+	bne loop5a
+loop5b:
+	lda $d6a0
+	sta $5B00,y
+	iny
+	bne loop5b
+loop5c:
+	lda $d6a0
+	sta $5C00,y
+	iny
+	bne loop5c
+loop5d:
+	lda $d6a0
+	sta $5D00,y
+	iny
+	bne loop5d
+loop5e:
+	lda $d6a0
+	sta $5E00,y
+	iny
+	bne loop5e
+loop5f:
+	lda $d6a0
+	sta $5F00,y
+	iny
+	bne loop5f
+loop60:
+	lda $d6a0
+	sta $6000,y
+	iny
+	bne loop60
+loop61:
+	lda $d6a0
+	sta $6100,y
+	iny
+	bne loop61
+loop62:
+	lda $d6a0
+	sta $6200,y
+	iny
+	bne loop62
+loop63:
+	lda $d6a0
+	sta $6300,y
+	iny
+	bne loop63
+loop64:
+	lda $d6a0
+	sta $6400,y
+	iny
+	bne loop64
+loop65:
+	lda $d6a0
+	sta $6500,y
+	iny
+	bne loop65
+loop66:
+	lda $d6a0
+	sta $6600,y
+	iny
+	bne loop66
+loop67:
+	lda $d6a0
+	sta $6700,y
+	iny
+	bne loop67
+loop68:
+	lda $d6a0
+	sta $6800,y
+	iny
+	bne loop68
+loop69:
+	lda $d6a0
+	sta $6900,y
+	iny
+	bne loop69
+loop6a:
+	lda $d6a0
+	sta $6A00,y
+	iny
+	bne loop6a
+loop6b:
+	lda $d6a0
+	sta $6B00,y
+	iny
+	bne loop6b
+loop6c:
+	lda $d6a0
+	sta $6C00,y
+	iny
+	bne loop6c
+loop6d:
+	lda $d6a0
+	sta $6D00,y
+	iny
+	bne loop6d
+loop6e:
+	lda $d6a0
+	sta $6E00,y
+	iny
+	bne loop6e
+loop6f:
+	lda $d6a0
+	sta $6F00,y
+	iny
+	bne loop6f
+loop70:
+	lda $d6a0
+	sta $7000,y
+	iny
+	bne loop70
+loop71:
+	lda $d6a0
+	sta $7100,y
+	iny
+	bne loop71
+loop72:
+	lda $d6a0
+	sta $7200,y
+	iny
+	bne loop72
+loop73:
+	lda $d6a0
+	sta $7300,y
+	iny
+	bne loop73
+loop74:
+	lda $d6a0
+	sta $7400,y
+	iny
+	bne loop74
+loop75:
+	lda $d6a0
+	sta $7500,y
+	iny
+	bne loop75
+loop76:
+	lda $d6a0
+	sta $7600,y
+	iny
+	bne loop76
+loop77:
+	lda $d6a0
+	sta $7700,y
+	iny
+	bne loop77
+loop78:
+	lda $d6a0
+	sta $7800,y
+	iny
+	bne loop78
+loop79:
+	lda $d6a0
+	sta $7900,y
+	iny
+	bne loop79
+loop7a:
+	lda $d6a0
+	sta $7A00,y
+	iny
+	bne loop7a
+loop7b:
+	lda $d6a0
+	sta $7B00,y
+	iny
+	bne loop7b
+loop7c:
+	lda $d6a0
+	sta $7C00,y
+	iny
+	bne loop7c
+loop7d:
+	lda $d6a0
+	sta $7D00,y
+	iny
+	bne loop7d
+loop7e:
+	lda $d6a0
+	sta $7E00,y
+	iny
+	bne loop7e
+loop7f:
+	lda $d6a0
+	sta $7F00,y
+	iny
+	bne loop7f
+loop80:
+	lda $d6a0
+	sta $8000,y
+	iny
+	bne loop80
+loop81:
+	lda $d6a0
+	sta $8100,y
+	iny
+	bne loop81
+loop82:
+	lda $d6a0
+	sta $8200,y
+	iny
+	bne loop82
+loop83:
+	lda $d6a0
+	sta $8300,y
+	iny
+	bne loop83
+loop84:
+	lda $d6a0
+	sta $8400,y
+	iny
+	bne loop84
+loop85:
+	lda $d6a0
+	sta $8500,y
+	iny
+	bne loop85
+loop86:
+	lda $d6a0
+	sta $8600,y
+	iny
+	bne loop86
+loop87:
+	lda $d6a0
+	sta $8700,y
+	iny
+	bne loop87
+loop88:
+	lda $d6a0
+	sta $8800,y
+	iny
+	bne loop88
+loop89:
+	lda $d6a0
+	sta $8900,y
+	iny
+	bne loop89
+loop8a:
+	lda $d6a0
+	sta $8A00,y
+	iny
+	bne loop8a
+loop8b:
+	lda $d6a0
+	sta $8B00,y
+	iny
+	bne loop8b
+loop8c:
+	lda $d6a0
+	sta $8C00,y
+	iny
+	bne loop8c
+loop8d:
+	lda $d6a0
+	sta $8D00,y
+	iny
+	bne loop8d
+loop8e:
+	lda $d6a0
+	sta $8E00,y
+	iny
+	bne loop8e
+loop8f:
+	lda $d6a0
+	sta $8F00,y
+	iny
+	bne loop8f
+loop90:
+	lda $d6a0
+	sta $9000,y
+	iny
+	bne loop90
+loop91:
+	lda $d6a0
+	sta $9100,y
+	iny
+	bne loop91
+loop92:
+	lda $d6a0
+	sta $9200,y
+	iny
+	bne loop92
+loop93:
+	lda $d6a0
+	sta $9300,y
+	iny
+	bne loop93
+loop94:
+	lda $d6a0
+	sta $9400,y
+	iny
+	bne loop94
+loop95:
+	lda $d6a0
+	sta $9500,y
+	iny
+	bne loop95
+loop96:
+	lda $d6a0
+	sta $9600,y
+	iny
+	bne loop96
+loop97:
+	lda $d6a0
+	sta $9700,y
+	iny
+	bne loop97
+loop98:
+	lda $d6a0
+	sta $9800,y
+	iny
+	bne loop98
+loop99:
+	lda $d6a0
+	sta $9900,y
+	iny
+	bne loop99
+loop9a:
+	lda $d6a0
+	sta $9A00,y
+	iny
+	bne loop9a
+loop9b:
+	lda $d6a0
+	sta $9B00,y
+	iny
+	bne loop9b
+loop9c:
+	lda $d6a0
+	sta $9C00,y
+	iny
+	bne loop9c
+loop9d:
+	lda $d6a0
+	sta $9D00,y
+	iny
+	bne loop9d
+loop9e:
+	lda $d6a0
+	sta $9E00,y
+	iny
+	bne loop9e
+loop9f:
+	lda $d6a0
+	sta $9F00,y
+	iny
+	bne loop9f
+loopa0:
+	lda $d6a0
+	sta $A000,y
+	iny
+	bne loopa0
+loopa1:
+	lda $d6a0
+	sta $A100,y
+	iny
+	bne loopa1
+loopa2:
+	lda $d6a0
+	sta $A200,y
+	iny
+	bne loopa2
+loopa3:
+	lda $d6a0
+	sta $A300,y
+	iny
+	bne loopa3
+loopa4:
+	lda $d6a0
+	sta $A400,y
+	iny
+	bne loopa4
+loopa5:
+	lda $d6a0
+	sta $A500,y
+	iny
+	bne loopa5
+loopa6:
+	lda $d6a0
+	sta $A600,y
+	iny
+	bne loopa6
+loopa7:
+	lda $d6a0
+	sta $A700,y
+	iny
+	bne loopa7
+loopa8:
+	lda $d6a0
+	sta $A800,y
+	iny
+	bne loopa8
+loopa9:
+	lda $d6a0
+	sta $A900,y
+	iny
+	bne loopa9
+loopaa:
+	lda $d6a0
+	sta $AA00,y
+	iny
+	bne loopaa
+loopab:
+	lda $d6a0
+	sta $AB00,y
+	iny
+	bne loopab
+loopac:
+	lda $d6a0
+	sta $AC00,y
+	iny
+	bne loopac
+loopad:
+	lda $d6a0
+	sta $AD00,y
+	iny
+	bne loopad
+loopae:
+	lda $d6a0
+	sta $AE00,y
+	iny
+	bne loopae
+loopaf:
+	lda $d6a0
+	sta $AF00,y
+	iny
+	bne loopaf
+loopb0:
+	lda $d6a0
+	sta $B000,y
+	iny
+	bne loopb0
+loopb1:
+	lda $d6a0
+	sta $B100,y
+	iny
+	bne loopb1
+loopb2:
+	lda $d6a0
+	sta $B200,y
+	iny
+	bne loopb2
+loopb3:
+	lda $d6a0
+	sta $B300,y
+	iny
+	bne loopb3
+loopb4:
+	lda $d6a0
+	sta $B400,y
+	iny
+	bne loopb4
+loopb5:
+	lda $d6a0
+	sta $B500,y
+	iny
+	bne loopb5
+loopb6:
+	lda $d6a0
+	sta $B600,y
+	iny
+	bne loopb6
+loopb7:
+	lda $d6a0
+	sta $B700,y
+	iny
+	bne loopb7
+loopb8:
+	lda $d6a0
+	sta $B800,y
+	iny
+	bne loopb8
+loopb9:
+	lda $d6a0
+	sta $B900,y
+	iny
+	bne loopb9
+loopba:
+	lda $d6a0
+	sta $BA00,y
+	iny
+	bne loopba
+loopbb:
+	lda $d6a0
+	sta $BB00,y
+	iny
+	bne loopbb
+loopbc:
+	lda $d6a0
+	sta $BC00,y
+	iny
+	bne loopbc
+loopbd:
+	lda $d6a0
+	sta $BD00,y
+	iny
+	bne loopbd
+loopbe:
+	lda $d6a0
+	sta $BE00,y
+	iny
+	bne loopbe
+loopbf:
+	lda $d6a0
+	sta $BF00,y
+	iny
+	bne loopbf
+loopc0:
+	lda $d6a0
+	sta $C000,y
+	iny
+	bne loopc0
+loopc1:
+	lda $d6a0
+	sta $C100,y
+	iny
+	bne loopc1
+loopc2:
+	lda $d6a0
+	sta $C200,y
+	iny
+	bne loopc2
+loopc3:
+	lda $d6a0
+	sta $C300,y
+	iny
+	bne loopc3
+loopc4:
+	lda $d6a0
+	sta $C400,y
+	iny
+	bne loopc4
+loopc5:
+	lda $d6a0
+	sta $C500,y
+	iny
+	bne loopc5
+loopc6:
+	lda $d6a0
+	sta $C600,y
+	iny
+	bne loopc6
+loopc7:
+	lda $d6a0
+	sta $C700,y
+	iny
+	bne loopc7
+loopc8:
+	lda $d6a0
+	sta $C800,y
+	iny
+	bne loopc8
+loopc9:
+	lda $d6a0
+	sta $C900,y
+	iny
+	bne loopc9
+loopca:
+	lda $d6a0
+	sta $CA00,y
+	iny
+	bne loopca
+loopcb:
+	lda $d6a0
+	sta $CB00,y
+	iny
+	bne loopcb
+loopcc:
+	lda $d6a0
+	sta $CC00,y
+	iny
+	bne loopcc
+loopcd:
+	lda $d6a0
+	sta $CD00,y
+	iny
+	bne loopcd
+loopce:
+	lda $d6a0
+	sta $CE00,y
+	iny
+	bne loopce
+loopcf:
+	lda $d6a0
+	sta $CF00,y
+	iny
+	bne loopcf

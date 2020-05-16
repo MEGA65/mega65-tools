@@ -1,0 +1,298 @@
+; 3.5" floppy drive test program for MEGA65
+
+
+; Include C64 BASIC program load header
+
+	 .word $0801
+	 .org $0801
+
+	 .scope
+	 .word _next, 10                       ; Next line and current line number
+	 .byte $97, "2,0:", $9e, " 2014", $AA, "65",0      ; POKE 2,0 : SYS 2014+65
+_next:	 .word 0
+
+iter1:	 .byte 0
+
+	 .checkpc 2079
+	 .advance 2079
+
+programentrypoint:
+	
+	; Enable C65GS io
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $D02f
+
+	; 50MHz CPU
+	lda #65
+	sta 0
+
+	ldy #$00
+	lda #$20
+l4:	sta $0400,y
+	sta $0500,y
+	sta $0600,y
+	sta $0700,y
+	iny
+	bne l4
+
+	lda #$ff
+	sta count
+
+mainloop:
+
+	; Display floppy status bits on screen
+	ldx #$00
+	sta flopctl
+	eor #$ff
+	inc $0421
+	ldy $0421
+	lda $d6a0
+	sta $040a
+l1:	rol
+	pha
+	lda #$00
+	rol
+	sta $0400,x
+	pla
+	inx 
+	cpx #$08
+	bne l1
+
+	; only show first 255 gaps after pressing fire
+	lda count
+	cmp #$ff
+	beq l99
+
+	inc count
+	ldy count	
+
+	; show gap distribution
+	ldx $d6a9
+	lda $d6aa
+	cmp #$04
+	bcs l99
+	pha
+	txa
+	and #$fe
+	sta $fd
+	pla
+	ora #$04
+	and #$07
+	sta $fe
+	ldy #$00
+	lda ($fd),y
+	inc
+	sta ($fd),y
+	bne l99
+	iny
+	lda ($fd),y
+	inc
+	sta ($fd),y
+l99:
+	ldx #$00
+	lda flopctl
+	sta $0432
+l2:	rol
+	pha
+	lda #$00
+	rol
+	sta $0428,x
+	pla
+	inx 
+	cpx #$08
+	bne l2
+	
+	lda $dc00
+	and $dc01
+	and #$1f
+	cmp #$0f
+	beq isfire
+	cmp #$1e
+	beq isup
+	cmp #$1d
+	beq isdown
+	cmp #$1b
+	beq isleft
+	cmp #$17
+	beq isright
+
+	; check for keyboard input
+	jsr $ffe4
+	cmp #$00
+	bne keyinput
+	jmp mainloop
+keyinput:
+	sta $0427
+	and #$1f
+	sta $0426
+
+	cmp #$49 ; i - step in
+	bne not_49
+isdown:	lda flopctl
+	ora #$20 ; select drive
+	ora #$10 ; step direction
+	eor #$08 ; toggle step line
+	sta flopctl
+	eor #$ff
+	sta $d6a0
+	jmp joywait
+
+not_49:
+	cmp #$4f ; o - step out
+	bne not_4f
+isup:	lda flopctl
+	ora #$20 ; select drive
+	and #$ef ; step direction
+	eor #$08 ; toggle step line
+	sta flopctl
+	eor #$ff
+	sta $d6a0
+	jmp joywait
+
+not_4f:
+	cmp #$4d
+	bne not_4d
+
+	; toggle motor
+isleft:
+	inc $0450
+
+	lda flopctl
+	ora #$40  ; motor
+	ora #$20  ; select
+	sta flopctl
+	eor #$ff
+	sta $d6a0
+	jmp joywait
+
+not_4d:
+	cmp #$46
+	bne not_46
+	
+isright:
+	inc $0451
+
+	lda flopctl
+	and #$9f  ; motor and select off
+	sta flopctl
+	eor #$ff
+	sta $d6a0
+	jmp joywait
+
+not_46:
+
+	; wait for joysticks to release
+joywait:
+	sei
+
+	lda $dc00
+	and #$1f
+	sta $0460
+	cmp #$1f
+	bne joywait
+	lda $dc01
+	sta $0461
+	and #$1f
+	cmp #$1f
+	bne joywait
+
+	cli
+
+	jmp mainloop
+
+isfire:
+	; Read some data after the index pulse
+
+	ldy #$00
+l98:
+	lda $d6a9
+	sta $1800,y
+	lda $d6aa
+	sta $1900,y
+	iny
+	bne l98
+
+	lda #$00
+	sta count
+
+	sei
+
+	; spin motor up
+	lda flopctl
+	ora #$40  ; motor
+	ora #$20  ; select
+	sta flopctl
+	eor #$ff
+	sta $d6a0
+	
+	lda #$00
+	sta $fd
+	lda #$40
+	sta $fe
+	ldy #$00
+
+
+	; Wait for start of index pulse
+	lda $d6a0
+	bpl isfire
+if1:	lda $d6a0
+	bmi if1
+
+	; Sample every ~ 25 cycles
+
+	lda #64
+	sta 0
+	; 3.5MHz mode
+	lda #$40
+	tsb $d031
+	; now tweak CPU speed up a bit more
+	lda #$ff
+	sta $d7fa
+
+	; DMA read from $d6a0 32K times
+
+	lda #$00
+	sta $d703 	; F018A mode
+	sta $d702       ; list is in bank 0
+	lda #>flopreadlist
+	sta $d701
+	lda #<flopreadlist
+	sta $d700
+
+	ldy #$00
+if2:	lda $d6a0
+	sta $2000,y
+	iny
+	bne if2
+if3:	lda $d6a0
+	sta $2100,y
+	iny
+	bne if3
+
+	inc $d020
+
+	cli
+
+	jmp joywait
+
+flopreadlist:
+	; $F018A format
+
+		.byte $00 ; copy + last request in chain
+		.word $d7ff ; size of copy is ~54KB
+		.word $d6ac
+		.byte $9F   ; I/O, hold source address
+		.word $2000 ; destination address is $2000
+		.byte $01   ; lower 64KB
+		.word $0000 ; modulo (unused)
+	
+
+flopctl:	.byte $ff
+
+count:	    .byte $ff
+
+	.scend
+
+	.outfile "utilities/floptest.prg"

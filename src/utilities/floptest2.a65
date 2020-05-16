@@ -1,0 +1,189 @@
+; 3.5" floppy drive test program for MEGA65
+
+; Include C64 BASIC program load header
+
+	 .word $0801
+	 .org $0801
+
+	 .scope
+	 .word _next, 10                       ; Next line and current line number
+	 .byte $97, "2,0:", $9e, " 2014", $AA, "65",0      ; POKE 2,0 : SYS 2014+65
+_next:	 .word 0
+
+iter1:	 .byte 0
+
+	 .checkpc 2079
+	 .advance 2079
+
+programentrypoint:
+
+	; disable interrupts so we can single-step more easily
+	sei
+	
+	; Enable C65GS io
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $D02f
+
+	; 50MHz CPU
+	lda #65
+	sta 0
+
+	lda #$93
+	jsr $ffd2
+	
+	; $01 = Enable real floppy drive, don't match any sector
+ 	; $03 = Enable real floppy, and match any sector
+	lda #$01      
+	sta $d6a1
+
+	; Disable SD card disk image
+	lda #$00
+	sta $d68b
+
+	; Turn motor and LED on
+	; select side 1
+	lda #$68
+	lda #$78   ; with SWAP set
+	sta $d080
+
+findtrack0:
+	; Step out to track zero
+	lda $d082
+	and #$01
+	bne attrack0
+	; step out a track
+	lda #$10
+	sta $d081
+	jsr idlewait
+	jsr busywait
+	inc $0400
+	jmp findtrack0
+
+
+attrack0:
+	; We have found track 0
+	inc $0401
+
+	; skip reading from track 0
+;	jmp read39
+
+	; Now ask to read track 0, sector 1, side 0
+
+	lda #0        ; track 0 (range 0 - 79)
+	sta $d084
+	lda #$01      ; sector 1 (range 1 - 10)
+	sta $d085
+	lda #$00      ; side 1 (range 0 - 1)
+	sta $d086
+	
+	lda #$40
+	sta $d081
+
+	jsr busywait
+
+	; Read the sector
+	inc $0402
+
+	; show status
+	lda $d082
+	and #$18
+	sta $042a
+	bne fail
+
+read39:
+
+	; Now step to track 39
+	ldx #39
+steploop1:
+	; step to higher numbered track
+	lda #$18
+	sta $d081
+	jsr busywait
+	inc $0403
+	dex
+	bne steploop1
+
+	inc $0404
+
+	; Now ask to read track 39, sector 1, side 0,
+	; i.e., track 40 sector 0 from the 1581 view.
+
+	lda #39
+	sta $d084
+	lda #$01
+	sta $d085
+	lda #$00
+	sta $d086
+	
+	; clear DRQ
+	lda $d087
+
+	lda #$40
+	sta $d081
+
+	; This time, read the bytes out unbuffered, like C65 DOS does,
+	; to see how that is performing
+	ldx #$00
+bytewait:
+	bit $d082
+	bvc bytewait
+	lda $d087
+	sta $0500,x
+	inx
+	bne bytewait
+bytewait2:
+	bit $d082
+	bvc bytewait2
+	lda $d087
+	sta $0600,x
+	inx
+	bne bytewait2
+
+
+	; Read the sector
+	inc $0405
+
+	; show status
+	lda $d082
+	and #$18
+	sta $0428+5
+	bne fail
+
+success:
+;	jmp success
+	jmp failloop
+
+
+busywait:
+	inc $0427
+	bit $d082
+	bmi busywait
+	rts
+
+idlewait:
+	inc $0426
+	bit $d082
+	bpl idlewait
+	rts
+
+fail:
+	inc $d020
+
+failloop:
+;	lda $d6a1    ; MFM status bits
+;	lda $d6ad    ; byte counter low
+;	lda $d688    ; sector buffer write offset low
+	lda $d6a1
+	and #$f0
+	ora $d685    ; sdcardio state
+	tax
+	inc $0450,x
+
+	jmp failloop
+
+
+	.scend
+
+	.outfile "utilities/floptest2.prg"
