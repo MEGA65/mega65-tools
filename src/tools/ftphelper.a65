@@ -161,4 +161,4 @@ endloop:
 	inc $d020
 	jmp endloop
 
-	.outfile "bin/ftphelper.bin"
+	.outfile "libexec/ftphelper.bin"
