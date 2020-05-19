@@ -197,7 +197,13 @@ int xilinx_boundaryscan(char *xdc,char *bsdl,char *sensitivity)
     if (!strcmp("CLK_IN",s)) bbit_ignore[i]=1; else bbit_ignore[i]=0;
     if (sensitivity) {
       if (!i) printf("Applying sensitivity list '%s'\n",sensitivity);
-      if (strcasestr(sensitivity,s)) {
+      if
+#ifdef WINDOWS
+       (strstr(sensitivity,s))
+#else
+       (strcasestr(sensitivity,s)) 
+#endif
+      {
 	bbit_ignore[i]=0;
 	if (next_vcdchar<=126) {
 	  bbit_vcdchar[i]=next_vcdchar++;

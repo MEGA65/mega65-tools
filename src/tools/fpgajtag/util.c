@@ -141,10 +141,12 @@ static int ftdi_write_data(struct ftdi_context *ftdi, const unsigned char *buf, 
         fprintf(stderr, "fpgajtag: usb bulk write failed: ret %d req size %d act %d\n", ret, size, actual_length);
         exit(-1);
     }
+#ifndef WINDOWS
     struct timeval timeout;
     timeout.tv_sec = 0;
     timeout.tv_usec = 100;
     select(0, NULL, NULL, NULL, &timeout);
+#endif
     return actual_length;
 }
 static int ftdi_read_data(struct ftdi_context *ftdi, unsigned char *buf, int size)
@@ -166,10 +168,12 @@ static int ftdi_read_data(struct ftdi_context *ftdi, unsigned char *buf, int siz
             return -1;
         }
         actual_length -= 2;
+#ifndef WINDOWS
         struct timeval timeout;
         timeout.tv_sec = 0;
         timeout.tv_usec = 100;
         select(0, NULL, NULL, NULL, &timeout);
+#endif
     } while (actual_length == 0);
     if (actual_length > 0) {
         memcpy (buf, usbreadbuffer+2, actual_length);
