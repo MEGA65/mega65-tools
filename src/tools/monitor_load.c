@@ -47,6 +47,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <inttypes.h>
 #include <pthread.h>
 
+#define PNG_DEBUG 3
+#include <png.h>
+
 #ifdef APPLE
 static const int B1000000 = 1000000;
 static const int B1500000 = 1500000;
@@ -716,6 +719,98 @@ void show_hyppo_report(void)
 
 }
 
+int monitor_sync(void)
+{
+  /* Synchronise with the monitor interface.
+     Send #<token> until we see the token returned to us.
+  */
+
+  unsigned char read_buff[8192];
+  
+  // Begin by sending a null command and purging input
+  char cmd[8192];
+  cmd[0]=0x15; // ^U
+  cmd[1]=0x0d; // Carriage return
+  usleep(20000); // Give plenty of time for things to settle
+  slow_write_safe(fd,cmd,2);
+  usleep(20000); // Give plenty of time for things to settle
+  int b=1;
+  // Purge input
+  while(b>0) { b=read(fd,read_buff,8192); }
+
+  for(int tries=0;tries<10;tries++) {
+    snprintf(cmd,1024,"#%08x\r",random());
+    slow_write_safe(fd,cmd,strlen(cmd));
+
+    for(int i=0;i<10;i++) {
+      b=read(fd,read_buff,8192);
+      if (b<0) b=0; if (b>8191) b=8191;
+      read_buff[b]=0;
+      if (strstr((char *)read_buff,cmd)) {
+	printf("Found token. Synchronised with monitor.\n");
+	return 0;
+      }
+      usleep(2000);
+    }
+  }
+  printf("Failed to synchronise with the monitor.\n");
+  return 1;
+}
+
+int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
+{
+  /* Fetch a block of RAM into the provided buffer.
+     This greatly simplifies many tasks.
+   */
+
+  unsigned long addr=address;
+  unsigned long end_addr;
+  char cmd[8192];
+  unsigned char read_buff[8192];
+  char next_addr_str[8192];
+  int ofs=0;
+  
+  monitor_sync();
+  while(addr<(address+count)) {
+    if ((address+count-addr)<17) {
+      snprintf(cmd,8192,"m%X\r",addr);
+      end_addr=addr+10;
+    } else {
+      snprintf(cmd,8192,"M%X\r",addr);
+      end_addr=addr+0x100;
+    }
+    printf("Sending '%s'\n",cmd);
+    slow_write_safe(fd,cmd,strlen(cmd));
+    while(addr!=end_addr) {
+      snprintf(next_addr_str,8192,"\n:%008X:",addr);
+      int b=read(fd,&read_buff[ofs],8192-ofs);
+      if (b<0) b=0; if (b>8191) b=8191;
+      if (b>0) dump_bytes(0,"read()",&read_buff[ofs],b);
+      read_buff[ofs+b]=0;
+      ofs+=b;
+      char *s=strstr((char *)read_buff,next_addr_str);
+      if (s) {
+	printf("Found data for $%08lx\n",addr);
+	addr+=16;
+      }
+    }
+  }
+}
+
+int detect_mode(void)
+{
+  /*
+    Set saw_c64_mode or saw_c65_mode according to what we can discover. 
+    We can look at the C64/C65 charset bit in $D030 for a good clue.
+    But we also really want to know that the CPU is in the keyboard 
+    input loop for either of the modes, if possible. OpenROMs being
+    under development makes this tricky.
+  */
+  unsigned char mem_buff[8192];
+  fetch_ram(0xffd3030,1,mem_buff);
+  
+}
+
 int process_line(char *line,int live)
 {
   int pc,a,x,y,sp,p;
@@ -1084,6 +1179,8 @@ int process_line(char *line,int live)
 	screen_line_step=b[0]+(b[1]<<8);
 	screen_rows_remaining=25;
 	screen_line_offset=0;
+      } else if ((addr==0xffd3068)&&(!screen_address)) {
+	// Get more screen details
 	
 	// So now ask for screen data
 	char cmd[1024];
@@ -1206,7 +1303,8 @@ int process_line(char *line,int live)
 	} else if (screen_shot) {
 	  if (!screen_address) {
 	    printf("Waiting to capture screen...\n");
-	    slow_write_safe(fd,"mffd3058\r",9);
+	    // We need to get some info about the screen
+	    slow_write_safe(fd,"Mffd3058\r",9);
 	  }
         } else {
   	  fprintf(stderr,"Exiting now that we are in C65 mode.\n");
@@ -1236,7 +1334,7 @@ int process_line(char *line,int live)
       saw_c64_mode=1;
       if( (!virtual_f011)&&(!screen_shot))
 	do_exit(0);
-      if (screen_shot) slow_write_safe(fd,"mffd3058\r",9);
+      if (screen_shot) slow_write_safe(fd,"Mffd3058\r",9);
     }
   }  
   if (state==2)
@@ -1935,6 +2033,10 @@ int main(int argc,char **argv)
 
   set_serial_speed(fd,serial_speed);
 
+  monitor_sync();
+
+  detect_mode();
+  
   if (virtual_f011&&serial_speed==2000000) {
     // Try bumping up to 4mbit
     slow_write(fd,"\r+9\r",4);
@@ -1984,7 +2086,7 @@ int main(int argc,char **argv)
 	      case 3: slow_write_safe(fd,"mffd3077\r",9); break; 
 	      case 4:
 		// Requests screen address if we are taking a screenshot
-		if (screen_shot) slow_write_safe(fd,"mffd3058\r",9);
+		if (screen_shot) slow_write_safe(fd,"Mffd3058\r",9);
 		break;
 	      case 5: slow_write_safe(fd,"mffd3659\r",9); break; // Hypervisor virtualisation/security mode flag check
 	      default: phase=0;
