@@ -371,7 +371,11 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     b=fread(buf,1,max_bytes,f);	  
   }
   fclose(f);
+#ifdef WINDOWS
+  fprintf(stderr,"[T+%I64dsec] '%s' loaded.\n",(long long)time(0)-start_time,filename);
+#else
   fprintf(stderr,"[T+%lldsec] '%s' loaded.\n",(long long)time(0)-start_time,filename);
+#endif
   
   return 0;
 }
@@ -454,9 +458,14 @@ int virtual_f011_read(int device,int track,int sector,int side)
   char cmd[1024];
 
   long long start=gettime_ms();
-  
+
+#ifdef WINDOWS
+  fprintf(stderr,"T+%I64d ms : Servicing hypervisor request for F011 FDC sector read.\n",
+	  gettime_ms()-start);
+#else
   fprintf(stderr,"T+%lld ms : Servicing hypervisor request for F011 FDC sector read.\n",
 	  gettime_ms()-start);
+#endif
   fprintf(stderr, "device: %d  track: %d  sector: %d  side: %d\n", device, track, sector, side);
 
   if(fd81 == NULL) {
@@ -518,7 +527,11 @@ int virtual_f011_read(int device,int track,int sector,int side)
 	  int w=write(fd,p,n);
 	  if (w>0) { p+=w; n-=w; } else usleep(1000);
 	}
+#ifdef WINDOWS       
+	printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
+#else	
 	printf("T+%lld ms : Block sent.\n",gettime_ms()-start);
+#endif	
       }
     }
 
@@ -528,7 +541,11 @@ int virtual_f011_read(int device,int track,int sector,int side)
   snprintf(cmd,1024,"sffd3086 %x\n",side);
   slow_write(fd,cmd,strlen(cmd));
   
+#ifdef WINDOWS
+  printf("T+%I64d ms : Finished V-FDC read.\n",gettime_ms()-start);
+#else
   printf("T+%lld ms : Finished V-FDC read.\n",gettime_ms()-start);
+#endif
   return 0;
 }
 
@@ -744,12 +761,17 @@ int monitor_sync(void)
   while(b>0) { b=read(fd,read_buff,8192); }
 
   for(int tries=0;tries<10;tries++) {
+#ifdef WINDOWS
+    snprintf(cmd,1024,"#%08x\r",rand());
+#else
     snprintf(cmd,1024,"#%08x\r",random());
+#endif
     slow_write_safe(fd,cmd,strlen(cmd));
 
     for(int i=0;i<10;i++) {
       b=read(fd,read_buff,8192);
-      if (b<0) b=0; if (b>8191) b=8191;
+      if (b<0) b=0;
+      if (b>8191) b=8191;
       read_buff[b]=0;
       if (strstr((char *)read_buff,cmd)) {
 	printf("Found token. Synchronised with monitor.\n");
@@ -778,28 +800,30 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   monitor_sync();
   while(addr<(address+count)) {
     if ((address+count-addr)<17) {
-      snprintf(cmd,8192,"m%X\r",addr);
+      snprintf(cmd,8192,"m%X\r",(unsigned int)addr);
       end_addr=addr+10;
     } else {
-      snprintf(cmd,8192,"M%X\r",addr);
+      snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
       end_addr=addr+0x100;
     }
     printf("Sending '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
     while(addr!=end_addr) {
-      snprintf(next_addr_str,8192,"\n:%008X:",addr);
+      snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
       int b=read(fd,&read_buff[ofs],8192-ofs);
-      if (b<0) b=0; if (b>8191) b=8191;
+      if (b<0) b=0;
+      if (b>8191) b=8191;
       if (b>0) dump_bytes(0,"read()",&read_buff[ofs],b);
       read_buff[ofs+b]=0;
       ofs+=b;
       char *s=strstr((char *)read_buff,next_addr_str);
       if (s) {
-	printf("Found data for $%08lx\n",addr);
+	printf("Found data for $%08x\n",(unsigned int)addr);
 	addr+=16;
       }
     }
   }
+  return 1;
 }
 
 int detect_mode(void)
@@ -813,7 +837,8 @@ int detect_mode(void)
   */
   unsigned char mem_buff[8192];
   fetch_ram(0xffd3030,1,mem_buff);
-  
+
+  return 1;
 }
 
 int process_line(char *line,int live)
@@ -836,9 +861,15 @@ int process_line(char *line,int live)
 	       (hyppo)) {
       int patchKS=0;
       if (romfile&&(!flashmenufile)) patchKS=1;
+#ifdef WINDOWS
+      fprintf(stderr,"[T+%I64dsec] Replacing %shyppo...\n",
+	      (long long)time(0)-start_time,
+	      patchKS?"and patching ":"");
+#else
       fprintf(stderr,"[T+%lldsec] Replacing %shyppo...\n",
 	      (long long)time(0)-start_time,
 	      patchKS?"and patching ":"");
+#endif
       stop_cpu();
       if (hyppo) { load_file(hyppo,0xfff8000,patchKS); } hyppo=NULL;
       if (romfile) { load_file(romfile,0x20000,0); } romfile=NULL;
@@ -847,8 +878,13 @@ int process_line(char *line,int live)
       if (colourramfile) load_file(colourramfile,0xFF80000,0);
       if (virtual_f011) {
 	char cmd[1024];
+#ifdef WINDOWS
+	fprintf(stderr,"[T+%I64dsec] Virtualising F011 FDC access.\n",
+		(long long)time(0)-start_time);
+#else
 	fprintf(stderr,"[T+%lldsec] Virtualising F011 FDC access.\n",
 		(long long)time(0)-start_time);
+#endif
 	// Enable FDC virtualisation
 	snprintf(cmd,1024,"sffd3659 01\r");
 	slow_write(fd,cmd,strlen(cmd));
@@ -1236,7 +1272,11 @@ int process_line(char *line,int live)
     {
 
     if (modeline_cmd[0]) {
+#ifdef WINDOWS
+      fprintf(stderr,"[T+%I64dsec] Setting video modeline\n",(long long)time(0)-start_time);
+#else
       fprintf(stderr,"[T+%lldsec] Setting video modeline\n",(long long)time(0)-start_time);
+#endif
       fprintf(stderr,"Commands:\n%s\n",modeline_cmd);
       slow_write(fd,modeline_cmd,strlen(modeline_cmd));
 
@@ -1283,7 +1323,11 @@ int process_line(char *line,int live)
       // PGS 20181123 - Keyboard buffer has moved in newer C65 ROMs from $34A to $2D0
       saw_c65_mode=1; stuff_keybuffer("GO64\rY\r");
       saw_c65_mode=0;
+#ifdef WINDOWS
+      if (first_go64) fprintf(stderr,"[T+%I64dsec] GO64\nY\n",(long long)time(0)-start_time);
+#else
       if (first_go64) fprintf(stderr,"[T+%lldsec] GO64\nY\n",(long long)time(0)-start_time);
+#endif
       first_go64=0;
     } else {
       if (!saw_c65_mode) fprintf(stderr,"MEGA65 is in C65 mode.\n");
@@ -1294,7 +1338,11 @@ int process_line(char *line,int live)
 	cmd="bf664\r";
 	slow_write(fd,cmd,strlen(cmd));
 	stuff_keybuffer("DLo\"!\r");
+#ifdef WINDOWS
+	if (first_load) fprintf(stderr,"[T+%I64dsec] Injecting LOAD\"!\n",(long long)time(0)-start_time);
+#else
 	if (first_load) fprintf(stderr,"[T+%lldsec] Injecting LOAD\"!\n",(long long)time(0)-start_time);
+#endif
 	first_load=0;
 
 	while(state!=1) {
@@ -1332,7 +1380,11 @@ int process_line(char *line,int live)
       saw_c64_mode=1;
       slow_write(fd,cmd,strlen(cmd));
       stuff_keybuffer("Lo\"!\",8,1\r");
+#ifdef WINDOWS
+      if (first_load) fprintf(stderr,"[T+%I64dsec] LOAD\"!\n",(long long)time(0)-start_time);
+#else
       if (first_load) fprintf(stderr,"[T+%lldsec] LOAD\"!\n",(long long)time(0)-start_time);
+#endif
       first_load=0;
     } else {
       if (!saw_c64_mode) fprintf(stderr,"MEGA65 is in C64 mode.\n");
@@ -1418,7 +1470,11 @@ int process_line(char *line,int live)
 
 	if (do_run) {
 	  stuff_keybuffer("RUN:\r");
+#ifdef WINDOWS
+	  fprintf(stderr,"[T+%I64dsec] RUN\n",(long long)time(0)-start_time);
+#else
 	  fprintf(stderr,"[T+%lldsec] RUN\n",(long long)time(0)-start_time);
+#endif
 	}
 
 	printf("\n");
@@ -1444,14 +1500,24 @@ int process_char(unsigned char c, int live)
   // Remember recent chars for virtual FDC access, as the Hypervisor tells
   // us which track, sector and side, before it sends the marker
   if (c=='!'&&virtual_f011) {
-    printf("[T+%ldsec] : V-FDC read request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
+#ifdef WINDOWS
+    printf("[T+%I64dsec] : V-FDC read request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
 	   time(0)-start_time,vfdc_track,vfdc_sector,vfdc_side);
+#else
+    printf("[T+%lldsec] : V-FDC read request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
+	   time(0)-start_time,vfdc_track,vfdc_sector,vfdc_side);
+#endif
     // We have all we need, so just read the sector from disk, upload it, and mark the job done
     virtual_f011_read(0,vfdc_track,vfdc_sector,vfdc_side);
   }
   if (c=='\\'&&virtual_f011) {
-    printf("[T+%ldsec] : V-FDC write request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
+#ifdef WINDOWS
+    printf("[T+%I64dsec] : V-FDC write request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
 	   time(0)-start_time,vfdc_track,vfdc_sector,vfdc_side);
+#else
+    printf("[T+%lldsec] : V-FDC write request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
+	   time(0)-start_time,vfdc_track,vfdc_sector,vfdc_side);
+#endif
     // We have all we need, so just read the sector from disk, upload it, and mark the job done
     sdbuf_request_addr = WRITE_SECTOR_BUFFER_ADDRESS;
     { char  cmd[1024];
@@ -1748,6 +1814,8 @@ int prepare_modeline(char *modeline)
   return 0;
 }
 
+#ifdef WINDOWS
+#else
 void set_serial_speed(int fd,int serial_speed)
 {
   fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
@@ -1780,6 +1848,7 @@ void set_serial_speed(int fd,int serial_speed)
   if (tcsetattr(fd, TCSANOW, &t)) perror("Failed to set terminal parameters");
   
 }
+#endif
 
 void *run_boundary_scan(void *argp)
 {
@@ -2016,7 +2085,11 @@ int main(int argc,char **argv)
     }
     //fprintf(stderr,"%s\n",cmd);
     //    system(cmd);
+#ifdef WINDOWS
+    fprintf(stderr,"[T+%I64dsec] Bitstream loaded\n",(long long)time(0)-start_time);
+#else
     fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
+#endif
   }
 
   if (virtual_f011) {
@@ -2024,10 +2097,18 @@ int main(int argc,char **argv)
       fprintf(stderr,"ERROR: -d requires -b and -k to also be specified.\n");
       exit(-1);
     }
+#ifdef WINDOWS
+    fprintf(stderr,"[T+%I64dsec] Remote access to disk image '%s' requested\n",(long long)time(0)-start_time,d81file);
+#else
     fprintf(stderr,"[T+%lldsec] Remote access to disk image '%s' requested\n",(long long)time(0)-start_time,d81file);
+#endif
     
   }
-  
+
+#ifdef WINDOWS
+  fprintf(stderr,"ERROR: Call windows serial setup routine here.\n");
+  exit(-1);
+#else
   errno=0;
   fd=open(serial_port,O_RDWR);
   if (fd==-1) {
@@ -2037,17 +2118,20 @@ int main(int argc,char **argv)
   }
 
   set_serial_speed(fd,serial_speed);
+#endif
 
   monitor_sync();
 
   detect_mode();
-  
+
+#ifndef WINDOWS
   if (virtual_f011&&serial_speed==2000000) {
     // Try bumping up to 4mbit
     slow_write(fd,"\r+9\r",4);
     set_serial_speed(fd,4000000);
     serial_speed=4000000;
   }
+#endif
   
   unsigned long long last_check = gettime_ms();
   int phase=0;

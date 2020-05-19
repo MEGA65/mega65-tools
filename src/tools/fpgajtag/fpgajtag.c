@@ -71,7 +71,7 @@ uint8_t *input_fileptr;
 int input_filesize, found_cortex = -1, jtag_index = -1, dcount, idcode_count;
 int tracep ;//= 1;
 
-static int debug, verbose, skip_idcode, match_any_idcode, trailing_len, first_time_idcode_read = 1, dc2trail, interface;
+static int debug, verbose, skip_idcode, match_any_idcode, trailing_len, first_time_idcode_read = 1, dc2trail, interface_id;
 static USB_INFO *uinfo;
 static uint32_t idcode_array[IDCODE_ARRAY_SIZE], idcode_len[IDCODE_ARRAY_SIZE];
 static uint8_t *rstatus = DITEM(CONFIG_DUMMY, CONFIG_SYNC, CONFIG_TYPE2(0),
@@ -429,10 +429,10 @@ static void init_device(int extra)
     write_tms_transition("XR11111");       /*** Force TAP controller to Reset state ***/
     EXIT();
 }
-static void get_deviceid(int device_index, int interface)
+static void get_deviceid(int device_index, int interface_id)
 {
   ENTER();
-    init_ftdi(device_index, interface);
+    init_ftdi(device_index, interface_id);
     /*
      * Set JTAG clock speed and GPIO pins for our i/f
      */
@@ -709,6 +709,13 @@ static void read_config_memory(int fd, uint32_t size)
     EXIT();
 }
 
+#ifdef WINDOWS
+void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idcode)
+{
+	fprintf(stderr,"init_fpgajtag() not implemented for Windows.\n");
+	return;
+}
+#else
 void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idcode)
 {
   ENTER();
@@ -730,7 +737,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
                  printf("Altera device");
             }
             else
-                get_deviceid(i, interface);  /*** Generic initialization of FTDI chip ***/
+                get_deviceid(i, interface_id);  /*** Generic initialization of FTDI chip ***/
             fpgausb_close();
             if (idcode_count)
                 fprintf(stderr, "; IDCODE:");
@@ -802,7 +809,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
     /*
      * Set JTAG clock speed and GPIO pins for our i/f
      */
-    get_deviceid(usb_index, interface);          /*** Generic initialization of FTDI chip ***/
+    get_deviceid(usb_index, interface_id);          /*** Generic initialization of FTDI chip ***/
     for (i = 0; i < idcode_count; i++)       /*** look for device matching file idcode ***/
         if (idcode_array[i] == file_idcode || file_idcode == 0xffffffff || match_any_idcode) {
             jtag_index = i;
@@ -823,6 +830,7 @@ int min(int a, int b)
   else
       return b;
 }
+#endif
 
 int fpgajtag_main(char *bitstream,char *serialport)
 {

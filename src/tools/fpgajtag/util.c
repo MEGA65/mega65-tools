@@ -35,6 +35,7 @@
 #endif
 #include "util.h"
 #include "elfdef.h"
+
 #ifdef __arm__
 #define NO_LIBUSB
 #else
