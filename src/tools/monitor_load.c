@@ -784,7 +784,7 @@ int monitor_sync(void)
 #else
     snprintf(cmd,1024,"#%08lx\r",random());
 #endif
-    printf("Writing token: '%s'\n",cmd);
+    //    printf("Writing token: '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
 
     for(int i=0;i<10;i++) {
@@ -792,7 +792,7 @@ int monitor_sync(void)
       if (b<0) b=0;
       if (b>8191) b=8191;
       read_buff[b]=0;
-      if (b>0) dump_bytes(0,"read_data",read_buff,b);
+      //      if (b>0) dump_bytes(0,"read_data",read_buff,b);
       if (strstr((char *)read_buff,cmd)) {
 	printf("Found token. Synchronised with monitor.\n");
 	state=99;
@@ -1948,6 +1948,22 @@ HANDLE open_serial_port(const char * device, uint32_t baud_rate)
     CloseHandle(port);
     return INVALID_HANDLE_VALUE;
   }
+
+  state.fBinary = TRUE;
+  state.fDtrControl = DTR_CONTROL_ENABLE;
+  state.fDsrSensitivity = FALSE;
+  state.fTXContinueOnXoff = FALSE;
+  state.fOutX = FALSE;
+  state.fInX = FALSE;
+  state.fErrorChar = FALSE;
+  state.fNull = FALSE;
+  state.fRtsControl = RTS_CONTROL_ENABLE;
+  state.fAbortOnError = FALSE;
+  state.fOutxCtsFlow = FALSE;
+  state.fOutxDsrFlow = FALSE;
+  state.ByteSize = 8;
+  state.StopBits = ONESTOPBIT;
+  state.Parity = NOPARITY;
  
   state.BaudRate = baud_rate;
  
@@ -1990,14 +2006,14 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
 SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
 {
   DWORD received=0;
-  printf("Calling ReadFile(%I64d)\n",size);
+  //  printf("Calling ReadFile(%I64d)\n",size);
   BOOL success = ReadFile(port, buffer, size, &received, NULL);
   if (!success)
   {
     print_error("Failed to read from port");
     return -1;
   }
-  printf("  ReadFile() returned. Received %ld bytes\n",received);
+  //  printf("  ReadFile() returned. Received %ld bytes\n",received);
   return received;
 }
 
@@ -2253,7 +2269,9 @@ int main(int argc,char **argv)
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
   init_fpgajtag(serial_port, bitstream, 0x3631093); // 0xffffffff);
 #else
-  
+  // For Windows, we don't (yet) have a working USB com port auto-detection regime.
+  // The libusb stuff seems to not work properly, and I can't get the undefined symbols
+  // for the listcomports to link under mingw.
 #endif
   
   if (boundary_scan) {
