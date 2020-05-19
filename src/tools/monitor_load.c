@@ -55,6 +55,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <png.h>
 #endif
 
+#ifdef WINDOWS
+#define PORT_TYPE HANDLE
+SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
+  int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
+#else
+#define PORT_TYPE int
+size_t serialport_read(int fd, uint8_t * buffer, size_t size);
+int serialport_write(int fd, uint8_t * buffer, size_t size);
+#endif
+
+
 #ifdef APPLE
 static const int B1000000 = 1000000;
 static const int B1500000 = 1500000;
@@ -76,7 +87,7 @@ int viciv_mode_report(unsigned char *viciv_regs);
 
 int process_char(unsigned char c,int live);
 int process_line(char *line,int live);
-int process_waiting(int fd);
+int process_waiting(PORT_TYPE fd);
 int fpgajtag_main(char *bitstream,char *serialport);
 void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idcode);
 int xilinx_boundaryscan(char *xdc,char *bsdl,char *sensitivity);
@@ -141,7 +152,12 @@ int hyppo_report=0;
 unsigned char hyppo_buffer[1024];
 
 int counter  =0;
-int fd=-1;
+#ifdef WINDOWS
+PORT_TYPE fd=INVALID_HANDLE_VALUE;
+#else
+PORT_TYPE fd=-1;
+#endif
+
 int state=99;
 unsigned int name_len,name_lo,name_hi,name_addr=-1;
 int do_go64=0;
@@ -194,7 +210,7 @@ int saved_track = 0;
 int saved_sector = 0;
 int saved_side = 0;
 
-int slow_write(int fd,char *d,int l)
+int slow_write(PORT_TYPE fd,char *d,int l)
 {
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
@@ -211,16 +227,16 @@ int slow_write(int fd,char *d,int l)
   for(i=0;i<l;i++)
     {
       if (serial_speed==4000000) usleep(1000); else usleep(2000);
-      int w=write(fd,&d[i],1);
+      int w=serialport_write(fd,(unsigned char *)&d[i],1);
       while (w<1) {
 	if (serial_speed==4000000) usleep(500); else usleep(1000);
-	w=write(fd,&d[i],1);
+	w=serialport_write(fd,(unsigned char *)&d[i],1);
       }
     }
   return 0;
 }
 
-int slow_write_safe(int fd,char *d,int l)
+int slow_write_safe(PORT_TYPE fd,char *d,int l)
 {
   // There is a bug at the time of writing that causes problems
   // with the CPU's correct operation if various monitor commands
@@ -353,7 +369,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     int n=b;
     unsigned char *p=buf;
     while(n>0) {
-      int w=write(fd,p,n);
+      int w=serialport_write(fd,p,n);
       if (w>0) { p+=w; n-=w; } else usleep(1000);
     }
     if (serial_speed==230400) usleep(10000+50*b);
@@ -419,10 +435,10 @@ int first_go64=1;
 unsigned char viciv_regs[0x100];
 int mode_report=0;
 
-int read_and_print(int fd)
+int read_and_print(PORT_TYPE fd)
 {
   char buff[8192];
-  int r=read(fd,buff,8192);
+  int r=serialport_read(fd,(unsigned char *)buff,8192);
   buff[r]=0;
   printf("%s\n",buff);
   return 0;
@@ -524,7 +540,7 @@ int virtual_f011_read(int device,int track,int sector,int side)
 	//	      fprintf(stderr,"%s\n",cmd);
 	//	      dump_bytes(0,"F011 virtual sector data",p,512);
 	while(n>0) {
-	  int w=write(fd,p,n);
+	  int w=serialport_write(fd,p,n);
 	  if (w>0) { p+=w; n-=w; } else usleep(1000);
 	}
 #ifdef WINDOWS       
@@ -758,7 +774,7 @@ int monitor_sync(void)
   usleep(20000); // Give plenty of time for things to settle
   int b=1;
   // Purge input
-  while(b>0) { b=read(fd,read_buff,8192); }
+  while(b>0) { b=serialport_read(fd,read_buff,8192); }
 
   for(int tries=0;tries<10;tries++) {
 #ifdef WINDOWS
@@ -769,7 +785,7 @@ int monitor_sync(void)
     slow_write_safe(fd,cmd,strlen(cmd));
 
     for(int i=0;i<10;i++) {
-      b=read(fd,read_buff,8192);
+      b=serialport_read(fd,read_buff,8192);
       if (b<0) b=0;
       if (b>8191) b=8191;
       read_buff[b]=0;
@@ -810,7 +826,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
     slow_write_safe(fd,cmd,strlen(cmd));
     while(addr!=end_addr) {
       snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
-      int b=read(fd,&read_buff[ofs],8192-ofs);
+      int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
       if (b<0) b=0;
       if (b>8191) b=8191;
       if (b>0) dump_bytes(0,"read()",&read_buff[ofs],b);
@@ -1432,7 +1448,7 @@ int process_line(char *line,int live)
 	  int n=b;
 	  unsigned char *p=buf;
 	  while(n>0) {
-	    int w=write(fd,p,n);
+	    int w=serialport_write(fd,p,n);
 	    if (w>0) { p+=w; n-=w; } else usleep(1000);
 	  }
 	  if (serial_speed==230400) usleep(10000+50*b);
@@ -1544,16 +1560,16 @@ int process_char(unsigned char c, int live)
   return 0;
 }
 
-int process_waiting(int fd)
+int process_waiting(PORT_TYPE fd)
 {
   unsigned char  read_buff[1024];
-  int b=read(fd,read_buff,1024);
+  int b=serialport_read(fd,read_buff,1024);
   while (b>0) {
     int i;
     for(i=0;i<b;i++) {
       process_char(read_buff[i],1);
     }
-    b=read(fd,read_buff,1024);    
+    b=serialport_read(fd,read_buff,1024);    
   }
   return 0;
 }
@@ -1815,8 +1831,127 @@ int prepare_modeline(char *modeline)
 }
 
 #ifdef WINDOWS
+
+void print_error(const char * context)
+{
+  DWORD error_code = GetLastError();
+  char buffer[256];
+  DWORD size = FormatMessageA(
+    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+    NULL, error_code, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+    buffer, sizeof(buffer), NULL);
+  if (size == 0) { buffer[0] = 0; }
+  fprintf(stderr, "%s: %s\n", context, buffer);
+}
+ 
+
+// Opens the specified serial port, configures its timeouts, and sets its
+// baud rate.  Returns a handle on success, or INVALID_HANDLE_VALUE on failure.
+HANDLE open_serial_port(const char * device, uint32_t baud_rate)
+{
+  HANDLE port = CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (port == INVALID_HANDLE_VALUE)
+  {
+    print_error(device);
+    return INVALID_HANDLE_VALUE;
+  }
+ 
+  // Flush away any bytes previously read or written.
+  BOOL success = FlushFileBuffers(port);
+  if (!success)
+  {
+    print_error("Failed to flush serial port");
+    CloseHandle(port);
+    return INVALID_HANDLE_VALUE;
+  }
+ 
+  // Configure read and write operations to time out after 100 ms.
+  COMMTIMEOUTS timeouts = { 0 };
+  timeouts.ReadIntervalTimeout = 0;
+  timeouts.ReadTotalTimeoutConstant = 100;
+  timeouts.ReadTotalTimeoutMultiplier = 0;
+  timeouts.WriteTotalTimeoutConstant = 100;
+  timeouts.WriteTotalTimeoutMultiplier = 0;
+ 
+  success = SetCommTimeouts(port, &timeouts);
+  if (!success)
+  {
+    print_error("Failed to set serial timeouts");
+    CloseHandle(port);
+   return INVALID_HANDLE_VALUE;
+  }
+ 
+  DCB state;
+  state.DCBlength = sizeof(DCB);
+  success = GetCommState(port, &state);
+  if (!success)
+  {
+    print_error("Failed to get serial settings");
+    CloseHandle(port);
+    return INVALID_HANDLE_VALUE;
+  }
+ 
+  state.BaudRate = baud_rate;
+ 
+  success = SetCommState(port, &state);
+  if (!success)
+  {
+    print_error("Failed to set serial settings");
+    CloseHandle(port);
+    return INVALID_HANDLE_VALUE;
+  }
+ 
+  return port;
+}
+
+// Writes bytes to the serial port, returning 0 on success and -1 on failure.
+int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
+{
+  DWORD written;
+  BOOL success = WriteFile(port, buffer, size, &written, NULL);
+  if (!success)
+  {
+    print_error("Failed to write to port");
+    return -1;
+  }
+  if (written != size)
+  {
+    print_error("Failed to write all bytes to port");
+    return -1;
+  }
+  return 0;
+}
+ 
+// Reads bytes from the serial port.
+// Returns after all the desired bytes have been read, or if there is a
+// timeout or other error.
+// Returns the number of bytes successfully read into the buffer, or -1 if
+// there was an error reading.
+SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
+{
+  DWORD received;
+  BOOL success = ReadFile(port, buffer, size, &received, NULL);
+  if (!success)
+  {
+    print_error("Failed to read from port");
+    return -1;
+  }
+  return received;
+}
+
 #else
-void set_serial_speed(int fd,int serial_speed)
+int serialport_write(int fd, uint8_t * buffer, size_t size)
+{
+  return write(fd,buffer,size);
+}
+
+size_t serialport_read(int fd, uint8_t * buffer, size_t size)
+{
+  return read(fd,buffer,size);
+}
+
+  void set_serial_speed(int fd,int serial_speed)
 {
   fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
   struct termios t;
@@ -2106,8 +2241,12 @@ int main(int argc,char **argv)
   }
 
 #ifdef WINDOWS
-  fprintf(stderr,"ERROR: Call windows serial setup routine here.\n");
-  exit(-1);
+  fd=open_serial_port(serial_port,2000000);
+  if (fd==INVALID_HANDLE_VALUE) {
+    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
+    exit(-1);
+  }
+  
 #else
   errno=0;
   fd=open(serial_port,O_RDWR);
@@ -2144,7 +2283,7 @@ int main(int argc,char **argv)
       switch(state) {
       case 0: case 2: case 3: case 99:
 	errno=0;
-	b=read(fd,read_buff,1024);
+	b=serialport_read(fd,(unsigned char *)read_buff,1024);
 	if (b>0) {
 //printf("%s\n", read_buff);
 	  int i;
