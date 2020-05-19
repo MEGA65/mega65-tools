@@ -722,13 +722,6 @@ static void read_config_memory(int fd, uint32_t size)
     EXIT();
 }
 
-#ifdef WINDOWS
-void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idcode)
-{
-	fprintf(stderr,"init_fpgajtag() not implemented for Windows.\n");
-	return;
-}
-#else
 void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idcode)
 {
   ENTER();
@@ -790,6 +783,10 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
 	    
 	    // Iterate through /sys/bus/usb-serial/devices to see if any of the entries there have
 	    // symlinks that make sense for this device bus and port number.
+#ifdef WINDOWS
+	    printf("I'm on windows, and don't (yet) know how to work out the COMx: path.\n");
+	    printf("In case it helps: bus=%d, port=%d\n",bus,port);
+#else
 	    {
 	      DIR *d=opendir("/sys/bus/usb-serial/devices");
 	      if (d) {
@@ -813,6 +810,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
 		closedir(d);
 	      }
 	    }
+#endif
 	    
             break;
 	  }
@@ -836,6 +834,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
     EXIT();
 }
 
+#ifndef WINDOWS
 int min(int a, int b)
 {
   if (a < b)

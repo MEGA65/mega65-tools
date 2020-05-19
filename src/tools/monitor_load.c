@@ -791,6 +791,7 @@ int monitor_sync(void)
       read_buff[b]=0;
       if (strstr((char *)read_buff,cmd)) {
 	printf("Found token. Synchronised with monitor.\n");
+	state=99;
 	return 0;
       }
       usleep(2000);
@@ -798,6 +799,22 @@ int monitor_sync(void)
   }
   printf("Failed to synchronise with the monitor.\n");
   return 1;
+}
+
+int get_pc(void)
+{
+  /*
+    Get current programme counter value of CPU
+  */
+  slow_write_safe(fd,"r\r",2);
+  usleep(50000);
+  unsigned char buff[8192];
+  int b=serialport_read(fd,buff,8192);
+  if (b<0) b=0;
+  if (b>8191) b=8191;
+  buff[b]=0;
+  char *s=strstr((char *)buff,"\n,");
+  if (s) return strtoll(&s[6],NULL,16);
 }
 
 int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
@@ -822,7 +839,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
       end_addr=addr+0x100;
     }
-    printf("Sending '%s'\n",cmd);
+    //    printf("Sending '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
     while(addr!=end_addr) {
       snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
@@ -833,7 +850,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       ofs+=b;
       char *s=strstr((char *)read_buff,next_addr_str);
       if (s) {
-	printf("Found data for $%08x\n",(unsigned int)addr);
+	//	printf("Found data for $%08x\n",(unsigned int)addr);
 	for(int i=0;i<16;i++) {
 	  char hex[3];
 	  hex[0]=s[1+10+i*2+0];
@@ -861,7 +878,35 @@ int detect_mode(void)
   unsigned char mem_buff[8192];
   fetch_ram(0xffd3030,1,mem_buff);
   printf("$D030 = $%02X\n",mem_buff[0]);
-  
+  if (mem_buff[0]==0x64) {
+    // Probably C65 mode
+    int in_range=0;
+    for (int i=0;i<5;i++) {
+      int pc=get_pc();
+      if (pc>=0xe1af&&pc<=0xe1b4) in_range++;
+    }
+    if (in_range>3) {
+      // We are in C65 BASIC main loop, so assume it is C65 mode
+      saw_c65_mode=1;
+      printf("CPU in C65 BASIC 10 main loop.\n");
+      return 0;
+    }
+  } else if (mem_buff[0]==0x00) {
+    // Probably C64 mode
+    int in_range=0;
+    for (int i=0;i<5;i++) {
+      int pc=get_pc();
+      // XXX Might not work with OpenROMs?
+      if (pc>=0xe5cf&&pc<=0xe5d5) in_range++;
+    }
+    if (in_range>3) {
+      // We are in C64 BASIC main loop, so assume it is C65 mode
+      saw_c64_mode=1;
+      printf("CPU in C64 BASIC 2 main loop.\n");
+      return 0;
+    }
+  }
+  printf("Could not determine C64/C65/MEGA65 mode.\n");
   return 1;
 }
 
@@ -2001,9 +2046,11 @@ void *run_boundary_scan(void *argp)
   return (void *)NULL;
 }
 
+#ifndef WINDOWS
 #define MAX_THREADS 16
   int thread_count=0;
-  pthread_t threads[MAX_THREADS]; 
+  pthread_t threads[MAX_THREADS];
+#endif
 
 void download_bitstream(void)
 {
@@ -2120,6 +2167,8 @@ int main(int argc,char **argv)
 {
   start_time=time(0);
 
+  printf("Getting started..\n");
+  
   int opt;
   while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:k:Ll:m:MnoprR:Ss:t:T:U:V:XZ:")) != -1) {
     switch (opt) {
@@ -2196,12 +2245,17 @@ int main(int argc,char **argv)
   init_fpgajtag(serial_port, bitstream, 0x3631093); // 0xffffffff);
 
   if (boundary_scan) {
+#ifdef WINDOWS
+    fprintf(stderr,"ERROR: threading on Windows not implemented.\n");
+    exit(-1);
+#else
     // Launch boundary scan in a separate thread, so that we can monitor signals while
     // running other operations.
     if (pthread_create(&threads[thread_count++], NULL, run_boundary_scan, NULL))
       perror("Failed to create JTAG boundary scan thread.\n");
     else 
-      fprintf(stderr,"JTAG boundary scan launched in separate thread.\n"); 
+      fprintf(stderr,"JTAG boundary scan launched in separate thread.\n");
+#endif
   }
 
   if (jtag_only) do_exit(0);
@@ -2286,8 +2340,9 @@ int main(int argc,char **argv)
   while(1)
     {
       int b;
-      int fast_mode;
+      int fast_mode=0;
       char read_buff[1024];
+      printf("State = %d\n",state);
       switch(state) {
       case 0: case 2: case 3: case 99:
 	errno=0;
@@ -2302,10 +2357,11 @@ int main(int argc,char **argv)
 	  usleep(1000);
 	}
 
-        fast_mode = saw_c65_mode || saw_c64_mode;
+	//        fast_mode = saw_c65_mode || saw_c64_mode;
 	if (gettime_ms()>last_check) {
-          if(fast_mode) {         
-	  } else {	    
+  //          if(fast_mode) {
+  //	  } else
+  {
 	    if (state==99) printf("sending R command to sync @ %dpbs.\n",serial_speed);
 	    if (hyppo_report) {
 	      switch (phase%(5+hypervisor_paused)) {
@@ -2346,9 +2402,10 @@ int main(int argc,char **argv)
 }
 
 void do_exit(int retval) {
+#ifndef WINDOWS
     printf("Background tasks running. CONTROL+C to stop...\n");
     for(int i=0;i<thread_count;i++)
     pthread_join(threads[i], NULL);     
-  
+#endif  
     exit(retval);
 }
