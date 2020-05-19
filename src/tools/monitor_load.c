@@ -771,17 +771,20 @@ int monitor_sync(void)
   cmd[1]=0x0d; // Carriage return
   usleep(20000); // Give plenty of time for things to settle
   slow_write_safe(fd,cmd,2);
+  printf("Wrote empty command.\n");
   usleep(20000); // Give plenty of time for things to settle
   int b=1;
-  // Purge input
+  // Purge input  
   while(b>0) { b=serialport_read(fd,read_buff,8192); }
+  printf("Purging input.\n");
 
   for(int tries=0;tries<10;tries++) {
 #ifdef WINDOWS
     snprintf(cmd,1024,"#%08x\r",rand());
 #else
-    snprintf(cmd,1024,"#%08x\r",random());
+    snprintf(cmd,1024,"#%08lx\r",random());
 #endif
+    printf("Writing token: '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
 
     for(int i=0;i<10;i++) {
@@ -789,6 +792,7 @@ int monitor_sync(void)
       if (b<0) b=0;
       if (b>8191) b=8191;
       read_buff[b]=0;
+      if (b>0) dump_bytes(0,"read_data",read_buff,b);
       if (strstr((char *)read_buff,cmd)) {
 	printf("Found token. Synchronised with monitor.\n");
 	state=99;
@@ -1573,7 +1577,7 @@ int process_char(unsigned char c, int live)
     printf("[T+%I64dsec] : V-FDC read request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
 	   time(0)-start_time,vfdc_track,vfdc_sector,vfdc_side);
 #else
-    printf("[T+%lldsec] : V-FDC read request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
+    printf("[T+%ldsec] : V-FDC read request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
 	   time(0)-start_time,vfdc_track,vfdc_sector,vfdc_side);
 #endif
     // We have all we need, so just read the sector from disk, upload it, and mark the job done
@@ -1584,7 +1588,7 @@ int process_char(unsigned char c, int live)
     printf("[T+%I64dsec] : V-FDC write request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
 	   time(0)-start_time,vfdc_track,vfdc_sector,vfdc_side);
 #else
-    printf("[T+%lldsec] : V-FDC write request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
+    printf("[T+%ldsec] : V-FDC write request from UART monitor: Track:%d, Sector:%d, Side:%d.\n",
 	   time(0)-start_time,vfdc_track,vfdc_sector,vfdc_side);
 #endif
     // We have all we need, so just read the sector from disk, upload it, and mark the job done
@@ -1919,10 +1923,10 @@ HANDLE open_serial_port(const char * device, uint32_t baud_rate)
     return INVALID_HANDLE_VALUE;
   }
  
-  // Configure read and write operations to time out after 100 ms.
+  // Configure read and write operations to time out after 1 ms and 100 ms, respectively.
   COMMTIMEOUTS timeouts = { 0 };
   timeouts.ReadIntervalTimeout = 0;
-  timeouts.ReadTotalTimeoutConstant = 100;
+  timeouts.ReadTotalTimeoutConstant = 1;
   timeouts.ReadTotalTimeoutMultiplier = 0;
   timeouts.WriteTotalTimeoutConstant = 100;
   timeouts.WriteTotalTimeoutMultiplier = 0;
@@ -1962,7 +1966,9 @@ HANDLE open_serial_port(const char * device, uint32_t baud_rate)
 int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
 {
   DWORD written;
+  //  printf("Calling WriteFile(%d)\n",size);
   BOOL success = WriteFile(port, buffer, size, &written, NULL);
+  //  printf("  WriteFile() returned.\n");
   if (!success)
   {
     print_error("Failed to write to port");
@@ -1973,7 +1979,7 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
     print_error("Failed to write all bytes to port");
     return -1;
   }
-  return 0;
+  return size;
 }
  
 // Reads bytes from the serial port.
@@ -1983,13 +1989,15 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
 // there was an error reading.
 SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
 {
-  DWORD received;
+  DWORD received=0;
+  printf("Calling ReadFile(%I64d)\n",size);
   BOOL success = ReadFile(port, buffer, size, &received, NULL);
   if (!success)
   {
     print_error("Failed to read from port");
     return -1;
   }
+  printf("  ReadFile() returned. Received %ld bytes\n",received);
   return received;
 }
 
@@ -2238,12 +2246,16 @@ int main(int argc,char **argv)
     default: /* '?' */
       usage();
     }
-  }  
-
+  }    
+  
+#ifndef WINDOWS
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
   init_fpgajtag(serial_port, bitstream, 0x3631093); // 0xffffffff);
-
+#else
+  
+#endif
+  
   if (boundary_scan) {
 #ifdef WINDOWS
     fprintf(stderr,"ERROR: threading on Windows not implemented.\n");
@@ -2321,10 +2333,14 @@ int main(int argc,char **argv)
   set_serial_speed(fd,serial_speed);
 #endif
 
+  printf("Calling monitor_sync()\n");
   monitor_sync();
 
+  printf("Calling detect_mode()\n");
   detect_mode();
 
+  printf("Progressing...\n");
+  
 #ifndef WINDOWS
   if (virtual_f011&&serial_speed==2000000) {
     // Try bumping up to 4mbit
@@ -2342,7 +2358,6 @@ int main(int argc,char **argv)
       int b;
       int fast_mode=0;
       char read_buff[1024];
-      printf("State = %d\n",state);
       switch(state) {
       case 0: case 2: case 3: case 99:
 	errno=0;
