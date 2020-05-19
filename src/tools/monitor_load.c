@@ -300,7 +300,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
 {
   char cmd[1024];
 
-  FILE *f=fopen(filename,"r");
+  FILE *f=fopen(filename,"rb");
   if (!f) {
     fprintf(stderr,"Could not open file '%s'\n",filename);
     exit(-2);
@@ -1398,7 +1398,7 @@ int process_line(char *line,int live)
     {
       state=99;
       printf("Filename is %s\n",filename);
-      f=fopen(filename,"r");
+      f=fopen(filename,"rb");
       if (f==NULL) {
 	fprintf(stderr,"Could not find file '%s'\n",filename);
 	exit(-1);
@@ -1873,7 +1873,7 @@ void download_bitstream(void)
 
   char filename[8192];
   snprintf(filename,8192,"%s/.netrc",getenv("HOME"));
-  FILE *nf=fopen(filename,"r");
+  FILE *nf=fopen(filename,"rb");
   if (!nf) {
     fprintf(stderr,"WARNING: You don't have a .netrc file.  You probably want to set one up with something like this:\n"
 	    "    machine  app.scryptos.com\n"
@@ -1883,7 +1883,7 @@ void download_bitstream(void)
   }
   fclose(nf);
   snprintf(filename,8192,"/usr/bin/cadaver");
-  nf=fopen(filename,"r");
+  nf=fopen(filename,"rb");
   if (!nf) {
     fprintf(stderr,"ERROR: You don't seem to have cadaver installed.\n"
 	    "If you are on Ubuntu linux, try:\n"
@@ -1900,7 +1900,7 @@ void download_bitstream(void)
 	   issue,tag);
   system(cmd);
 
-  FILE *f=fopen("/tmp/monitor_load.folder.txt","r");
+  FILE *f=fopen("/tmp/monitor_load.folder.txt","rb");
   if (!f) {
     fprintf(stderr,"ERROR: Could not read WebDAV retrieved folder name from /tmp/monitor_load.folder.txt\n");
     exit(-2);
@@ -1928,7 +1928,7 @@ void download_hyppo(void)
 
   char filename[8192];
   snprintf(filename,8192,"%s/.netrc",getenv("HOME"));
-  FILE *nf=fopen(filename,"r");
+  FILE *nf=fopen(filename,"rb");
   if (!nf) {
     fprintf(stderr,"WARNING: You don't have a .netrc file.  You probably want to set one up with something like this:\n"
 	    "    machine  app.scryptos.com\n"
@@ -1938,7 +1938,7 @@ void download_hyppo(void)
   }
   fclose(nf);
   snprintf(filename,8192,"/usr/bin/cadaver");
-  nf=fopen(filename,"r");
+  nf=fopen(filename,"rb");
   if (!nf) {
     fprintf(stderr,"ERROR: You don't seem to have cadaver installed.\n"
 	    "If you are on Ubuntu linux, try:\n"
@@ -1955,7 +1955,7 @@ void download_hyppo(void)
 	   issue,tag);
   system(cmd);
 
-  FILE *f=fopen("/tmp/monitor_load.folder.txt","r");
+  FILE *f=fopen("/tmp/monitor_load.folder.txt","rb");
   if (!f) {
     fprintf(stderr,"ERROR: Could not read WebDAV retrieved folder name from /tmp/monitor_load.folder.txt\n");
     exit(-2);
