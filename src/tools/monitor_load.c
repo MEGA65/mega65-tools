@@ -817,7 +817,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   while(addr<(address+count)) {
     if ((address+count-addr)<17) {
       snprintf(cmd,8192,"m%X\r",(unsigned int)addr);
-      end_addr=addr+10;
+      end_addr=addr+0x10;
     } else {
       snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
       end_addr=addr+0x100;
@@ -829,17 +829,24 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
       if (b<0) b=0;
       if (b>8191) b=8191;
-      if (b>0) dump_bytes(0,"read()",&read_buff[ofs],b);
       read_buff[ofs+b]=0;
       ofs+=b;
       char *s=strstr((char *)read_buff,next_addr_str);
       if (s) {
 	printf("Found data for $%08x\n",(unsigned int)addr);
+	for(int i=0;i<16;i++) {
+	  char hex[3];
+	  hex[0]=s[1+10+i*2+0];
+	  hex[1]=s[1+10+i*2+1];
+	  hex[2]=0;
+	  buffer[addr-address+i]=strtol(hex,NULL,16);
+	}
 	addr+=16;
       }
     }
   }
-  return 1;
+  if (addr>=(address+count)) return 0;
+  else return 1;
 }
 
 int detect_mode(void)
@@ -853,7 +860,8 @@ int detect_mode(void)
   */
   unsigned char mem_buff[8192];
   fetch_ram(0xffd3030,1,mem_buff);
-
+  printf("$D030 = $%02X\n",mem_buff[0]);
+  
   return 1;
 }
 
