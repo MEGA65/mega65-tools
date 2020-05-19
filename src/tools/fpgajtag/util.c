@@ -22,14 +22,17 @@
 // SOFTWARE.
 
 #include <stdio.h>
-#include <sys/select.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <zlib.h>
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
+#ifdef WINDOWS
+#else
+#include <sys/select.h>
+#include <zlib.h>
+#endif
 #include "util.h"
 #include "elfdef.h"
 #ifdef __arm__
@@ -525,8 +528,10 @@ uint32_t read_inputfile(const char *filename)
     static uint8_t bitfile_header[] = {
         0, 9, 0xf, 0xf0, 0xf, 0xf0, 0xf, 0xf0, 0xf, 0xf0, 0, 0, 1, 'a'};
     static uint8_t filebuf[BUFFER_MAX_LEN];
+#ifndef WINDOWS
     static uint8_t uncompressbuf[BUFFER_MAX_LEN];
     static uint8_t gzmagic[] = {0x1f, 0x8b};
+#endif
     static uint8_t elfmagic[] = {0x7f, 'E', 'L', 'F'};
     int inputfd = 0;   /* default input for '-' is stdin */
 
@@ -569,6 +574,7 @@ uint32_t read_inputfile(const char *filename)
             exit(-1);
         }
     }
+#ifndef WINDOWS
     if (!memcmp(input_fileptr, gzmagic, sizeof(gzmagic))) {
         printf("fpgajtag: unzip input file, len %d\n", input_filesize);
         z_stream strm;
@@ -589,6 +595,7 @@ uint32_t read_inputfile(const char *filename)
             goto badlen;
         input_fileptr = uncompressbuf;
     }
+#endif
     if (!memcmp(bitfile_header, input_fileptr, sizeof(bitfile_header))) {
         uint8_t *inputtemp = input_fileptr;
         input_fileptr += sizeof(bitfile_header) - 1;

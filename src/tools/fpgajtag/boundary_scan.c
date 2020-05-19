@@ -15,6 +15,9 @@
 #include <strings.h>
 #include <time.h>
 
+#ifdef WINDOWS
+#define bcopy(s2,s1,n) memcpy(s1, s2, n)
+#endif
 char *strcasestr(const char *haystack, const char *needle);
 
 unsigned long long gettime_ms(void);
@@ -301,10 +304,21 @@ int xilinx_boundaryscan(char *xdc,char *bsdl,char *sensitivity)
 		{
 
 		  if(!count_shown) {
-		    if (vcd) fprintf(vcd,"#%lld\n",time_delta);
-		    else
+		    if (vcd) {
+#ifdef WINDOWS			  
+			    fprintf(vcd,"#%I64d\n",time_delta);
+#else
+			    fprintf(vcd,"#%lld\n",time_delta);
+#endif
+		    } else {
+#ifdef WINDOWS
+      			    printf("T+%I64dusec >>> Signal(s) changed.\n",
+			     time_delta);
+#else
 		      printf("T+%lldusec >>> Signal(s) changed.\n",
 			     time_delta);
+#endif
+		    }
 
 		  }
 		  count_shown++;

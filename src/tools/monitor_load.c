@@ -36,7 +36,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <termios.h>
 #include <time.h>
 #include <strings.h>
 #include <string.h>
@@ -47,8 +46,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <inttypes.h>
 #include <pthread.h>
 
+#ifdef WINDOWS
+#include <windows.h>
+#else
+#include <termios.h>
+
 #define PNG_DEBUG 3
 #include <png.h>
+#endif
 
 #ifdef APPLE
 static const int B1000000 = 1000000;

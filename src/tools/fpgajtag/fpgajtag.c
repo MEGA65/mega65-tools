@@ -36,12 +36,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <arpa/inet.h>
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <unistd.h>
 #include <dirent.h>
+#ifdef WINDOWS 
+#include <winsock.h>
+#else
+#include <arpa/inet.h>
 #include <libusb.h>
+#endif
 #include "util.h"
 #include "fpga.h"
 
@@ -838,8 +842,10 @@ int fpgajtag_main(char *bitstream,char *serialport)
      */
     /* uint32_t file_idcode = */ read_inputfile(filename);
 
+#ifndef WINDOWS
     if (mflag)
 	setuid( 0 );
+#endif
 
     if (xflag || mflag) {
 	int magic[2];
@@ -858,11 +864,13 @@ int fpgajtag_main(char *bitstream,char *serialport)
 	    if (debug) fprintf(stderr, "updated magic: %08x.%08x expected %08x.%08x\n", magic[0], magic[1], 0x000000bb, 0x11220044);
 	    input_fileptr = buffer;
 	}
-	 int rc = setuid(0);
+#ifndef WINDOWS
+	int rc = setuid(0);
 	 const char *filename = (mflag) ? "/lib/firmware/fpga.bin" : "/dev/xdevcfg";
 	 if (rc != 0)
 	 fprintf(stderr, "setuid status %d uid %d euid %d\n",
 		 rc, getuid(), geteuid());
+#endif
         int fd = open(filename, (mflag) ? (O_WRONLY|O_CREAT) : O_WRONLY);
 	if (fd < 0) {
 	  fprintf(stderr, "[%s:%d] failed to open %s: fd=%d errno=%d %s\n", __FUNCTION__, __LINE__, filename, fd, errno, strerror(errno));
