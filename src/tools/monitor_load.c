@@ -842,7 +842,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   char next_addr_str[8192];
   int ofs=0;
   
-  monitor_sync();
+  //  monitor_sync();
   while(addr<(address+count)) {
     if ((address+count-addr)<17) {
       snprintf(cmd,8192,"m%X\r",(unsigned int)addr);
