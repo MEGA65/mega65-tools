@@ -949,6 +949,13 @@ unsigned char screen_data[MAX_SCREEN_SIZE];
 unsigned char colour_data[MAX_SCREEN_SIZE];
 unsigned char char_data[8192*8];
 
+unsigned char mega65_rgb(int colour,int rgb)
+{
+  return
+    ((vic_regs[0x0100+(0x100*rgb)+colour]&0xf)<<4)+
+    ((vic_regs[0x0100+(0x100*rgb)+colour]&0xf0)>>4);
+}
+
 int do_screen_shot(void)
 {
   monitor_sync();
@@ -959,7 +966,8 @@ int do_screen_shot(void)
   unsigned int charset_address=vic_regs[0x68]+(vic_regs[0x69]<<8)+(vic_regs[0x6A]<<16);
   if (charset_address==0x1000) charset_address=0x2D000;
   if (charset_address==0x9000) charset_address=0x3D000;
-  
+
+  int pal_mode=(vic_regs[0x6f]&0x80)^0x80;
   unsigned int screen_line_step=vic_regs[0x58]+(vic_regs[0x59]<<8);
   unsigned int colour_address=vic_regs[0x64]+(vic_regs[0x65]<<8);
   unsigned int screen_width=vic_regs[0x5e];
@@ -969,6 +977,19 @@ int do_screen_shot(void)
   unsigned int screen_size=screen_line_step*screen_rows*(1+sixteenbit_mode);
   unsigned int charset_size=2048;
   unsigned int extended_background_mode=vic_regs[0x11]&0x40;
+
+  int border_colour=vic_regs[0x20];
+  int background_colour=vic_regs[0x21];
+    
+  unsigned int top_border_y=(vic_regs[0x48]+(vic_regs[0x49]<<8))&0xfff;
+  unsigned int bottom_border_y=(vic_regs[0x4A]+(vic_regs[0x4B]<<8))&0xfff;
+  unsigned int side_border_width=(vic_regs[0x5C]+(vic_regs[0x5D]<<8))&0xfff;
+  unsigned int x_scale=vic_regs[0x5A];
+  unsigned int y_scale=vic_regs[0x5B];
+  unsigned int h640=vic_regs[0x31]&0x80;
+  unsigned int v400=vic_regs[0x31]&0x08;
+  unsigned int viciii_attribs=vic_regs[0x31]&0x20;
+
   
   // Check if we are in 16-bit text mode, without full-colour chars for char IDs > 255
   if (sixteenbit_mode&&(!(vic_regs[0x54]&4))) {
@@ -996,9 +1017,6 @@ int do_screen_shot(void)
 
   //  dump_bytes(0,"screen data",screen_data,screen_size);
 
-  int border_colour=vic_regs[0x20];
-  int background_colour=vic_regs[0x21];
-  
   // printf("Got screen line @ $%x. %d to go.\n",screen_address,screen_rows_remaining);
 
   // Display a thin border
@@ -1113,8 +1131,76 @@ int do_screen_shot(void)
 
   
   printf("\n");
-	  
+
+  printf("Rendering pixel-exact version to mega65-screen.png...\n");
+
+  png_bytep row = NULL;
+  FILE *f = fopen("mega65-screen.png", "wb");
+  if (!f) {
+    fprintf(stderr,"ERROR: Could not open mega65-screen.png for writing.\n");
+    return -1;
+  }
+
+  png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  if (!png_ptr) {
+    fprintf(stderr,"ERROR: Could not creat PNG structure.\n");
+    return -1;
+  }
+
+  png_infop info_ptr = png_create_info_struct(png_ptr);
+  if (!info_ptr) {
+    fprintf(stderr,"ERROR: Could not creat PNG info structure.\n");
+    return -1;
+  }
+
+  png_init_io(png_ptr, f);
+
+  // Set image size based on PAL or NTSC video mode
+  png_set_IHDR(png_ptr, info_ptr, 720, pal_mode? 576 : 480,
+	       8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+	       PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+  png_write_info(png_ptr, info_ptr);
+
+  // Allocate frame buffer for image, and set all pixels to the border colour by default
+  printf("Allocating PNG frame buffer...\n");
+  png_bytep *png_rows[576];
+  for(int y=0;y<(pal_mode?576:480);y++) {
+    png_rows[y]=(png_bytep) malloc(3 * 720 * sizeof(png_byte));
+    if (!png_rows[y]) {
+      perror("malloc()");
+      return -1;
+    }
+    // Set all pixels to border colour
+    for(int x=0;x<720;x++) {
+      ((unsigned char *)png_rows[y])[x*3+0]=mega65_rgb(border_colour,0);
+      ((unsigned char *)png_rows[y])[x*3+1]=mega65_rgb(border_colour,1);
+      ((unsigned char *)png_rows[y])[x*3+2]=mega65_rgb(border_colour,2);
+    }
+  }
+
+  printf("Rendering screen...\n");
+  // Start by drawing the non-border area
+  for(int y=top_border_y+1;y<bottom_border_y&&(y<(pal_mode?576:480));y++)
+    {
+      for(int x=side_border_width;x<(720-side_border_width);x++) {
+	((unsigned char *)png_rows[y])[x*3+0]=mega65_rgb(background_colour,0);
+	((unsigned char *)png_rows[y])[x*3+1]=mega65_rgb(background_colour,1);
+	((unsigned char *)png_rows[y])[x*3+2]=mega65_rgb(background_colour,2);
+      }
+    }
+
   
+  printf("Writing out PNG frame buffer...\n");
+  // Write out each row of the PNG
+  for(int y=0;y<(pal_mode?576:480);y++)
+    png_write_row(png_ptr, png_rows[y]);
+
+  png_write_end(png_ptr, NULL);
+
+  fclose(f);
+  
+  return 0;
 }
 
 
