@@ -983,7 +983,8 @@ int do_screen_shot(void)
     
   unsigned int top_border_y=(vic_regs[0x48]+(vic_regs[0x49]<<8))&0xfff;
   unsigned int bottom_border_y=(vic_regs[0x4A]+(vic_regs[0x4B]<<8))&0xfff;
-  unsigned int side_border_width=(vic_regs[0x5C]+(vic_regs[0x5D]<<8))&0xfff;
+  // side border width is measured in pixelclock ticks, so divide by 3
+  unsigned int side_border_width=((vic_regs[0x5C]+(vic_regs[0x5D]<<8))&0xfff)/3;
   unsigned int x_scale=vic_regs[0x5A];
   unsigned int y_scale=vic_regs[0x5B];
   unsigned int h640=vic_regs[0x31]&0x80;
