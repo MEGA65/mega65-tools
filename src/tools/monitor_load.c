@@ -931,38 +931,6 @@ unsigned char screen_data[MAX_SCREEN_SIZE];
 unsigned char colour_data[MAX_SCREEN_SIZE];
 unsigned char char_data[8192*8];
 
-#include "xterm-colours.c"
-
-int mega65_to_xterm_colour(int id)
-{
-  int mega65_rgb=
-    ((vic_regs[0x100+id]&0xf)<<4)
-    |((vic_regs[0x100+id]&0xf0)>>4)
-    |((vic_regs[0x200+id]&0xf)<<(4+8))
-    |((vic_regs[0x200+id]&0xf0)<<4)
-    |((vic_regs[0x300+id]&0xf)<<(4+16))
-    |((vic_regs[0x300+id]&0xf0)<<(4+8));
-  unsigned long long best_error;
-  unsigned char best_colour=0;
-  for(int c=0;c<256;c++) {
-    int d_r=abs(((mega65_rgb>>0)&0xff)-((xterm_rgb[c]>>0)&0xff));
-    int d_g=abs(((mega65_rgb>>8)&0xff)-((xterm_rgb[c]>>8)&0xff));
-    int d_b=abs(((mega65_rgb>>16)&0xff)-((xterm_rgb[c]>>16)&0xff));
-
-    // Work out error based on very simple RGB relative importance
-    // model. Blue is less important.
-    
-    unsigned long long this_error=2*d_r*d_r+2*d_g*d_g+d_b*d_b;
-    if ((!c)||(this_error<best_error)) {
-      best_colour=c;
-      best_error=this_error;
-    }
-  }
-  if (0) printf("MEGA65 colour %d has rgb #%06x, maps best to xterm colour %d with rgb #%06x with error of %lld\n",
-	 id,mega65_rgb,best_colour,xterm_rgb[best_colour],best_error);
-  return best_colour;
-}
-
 int do_screen_shot(void)
 {
   monitor_sync();
@@ -1006,17 +974,39 @@ int do_screen_shot(void)
 
   //  dump_bytes(0,"screen data",screen_data,screen_size);
 
+  int border_colour=vic_regs[0x20];
   int background_colour=vic_regs[0x21];
-  int background_xterm_colour=mega65_to_xterm_colour(background_colour);
-  printf("Background colour is %d\n",background_xterm_colour);
   
   // printf("Got screen line @ $%x. %d to go.\n",screen_address,screen_rows_remaining);
+
+  // Display a thin border
+  printf("%c[48;2;%d;%d;%dm",
+	 27,
+	 ((vic_regs[0x0100+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0100+border_colour]&0xf0)>>4),
+	 ((vic_regs[0x0200+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0200+border_colour]&0xf0)>>4),
+	 ((vic_regs[0x0300+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0300+border_colour]&0xf0)>>4));
+  for(int x=0;x<(1+screen_width+1);x++) printf(" ");
+  printf("%c[0m\n",27);
+  
+  
   for(int y=0;y<screen_rows;y++) {
     //    dump_bytes(0,"row data",&screen_data[y*screen_line_step],screen_width*(1+sixteenbit_mode));
+
+    printf("%c[48;2;%d;%d;%dm ",
+	 27,
+	 ((vic_regs[0x0100+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0100+border_colour]&0xf0)>>4),
+	 ((vic_regs[0x0200+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0200+border_colour]&0xf0)>>4),
+	 ((vic_regs[0x0300+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0300+border_colour]&0xf0)>>4));
+    
     for(int x=0;x<screen_width;x++) {
       // Set foreground and background colours
       int foreground_colour=colour_data[y*screen_line_step+x*(1+sixteenbit_mode)];
-      int foreground_xterm_colour=mega65_to_xterm_colour(foreground_colour);
 
       printf("%c[48;2;%d;%d;%dm%c[38;2;%d;%d;%dm",
 	     27,
@@ -1042,10 +1032,31 @@ int do_screen_shot(void)
       // XXX Support VIC-IV full-colour text      
       print_screencode(screen_data[y*screen_line_step+x*(1+sixteenbit_mode)],upper_case);
     }
-    // Set foreground and background colours back to normal at end of each line, before newline
+
+    printf("%c[48;2;%d;%d;%dm ",
+	 27,
+	 ((vic_regs[0x0100+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0100+border_colour]&0xf0)>>4),
+	 ((vic_regs[0x0200+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0200+border_colour]&0xf0)>>4),
+	 ((vic_regs[0x0300+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0300+border_colour]&0xf0)>>4));
     
+    // Set foreground and background colours back to normal at end of each line, before newline    
     printf("%c[0m\n",27);
   }
+  printf("%c[48;2;%d;%d;%dm",
+	 27,
+	 ((vic_regs[0x0100+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0100+border_colour]&0xf0)>>4),
+	 ((vic_regs[0x0200+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0200+border_colour]&0xf0)>>4),
+	 ((vic_regs[0x0300+border_colour]&0xf)<<4)+
+	 ((vic_regs[0x0300+border_colour]&0xf0)>>4));
+  for(int x=0;x<(1+screen_width+1);x++) printf(" ");
+  printf("%c[0m",27);
+
+  
   printf("\n");
 	  
   
