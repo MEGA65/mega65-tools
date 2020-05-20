@@ -899,6 +899,41 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   }
 }
 
+unsigned char ram_cache[512*1024+255];
+unsigned char ram_cache_valids[512*1024+255];
+int ram_cache_initialised=0;
+
+int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *buffer)
+{
+  if (!ram_cache_initialised) {
+    ram_cache_initialised=1;
+    bzero(ram_cache_valids,512*1024);
+    bzero(ram_cache,512*1024);
+  }
+  if ((address+count)>=(512*1024)) {
+    return fetch_ram(address,count,buffer);
+  }
+
+  // See if we need to fetch it fresh
+  for(int i=0;i<count;i++) {
+    if (!ram_cache_valids[address+i]) {
+      // Cache not valid here -- so read some data
+      printf("Fetching $%08x for cache.\n",address);
+      fetch_ram(address,256,&ram_cache[address]);
+      for(int j=0;j<256;j++) ram_cache_valids[address+j]=1;
+
+      bcopy(&ram_cache[address],buffer,count);
+      return 0;
+    }
+  }
+
+  // It's valid in the cache
+  bcopy(&ram_cache[address],buffer,count);
+  return 0;
+  
+}
+
+
 int detect_mode(void)
 {
   /*
@@ -1009,8 +1044,7 @@ int do_screen_shot(void)
   unsigned int chargen_x=(vic_regs[0x4c]+(vic_regs[0x4d]<<8))&0xfff;
   chargen_x/=3; // Also measured in pixelclock ticks
   unsigned int chargen_y=(vic_regs[0x4e]+(vic_regs[0x4f]<<8))&0xfff;  
-  
-  
+    
   unsigned int top_border_y=(vic_regs[0x48]+(vic_regs[0x49]<<8))&0xfff;
   unsigned int bottom_border_y=(vic_regs[0x4A]+(vic_regs[0x4B]<<8))&0xfff;
   // side border width is measured in pixelclock ticks, so divide by 3
@@ -1292,7 +1326,7 @@ int do_screen_shot(void)
 	
 	if (glyph_full_colour) {
 	  // Get 8 bytes of data
-	  fetch_ram(char_id*64+glyph_row*8,8,glyph_data);
+	  fetch_ram_cacheable(char_id*64+glyph_row*8,8,glyph_data);
 	} else {
 	  // Use existing char data we have already fetched
 	  //	  printf("Chardata for char $%03x = $%02x\n",char_id,char_data[char_id*8+glyph_row]);
