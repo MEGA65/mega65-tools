@@ -1108,6 +1108,7 @@ int do_screen_shot(void)
 
   // printf("Got screen line @ $%x. %d to go.\n",screen_address,screen_rows_remaining);
 
+#ifndef WINDOWS
   // Display a thin border
   printf("%c[48;2;%d;%d;%dm",
 	 27,
@@ -1235,18 +1236,28 @@ int do_screen_shot(void)
   for(int x=0;x<(1+screen_width+1);x++) printf(" ");
   printf("%c[0m",27);
 
+#endif
   
   printf("\n");
 
   printf("Rendering pixel-exact version to mega65-screen.png...\n");
 
   png_bytep row = NULL;
-  FILE *f = fopen("mega65-screen.png", "wb");
+  FILE *f=NULL;
+  char filename[1024];
+  for(int n=0;n<1000000;n++)
+    {
+  snprintf(filename,1024,"mega65-screen-%06d.png",n);
+  f = fopen(filename, "rb");
+  if (!f) break;
+}
+  f = fopen(filename, "wb");
   if (!f) {
     fprintf(stderr,"ERROR: Could not open mega65-screen.png for writing.\n");
     return -1;
   }
-
+  printf("Writing to %s\n",filename);
+  
   png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
   if (!png_ptr) {
     fprintf(stderr,"ERROR: Could not creat PNG structure.\n");
@@ -2821,15 +2832,9 @@ int main(int argc,char **argv)
     }
   }    
   
-#ifndef WINDOWS
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
   init_fpgajtag(serial_port, bitstream, 0x3631093); // 0xffffffff);
-#else
-  // For Windows, we don't (yet) have a working USB com port auto-detection regime.
-  // The libusb stuff seems to not work properly, and I can't get the undefined symbols
-  // for the listcomports to link under mingw.
-#endif
   
   if (boundary_scan) {
 #ifdef WINDOWS

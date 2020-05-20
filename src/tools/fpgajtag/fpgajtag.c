@@ -727,11 +727,6 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
   ENTER();
     int i, j;
 
-#ifdef WINDOWS
-    printf("init_fpgajtag() disabled on Windows.\n");    
-    return;
-#endif
-    
     /*
      * Initialize USB, FTDI
      */
