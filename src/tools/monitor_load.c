@@ -423,7 +423,10 @@ int dump_bytes(int col, char *msg,unsigned char *bytes,int length)
   for(int i=0;i<length;i+=16) {
     print_spaces(stderr,col);
     fprintf(stderr,"%04X: ",i);
-    for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr," %02X",bytes[i+j]);
+    for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr," %02X",bytes[i+j]); else fprintf(stderr,"   ");
+    fprintf(stderr,"  ");
+    for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr,"%c",(bytes[i+j]>=' '&&bytes[i+j]<0x7c)? bytes[i+j]:'.');
+    
     fprintf(stderr,"\n");
   }
   return 0;
@@ -638,7 +641,7 @@ char *to_utf8(const uint32_t cp)
 	return ret;
 }
 
-void print_screencode(unsigned char c)
+void print_screencode(unsigned char c, int upper_case)
 {
   int rev=0;
   if (c&0x80) {
@@ -647,8 +650,13 @@ void print_screencode(unsigned char c)
     printf("%c[7m",27);
   }
   if (c>='0'&&c<='9') printf("%c",c);
-  else if (c>=0x00&&c<=0x1f) printf("%c",c+0x40);
-  else if (c>=0x20&&c<=0x3f) printf("%c",c);
+  else if (c>=0x00&&c<=0x1f) {
+    if (upper_case) printf("%c",c+0x40);
+    else printf("%c",c+0x60);
+  }
+  else if (c==0x20) printf(" ");
+  else if ((c>=0x40&&c<=0x5f)&&(!upper_case)) printf("%c",c);
+  
   else if (c==0x60) printf("%s",to_utf8(0xA0));
   else if (c==0x61) printf("%s",to_utf8(0x258c));
   else if (c==0x62) printf("%s",to_utf8(0x2584));
@@ -850,11 +858,14 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
       if (b<0) b=0;
       if (b>8191) b=8191;
+      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
       read_buff[ofs+b]=0;
       ofs+=b;
       char *s=strstr((char *)read_buff,next_addr_str);
-      if (s) {
-	//	printf("Found data for $%08x\n",(unsigned int)addr);
+      if (s&&(strlen(s)>=42)) {
+	//	printf("Found data for $%08x:\n%s\n",
+	//	       (unsigned int)addr,
+	//	       s);
 	for(int i=0;i<16;i++) {
 	  char hex[3];
 	  hex[0]=s[1+10+i*2+0];
@@ -887,7 +898,7 @@ int detect_mode(void)
     int in_range=0;
     for (int i=0;i<5;i++) {
       int pc=get_pc();
-      if (pc>=0xe1af&&pc<=0xe1b4) in_range++;
+      if (pc>=0xe1af&&pc<=0xe1b4) in_range++; else printf("Odd PC=$%04x\n",pc);
     }
     if (in_range>3) {
       // We are in C65 BASIC main loop, so assume it is C65 mode
@@ -901,7 +912,7 @@ int detect_mode(void)
     for (int i=0;i<5;i++) {
       int pc=get_pc();
       // XXX Might not work with OpenROMs?
-      if (pc>=0xe5cf&&pc<=0xe5d5) in_range++;
+      if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;  else printf("Odd PC=$%04x\n",pc);
     }
     if (in_range>3) {
       // We are in C64 BASIC main loop, so assume it is C65 mode
@@ -913,6 +924,69 @@ int detect_mode(void)
   printf("Could not determine C64/C65/MEGA65 mode.\n");
   return 1;
 }
+
+#define MAX_SCREEN_SIZE (128*1024)
+unsigned char screen_data[MAX_SCREEN_SIZE];
+unsigned char colour_data[MAX_SCREEN_SIZE];
+unsigned char char_data[8192*8];
+
+int do_screen_shot(void)
+{
+  unsigned char vic_regs[0x400];
+  monitor_sync();
+  detect_mode();
+  fetch_ram(0xffd3000,0x0400,vic_regs);
+
+  unsigned int screen_address=vic_regs[0x60]+(vic_regs[0x61]<<8)+(vic_regs[0x62]<<16);
+  unsigned int charset_address=vic_regs[0x68]+(vic_regs[0x69]<<8)+(vic_regs[0x6A]<<16);
+  unsigned int screen_line_step=vic_regs[0x58]+(vic_regs[0x59]<<8);
+  unsigned int colour_address=vic_regs[0x64]+(vic_regs[0x65]<<8);
+  unsigned int screen_width=vic_regs[0x5e];
+  unsigned int upper_case=2-(vic_regs[0x18]&2);
+  unsigned int screen_rows=1+vic_regs[0x7B];
+  unsigned int sixteenbit_mode=vic_regs[0x54]&1;
+  unsigned int screen_size=screen_line_step*screen_rows*(1+sixteenbit_mode);
+  unsigned int charset_size=2048;
+
+  // Check if we are in 16-bit text mode, without full-colour chars for char IDs > 255
+  if (sixteenbit_mode&&(!(vic_regs[0x54]&4))) {
+    charset_size=8192*8;
+  }
+  
+  if (screen_size>MAX_SCREEN_SIZE) {
+    fprintf(stderr,"ERROR: Implausibly large screen size of %d bytes: %d rows, %d columns\n",
+	    screen_line_step,screen_rows);
+    exit(-1);
+  }
+
+  fprintf(stderr,"Screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes, uppercase=%d, line_step= %d\n",
+	  screen_address,screen_width,screen_rows,screen_size,upper_case,screen_line_step);
+  
+  fprintf(stderr,"Fetching screen data...\n");
+  fetch_ram(screen_address,screen_size,screen_data);
+  fprintf(stderr,"Fetching colour data...\n");
+  fetch_ram(0xff80000L+colour_address,screen_size,colour_data);
+
+  fprintf(stderr,"Fetching charset...\n");
+  fetch_ram(charset_address,charset_size,char_data);
+  
+  fprintf(stderr,"Have all data.\n");
+
+  //  dump_bytes(0,"screen data",screen_data,screen_size);
+  
+  // printf("Got screen line @ $%x. %d to go.\n",screen_address,screen_rows_remaining);
+  for(int y=0;y<screen_rows;y++) {
+    //    dump_bytes(0,"row data",&screen_data[y*screen_line_step],screen_width*(1+sixteenbit_mode));
+    for(int x=0;x<screen_width;x++) {
+      print_screencode(screen_data[y*screen_line_step+x*(1+sixteenbit_mode)],upper_case);
+    }
+    printf("\n");
+  }
+  printf("\n");
+	  
+  
+}
+
 
 int process_line(char *line,int live)
 {
@@ -1282,62 +1356,6 @@ int process_line(char *line,int live)
 	hypervisor_paused=0;
         printf("hyperv not paused\n");
       }
-      if ((addr==0xffd3058)&&(!screen_address)) {
-	// Screen shot stage 1: Get screen start address
-	// $D058/9 = chars per logical text row, i.e., advance per text line
-	// $D05E = number of chars to display per row
-	// $D060-3 = start address of screen
-	screen_address=b[8]+(b[9]<<8)+(b[10]<<16);
-	next_screen_address=screen_address;	
-        screen_width=b[6];
-	screen_line_step=b[0]+(b[1]<<8);
-	screen_rows_remaining=25;
-	screen_line_offset=0;
-      } else if ((addr==0xffd3068)&&(!screen_address)) {
-	// Get more screen details
-	
-	// So now ask for screen data
-	char cmd[1024];
-	snprintf(cmd,1024,"M%x\n",screen_address);
-	slow_write(fd,cmd,strlen(cmd));
-      } else if (addr==next_screen_address) {
-	for(int i=0;i<16;i++) screen_line_buffer[screen_line_offset+i]=b[i];
-	screen_line_offset+=16;
-	next_screen_address+=16;
-	if (screen_line_offset==0x100) {
-	  // We have read the whole screen line
-
-	  // printf("Got screen line @ $%x. %d to go.\n",screen_address,screen_rows_remaining);
-	  for(int i=0;i<screen_width;i++) {
-	    print_screencode(screen_line_buffer[i]);
-	  }
-	  printf("\n");
-	  
-	  screen_rows_remaining--;
-	  if (screen_rows_remaining) {
-	    // Ask for next screen line
-	    screen_address+=screen_line_step;
-	    next_screen_address=screen_address;
-	    screen_line_offset=0;
-	    char cmd[1024];
-	    snprintf(cmd,1024,"M%x\n",screen_address);
-	    slow_write(fd,cmd,strlen(cmd));
-	  } else do_exit(0);	  
-	}
-	// 
-      } else if (addr>=0xffd3000U&&addr<=0xffd3100) {
-	// copy bytes to VIC-IV register buffer
-	int offset=addr-0xffd3000;
-	if (offset<0x80&&offset>=0) {
-	  int i;
-	  for(i=0;i<16;i++)
-	    viciv_regs[offset+i]=b[i];
-	}
-	if (offset==0x80) {
-	  viciv_mode_report(viciv_regs);
-	  mode_report=0;
-	}
-      }
     }
   }
   if ((!strcmp(line," :0000800 A0 A0 A0 A0 A0 A0 A0 A0 A0 A0 A0 A0 A0 A0 A0 A0"))
@@ -1426,12 +1444,12 @@ int process_line(char *line,int live)
         if (do_run) {
           // C65 mode stuff keyboard buffer
 	  printf("XXX - Do C65 keyboard buffer stuffing\n");
-	} else if (screen_shot) {
-	  if (!screen_address) {
-	    printf("Waiting to capture screen...\n");
-	    // We need to get some info about the screen
-	    slow_write_safe(fd,"Mffd3058\r",9);
-	  }
+	  //	} else if (screen_shot) {
+	  //	  if (!screen_address) {
+	  //	    printf("Waiting to capture screen...\n");
+	  //	    // We need to get some info about the screen
+	  //	    slow_write_safe(fd,"Mffd3058\r",9);
+	  //	  }
         } else {
   	  fprintf(stderr,"Exiting now that we are in C65 mode.\n");
 	  do_exit(0);
@@ -1462,9 +1480,9 @@ int process_line(char *line,int live)
     } else {
       if (!saw_c64_mode) fprintf(stderr,"MEGA65 is in C64 mode.\n");
       saw_c64_mode=1;
-      if( (!virtual_f011)&&(!screen_shot))
+      if( (!virtual_f011)) // &&(!screen_shot))
 	do_exit(0);
-      if (screen_shot) slow_write_safe(fd,"Mffd3058\r",9);
+      //      if (screen_shot) slow_write_safe(fd,"Mffd3058\r",9);
     }
   }  
   if (state==2)
@@ -2367,6 +2385,10 @@ int main(int argc,char **argv)
     serial_speed=4000000;
   }
 #endif
+
+  if (screen_shot) {
+    exit(do_screen_shot());
+  }
   
   unsigned long long last_check = gettime_ms();
   int phase=0;
@@ -2411,7 +2433,7 @@ int main(int argc,char **argv)
 	      case 3: slow_write_safe(fd,"mffd3077\r",9); break; 
 	      case 4:
 		// Requests screen address if we are taking a screenshot
-		if (screen_shot) slow_write_safe(fd,"Mffd3058\r",9);
+		//		if (screen_shot) slow_write_safe(fd,"Mffd3058\r",9);
 		break;
 	      case 5: slow_write_safe(fd,"mffd3659\r",9); break; // Hypervisor virtualisation/security mode flag check
 	      default: phase=0;
