@@ -1357,6 +1357,20 @@ int do_screen_shot(void)
 	    // 16-colour 4 bits per pixel
 	  } else if (glyph_full_colour) {
 	    // 256-colour 8 bits per pixel
+	    if (glyph_with_alpha) {
+	      // Alpha blended pixels:
+	      // Here we blend the foreground and background colours we already know
+	      // according to the alpha value
+	      int a=glyph_data[(int)xx];
+	      r=(mega65_rgb(foreground_colour,0)*a + mega65_rgb(background_colour,0)*(255 -a))>>8;
+	      g=(mega65_rgb(foreground_colour,1)*a + mega65_rgb(background_colour,1)*(255 -a))>>8;
+	      b=(mega65_rgb(foreground_colour,2)*a + mega65_rgb(background_colour,2)*(255 -a))>>8;
+	    } else {
+	      r=mega65_rgb(glyph_data[(int)xx],0);
+	      g=mega65_rgb(glyph_data[(int)xx],1);
+	      b=mega65_rgb(glyph_data[(int)xx],2);
+	    }
+	    
 	  } else if (multicolour_mode) {
 	    // Multi-colour normal char
 	  } else {
