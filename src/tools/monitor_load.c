@@ -1001,7 +1001,16 @@ int do_screen_shot(void)
   
   int border_colour=vic_regs[0x20];
   int background_colour=vic_regs[0x21];
-    
+
+  unsigned int y_scale=vic_regs[0x5B];
+  unsigned int h640=vic_regs[0x31]&0x80;
+  unsigned int v400=vic_regs[0x31]&0x08;
+  unsigned int viciii_attribs=vic_regs[0x31]&0x20;
+  unsigned int chargen_x=(vic_regs[0x4c]+(vic_regs[0x4d]<<8))&0xfff;
+  chargen_x/=3; // Also measured in pixelclock ticks
+  unsigned int chargen_y=(vic_regs[0x4e]+(vic_regs[0x4f]<<8))&0xfff;  
+  
+  
   unsigned int top_border_y=(vic_regs[0x48]+(vic_regs[0x49]<<8))&0xfff;
   unsigned int bottom_border_y=(vic_regs[0x4A]+(vic_regs[0x4B]<<8))&0xfff;
   // side border width is measured in pixelclock ticks, so divide by 3
@@ -1011,14 +1020,8 @@ int do_screen_shot(void)
   // so 120 = 1 pixel wide
   // 60 = 2 pixels wide
   float x_step=x_scale_120/120.0;
-  
-  unsigned int y_scale=vic_regs[0x5B];
-  unsigned int h640=vic_regs[0x31]&0x80;
-  unsigned int v400=vic_regs[0x31]&0x08;
-  unsigned int viciii_attribs=vic_regs[0x31]&0x20;
-  unsigned int chargen_x=(vic_regs[0x4c]+(vic_regs[0x4d]<<8))&0xfff;
-  chargen_x/=3; // Also measured in pixelclock ticks
-  unsigned int chargen_y=(vic_regs[0x4e]+(vic_regs[0x4f]<<8))&0xfff;  
+  if (!h640) x_step/=2;
+  printf("x_scale_120=$%02x\n",x_scale_120);
   
   // Check if we are in 16-bit text mode, without full-colour chars for char IDs > 255
   if (sixteenbit_mode&&(!(vic_regs[0x54]&4))) {
