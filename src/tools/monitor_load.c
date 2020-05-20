@@ -654,7 +654,7 @@ void print_screencode(unsigned char c, int upper_case)
     if (upper_case) printf("%c",c+0x40);
     else printf("%c",c+0x60);
   }
-  else if (c>=0x20&&c<0x30) printf("%c",c);
+  else if (c>=0x20&&c<0x40) printf("%c",c);
   else if ((c>=0x40&&c<=0x5f)&&(!upper_case)) printf("%c",c);
   
   else if (c==0x60) printf("%s",to_utf8(0xA0));
@@ -841,6 +841,8 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   unsigned char read_buff[8192];
   char next_addr_str[8192];
   int ofs=0;
+
+  fprintf(stderr,"Fetching $%x bytes @ $%x\n",count,address);
   
   //  monitor_sync();
   while(addr<(address+count)) {
@@ -857,15 +859,19 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
       int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
       if (b<0) b=0;
-      if (b>8191) b=8191;
+      if ((ofs+b)>8191) b=8191-ofs;
       //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
       read_buff[ofs+b]=0;
       ofs+=b;
       char *s=strstr((char *)read_buff,next_addr_str);
       if (s&&(strlen(s)>=42)) {
-	//	printf("Found data for $%08x:\n%s\n",
-	//	       (unsigned int)addr,
-	//	       s);
+	char b=s[42]; s[42]=0;
+	if (0) {
+	  printf("Found data for $%08x:\n%s\n",
+		 (unsigned int)addr,
+		 s);
+	} 
+	s[42]=b;
 	for(int i=0;i<16;i++) {
 	  char hex[3];
 	  hex[0]=s[1+10+i*2+0];
@@ -874,11 +880,23 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	  buffer[addr-address+i]=strtol(hex,NULL,16);
 	}
 	addr+=16;
+
+	// Shuffle buffer down
+	int s_offset=(long)s-(long)read_buff+42;
+	bcopy(&read_buff[s_offset],&read_buff[0],8192-(ofs-s_offset));
+	ofs-=s_offset;
       }
     }
   }
-  if (addr>=(address+count)) return 0;
-  else return 1;
+  if (addr>=(address+count)) {
+    fprintf(stderr,"Memory read complete at $%lx\n",addr);
+    return 0;
+  }
+  else {
+    fprintf(stderr,"ERROR: Could not read requested memory region.\n");
+    exit(-1);
+    return 1;
+  }
 }
 
 int detect_mode(void)
@@ -939,6 +957,9 @@ int do_screen_shot(void)
 
   unsigned int screen_address=vic_regs[0x60]+(vic_regs[0x61]<<8)+(vic_regs[0x62]<<16);
   unsigned int charset_address=vic_regs[0x68]+(vic_regs[0x69]<<8)+(vic_regs[0x6A]<<16);
+  if (charset_address==0x1000) charset_address=0x2D000;
+  if (charset_address==0x9000) charset_address=0x3D000;
+  
   unsigned int screen_line_step=vic_regs[0x58]+(vic_regs[0x59]<<8);
   unsigned int colour_address=vic_regs[0x64]+(vic_regs[0x65]<<8);
   unsigned int screen_width=vic_regs[0x5e];
@@ -947,7 +968,8 @@ int do_screen_shot(void)
   unsigned int sixteenbit_mode=vic_regs[0x54]&1;
   unsigned int screen_size=screen_line_step*screen_rows*(1+sixteenbit_mode);
   unsigned int charset_size=2048;
-
+  unsigned int extended_background_mode=vic_regs[0x11]&0x40;
+  
   // Check if we are in 16-bit text mode, without full-colour chars for char IDs > 255
   if (sixteenbit_mode&&(!(vic_regs[0x54]&4))) {
     charset_size=8192*8;
@@ -965,7 +987,7 @@ int do_screen_shot(void)
   fprintf(stderr,"Fetching screen data...\n");
   fetch_ram(screen_address,screen_size,screen_data);
   fprintf(stderr,"Fetching colour data...\n");
-  fetch_ram(0xff80000L+colour_address,screen_size,colour_data);
+  fetch_ram(0xff80000+colour_address,screen_size,colour_data);
 
   fprintf(stderr,"Fetching charset...\n");
   fetch_ram(charset_address,charset_size,char_data);
@@ -1005,17 +1027,50 @@ int do_screen_shot(void)
 	 ((vic_regs[0x0300+border_colour]&0xf0)>>4));
     
     for(int x=0;x<screen_width;x++) {
+
+      // XXX Support VIC-II extended background colour mode
+      // XXX Support VIC-III extended attributes
+      // XXX Support VIC-IV 16-bit character mode attributes and all the rest
+      // XXX Support VIC-IV full-colour text
+      int char_background_colour;
+      int char_id=0;
+      int char_value=screen_data[y*screen_line_step+x*(1+sixteenbit_mode)];
+      if (sixteenbit_mode)
+	char_value|=(screen_data[y*screen_line_step+x*(1+sixteenbit_mode)+1]<<8);
+      int colour_value=colour_data[y*screen_line_step+x*(1+sixteenbit_mode)];
+      if (sixteenbit_mode)
+	colour_value|=(colour_data[y*screen_line_step+x*(1+sixteenbit_mode)+1]<<8);
+      if (extended_background_mode) {
+	char_id=char_value&=0x3f;
+	char_background_colour=vic_regs[0x21+((char_value>>6)&3)];
+      } 
+      else {
+	char_id=char_value&0x1fff;
+	char_background_colour=background_colour;
+      }
+      int glyph_width_deduct=char_value>>13;
+      
       // Set foreground and background colours
-      int foreground_colour=colour_data[y*screen_line_step+x*(1+sixteenbit_mode)];
+      int foreground_colour=colour_value&0xff;
+      int glyph_flip_vertical=colour_value&0x8000;     
+      int glyph_flip_horizontal=colour_value&0x4000;      
+      int glyph_with_alpha=colour_value&0x2000;     
+      int glyph_goto=colour_value&0x1000;
+      int glyph_full_colour=0;
+      if (vic_regs[0x54]&2) if (char_id<0x100) glyph_full_colour=1;
+      if (vic_regs[0x54]&4) if (char_id>0x0FF) glyph_full_colour=1;
+      int glyph_4bit=colour_value&0x0800;
+      if (glyph_4bit) glyph_full_colour=1;
+      if (colour_value&0x0400) glyph_width_deduct+=8;
 
       printf("%c[48;2;%d;%d;%dm%c[38;2;%d;%d;%dm",
 	     27,
-	     ((vic_regs[0x0100+background_colour]&0xf)<<4)+
-	     ((vic_regs[0x0100+background_colour]&0xf0)>>4),
-	     ((vic_regs[0x0200+background_colour]&0xf)<<4)+
-	     ((vic_regs[0x0200+background_colour]&0xf0)>>4),
-	     ((vic_regs[0x0300+background_colour]&0xf)<<4)+
-	     ((vic_regs[0x0300+background_colour]&0xf0)>>4),
+	     ((vic_regs[0x0100+char_background_colour]&0xf)<<4)+
+	     ((vic_regs[0x0100+char_background_colour]&0xf0)>>4),
+	     ((vic_regs[0x0200+char_background_colour]&0xf)<<4)+
+	     ((vic_regs[0x0200+char_background_colour]&0xf0)>>4),
+	     ((vic_regs[0x0300+char_background_colour]&0xf)<<4)+
+	     ((vic_regs[0x0300+char_background_colour]&0xf0)>>4),
 	     27,
 	     ((vic_regs[0x0100+foreground_colour]&0xf)<<4)+
 	     ((vic_regs[0x0100+foreground_colour]&0xf0)>>4),
@@ -1024,13 +1079,13 @@ int do_screen_shot(void)
 	     ((vic_regs[0x0300+foreground_colour]&0xf)<<4)+
 	     ((vic_regs[0x0300+foreground_colour]&0xf0)>>4)
 	     );
-	     
-      
-      // XXX Support VIC-II extended background colour mode
-      // XXX Support VIC-III extended attributes
-      // XXX Support VIC-IV 16-bit character mode attributes and all the rest
-      // XXX Support VIC-IV full-colour text      
-      print_screencode(screen_data[y*screen_line_step+x*(1+sixteenbit_mode)],upper_case);
+
+      // Xterm can't display arbitrary graphics, so just mark full-colour chars
+      if (glyph_full_colour) {
+	printf("?");
+	if (glyph_4bit) printf("?");
+      }
+      else print_screencode(char_id&0xff,upper_case);
     }
 
     printf("%c[48;2;%d;%d;%dm ",
