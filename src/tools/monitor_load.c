@@ -654,7 +654,7 @@ void print_screencode(unsigned char c, int upper_case)
     if (upper_case) printf("%c",c+0x40);
     else printf("%c",c+0x60);
   }
-  else if (c==0x20) printf(" ");
+  else if (c>=0x20&&c<0x30) printf("%c",c);
   else if ((c>=0x40&&c<=0x5f)&&(!upper_case)) printf("%c",c);
   
   else if (c==0x60) printf("%s",to_utf8(0xA0));
@@ -925,14 +925,41 @@ int detect_mode(void)
   return 1;
 }
 
+unsigned char vic_regs[0x400];
 #define MAX_SCREEN_SIZE (128*1024)
 unsigned char screen_data[MAX_SCREEN_SIZE];
 unsigned char colour_data[MAX_SCREEN_SIZE];
 unsigned char char_data[8192*8];
 
+#include "xterm-colours.c"
+
+int mega65_to_xterm_colour(int id)
+{
+  int mega65_rgb=
+    ((vic_regs[0x100+id]&0xf)<<4)
+    |((vic_regs[0x100+id]&0xf0)>>4)
+    |((vic_regs[0x200+id]&0xf)<<(4+8))
+    |((vic_regs[0x200+id]&0xf0)<<4)
+    |((vic_regs[0x300+id]&0xf)<<(4+16))
+    |((vic_regs[0x300+id]&0xf0)<<(4+8));
+  unsigned long long best_error;
+  unsigned char best_colour=0;
+  for(int c=0;c<256;c++) {
+    unsigned long long this_error=
+      2*((mega65_rgb>>0)&0xff)*((mega65_rgb>>0)&0xff)
+      +2*((mega65_rgb>>8)&0xff)*((mega65_rgb>>8)&0xff)
+      // Blue is less important that R or G
+      +1*((mega65_rgb>>16)&0xff)*((mega65_rgb>>16)&0xff);
+    if ((!c)||(this_error<best_error)) {
+      best_colour=c;
+      best_error=this_error;
+    }
+  }
+  return best_colour;
+}
+
 int do_screen_shot(void)
 {
-  unsigned char vic_regs[0x400];
   monitor_sync();
   detect_mode();
   fetch_ram(0xffd3000,0x0400,vic_regs);
@@ -973,13 +1000,27 @@ int do_screen_shot(void)
   fprintf(stderr,"Have all data.\n");
 
   //  dump_bytes(0,"screen data",screen_data,screen_size);
+
+  int background_colour=vic_regs[0x20];
+  int background_xterm_colour=mega65_to_xterm_colour(background_colour);
+  printf("Background colour is %d\n",background_xterm_colour);
   
   // printf("Got screen line @ $%x. %d to go.\n",screen_address,screen_rows_remaining);
   for(int y=0;y<screen_rows;y++) {
     //    dump_bytes(0,"row data",&screen_data[y*screen_line_step],screen_width*(1+sixteenbit_mode));
     for(int x=0;x<screen_width;x++) {
+      // Set foreground and background colours
+      int foreground_colour=colour_data[y*screen_line_step+x*(1+sixteenbit_mode)];
+      int foreground_xterm_colour=mega65_to_xterm_colour(foreground_colour);
+      
+      // XXX Support VIC-II extended background colour mode
+      // XXX Support VIC-III extended attributes
+      // XXX Support VIC-IV 16-bit character mode attributes and all the rest
+      // XXX Support VIC-IV full-colour text      
       print_screencode(screen_data[y*screen_line_step+x*(1+sixteenbit_mode)],upper_case);
     }
+    // Set foreground and background colours back to normal at end of each line, before newline
+    
     printf("\n");
   }
   printf("\n");
