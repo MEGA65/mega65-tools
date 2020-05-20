@@ -1024,6 +1024,8 @@ int do_screen_shot(void)
   unsigned int charset_address=vic_regs[0x68]+(vic_regs[0x69]<<8)+(vic_regs[0x6A]<<16);
   if (charset_address==0x1000) charset_address=0x2D000;
   if (charset_address==0x9000) charset_address=0x3D000;
+  if (charset_address==0x1800) charset_address=0x2D800;
+  if (charset_address==0x9800) charset_address=0x3D800;
 
   is_pal_mode=(vic_regs[0x6f]&0x80)^0x80;
   unsigned int screen_line_step=vic_regs[0x58]+(vic_regs[0x59]<<8);
@@ -1148,27 +1150,44 @@ int do_screen_shot(void)
       int glyph_with_alpha=colour_value&0x2000;     
       int glyph_goto=colour_value&0x1000;
       int glyph_full_colour=0;
+      int glyph_blink=0;
+      int glyph_underline=0;
+      int glyph_bold=0;
+      int glyph_reverse=0;
+      if (viciii_attribs&&(!multicolour_mode)) {
+	glyph_blink=colour_value&0x0010;
+	glyph_reverse=colour_value&0x0020;
+	glyph_bold=colour_value&0x0040;
+	glyph_underline=colour_value&0x0080;
+	if (glyph_bold) foreground_colour|=0x10;
+      }
       if (vic_regs[0x54]&2) if (char_id<0x100) glyph_full_colour=1;
       if (vic_regs[0x54]&4) if (char_id>0x0FF) glyph_full_colour=1;
       int glyph_4bit=colour_value&0x0800;
       if (glyph_4bit) glyph_full_colour=1;
       if (colour_value&0x0400) glyph_width_deduct+=8;
 
+      int fg=foreground_colour;
+      int bg=char_background_colour;
+      if (glyph_reverse) {
+	bg=foreground_colour;
+	fg=char_background_colour;
+      }
       printf("%c[48;2;%d;%d;%dm%c[38;2;%d;%d;%dm",
 	     27,
-	     ((vic_regs[0x0100+char_background_colour]&0xf)<<4)+
-	     ((vic_regs[0x0100+char_background_colour]&0xf0)>>4),
-	     ((vic_regs[0x0200+char_background_colour]&0xf)<<4)+
-	     ((vic_regs[0x0200+char_background_colour]&0xf0)>>4),
-	     ((vic_regs[0x0300+char_background_colour]&0xf)<<4)+
-	     ((vic_regs[0x0300+char_background_colour]&0xf0)>>4),
+	     ((vic_regs[0x0100+bg]&0xf)<<4)+
+	     ((vic_regs[0x0100+bg]&0xf0)>>4),
+	     ((vic_regs[0x0200+bg]&0xf)<<4)+
+	     ((vic_regs[0x0200+bg]&0xf0)>>4),
+	     ((vic_regs[0x0300+bg]&0xf)<<4)+
+	     ((vic_regs[0x0300+bg]&0xf0)>>4),
 	     27,
-	     ((vic_regs[0x0100+foreground_colour]&0xf)<<4)+
-	     ((vic_regs[0x0100+foreground_colour]&0xf0)>>4),
-	     ((vic_regs[0x0200+foreground_colour]&0xf)<<4)+
-	     ((vic_regs[0x0200+foreground_colour]&0xf0)>>4),
-	     ((vic_regs[0x0300+foreground_colour]&0xf)<<4)+
-	     ((vic_regs[0x0300+foreground_colour]&0xf0)>>4)
+	     ((vic_regs[0x0100+fg]&0xf)<<4)+
+	     ((vic_regs[0x0100+fg]&0xf0)>>4),
+	     ((vic_regs[0x0200+fg]&0xf)<<4)+
+	     ((vic_regs[0x0200+fg]&0xf0)>>4),
+	     ((vic_regs[0x0300+fg]&0xf)<<4)+
+	     ((vic_regs[0x0300+fg]&0xf0)>>4)
 	     );
 
       // Xterm can't display arbitrary graphics, so just mark full-colour chars
@@ -1372,6 +1391,10 @@ int do_screen_shot(void)
 	  unsigned char b[8];
 	  for(int i=0;i<8;i++) b[i]=glyph_data[i];
 	  for(int i=0;i<8;i++) glyph_data[i]=b[7-i];
+	}
+
+	if (glyph_reverse) {
+	  for(int i=0;i<8;i++) glyph_data[i]=0xff-glyph_data[i];	  
 	}
 
 	// XXX Do blink with PNG animation?
