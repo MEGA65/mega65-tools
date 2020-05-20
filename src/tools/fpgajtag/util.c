@@ -372,13 +372,17 @@ USB_INFO *fpgausb_init(void)
             usbinfo_array[usbinfo_array_index].idProduct = desc.idProduct;
             usbinfo_array[usbinfo_array_index].bcdDevice = desc.bcdDevice;
             usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
-            if (libusb_open(dev, &usbhandle) < 0
-             || UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
-                printf("Error getting USB device attributes (iManuf, iProd or iSe negative)\n");
-                exit(-1);
-            }
-            libusb_close (usbhandle);
-            usbhandle = NULL;
+            int open_result = libusb_open(dev, &usbhandle);
+	    if (open_result<0) {
+	      printf("ERROR: Could not open USB device: Error code %d\n",open_result);
+	    } else {
+	      if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
+                printf("WARNING: Error getting USB device attributes (iManuf=%x, iProd=%x, iSerial=%x)\n",
+		       UDESC(iManufacturer), UDESC(iProduct), UDESC(iSerialNumber));
+		libusb_close (usbhandle);
+		usbhandle = NULL;
+	      }
+	    }
             usbinfo_array_index++;
         }
         else if ( desc.idVendor == USB_JTAG_ALTERA && desc.idProduct == 0x6810) { /* Altera */
