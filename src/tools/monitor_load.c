@@ -65,6 +65,8 @@ size_t serialport_read(int fd, uint8_t * buffer, size_t size);
 int serialport_write(int fd, uint8_t * buffer, size_t size);
 #endif
 
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)  
+#define bcopy(b1,b2,len) (memmove((b2), (b1), (len)), (void) 0)
 
 #ifdef APPLE
 static const int B1000000 = 1000000;
