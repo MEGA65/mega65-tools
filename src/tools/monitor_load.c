@@ -1355,6 +1355,22 @@ int do_screen_shot(void)
 
 	  if (glyph_4bit) {
 	    // 16-colour 4 bits per pixel
+	    int c=glyph_data[((int)xx)/2];
+	    if (((int)xx)&1) c=c>>4; else c=c&0xf;
+	    if (glyph_with_alpha) {
+	      // Alpha blended pixels:
+	      // Here we blend the foreground and background colours we already know
+	      // according to the alpha value
+	      int a=c;
+	      r=(mega65_rgb(foreground_colour,0)*a + mega65_rgb(background_colour,0)*(15 -a))>>8;
+	      g=(mega65_rgb(foreground_colour,1)*a + mega65_rgb(background_colour,1)*(15 -a))>>8;
+	      b=(mega65_rgb(foreground_colour,2)*a + mega65_rgb(background_colour,2)*(15 -a))>>8;
+	    } else {
+	      r=mega65_rgb(c,0);
+	      g=mega65_rgb(c,1);
+	      b=mega65_rgb(c,2);
+	    }
+	    
 	  } else if (glyph_full_colour) {
 	    // 256-colour 8 bits per pixel
 	    if (glyph_with_alpha) {
@@ -1371,8 +1387,22 @@ int do_screen_shot(void)
 	      b=mega65_rgb(glyph_data[(int)xx],2);
 	    }
 	    
-	  } else if (multicolour_mode) {
+	  } else if (multicolour_mode&&(foreground_colour&8)) {
 	    // Multi-colour normal char
+	    int bits=0;
+	    if (glyph_data[6-(((int)xx)&0x6)]) bits|=1;
+	    if (glyph_data[7-(((int)xx)&0x6)]) bits|=2;
+	    int colour;
+	    switch(bits) {
+	    case 0: colour=vic_regs[0x21]; break; // background colour
+	    case 1: colour=vic_regs[0x22]; break; // multi colour 1
+	    case 2: colour=vic_regs[0x23]; break; // multi colour 2
+	    case 3: colour=foreground_colour&7; break; // foreground colour
+	    }
+	    r=mega65_rgb(colour,0);
+	    g=mega65_rgb(colour,1);
+	    b=mega65_rgb(colour,2);
+
 	  } else {
 	    // Mono normal char
 	    if (glyph_data[7-(int)xx]) {
