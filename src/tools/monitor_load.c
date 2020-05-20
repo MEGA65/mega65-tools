@@ -1011,6 +1011,8 @@ int set_pixel(int x,int y,int r,int g, int b)
   ((unsigned char *)png_rows[y])[x*3+2]=b;
 }  
 
+#define SCREEN_POSITION ((800-720)/2)
+
 int do_screen_shot(void)
 {
   monitor_sync();
@@ -1043,13 +1045,16 @@ int do_screen_shot(void)
   unsigned int v400=vic_regs[0x31]&0x08;
   unsigned int viciii_attribs=vic_regs[0x31]&0x20;
   unsigned int chargen_x=(vic_regs[0x4c]+(vic_regs[0x4d]<<8))&0xfff;
-  chargen_x/=3; // Also measured in pixelclock ticks
+  chargen_x; // Also measured in pixelclock ticks
+  chargen_x-=SCREEN_POSITION; // adjust for pipeline delay
   unsigned int chargen_y=(vic_regs[0x4e]+(vic_regs[0x4f]<<8))&0xfff;  
     
   unsigned int top_border_y=(vic_regs[0x48]+(vic_regs[0x49]<<8))&0xfff;
   unsigned int bottom_border_y=(vic_regs[0x4A]+(vic_regs[0x4B]<<8))&0xfff;
   // side border width is measured in pixelclock ticks, so divide by 3
-  unsigned int side_border_width=((vic_regs[0x5C]+(vic_regs[0x5D]<<8))&0xfff)/3;
+  unsigned int side_border_width=((vic_regs[0x5C]+(vic_regs[0x5D]<<8))&0xfff);
+  unsigned int left_border=side_border_width-SCREEN_POSITION; // Adjust for screen position
+  unsigned int right_border=800-side_border_width-SCREEN_POSITION;
   unsigned int x_scale_120=vic_regs[0x5A];
   // x_scale is actually in 120ths of a pixel.
   // so 120 = 1 pixel wide
@@ -1250,7 +1255,7 @@ int do_screen_shot(void)
   // Start by drawing the non-border area
   for(int y=top_border_y;y<bottom_border_y&&(y<(is_pal_mode?576:480));y++)
     {
-      for(int x=side_border_width;x<(720-side_border_width);x++) {
+      for(int x=left_border;x<right_border;x++) {
 	((unsigned char *)png_rows[y])[x*3+0]=mega65_rgb(background_colour,0);
 	((unsigned char *)png_rows[y])[x*3+1]=mega65_rgb(background_colour,1);
 	((unsigned char *)png_rows[y])[x*3+2]=mega65_rgb(background_colour,2);
@@ -1454,8 +1459,8 @@ int do_screen_shot(void)
 	  for(int yc=0;yc<=y_scale;yc++) {
 	    if (((y_position+yc)<bottom_border_y)
 		&&((y_position+yc)>=top_border_y)
-		&& ((x_position+xc)<(720-side_border_width))
-		&& ((x_position+xc)>=side_border_width)
+		&& ((x_position+xc)<right_border)
+		&& ((x_position+xc)>=left_border)
 		)
 	      set_pixel(x_position+xc,y_position+yc+yy*(1+y_scale),r,g,b);
 	  }
