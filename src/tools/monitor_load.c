@@ -956,6 +956,26 @@ unsigned char mega65_rgb(int colour,int rgb)
     ((vic_regs[0x0100+(0x100*rgb)+colour]&0xf0)>>4);
 }
 
+png_bytep *png_rows[576];
+int is_pal_mode=0;
+
+int set_pixel(int x,int y,int r,int g, int b)
+{
+  if (y<0||y>(is_pal_mode?575:479)) {
+    fprintf(stderr,"ERROR: Impossible y value %d\n",y);
+    exit(-1);
+  }
+  if (x<0||x>719) {
+    fprintf(stderr,"ERROR: Impossible x value %d\n",x);
+    exit(-1);
+  }
+
+  //  printf("Setting pixel at %d,%d to #%02x%02x%02x\n",x,y,b,g,r);
+  ((unsigned char *)png_rows[y])[x*3+0]=r;
+  ((unsigned char *)png_rows[y])[x*3+1]=g;
+  ((unsigned char *)png_rows[y])[x*3+2]=b;
+}  
+
 int do_screen_shot(void)
 {
   monitor_sync();
@@ -967,7 +987,7 @@ int do_screen_shot(void)
   if (charset_address==0x1000) charset_address=0x2D000;
   if (charset_address==0x9000) charset_address=0x3D000;
 
-  int pal_mode=(vic_regs[0x6f]&0x80)^0x80;
+  is_pal_mode=(vic_regs[0x6f]&0x80)^0x80;
   unsigned int screen_line_step=vic_regs[0x58]+(vic_regs[0x59]<<8);
   unsigned int colour_address=vic_regs[0x64]+(vic_regs[0x65]<<8);
   unsigned int screen_width=vic_regs[0x5e];
@@ -977,7 +997,8 @@ int do_screen_shot(void)
   unsigned int screen_size=screen_line_step*screen_rows*(1+sixteenbit_mode);
   unsigned int charset_size=2048;
   unsigned int extended_background_mode=vic_regs[0x11]&0x40;
-
+  unsigned int multicolour_mode=vic_regs[0x16]&0x10;
+  
   int border_colour=vic_regs[0x20];
   int background_colour=vic_regs[0x21];
     
@@ -985,12 +1006,19 @@ int do_screen_shot(void)
   unsigned int bottom_border_y=(vic_regs[0x4A]+(vic_regs[0x4B]<<8))&0xfff;
   // side border width is measured in pixelclock ticks, so divide by 3
   unsigned int side_border_width=((vic_regs[0x5C]+(vic_regs[0x5D]<<8))&0xfff)/3;
-  unsigned int x_scale=vic_regs[0x5A];
+  unsigned int x_scale_120=vic_regs[0x5A];
+  // x_scale is actually in 120ths of a pixel.
+  // so 120 = 1 pixel wide
+  // 60 = 2 pixels wide
+  float x_step=x_scale_120/120.0;
+  
   unsigned int y_scale=vic_regs[0x5B];
   unsigned int h640=vic_regs[0x31]&0x80;
   unsigned int v400=vic_regs[0x31]&0x08;
   unsigned int viciii_attribs=vic_regs[0x31]&0x20;
-
+  unsigned int chargen_x=(vic_regs[0x4c]+(vic_regs[0x4d]<<8))&0xfff;
+  chargen_x/=3; // Also measured in pixelclock ticks
+  unsigned int chargen_y=(vic_regs[0x4e]+(vic_regs[0x4f]<<8))&0xfff;  
   
   // Check if we are in 16-bit text mode, without full-colour chars for char IDs > 255
   if (sixteenbit_mode&&(!(vic_regs[0x54]&4))) {
@@ -1157,7 +1185,7 @@ int do_screen_shot(void)
   png_init_io(png_ptr, f);
 
   // Set image size based on PAL or NTSC video mode
-  png_set_IHDR(png_ptr, info_ptr, 720, pal_mode? 576 : 480,
+  png_set_IHDR(png_ptr, info_ptr, 720, is_pal_mode? 576 : 480,
 	       8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
 	       PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
@@ -1165,8 +1193,7 @@ int do_screen_shot(void)
 
   // Allocate frame buffer for image, and set all pixels to the border colour by default
   printf("Allocating PNG frame buffer...\n");
-  png_bytep *png_rows[576];
-  for(int y=0;y<(pal_mode?576:480);y++) {
+  for(int y=0;y<(is_pal_mode?576:480);y++) {
     png_rows[y]=(png_bytep) malloc(3 * 720 * sizeof(png_byte));
     if (!png_rows[y]) {
       perror("malloc()");
@@ -1181,8 +1208,9 @@ int do_screen_shot(void)
   }
 
   printf("Rendering screen...\n");
+
   // Start by drawing the non-border area
-  for(int y=top_border_y+1;y<bottom_border_y&&(y<(pal_mode?576:480));y++)
+  for(int y=top_border_y;y<bottom_border_y&&(y<(is_pal_mode?576:480));y++)
     {
       for(int x=side_border_width;x<(720-side_border_width);x++) {
 	((unsigned char *)png_rows[y])[x*3+0]=mega65_rgb(background_colour,0);
@@ -1191,10 +1219,143 @@ int do_screen_shot(void)
       }
     }
 
+  // Now render the text display
+  int y_position=chargen_y;
+  for(int cy=0;cy<screen_rows;cy++) {
+    if (y_position>=(is_pal_mode?576:480)) break;
+    
+    int x_position=chargen_x;
+
+    int xc=0;     
+    
+    for(int cx=0;cx<screen_width;cx++) {
+
+      printf("Rendering char (%d,%d) at (%d,%d)\n",cx,cy,x_position,y_position);
+      int char_background_colour;
+      int char_id=0;
+      int char_value=screen_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
+      if (sixteenbit_mode)
+	char_value|=(screen_data[cy*screen_line_step+cx*(1+sixteenbit_mode)+1]<<8);
+      int colour_value=colour_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
+      if (sixteenbit_mode)
+	colour_value|=(colour_data[cy*screen_line_step+cx*(1+sixteenbit_mode)+1]<<8);
+      if (extended_background_mode) {
+	char_id=char_value&=0x3f;
+	char_background_colour=vic_regs[0x21+((char_value>>6)&3)];
+      } 
+      else {
+	char_id=char_value&0x1fff;
+	char_background_colour=background_colour;
+      }
+      int glyph_width_deduct=char_value>>13;
+      
+      // Set foreground and background colours
+      int foreground_colour=colour_value&0x0f;
+      int glyph_flip_vertical=colour_value&0x8000;     
+      int glyph_flip_horizontal=colour_value&0x4000;      
+      int glyph_with_alpha=colour_value&0x2000;     
+      int glyph_goto=colour_value&0x1000;
+      int glyph_full_colour=0;
+      int glyph_blink=0;
+      int glyph_underline=0;
+      int glyph_bold=0;
+      int glyph_reverse=0;
+      if (viciii_attribs&&(!multicolour_mode)) {
+	glyph_blink=colour_value&0x0010;
+	glyph_reverse=colour_value&0x0020;
+	glyph_bold=colour_value&0x0040;
+	glyph_underline=colour_value&0x0080;
+	if (glyph_bold) foreground_colour|=0x10;
+      }
+      if (multicolour_mode) foreground_colour=colour_value&0xff;      
+      
+      if (vic_regs[0x54]&2) if (char_id<0x100) glyph_full_colour=1;
+      if (vic_regs[0x54]&4) if (char_id>0x0FF) glyph_full_colour=1;
+      int glyph_4bit=colour_value&0x0800;
+      if (glyph_4bit) glyph_full_colour=1;
+      if (colour_value&0x0400) glyph_width_deduct+=8;
+
+      // Lookup the char data, and work out how many pixels we need to paint
+      int glyph_width=8;
+      if (glyph_4bit) glyph_width=16; 
+      glyph_width-=glyph_width_deduct;
+
+      // For each row of the glyph
+      for(int yy=0;yy<8;yy++) {
+	int glyph_row=yy;
+	if (glyph_flip_vertical) glyph_row=7-glyph_row;
+
+	unsigned char glyph_data[8];       
+	
+	if (glyph_full_colour) {
+	  // Get 8 bytes of data
+	  fetch_ram(char_id*64+glyph_row*8,8,glyph_data);
+	} else {
+	  // Use existing char data we have already fetched
+	  //	  printf("Chardata for char $%03x = $%02x\n",char_id,char_data[char_id*8+glyph_row]);
+	  for(int i=0;i<8;i++)
+	    if ((char_data[char_id*8+glyph_row]>>i)&1) glyph_data[i]=0xff; else glyph_data[i]=0;
+	}
+	
+	
+	if (glyph_flip_horizontal) {
+	  unsigned char b[8];
+	  for(int i=0;i<8;i++) b[i]=glyph_data[i];
+	  for(int i=0;i<8;i++) glyph_data[i]=b[7-i];
+	}
+
+	// XXX Do blink with PNG animation?
+
+	if (glyph_underline&&(yy==7)) {
+	  for(int i=0;i<8;i++) glyph_data[i]=0xff;
+	}
+
+	xc=0;
+	for(float xx=0;xx<glyph_width;xx+=x_step) {
+	  int r=mega65_rgb(background_colour,0);
+	  int g=mega65_rgb(background_colour,1);
+	  int b=mega65_rgb(background_colour,2);
+
+	  if (glyph_4bit) {
+	    // 16-colour 4 bits per pixel
+	  } else if (glyph_full_colour) {
+	    // 256-colour 8 bits per pixel
+	  } else if (multicolour_mode) {
+	    // Multi-colour normal char
+	  } else {
+	    // Mono normal char
+	    if (glyph_data[7-(int)xx]) {
+	      r=mega65_rgb(foreground_colour,0);
+	      g=mega65_rgb(foreground_colour,1);
+	      b=mega65_rgb(foreground_colour,2);
+	      printf("Foreground pixel. colour = $%02x = #%02x%02x%02x\n",
+		     foreground_colour,b,g,r);
+	    }
+	  }
+	  
+	  // Actually draw the pixels
+	  for(int yc=0;yc<=y_scale;yc++) {
+	    if (((y_position+yc)<bottom_border_y)
+		&&((y_position+yc)>=top_border_y)
+		&& ((x_position+xc)<(720-side_border_width))
+		&& ((x_position+xc)>=side_border_width)
+		)
+	      set_pixel(x_position+xc,y_position+yc+yy*(1+y_scale),r,g,b);
+	  }
+	  xc++;
+	}
+      }
+      
+      // Advance for width of the glyph
+      printf("Char was %d pixels wide.\n",xc);
+      x_position+=xc;
+    }
+    y_position+=8*(1+y_scale);
+  }
   
   printf("Writing out PNG frame buffer...\n");
   // Write out each row of the PNG
-  for(int y=0;y<(pal_mode?576:480);y++)
+  for(int y=0;y<(is_pal_mode?576:480);y++)
     png_write_row(png_ptr, png_rows[y]);
 
   png_write_end(png_ptr, NULL);
