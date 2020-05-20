@@ -842,7 +842,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   char next_addr_str[8192];
   int ofs=0;
 
-  fprintf(stderr,"Fetching $%x bytes @ $%x\n",count,address);
+  //  fprintf(stderr,"Fetching $%x bytes @ $%x\n",count,address);
   
   //  monitor_sync();
   while(addr<(address+count)) {
@@ -889,7 +889,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
     }
   }
   if (addr>=(address+count)) {
-    fprintf(stderr,"Memory read complete at $%lx\n",addr);
+    //    fprintf(stderr,"Memory read complete at $%lx\n",addr);
     return 0;
   }
   else {
@@ -918,7 +918,8 @@ int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *
   for(int i=0;i<count;i++) {
     if (!ram_cache_valids[address+i]) {
       // Cache not valid here -- so read some data
-      printf("Fetching $%08x for cache.\n",address);
+      printf("."); fflush(stdout);
+      //      printf("Fetching $%08x for cache.\n",address);
       fetch_ram(address,256,&ram_cache[address]);
       for(int j=0;j<256;j++) ram_cache_valids[address+j]=1;
 
@@ -1275,7 +1276,7 @@ int do_screen_shot(void)
     
     for(int cx=0;cx<screen_width;cx++) {
 
-      printf("Rendering char (%d,%d) at (%d,%d)\n",cx,cy,x_position,y_position);
+      //      printf("Rendering char (%d,%d) at (%d,%d)\n",cx,cy,x_position,y_position);
       int char_background_colour;
       int char_id=0;
       int char_value=screen_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
@@ -1319,7 +1320,7 @@ int do_screen_shot(void)
 	foreground_colour=char_value&0xf;
 	background_colour=char_value>>4;
 	bitmap_multi_colour=colour_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
-	printf("Bitmap fore/background colours are $%x / $%x\n",foreground_colour,background_colour);
+	if (0) printf("Bitmap fore/background colours are $%x / $%x\n",foreground_colour,background_colour);
       }     
       
       if (vic_regs[0x54]&2) if (char_id<0x100) glyph_full_colour=1;
@@ -1358,8 +1359,8 @@ int do_screen_shot(void)
 	    }
 	    unsigned char pixels;
 	    fetch_ram_cacheable(addr,1,&pixels);
-	    printf("Reading bitmap data from $%x = $%02x, charset_address=$%x\n",
-		   addr,pixels,charset_address);
+	    if (0) printf("Reading bitmap data from $%x = $%02x, charset_address=$%x\n",
+			  addr,pixels,charset_address);
 	    for(int i=0;i<8;i++)
 	      if ((pixels>>i)&1) glyph_data[i]=0xff; else glyph_data[i]=0;
 	    
@@ -1450,8 +1451,8 @@ int do_screen_shot(void)
 	      r=mega65_rgb(foreground_colour,0);
 	      g=mega65_rgb(foreground_colour,1);
 	      b=mega65_rgb(foreground_colour,2);
-	      printf("Foreground pixel. colour = $%02x = #%02x%02x%02x\n",
-		     foreground_colour,b,g,r);
+	      //	      printf("Foreground pixel. colour = $%02x = #%02x%02x%02x\n",
+	      //		     foreground_colour,b,g,r);
 	    }
 	  }
 	  
@@ -1469,7 +1470,7 @@ int do_screen_shot(void)
       }
       
       // Advance for width of the glyph
-      printf("Char was %d pixels wide.\n",xc);
+      //      printf("Char was %d pixels wide.\n",xc);
       x_position+=xc;
     }
     y_position+=8*(1+y_scale);
@@ -1483,6 +1484,7 @@ int do_screen_shot(void)
   png_write_end(png_ptr, NULL);
 
   fclose(f);
+  printf("\n");
   
   return 0;
 }
