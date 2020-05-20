@@ -375,6 +375,7 @@ USB_INFO *fpgausb_init(void)
             int open_result = libusb_open(dev, &usbhandle);
 	    if (open_result<0) {
 	      printf("ERROR: Could not open USB device: Error code %d\n",open_result);
+	      printf("       libusb says: %s\n",libusb_strerror(open_result));
 	    } else {
 	      if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
                 printf("WARNING: Error getting USB device attributes (iManuf=%x, iProd=%x, iSerial=%x)\n",
