@@ -1033,6 +1033,7 @@ int do_screen_shot(void)
   unsigned int charset_size=2048;
   unsigned int extended_background_mode=vic_regs[0x11]&0x40;
   unsigned int multicolour_mode=vic_regs[0x16]&0x10;
+  int bitmap_mode=vic_regs[0x11]&0x20;
   
   int border_colour=vic_regs[0x20];
   int background_colour=vic_regs[0x21];
@@ -1133,7 +1134,7 @@ int do_screen_shot(void)
 	char_background_colour=background_colour;
       }
       int glyph_width_deduct=char_value>>13;
-      
+
       // Set foreground and background colours
       int foreground_colour=colour_value&0xff;
       int glyph_flip_vertical=colour_value&0x8000;     
@@ -1256,6 +1257,8 @@ int do_screen_shot(void)
       }
     }
 
+  unsigned char bitmap_multi_colour;
+  
   // Now render the text display
   int y_position=chargen_y;
   for(int cy=0;cy<screen_rows;cy++) {
@@ -1305,6 +1308,14 @@ int do_screen_shot(void)
 	if (glyph_bold) foreground_colour|=0x10;
       }
       if (multicolour_mode) foreground_colour=colour_value&0xff;      
+
+      if (bitmap_mode) {
+	char_value=screen_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
+	foreground_colour=char_value&0xf;
+	background_colour=char_value>>4;
+	bitmap_multi_colour=colour_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
+	printf("Bitmap fore/background colours are $%x / $%x\n",foreground_colour,background_colour);
+      }     
       
       if (vic_regs[0x54]&2) if (char_id<0x100) glyph_full_colour=1;
       if (vic_regs[0x54]&4) if (char_id>0x0FF) glyph_full_colour=1;
@@ -1330,8 +1341,24 @@ int do_screen_shot(void)
 	} else {
 	  // Use existing char data we have already fetched
 	  //	  printf("Chardata for char $%03x = $%02x\n",char_id,char_data[char_id*8+glyph_row]);
-	  for(int i=0;i<8;i++)
-	    if ((char_data[char_id*8+glyph_row]>>i)&1) glyph_data[i]=0xff; else glyph_data[i]=0;
+	  if (!bitmap_mode) {
+	    for(int i=0;i<8;i++)
+	      if ((char_data[char_id*8+glyph_row]>>i)&1) glyph_data[i]=0xff; else glyph_data[i]=0;
+	  } else {
+	    int addr=charset_address&0xfe000;
+	    addr+=cx*8+cy*320+glyph_row;
+	    if (h640) {
+	      addr=charset_address&0xfc000;
+	      addr+=cx*8+cy*640+glyph_row;
+	    }
+	    unsigned char pixels;
+	    fetch_ram_cacheable(addr,1,&pixels);
+	    printf("Reading bitmap data from $%x = $%02x, charset_address=$%x\n",
+		   addr,pixels,charset_address);
+	    for(int i=0;i<8;i++)
+	      if ((pixels>>i)&1) glyph_data[i]=0xff; else glyph_data[i]=0;
+	    
+	  }
 	}
 	
 	
@@ -1387,17 +1414,26 @@ int do_screen_shot(void)
 	      b=mega65_rgb(glyph_data[(int)xx],2);
 	    }
 	    
-	  } else if (multicolour_mode&&(foreground_colour&8)) {
+	  } else if (multicolour_mode&&((foreground_colour&8)||bitmap_mode)) {
 	    // Multi-colour normal char
 	    int bits=0;
 	    if (glyph_data[6-(((int)xx)&0x6)]) bits|=1;
 	    if (glyph_data[7-(((int)xx)&0x6)]) bits|=2;
 	    int colour;
-	    switch(bits) {
-	    case 0: colour=vic_regs[0x21]; break; // background colour
-	    case 1: colour=vic_regs[0x22]; break; // multi colour 1
-	    case 2: colour=vic_regs[0x23]; break; // multi colour 2
-	    case 3: colour=foreground_colour&7; break; // foreground colour
+	    if (!bitmap_mode) {
+	      switch(bits) {
+	      case 0: colour=vic_regs[0x21]; break; // background colour
+	      case 1: colour=vic_regs[0x22]; break; // multi colour 1
+	      case 2: colour=vic_regs[0x23]; break; // multi colour 2
+	      case 3: colour=foreground_colour&7; break; // foreground colour
+	      }
+	    } else {
+	      switch(bits) {
+	      case 0: colour=vic_regs[0x21]; break;
+	      case 1: colour=background_colour; break; 
+	      case 2: colour=foreground_colour; break; 
+	      case 3: colour=bitmap_multi_colour&0xf; break;
+	      }
 	    }
 	    r=mega65_rgb(colour,0);
 	    g=mega65_rgb(colour,1);
