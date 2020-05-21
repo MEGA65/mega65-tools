@@ -52,6 +52,15 @@
 #include <termios.h>
 #endif
 
+#ifdef __APPLE__
+#include <sys/ioctl.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/serial/IOSerialKeys.h>
+#include <IOKit/serial/ioss.h>
+#include <IOKit/IOBSD.h>
+#endif
+
 #ifdef WINDOWS
 #define PORT_TYPE HANDLE
 SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
