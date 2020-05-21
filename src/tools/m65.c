@@ -62,10 +62,11 @@ size_t serialport_read(int fd, uint8_t * buffer, size_t size);
 int serialport_write(int fd, uint8_t * buffer, size_t size);
 #endif
 
+#ifdef WINDOWS
+
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)  
 #define bcopy(b1,b2,len) (memmove((b2), (b1), (len)), (void) 0)
 
-#ifdef WINDOWS
 FILE iobs[3];
 
 FILE *__imp___acrt_iob_func(void)
