@@ -114,11 +114,12 @@ void do_exit(int retval);
 void usage(void)
 {
   fprintf(stderr,"MEGA65 cross-development tool for booting the MEGA65 using a custom bitstream and/or HICKUP file.\n");
-  fprintf(stderr,"usage: monitor_load [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-m modeline] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
+  fprintf(stderr,"usage: monitor_load [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.exe>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-m modeline] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
   fprintf(stderr,"  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr,"  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr,"       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
   fprintf(stderr,"  -b - Name of bitstream file to load.\n");
+  fprintf(stderr,"  -v - The location of the Vivado executable to use for -b on Windows.\n");
   fprintf(stderr,"  -K - Use DK backend for libUSB, if available\n");
   fprintf(stderr,"  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n");
   fprintf(stderr,"       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
@@ -194,6 +195,7 @@ FILE *f=NULL;
 FILE *fd81=NULL;
 char *search_path=".";
 char *bitstream=NULL;
+char *vivado_exe=NULL;
 char *hyppo=NULL;
 char *fpga_serial=NULL;
 char *serial_port=NULL; // XXX do a better job auto-detecting this
@@ -2766,7 +2768,7 @@ int main(int argc,char **argv)
   printf("Getting started..\n");
   
   int opt;
-  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:m:MnoprR:Ss:t:T:U:V:XZ:")) != -1) {
+  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:m:MnoprR:Ss:t:T:U:v:V:XZ:")) != -1) {
     switch (opt) {
     case 'X': hyppo_report=1; break;
     case 'K': usedk=1; break;
@@ -2814,6 +2816,9 @@ int main(int argc,char **argv)
     case 'b':
       bitstream=strdup(optarg);
       if (bitstream[0]=='@') download_bitstream();
+      break;
+    case 'v':
+      vivado_exe=strdup(optarg);
       break;
     case 'j':
       jtag_only=1; break;
@@ -2868,6 +2873,40 @@ int main(int argc,char **argv)
   // Load bitstream if file provided
   if (bitstream) {
     // char cmd[1024];
+#ifdef WINDOWS
+    {
+      // For Windows we just call Vivado to do the FPGA programming,
+      // while we are having horrible USB problems otherwise.
+      FILE *tclfile=fopen("temp.tcl","w");
+      if (!tclfile) {
+	fprintf(stderr,"ERROR: Could not create temp.tcl");
+	exit(-1);
+      }
+      fprintf(tclfile,
+	      "open_hw_manager\n"
+	      "connect_hw_server -allow_non_jtag\n"
+	      "open_hw_target\n"
+	      "current_hw_device [get_hw_devices xc7a100t_0]\n"
+	      "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	      "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	      "\n"
+	      "set_property PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
+	      "set_property FULL_PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
+	      "set_property PROGRAM.FILE {%s} [get_hw_devices xc7a100t_0]\n"
+	      "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	      "program_hw_devices [get_hw_devices xc7a100t_0]\n"
+	      "refresh_hw_device [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	      "quit\n",bitstream);
+      fclose(tclfile);
+      char cmd[8192];
+      snprintf(cmd,8192,"%s -mode batch -nojournal -nolog -notrace -source temp.tcl",
+	       vivado_exe);
+      printf("Running %s...\n",cmd);
+      system(cmd);
+      unlink("temp.tcl");
+    }
+    fprintf(stderr,"[T+%I64dsec] Bitstream loaded\n",(long long)time(0)-start_time);
+#else
     if (fpga_serial) {
       fpgajtag_main(bitstream,fpga_serial);
     }
@@ -2879,9 +2918,6 @@ int main(int argc,char **argv)
     }
     //fprintf(stderr,"%s\n",cmd);
     //    system(cmd);
-#ifdef WINDOWS
-    fprintf(stderr,"[T+%I64dsec] Bitstream loaded\n",(long long)time(0)-start_time);
-#else
     fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
 #endif
   }

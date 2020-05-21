@@ -134,7 +134,6 @@ static void pulse_gpio(int adelay)
     write_item(DITEM(CLK_BYTES, INT16(delay-1)));
     flush_write(DITEM(SET_LSB_DIRECTION(GPIO_DONE | GPIO_01),
                      SET_LSB_DIRECTION(GPIO_01)));
-    sleep(1);
     EXIT();
 }
 static void set_clock_divisor(void)
