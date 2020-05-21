@@ -134,6 +134,7 @@ static void pulse_gpio(int adelay)
     write_item(DITEM(CLK_BYTES, INT16(delay-1)));
     flush_write(DITEM(SET_LSB_DIRECTION(GPIO_DONE | GPIO_01),
                      SET_LSB_DIRECTION(GPIO_01)));
+    sleep(1);
     EXIT();
 }
 static void set_clock_divisor(void)
@@ -735,7 +736,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
     uinfo = fpgausb_init();   /*** Initialize USB interface ***/
     int usb_index = 0;
     for (i = 0; uinfo[i].dev; i++) {
-        fprintf(stderr, "fpgajtag: %s:%s:%s; bcd:%x", uinfo[i].iManufacturer,
+      fprintf(stderr, "#%d: fpgajtag: %s:%s:%s; bcd:%x", i, uinfo[i].iManufacturer,
             uinfo[i].iProduct, uinfo[i].iSerialNumber, uinfo[i].bcdDevice);
         if (!filename) {
             idcode_count = 0;
@@ -755,68 +756,90 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
     //    if (!filename)
     //        exit(1);
     while (1) {
-        if (!uinfo[usb_index].dev) {
-            fprintf(stderr, "fpgajtag: Can't find usable usb interface\n");
-            exit(-1);
-        }
-        if (uinfo[usb_index].idVendor == USB_JTAG_ALTERA) {
-        }
-        else if (!serialno || !strcmp(serialno, (char *)uinfo[usb_index].iSerialNumber))
-	  {
-	    // Found the correct interface.
-	    // Now extract the real serial port name as well, so that monitor_load can use it.
-
-#if 0
-	    fprintf(stderr,"USB device info: dev=%p, idVendor=%x, idProduct=%x, bcdDevice=%x(0d%d)\n",
-		    uinfo[usb_index].dev,
-		    uinfo[usb_index].idVendor,
-		    uinfo[usb_index].idProduct,
-		    uinfo[usb_index].bcdDevice,
-		    uinfo[usb_index].bcdDevice
-		    );
-	    fprintf(stderr,"USB bus=%d, port_number=%d\n",
-		    libusb_get_bus_number(uinfo[usb_index].dev),
-		    libusb_get_port_number(uinfo[usb_index].dev));
+      printf("Trying usb_index=%d\n",usb_index);
+      if (!uinfo[usb_index].dev) {
+	fprintf(stderr, "fpgajtag: Can't find usable usb interface\n");
+	exit(-1);
+      }
+      if (uinfo[usb_index].idVendor == USB_JTAG_ALTERA) {
+	fprintf(stderr,"Ignoring ALTERA device.\n");
+      }
+      else if (!serialno || !strcmp(serialno, (char *)uinfo[usb_index].iSerialNumber))
+	{
+	  // Found the correct interface.
+	  // Now extract the real serial port name as well, so that monitor_load can use it.
+	  
+#if 1
+	  fprintf(stderr,"USB device info: dev=%p, idVendor=%x, idProduct=%x, bcdDevice=%x(0d%d)\n",
+		  uinfo[usb_index].dev,
+		  uinfo[usb_index].idVendor,
+		  uinfo[usb_index].idProduct,
+		  uinfo[usb_index].bcdDevice,
+		  uinfo[usb_index].bcdDevice
+		  );
+	  fprintf(stderr,"USB bus=%d, port_number=%d\n",
+		  libusb_get_bus_number(uinfo[usb_index].dev),
+		  libusb_get_port_number(uinfo[usb_index].dev));
 #endif
-	    int bus=libusb_get_bus_number(uinfo[usb_index].dev);
-	    int port=libusb_get_port_number(uinfo[usb_index].dev);
-	    
-	    // Iterate through /sys/bus/usb-serial/devices to see if any of the entries there have
-	    // symlinks that make sense for this device bus and port number.
+	  int bus=libusb_get_bus_number(uinfo[usb_index].dev);
+	  int port=libusb_get_port_number(uinfo[usb_index].dev);
+	  
+	  // Iterate through /sys/bus/usb-serial/devices to see if any of the entries there have
+	  // symlinks that make sense for this device bus and port number.
 #ifdef WINDOWS
-	    printf("I'm on windows, and don't (yet) know how to work out the COMx: path.\n");
-	    printf("In case it helps: bus=%d, port=%d\n",bus,port);
+	  printf("I'm on windows, and don't (yet) know how to work out the COMx: path.\n");
+	  printf("In case it helps: bus=%d, port=%d\n",bus,port);
+	  break;
 #else
-	    {
-	      DIR *d=opendir("/sys/bus/usb-serial/devices");
-	      if (d) {
-		struct dirent *de=NULL;
-		while ((de=readdir(d))!=NULL) {
-		  char link[1024]="";
-		  char path[1024];
-		  snprintf(path,1024,"/sys/bus/usb-serial/devices/%s",de->d_name);
-		  int len=readlink(path,link,sizeof(link));
-		  link[len]=0;
-		  // fprintf(stderr,"  Checking '%s' -> '%s'\n",path,link);
-		  char match[1024];
-		  snprintf(match,1024,"/%d-%d/%d-%d:1.1",bus,port,bus,port);
-		  if (strstr(link,match)) {
-		    char serial_path[1024];
-		    snprintf(serial_path,1024,"/dev/%s",de->d_name);
-		    fprintf(stderr,"Auto-detected serial port '%s'\n",serial_path);
-		    serial_port=strdup(serial_path);
-		  }
+	  {
+	    DIR *d=opendir("/sys/bus/usb-serial/devices");
+	    if (d) {
+	      struct dirent *de=NULL;
+	      while ((de=readdir(d))!=NULL) {
+		char link[1024]="";
+		char path[1024];
+		snprintf(path,1024,"/sys/bus/usb-serial/devices/%s",de->d_name);
+		int len=readlink(path,link,sizeof(link));
+		link[len]=0;
+		// fprintf(stderr,"  Checking '%s' -> '%s'\n",path,link);
+		char match[1024];
+		snprintf(match,1024,"/%d-%d/%d-%d:1.1",bus,port,bus,port);
+		if (strstr(link,match)) {
+		  char serial_path[1024];
+		  snprintf(serial_path,1024,"/dev/%s",de->d_name);
+		  fprintf(stderr,"Auto-detected serial port '%s'\n",serial_path);
+		  serial_port=strdup(serial_path);
 		}
-		closedir(d);
 	      }
+	      closedir(d);
 	    }
-#endif
-	    
-            break;
 	  }
-        usb_index++;
+#endif
+	  
+	  break;
+	}
+      else {
+	printf("This device doesn't seem to match.\n");
+#if 1
+	fprintf(stderr,"USB device info: dev=%p, idVendor=%x, idProduct=%x, bcdDevice=%x(0d%d)\n",
+		uinfo[usb_index].dev,
+		uinfo[usb_index].idVendor,
+		uinfo[usb_index].idProduct,
+		uinfo[usb_index].bcdDevice,
+		uinfo[usb_index].bcdDevice
+		);
+	fprintf(stderr,"USB bus=%d, port_number=%d\n",
+		libusb_get_bus_number(uinfo[usb_index].dev),
+		libusb_get_port_number(uinfo[usb_index].dev));
+	fprintf(stderr,"serialno='%s'\n",serialno?serialno:"<null>");
+	fprintf(stderr,"USB serial='%s'\n", (char *)uinfo[usb_index].iSerialNumber);
+#endif
+	
+      }
+      
+      usb_index++;
     }
-
+    
     /*
      * Set JTAG clock speed and GPIO pins for our i/f
      */
