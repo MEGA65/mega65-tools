@@ -1964,6 +1964,13 @@ void set_serial_speed(int fd,int serial_speed)
 {
   fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
   struct termios t;
+
+#ifdef __APPLE__
+  speed_t speed = serial_speed;
+  if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
+    perror("Failed to set output baud rate using IOSSIOSPEED");
+  }
+#else  
   if (serial_speed==230400) {
     if (cfsetospeed(&t, B230400)) perror("Failed to set output baud rate");
     if (cfsetispeed(&t, B230400)) perror("Failed to set input baud rate");
@@ -1980,6 +1987,7 @@ void set_serial_speed(int fd,int serial_speed)
     if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
     if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
   }
+#endif
   t.c_cflag &= ~PARENB;
   t.c_cflag &= ~CSTOPB;
   t.c_cflag &= ~CSIZE;
