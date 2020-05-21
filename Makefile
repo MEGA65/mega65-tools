@@ -3,7 +3,7 @@
 
 #COPT=	-Wall -g -std=gnu99 -fsanitize=address -fno-omit-frame-pointer -fsanitize-address-use-after-scope
 #CC=	clang
-COPT=	-Wall -g -std=gnu99
+COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib
 CC=	gcc
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=	$(COPT) -DWINDOWS -Imingw64/include -Lmingw64/lib
