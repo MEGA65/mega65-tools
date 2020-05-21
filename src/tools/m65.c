@@ -112,7 +112,7 @@ void do_exit(int retval);
 void usage(void)
 {
   fprintf(stderr,"MEGA65 cross-development tool.\n");
-  fprintf(stderr,"usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.exe>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-m modeline] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
+  fprintf(stderr,"usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-m modeline] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
   fprintf(stderr,"  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr,"  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr,"       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
@@ -193,7 +193,7 @@ FILE *f=NULL;
 FILE *fd81=NULL;
 char *search_path=".";
 char *bitstream=NULL;
-char *vivado_exe=NULL;
+char *vivado_bat=NULL;
 char *hyppo=NULL;
 char *fpga_serial=NULL;
 char *serial_port=NULL; // XXX do a better job auto-detecting this
@@ -266,7 +266,8 @@ int slow_write_safe(PORT_TYPE fd,char *d,int l)
   // resume the CPU when it should be stopping.
   // (We can work around this by using the fact that the new UART
   // monitor tells us when a breakpoint has been reached.
-  slow_write(fd,"t1\r",3);
+  if (!cpu_stopped)
+    slow_write(fd,"t1\r",3);
   slow_write(fd,d,l);
   if (!cpu_stopped) {
     //    printf("Resuming CPU after writing string\n");
@@ -699,6 +700,32 @@ int monitor_sync(void)
   }
   printf("Failed to synchronise with the monitor.\n");
   return 1;
+}
+
+void progress_to_RTI(void)
+{
+  int bytes=0;
+  int match_state=0;
+  int b=0;
+  unsigned char buff[8192];
+  slow_write_safe(fd,"tc\r",3);
+  while(1) {
+    b=serialport_read(fd,buff,8192);
+    if (b>0) {
+      bytes+=b;
+      buff[b]=0;
+      for(int i=0;i<b;i++) {
+	if (match_state==0&&buff[i]=='R') { match_state=1; }
+	else if (match_state==1&&buff[i]=='T') { match_state=2; } 
+	else if (match_state==2&&buff[i]=='I') {
+	  slow_write_safe(fd,"\r",1);
+	  fprintf(stderr,"RTI seen after %d bytes\n",bytes);
+	  return;
+	} else match_state=0;
+      }
+    }
+    fflush(stdout);
+  }
 }
 
 int get_pc(void)
@@ -2148,7 +2175,7 @@ int main(int argc,char **argv)
       if (bitstream[0]=='@') download_bitstream();
       break;
     case 'v':
-      vivado_exe=strdup(optarg);
+      vivado_bat=strdup(optarg);
       break;
     case 'j':
       jtag_only=1; break;
@@ -2174,7 +2201,9 @@ int main(int argc,char **argv)
   
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
+#ifndef WINDOWS
   init_fpgajtag(NULL, bitstream, 0x3631093); // 0xffffffff);
+#endif
   
   if (boundary_scan) {
 #ifdef WINDOWS
@@ -2203,7 +2232,7 @@ int main(int argc,char **argv)
   // Load bitstream if file provided
   if (bitstream)
     {
-      if (vivado_exe!=NULL)	{
+      if (vivado_bat!=NULL)	{
 	/*  For Windows we just call Vivado to do the FPGA programming,
 	    while we are having horrible USB problems otherwise. */
 	FILE *tclfile=fopen("temp.tcl","w");
@@ -2212,8 +2241,8 @@ int main(int argc,char **argv)
 	  exit(-1);
 	}
 	fprintf(tclfile,
-		"open_hw_manager\n"
-		"connect_hw_server -allow_non_jtag\n"
+		"open_hw\n" // "open_hw_manager\n"
+		"connect_hw_server\n" // -allow_non_jtag\n"
 		"open_hw_target\n"
 		"current_hw_device [get_hw_devices xc7a100t_0]\n"
 		"refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
@@ -2229,12 +2258,12 @@ int main(int argc,char **argv)
 	fclose(tclfile);
 	char cmd[8192];
 	snprintf(cmd,8192,"%s -mode batch -nojournal -nolog -notrace -source temp.tcl",
-		 vivado_exe);
+		 vivado_bat);
 	printf("Running %s...\n",cmd);
 	system(cmd);
 	unlink("temp.tcl");
       } else {
-	// No Vivado.exe, so try to use internal fpgajtag implementation.
+	// No Vivado.bat, so try to use internal fpgajtag implementation.
 	if (fpga_serial) {
 	  fpgajtag_main(bitstream,fpga_serial);
 	}
@@ -2299,7 +2328,9 @@ int main(int argc,char **argv)
 #endif
 
   if (screen_shot) {
-    exit(do_screen_shot());
+    stop_cpu();
+    do_screen_shot();
+    start_cpu();
   }
   
   unsigned long long last_check = gettime_ms();
