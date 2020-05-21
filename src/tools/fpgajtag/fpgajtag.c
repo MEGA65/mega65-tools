@@ -759,7 +759,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
       printf("Trying usb_index=%d\n",usb_index);
       if (!uinfo[usb_index].dev) {
 	fprintf(stderr, "fpgajtag: Can't find usable usb interface\n");
-	if (!bitstream) exit(-1); else return -1;
+	if (!bitstream) exit(-1); else return;
       }
       if (uinfo[usb_index].idVendor == USB_JTAG_ALTERA) {
 	fprintf(stderr,"Ignoring ALTERA device.\n");
