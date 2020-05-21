@@ -35,6 +35,8 @@
 #include "util.h"
 #include "elfdef.h"
 
+extern int usedk;
+
 #ifdef __arm__
 #define NO_LIBUSB
 #else
@@ -361,6 +363,19 @@ USB_INFO *fpgausb_init(void)
         printf("libusb_init failed\n");
         exit(-1);
     }
+
+#ifdef LIOBUSB_OPTION_USE_USBDK
+    if (usedk) {
+      printf("Requesting to use USBDK backend.\n");
+      int res=libusb_set_option(usb_context, LIBUSB_OPTION_USE_USBDK);
+      if (res<0) {
+	printf("WARNING: Failed to switch to USEDK backend: %s\n",libusb_strerror(open_result));
+      }
+    }
+#else
+#warning No USBDK support in libusb
+#endif
+ 
     while ((dev = device_list[i++]) ) {
         struct libusb_device_descriptor desc;
         if (libusb_get_device_descriptor(dev, &desc) < 0)

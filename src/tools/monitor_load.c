@@ -94,6 +94,9 @@ int not_already_loaded=1;
 
 int halt=0;
 
+int usedk=0;
+
+
 // 0 = old hard coded monitor, 1= Kenneth's 65C02 based fancy monitor
 int new_monitor=0;
 
@@ -116,6 +119,7 @@ void usage(void)
   fprintf(stderr,"  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr,"       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
   fprintf(stderr,"  -b - Name of bitstream file to load.\n");
+  fprintf(stderr,"  -K - Use DK backend for libUSB, if available\n");
   fprintf(stderr,"  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n");
   fprintf(stderr,"       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
   	         "             for the bitstream, and @issue/tag for HYPPO.\n");
@@ -2762,9 +2766,10 @@ int main(int argc,char **argv)
   printf("Getting started..\n");
   
   int opt;
-  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:k:Ll:m:MnoprR:Ss:t:T:U:V:XZ:")) != -1) {
+  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:m:MnoprR:Ss:t:T:U:V:XZ:")) != -1) {
     switch (opt) {
     case 'X': hyppo_report=1; break;
+    case 'K': usedk=1; break;
     case 'Z':
       {
 	// Zap (reconfig) FPGA via MEGA65 reconfig registers
