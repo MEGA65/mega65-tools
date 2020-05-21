@@ -79,6 +79,7 @@ u_long htonl(u_long x)
 #define SEGMENT_LENGTH   256 /* sizes above 256bytes seem to get more bytes back in response than were requested */
 
 extern char *serial_port;
+extern char *bitstream;
 
 uint8_t *input_fileptr;
 int input_filesize, found_cortex = -1, jtag_index = -1, dcount, idcode_count;
@@ -758,7 +759,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
       printf("Trying usb_index=%d\n",usb_index);
       if (!uinfo[usb_index].dev) {
 	fprintf(stderr, "fpgajtag: Can't find usable usb interface\n");
-	exit(-1);
+	if (!bitstream) exit(-1); else return -1;
       }
       if (uinfo[usb_index].idVendor == USB_JTAG_ALTERA) {
 	fprintf(stderr,"Ignoring ALTERA device.\n");

@@ -51,12 +51,12 @@ TESTS=		$(TESTDIR)/ascii.prg \
 
 TOOLDIR=	$(SRCDIR)/tools
 TOOLS=	$(BINDIR)/etherload \
-	$(BINDIR)/monitor_load \
+	$(BINDIR)/m65 \
 	$(BINDIR)/mega65_ftp \
 	$(BINDIR)/monitor_save \
 	$(BINDIR)/pngprepare \
 	$(BINDIR)/giftotiles \
-	$(BINDIR)/monitor_load.exe
+	$(BINDIR)/m65.exe
 
 SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
@@ -249,11 +249,11 @@ $(SDCARD_DIR)/BANNER.M65:	$(BINDIR)/pngprepare $(ASSETS)/mega65_320x64.png /usr/
 	/usr/bin/convert -colors 128 -depth 8 +dither $(ASSETS)/mega65_320x64.png $(BINDIR)/mega65_320x64_128colour.png
 	$(BINDIR)/pngprepare logo $(BINDIR)/mega65_320x64_128colour.png $(SDCARD_DIR)/BANNER.M65
 
-$(BINDIR)/monitor_load:	$(TOOLDIR)/monitor_load.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
-	$(CC) $(COPT) -g -Wall -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/monitor_load $(TOOLDIR)/monitor_load.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
+$(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+	$(CC) $(COPT) -g -Wall -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/m65 $(TOOLDIR)/m65.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
-$(BINDIR)/monitor_load.exe:	$(TOOLDIR)/monitor_load.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
-	$(WINCC) $(WINCOPT) -g -Wall -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/monitor_load.exe $(TOOLDIR)/monitor_load.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -Wl,-Bstatic -lpng -lz -Wl,-Bdynamic
+$(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+	$(WINCC) $(WINCOPT) -g -Wall -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -Wl,-Bstatic -lpng -lz -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
 $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
