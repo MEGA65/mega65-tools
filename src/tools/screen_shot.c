@@ -703,7 +703,7 @@ void paint_screen_shot(void)
     y_position+=8*(1+y_scale);
   }
   
-  return 0;
+  return;
 }
 
 
