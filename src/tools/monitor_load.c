@@ -12,22 +12,22 @@
   2. If an optional bitstream file is provided, then we use fpgajtag to load
   the bitstream via JTAG.  fpgajtag is now compiled internally to this program.
 
-Copyright (C) 2014-2020 Paul Gardner-Stephen
-Portions Copyright (C) 2013 Serval Project Inc.
+  Copyright (C) 2014-2020 Paul Gardner-Stephen
+  Portions Copyright (C) 2013 Serval Project Inc.
  
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+  This program is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License
+  as published by the Free Software Foundation; either version 2
+  of the License, or (at your option) any later version.
  
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
  
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 #define _GNU_SOURCE
@@ -58,7 +58,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #ifdef WINDOWS
 #define PORT_TYPE HANDLE
 SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
-  int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
+int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
 #else
 #define PORT_TYPE int
 size_t serialport_read(int fd, uint8_t * buffer, size_t size);
@@ -123,7 +123,7 @@ void usage(void)
   fprintf(stderr,"  -K - Use DK backend for libUSB, if available\n");
   fprintf(stderr,"  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n");
   fprintf(stderr,"       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
-  	         "             for the bitstream, and @issue/tag for HYPPO.\n");
+	  "             for the bitstream, and @issue/tag for HYPPO.\n");
   fprintf(stderr,"  -J - Do JTAG boundary scan of attached FPGA, using the provided XDC and BSDL files.\n");
   fprintf(stderr,"       A sensitivity list can also be provided, to restrict the set of signals monitored.\n");
   fprintf(stderr,"       This will likely be required when producing VCD files, as they can only log ~80 signals.\n");
@@ -283,22 +283,22 @@ long long gettime_us()
   long long retVal = -1;
 
   do 
-  {
-    struct timeval nowtv;
-
-    // If gettimeofday() fails or returns an invalid value, all else is lost!
-    if (gettimeofday(&nowtv, NULL) == -1)
     {
-      break;
-    }
+      struct timeval nowtv;
 
-    if (nowtv.tv_sec < 0 || nowtv.tv_usec < 0 || nowtv.tv_usec >= 1000000)
-    {
-      break;
-    }
+      // If gettimeofday() fails or returns an invalid value, all else is lost!
+      if (gettimeofday(&nowtv, NULL) == -1)
+	{
+	  break;
+	}
 
-    retVal = nowtv.tv_sec * 1000000LL + nowtv.tv_usec;
-  }
+      if (nowtv.tv_sec < 0 || nowtv.tv_usec < 0 || nowtv.tv_usec >= 1000000)
+	{
+	  break;
+	}
+
+      retVal = nowtv.tv_sec * 1000000LL + nowtv.tv_usec;
+    }
   while (0);
 
   return retVal;
@@ -380,9 +380,9 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     // Also, Kenneth's implementation doesn't need the -1, so we need to know which version we
     // are talking to.
     if (new_monitor) 
-    	sprintf(cmd,"l%x %x\r",load_addr,(load_addr+b)&0xffff);
+      sprintf(cmd,"l%x %x\r",load_addr,(load_addr+b)&0xffff);
     else    
- 	sprintf(cmd,"l%x %x\r",munged_load_addr-1,(munged_load_addr+b-1)&0xffff);
+      sprintf(cmd,"l%x %x\r",munged_load_addr-1,(munged_load_addr+b-1)&0xffff);
     // printf("  command ='%s'\n",cmd);
     slow_write(fd,cmd,strlen(cmd));
     usleep(1000);
@@ -524,57 +524,57 @@ int virtual_f011_read(int device,int track,int sector,int side)
       ||(last_virtual_sector!=sector)
       ||(last_virtual_side!=side)
       )
-  {
-    last_virtual_time=gettime_ms();
-    last_virtual_track=track;
-    last_virtual_sector=sector;
-    last_virtual_side=side;
+    {
+      last_virtual_time=gettime_ms();
+      last_virtual_track=track;
+      last_virtual_sector=sector;
+      last_virtual_side=side;
     
-    /* read the block */
-    unsigned char buf[512];
-    int b=-1;
-    int physical_sector=( side==0 ? sector-1 : sector+9 );
-    int result = fseek(fd81, (track*20+physical_sector)*512, SEEK_SET);
-    if(result) {
+      /* read the block */
+      unsigned char buf[512];
+      int b=-1;
+      int physical_sector=( side==0 ? sector-1 : sector+9 );
+      int result = fseek(fd81, (track*20+physical_sector)*512, SEEK_SET);
+      if(result) {
       
-      fprintf(stderr, "Error finding D81 sector %d @ 0x%x\n", result, (track*20+physical_sector)*512);
-      exit(-2);
-    }
-    else {
-      b=fread(buf,1,512,fd81);
-      fprintf(stderr, " bytes read: %d @ 0x%x\n", b,(track*20+physical_sector)*512);
-      if(b==512) {
-	
-	//      dump_bytes(0,"The sector",buf,512);
-	
-	char cmd[1024];
-	
-	/* send block to m65 memory */
-	if (new_monitor) 
-	  sprintf(cmd,"l%x %x\r",READ_SECTOR_BUFFER_ADDRESS,
-		  (READ_SECTOR_BUFFER_ADDRESS+0x200)&0xffff);
-	else
-	  sprintf(cmd,"l%x %x\r",READ_SECTOR_BUFFER_ADDRESS-1,
-		  READ_SECTOR_BUFFER_ADDRESS+0x200-1);
-	slow_write(fd,cmd,strlen(cmd));
-	usleep(1000);
-	int n=0x200;
-	unsigned char *p=buf;
-	//	      fprintf(stderr,"%s\n",cmd);
-	//	      dump_bytes(0,"F011 virtual sector data",p,512);
-	while(n>0) {
-	  int w=serialport_write(fd,p,n);
-	  if (w>0) { p+=w; n-=w; } else usleep(1000);
-	}
-#ifdef WINDOWS       
-	printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
-#else	
-	printf("T+%lld ms : Block sent.\n",gettime_ms()-start);
-#endif	
+	fprintf(stderr, "Error finding D81 sector %d @ 0x%x\n", result, (track*20+physical_sector)*512);
+	exit(-2);
       }
-    }
+      else {
+	b=fread(buf,1,512,fd81);
+	fprintf(stderr, " bytes read: %d @ 0x%x\n", b,(track*20+physical_sector)*512);
+	if(b==512) {
+	
+	  //      dump_bytes(0,"The sector",buf,512);
+	
+	  char cmd[1024];
+	
+	  /* send block to m65 memory */
+	  if (new_monitor) 
+	    sprintf(cmd,"l%x %x\r",READ_SECTOR_BUFFER_ADDRESS,
+		    (READ_SECTOR_BUFFER_ADDRESS+0x200)&0xffff);
+	  else
+	    sprintf(cmd,"l%x %x\r",READ_SECTOR_BUFFER_ADDRESS-1,
+		    READ_SECTOR_BUFFER_ADDRESS+0x200-1);
+	  slow_write(fd,cmd,strlen(cmd));
+	  usleep(1000);
+	  int n=0x200;
+	  unsigned char *p=buf;
+	  //	      fprintf(stderr,"%s\n",cmd);
+	  //	      dump_bytes(0,"F011 virtual sector data",p,512);
+	  while(n>0) {
+	    int w=serialport_write(fd,p,n);
+	    if (w>0) { p+=w; n-=w; } else usleep(1000);
+	  }
+#ifdef WINDOWS       
+	  printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
+#else	
+	  printf("T+%lld ms : Block sent.\n",gettime_ms()-start);
+#endif	
+	}
+      }
 
-  }
+    }
 
   /* signal done/result */
   snprintf(cmd,1024,"sffd3086 %x\n",side);
@@ -589,21 +589,21 @@ int virtual_f011_read(int device,int track,int sector,int side)
 }
 
 typedef struct {
-	char mask;    /* char data will be bitwise AND with this */
-	char lead;    /* start bytes of current char in utf-8 encoded character */
-	uint32_t beg; /* beginning of codepoint range */
-	uint32_t end; /* end of codepoint range */
-	int bits_stored; /* the number of bits from the codepoint that fits in char */
+  char mask;    /* char data will be bitwise AND with this */
+  char lead;    /* start bytes of current char in utf-8 encoded character */
+  uint32_t beg; /* beginning of codepoint range */
+  uint32_t end; /* end of codepoint range */
+  int bits_stored; /* the number of bits from the codepoint that fits in char */
 }utf_t;
  
 utf_t * utf[] = {
-	/*             mask        lead        beg      end       bits */
-	[0] = &(utf_t){0b00111111, 0b10000000, 0,       0,        6    },
-	[1] = &(utf_t){0b01111111, 0b00000000, 0000,    0177,     7    },
-	[2] = &(utf_t){0b00011111, 0b11000000, 0200,    03777,    5    },
-	[3] = &(utf_t){0b00001111, 0b11100000, 04000,   0177777,  4    },
-	[4] = &(utf_t){0b00000111, 0b11110000, 0200000, 04177777, 3    },
-	      &(utf_t){0},
+  /*             mask        lead        beg      end       bits */
+  [0] = &(utf_t){0b00111111, 0b10000000, 0,       0,        6    },
+  [1] = &(utf_t){0b01111111, 0b00000000, 0000,    0177,     7    },
+  [2] = &(utf_t){0b00011111, 0b11000000, 0200,    03777,    5    },
+  [3] = &(utf_t){0b00001111, 0b11100000, 04000,   0177777,  4    },
+  [4] = &(utf_t){0b00000111, 0b11110000, 0200000, 04177777, 3    },
+  &(utf_t){0},
 };
 
 // UTF-8 from https://rosettacode.org/wiki/UTF-8_encode_and_decode#C
@@ -617,48 +617,48 @@ uint32_t to_cp(const char chr[4]);
  
 int codepoint_len(const uint32_t cp)
 {
-	int len = 0;
-	for(utf_t **u = utf; *u; ++u) {
-		if((cp >= (*u)->beg) && (cp <= (*u)->end)) {
-			break;
-		}
-		++len;
-	}
-	if(len > 4) /* Out of bounds */
-		exit(1);
+  int len = 0;
+  for(utf_t **u = utf; *u; ++u) {
+    if((cp >= (*u)->beg) && (cp <= (*u)->end)) {
+      break;
+    }
+    ++len;
+  }
+  if(len > 4) /* Out of bounds */
+    exit(1);
  
-	return len;
+  return len;
 }
  
 int utf8_len(const char ch)
 {
-	int len = 0;
-	for(utf_t **u = utf; *u; ++u) {
-		if((ch & ~(*u)->mask) == (*u)->lead) {
-			break;
-		}
-		++len;
-	}
-	if(len > 4) { /* Malformed leading byte */
-		exit(1);
-	}
-	return len;
+  int len = 0;
+  for(utf_t **u = utf; *u; ++u) {
+    if((ch & ~(*u)->mask) == (*u)->lead) {
+      break;
+    }
+    ++len;
+  }
+  if(len > 4) { /* Malformed leading byte */
+    exit(1);
+  }
+  return len;
 }
  
 char *to_utf8(const uint32_t cp)
 {
-	static char ret[5];
-	const int bytes = codepoint_len(cp);
+  static char ret[5];
+  const int bytes = codepoint_len(cp);
  
-	int shift = utf[0]->bits_stored * (bytes - 1);
-	ret[0] = (cp >> shift & utf[bytes]->mask) | utf[bytes]->lead;
-	shift -= utf[0]->bits_stored;
-	for(int i = 1; i < bytes; ++i) {
-		ret[i] = (cp >> shift & utf[0]->mask) | utf[0]->lead;
-		shift -= utf[0]->bits_stored;
-	}
-	ret[bytes] = '\0';
-	return ret;
+  int shift = utf[0]->bits_stored * (bytes - 1);
+  ret[0] = (cp >> shift & utf[bytes]->mask) | utf[bytes]->lead;
+  shift -= utf[0]->bits_stored;
+  for(int i = 1; i < bytes; ++i) {
+    ret[i] = (cp >> shift & utf[0]->mask) | utf[0]->lead;
+    shift -= utf[0]->bits_stored;
+  }
+  ret[bytes] = '\0';
+  return ret;
 }
 
 void print_screencode(unsigned char c, int upper_case)
@@ -853,7 +853,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
   /* Fetch a block of RAM into the provided buffer.
      This greatly simplifies many tasks.
-   */
+  */
 
   unsigned long addr=address;
   unsigned long end_addr;
@@ -1132,13 +1132,13 @@ int do_screen_shot(void)
     //    dump_bytes(0,"row data",&screen_data[y*screen_line_step],screen_width*(1+sixteenbit_mode));
 
     printf("%c[48;2;%d;%d;%dm ",
-	 27,
-	 ((vic_regs[0x0100+border_colour]&0xf)<<4)+
-	 ((vic_regs[0x0100+border_colour]&0xf0)>>4),
-	 ((vic_regs[0x0200+border_colour]&0xf)<<4)+
-	 ((vic_regs[0x0200+border_colour]&0xf0)>>4),
-	 ((vic_regs[0x0300+border_colour]&0xf)<<4)+
-	 ((vic_regs[0x0300+border_colour]&0xf0)>>4));
+	   27,
+	   ((vic_regs[0x0100+border_colour]&0xf)<<4)+
+	   ((vic_regs[0x0100+border_colour]&0xf0)>>4),
+	   ((vic_regs[0x0200+border_colour]&0xf)<<4)+
+	   ((vic_regs[0x0200+border_colour]&0xf0)>>4),
+	   ((vic_regs[0x0300+border_colour]&0xf)<<4)+
+	   ((vic_regs[0x0300+border_colour]&0xf0)>>4));
     
     for(int x=0;x<screen_width;x++) {
 
@@ -1220,13 +1220,13 @@ int do_screen_shot(void)
     }
 
     printf("%c[48;2;%d;%d;%dm ",
-	 27,
-	 ((vic_regs[0x0100+border_colour]&0xf)<<4)+
-	 ((vic_regs[0x0100+border_colour]&0xf0)>>4),
-	 ((vic_regs[0x0200+border_colour]&0xf)<<4)+
-	 ((vic_regs[0x0200+border_colour]&0xf0)>>4),
-	 ((vic_regs[0x0300+border_colour]&0xf)<<4)+
-	 ((vic_regs[0x0300+border_colour]&0xf0)>>4));
+	   27,
+	   ((vic_regs[0x0100+border_colour]&0xf)<<4)+
+	   ((vic_regs[0x0100+border_colour]&0xf0)>>4),
+	   ((vic_regs[0x0200+border_colour]&0xf)<<4)+
+	   ((vic_regs[0x0200+border_colour]&0xf0)>>4),
+	   ((vic_regs[0x0300+border_colour]&0xf)<<4)+
+	   ((vic_regs[0x0300+border_colour]&0xf0)>>4));
     
     // Set foreground and background colours back to normal at end of each line, before newline    
     printf("%c[0m\n",27);
@@ -1253,10 +1253,10 @@ int do_screen_shot(void)
   char filename[1024];
   for(int n=0;n<1000000;n++)
     {
-  snprintf(filename,1024,"mega65-screen-%06d.png",n);
-  f = fopen(filename, "rb");
-  if (!f) break;
-}
+      snprintf(filename,1024,"mega65-screen-%06d.png",n);
+      f = fopen(filename, "rb");
+      if (!f) break;
+    }
   f = fopen(filename, "wb");
   if (!f) {
     fprintf(stderr,"ERROR: Could not open mega65-screen.png for writing.\n");
@@ -1550,8 +1550,8 @@ int process_line(char *line,int live)
   //  printf("[%s]\n",line);
   if (!live) return 0;
   if (strstr(line,"ws h RECA8LHC")) {
-     if (!new_monitor) printf("Detected new-style UART monitor.\n");
-     new_monitor=1;
+    if (!new_monitor) printf("Detected new-style UART monitor.\n");
+    new_monitor=1;
   }
   if (sscanf(line,"%04x %02x %02x %02x %02x %02x",
 	     &pc,&a,&x,&y,&sp,&p)==6) {
@@ -1631,10 +1631,10 @@ int process_line(char *line,int live)
 	  char cmd[1024];
 	  usleep(20000);
 	  snprintf(cmd,1024,"sffd36c8 %x %x %x %x\r",
-		  (zap_addr>>0)&0xff,
-		  (zap_addr>>8)&0xff,
-		  (zap_addr>>16)&0xff,
-		  (zap_addr>>24)&0xff);
+		   (zap_addr>>0)&0xff,
+		   (zap_addr>>8)&0xff,
+		   (zap_addr>>16)&0xff,
+		   (zap_addr>>24)&0xff);
 	  slow_write(fd,cmd,strlen(cmd));	  
 	  usleep(20000);
 	  snprintf(cmd,1024,"sffd36cf 42\r");
@@ -1663,17 +1663,17 @@ int process_line(char *line,int live)
 	      // Punctuation that requires shifts
 	      switch (c)
 		{
-	        case '!': c='1'; c2=0x0f; break;
-	        case '\"': c='2'; c2=0x0f; break;
-	        case '#': c='3'; c2=0x0f; break;
-	        case '$': c='4'; c2=0x0f; break;
-	        case '%': c='5'; c2=0x0f; break;
-	        case '(': c='8'; c2=0x0f; break;
-	        case ')': c='9'; c2=0x0f; break;
-	        case '?': c='/'; c2=0x0f; break;
+		case '!': c='1'; c2=0x0f; break;
+		case '\"': c='2'; c2=0x0f; break;
+		case '#': c='3'; c2=0x0f; break;
+		case '$': c='4'; c2=0x0f; break;
+		case '%': c='5'; c2=0x0f; break;
+		case '(': c='8'; c2=0x0f; break;
+		case ')': c='9'; c2=0x0f; break;
+		case '?': c='/'; c2=0x0f; break;
 		case '<': c=','; c2=0x0f; break;
 		case '>': c='.'; c2=0x0f; break;
-	      }
+		}
 	      switch (c)
 		{
 		case '~':
@@ -1742,23 +1742,23 @@ int process_line(char *line,int live)
 		case '}': c1=0x30; break;  // British pound symbol
 		case '*': c1=0x31; break;
 		case ';': c1=0x32; break;
-  	        case 0x13: c1=0x33; break; // home
-	     // case '': c1=0x34; break; right shift
+		case 0x13: c1=0x33; break; // home
+		  // case '': c1=0x34; break; right shift
 		case '=': c1=0x35; break;
 		case 0x91: c1=0x36; break;
 		case '/': c1=0x37; break;
 
 		case '1': c1=0x38; break;
 		case '_': c1=0x39; break;
-	     // case '': c1=0x3a; break; control
+		  // case '': c1=0x3a; break; control
 		case '2': c1=0x3b; break;
 		case ' ': c1=0x3c; break;
-	     // case '': c1=0x3d; break; C=
+		  // case '': c1=0x3d; break; C=
 		case 'q': c1=0x3e; break;
 		case 0x0c: c1=0x3f; break;
 
-	      default: c1=0x7f;
-	      }
+		default: c1=0x7f;
+		}
 	      char cmd[1024];
 	      snprintf(cmd,1024,"sffd3615 %02x %02x\n",c1,c2);
 	      slow_write(fd,cmd,strlen(cmd));
@@ -1858,12 +1858,12 @@ int process_line(char *line,int live)
 	  state=0;
 	}
       }
-     else if(addr == sdbuf_request_addr) {
-       printf("Saw data for write buffer @ $%x\n",addr);
+      else if(addr == sdbuf_request_addr) {
+	printf("Saw data for write buffer @ $%x\n",addr);
        
 	int i;
 	for(i=0;i<16;i++)
-	    sd_sector_buf[sdbuf_request_addr-WRITE_SECTOR_BUFFER_ADDRESS+i]=b[i];
+	  sd_sector_buf[sdbuf_request_addr-WRITE_SECTOR_BUFFER_ADDRESS+i]=b[i];
         sdbuf_request_addr += 16;
 
         if(sdbuf_request_addr == (WRITE_SECTOR_BUFFER_ADDRESS+0x100)) {
@@ -1892,7 +1892,7 @@ int process_line(char *line,int live)
 	    b=fwrite(sd_sector_buf,1,512,fd81);
             if(b!=512) {
 
-             fprintf(stderr, "Could not write D81 file: '%s'\n", d81file);
+	      fprintf(stderr, "Could not write D81 file: '%s'\n", d81file);
 	      exit(-1);
             }
 	    fprintf(stderr, "write: %d @ 0x%x\n", b, (saved_track*20+physical_sector)*512);
@@ -1918,101 +1918,101 @@ int process_line(char *line,int live)
       ||(!strcmp(line,":00000800:A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0A0")))
     {
 
-    if (modeline_cmd[0]) {
+      if (modeline_cmd[0]) {
 #ifdef WINDOWS
-      fprintf(stderr,"[T+%I64dsec] Setting video modeline\n",(long long)time(0)-start_time);
+	fprintf(stderr,"[T+%I64dsec] Setting video modeline\n",(long long)time(0)-start_time);
 #else
-      fprintf(stderr,"[T+%lldsec] Setting video modeline\n",(long long)time(0)-start_time);
+	fprintf(stderr,"[T+%lldsec] Setting video modeline\n",(long long)time(0)-start_time);
 #endif
-      fprintf(stderr,"Commands:\n%s\n",modeline_cmd);
-      slow_write(fd,modeline_cmd,strlen(modeline_cmd));
+	fprintf(stderr,"Commands:\n%s\n",modeline_cmd);
+	slow_write(fd,modeline_cmd,strlen(modeline_cmd));
 
-      // Disable on-screen keyboard to be sure
-      usleep(50000);
-      slow_write(fd,"sffd3615 7f\n",12);
+	// Disable on-screen keyboard to be sure
+	usleep(50000);
+	slow_write(fd,"sffd3615 7f\n",12);
       
       
-      // Force mode change to take effect, after first giving time for VICIV to recalc parameters      
-      usleep(50000);
-      slow_write(fd,"sffd3011 1b\n",12);
+	// Force mode change to take effect, after first giving time for VICIV to recalc parameters      
+	usleep(50000);
+	slow_write(fd,"sffd3011 1b\n",12);
 
 #if 0
-      // Check X smooth-scroll values
-      int i;
-      for(i=0;i<10;i++)
-	{
-	  char cmd[1024];
-	  snprintf(cmd,1024,"sffd307d %x\n",i);
-	  slow_write(fd,cmd,strlen(cmd));
-	  snprintf(cmd,1024,"mffd307d\n");
-	  slow_write(fd,cmd,strlen(cmd));
-	  usleep(50000);
-	  read_and_print(fd);
-	}
+	// Check X smooth-scroll values
+	int i;
+	for(i=0;i<10;i++)
+	  {
+	    char cmd[1024];
+	    snprintf(cmd,1024,"sffd307d %x\n",i);
+	    slow_write(fd,cmd,strlen(cmd));
+	    snprintf(cmd,1024,"mffd307d\n");
+	    slow_write(fd,cmd,strlen(cmd));
+	    usleep(50000);
+	    read_and_print(fd);
+	  }
 #endif
       
-      // Then ask for current mode information via VIC-IV registers, but first give a little time
-      // for the mode change to take effect
-      usleep(100000);
-      slow_write(fd,"Mffd3040\n",9);
+	// Then ask for current mode information via VIC-IV registers, but first give a little time
+	// for the mode change to take effect
+	usleep(100000);
+	slow_write(fd,"Mffd3040\n",9);
       
-    }
-    else if (mode_report) {
-      slow_write(fd,"Mffd3040\n",9);
-    }
-
-    // We are in C65 mode - switch to C64 mode
-    if (osk_enable) {
-      char *cmd="sffd3615 ff\r";
-      slow_write(fd,cmd,strlen(cmd));      
-    }
-    if (do_go64) {
-      // PGS 20181123 - Keyboard buffer has moved in newer C65 ROMs from $34A to $2D0
-      saw_c65_mode=1; stuff_keybuffer("GO64\rY\r");
-      saw_c65_mode=0;
-#ifdef WINDOWS
-      if (first_go64) fprintf(stderr,"[T+%I64dsec] GO64\nY\n",(long long)time(0)-start_time);
-#else
-      if (first_go64) fprintf(stderr,"[T+%lldsec] GO64\nY\n",(long long)time(0)-start_time);
-#endif
-      first_go64=0;
-    } else {
-      if (!saw_c65_mode) fprintf(stderr,"MEGA65 is in C65 mode.\n");
-      saw_c65_mode=1;
-      if ((!do_go64)&&filename&&not_already_loaded) {
-	printf("XXX Trying to load from C65 mode\n");
-	char *cmd;
-	cmd="bf664\r";
-	slow_write(fd,cmd,strlen(cmd));
-	stuff_keybuffer("DLo\"!\r");
-#ifdef WINDOWS
-	if (first_load) fprintf(stderr,"[T+%I64dsec] Injecting LOAD\"!\n",(long long)time(0)-start_time);
-#else
-	if (first_load) fprintf(stderr,"[T+%lldsec] Injecting LOAD\"!\n",(long long)time(0)-start_time);
-#endif
-	first_load=0;
-
-	while(state!=1) {
-	  process_waiting(fd);
-	}
-	
-      } else if ((!mode_report)&&(!virtual_f011)&&(!type_text)) {
-        if (do_run) {
-          // C65 mode stuff keyboard buffer
-	  printf("XXX - Do C65 keyboard buffer stuffing\n");
-	  //	} else if (screen_shot) {
-	  //	  if (!screen_address) {
-	  //	    printf("Waiting to capture screen...\n");
-	  //	    // We need to get some info about the screen
-	  //	    slow_write_safe(fd,"Mffd3058\r",9);
-	  //	  }
-        } else {
-  	  fprintf(stderr,"Exiting now that we are in C65 mode.\n");
-	  do_exit(0);
-        }
       }
-    }    
-  }
+      else if (mode_report) {
+	slow_write(fd,"Mffd3040\n",9);
+      }
+
+      // We are in C65 mode - switch to C64 mode
+      if (osk_enable) {
+	char *cmd="sffd3615 ff\r";
+	slow_write(fd,cmd,strlen(cmd));      
+      }
+      if (do_go64) {
+	// PGS 20181123 - Keyboard buffer has moved in newer C65 ROMs from $34A to $2D0
+	saw_c65_mode=1; stuff_keybuffer("GO64\rY\r");
+	saw_c65_mode=0;
+#ifdef WINDOWS
+	if (first_go64) fprintf(stderr,"[T+%I64dsec] GO64\nY\n",(long long)time(0)-start_time);
+#else
+	if (first_go64) fprintf(stderr,"[T+%lldsec] GO64\nY\n",(long long)time(0)-start_time);
+#endif
+	first_go64=0;
+      } else {
+	if (!saw_c65_mode) fprintf(stderr,"MEGA65 is in C65 mode.\n");
+	saw_c65_mode=1;
+	if ((!do_go64)&&filename&&not_already_loaded) {
+	  printf("XXX Trying to load from C65 mode\n");
+	  char *cmd;
+	  cmd="bf664\r";
+	  slow_write(fd,cmd,strlen(cmd));
+	  stuff_keybuffer("DLo\"!\r");
+#ifdef WINDOWS
+	  if (first_load) fprintf(stderr,"[T+%I64dsec] Injecting LOAD\"!\n",(long long)time(0)-start_time);
+#else
+	  if (first_load) fprintf(stderr,"[T+%lldsec] Injecting LOAD\"!\n",(long long)time(0)-start_time);
+#endif
+	  first_load=0;
+
+	  while(state!=1) {
+	    process_waiting(fd);
+	  }
+	
+	} else if ((!mode_report)&&(!virtual_f011)&&(!type_text)) {
+	  if (do_run) {
+	    // C65 mode stuff keyboard buffer
+	    printf("XXX - Do C65 keyboard buffer stuffing\n");
+	    //	} else if (screen_shot) {
+	    //	  if (!screen_address) {
+	    //	    printf("Waiting to capture screen...\n");
+	    //	    // We need to get some info about the screen
+	    //	    slow_write_safe(fd,"Mffd3058\r",9);
+	    //	  }
+	  } else {
+	    fprintf(stderr,"Exiting now that we are in C65 mode.\n");
+	    do_exit(0);
+	  }
+	}
+      }    
+    }
   if (// C64 BASIC banner
       (!strcmp(line," :000042C 2A 2A 2A 2A 20 03 0F 0D 0D 0F 04 0F 12 05 20 36"))
       ||(!strcmp(line,":0000042C:2A2A2A2A20030F0D0D0F040F12052036"))
@@ -2468,9 +2468,9 @@ void print_error(const char * context)
   DWORD error_code = GetLastError();
   char buffer[256];
   DWORD size = FormatMessageA(
-    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_MAX_WIDTH_MASK,
-    NULL, error_code, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
-    buffer, sizeof(buffer), NULL);
+			      FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+			      NULL, error_code, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+			      buffer, sizeof(buffer), NULL);
   if (size == 0) { buffer[0] = 0; }
   fprintf(stderr, "%s: %s\n", context, buffer);
 }
@@ -2481,21 +2481,21 @@ void print_error(const char * context)
 HANDLE open_serial_port(const char * device, uint32_t baud_rate)
 {
   HANDLE port = CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0, NULL,
-    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
   if (port == INVALID_HANDLE_VALUE)
-  {
-    print_error(device);
-    return INVALID_HANDLE_VALUE;
-  }
+    {
+      print_error(device);
+      return INVALID_HANDLE_VALUE;
+    }
  
   // Flush away any bytes previously read or written.
   BOOL success = FlushFileBuffers(port);
   if (!success)
-  {
-    print_error("Failed to flush serial port");
-    CloseHandle(port);
-    return INVALID_HANDLE_VALUE;
-  }
+    {
+      print_error("Failed to flush serial port");
+      CloseHandle(port);
+      return INVALID_HANDLE_VALUE;
+    }
  
   // Configure read and write operations to time out after 1 ms and 100 ms, respectively.
   COMMTIMEOUTS timeouts = { 0 };
@@ -2507,21 +2507,21 @@ HANDLE open_serial_port(const char * device, uint32_t baud_rate)
  
   success = SetCommTimeouts(port, &timeouts);
   if (!success)
-  {
-    print_error("Failed to set serial timeouts");
-    CloseHandle(port);
-   return INVALID_HANDLE_VALUE;
-  }
+    {
+      print_error("Failed to set serial timeouts");
+      CloseHandle(port);
+      return INVALID_HANDLE_VALUE;
+    }
  
   DCB state;
   state.DCBlength = sizeof(DCB);
   success = GetCommState(port, &state);
   if (!success)
-  {
-    print_error("Failed to get serial settings");
-    CloseHandle(port);
-    return INVALID_HANDLE_VALUE;
-  }
+    {
+      print_error("Failed to get serial settings");
+      CloseHandle(port);
+      return INVALID_HANDLE_VALUE;
+    }
 
   state.fBinary = TRUE;
   state.fDtrControl = DTR_CONTROL_ENABLE;
@@ -2543,11 +2543,11 @@ HANDLE open_serial_port(const char * device, uint32_t baud_rate)
  
   success = SetCommState(port, &state);
   if (!success)
-  {
-    print_error("Failed to set serial settings");
-    CloseHandle(port);
-    return INVALID_HANDLE_VALUE;
-  }
+    {
+      print_error("Failed to set serial settings");
+      CloseHandle(port);
+      return INVALID_HANDLE_VALUE;
+    }
  
   return port;
 }
@@ -2560,15 +2560,15 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
   BOOL success = WriteFile(port, buffer, size, &written, NULL);
   //  printf("  WriteFile() returned.\n");
   if (!success)
-  {
-    print_error("Failed to write to port");
-    return -1;
-  }
+    {
+      print_error("Failed to write to port");
+      return -1;
+    }
   if (written != size)
-  {
-    print_error("Failed to write all bytes to port");
-    return -1;
-  }
+    {
+      print_error("Failed to write all bytes to port");
+      return -1;
+    }
   return size;
 }
  
@@ -2583,10 +2583,10 @@ SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
   //  printf("Calling ReadFile(%I64d)\n",size);
   BOOL success = ReadFile(port, buffer, size, &received, NULL);
   if (!success)
-  {
-    print_error("Failed to read from port");
-    return -1;
-  }
+    {
+      print_error("Failed to read from port");
+      return -1;
+    }
   //  printf("  ReadFile() returned. Received %ld bytes\n",received);
   return received;
 }
@@ -2602,7 +2602,7 @@ size_t serialport_read(int fd, uint8_t * buffer, size_t size)
   return read(fd,buffer,size);
 }
 
-  void set_serial_speed(int fd,int serial_speed)
+void set_serial_speed(int fd,int serial_speed)
 {
   fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
   struct termios t;
@@ -2646,8 +2646,8 @@ void *run_boundary_scan(void *argp)
 
 #ifndef WINDOWS
 #define MAX_THREADS 16
-  int thread_count=0;
-  pthread_t threads[MAX_THREADS];
+int thread_count=0;
+pthread_t threads[MAX_THREADS];
 #endif
 
 void download_bitstream(void)
@@ -2871,56 +2871,53 @@ int main(int argc,char **argv)
   if (argc-optind>1) usage();
   
   // Load bitstream if file provided
-  if (bitstream) {
-    // char cmd[1024];
-#ifdef WINDOWS
+  if (bitstream)
     {
-      // For Windows we just call Vivado to do the FPGA programming,
-      // while we are having horrible USB problems otherwise.
-      FILE *tclfile=fopen("temp.tcl","w");
-      if (!tclfile) {
-	fprintf(stderr,"ERROR: Could not create temp.tcl");
-	exit(-1);
+      if (vivado_exe!=NULL)	{
+	/*  For Windows we just call Vivado to do the FPGA programming,
+	    while we are having horrible USB problems otherwise. */
+	FILE *tclfile=fopen("temp.tcl","w");
+	if (!tclfile) {
+	  fprintf(stderr,"ERROR: Could not create temp.tcl");
+	  exit(-1);
+	}
+	fprintf(tclfile,
+		"open_hw_manager\n"
+		"connect_hw_server -allow_non_jtag\n"
+		"open_hw_target\n"
+		"current_hw_device [get_hw_devices xc7a100t_0]\n"
+		"refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+		"refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+		"\n"
+		"set_property PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
+		"set_property FULL_PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
+		"set_property PROGRAM.FILE {%s} [get_hw_devices xc7a100t_0]\n"
+		"refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+		"program_hw_devices [get_hw_devices xc7a100t_0]\n"
+		"refresh_hw_device [lindex [get_hw_devices xc7a100t_0] 0]\n"
+		"quit\n",bitstream);
+	fclose(tclfile);
+	char cmd[8192];
+	snprintf(cmd,8192,"%s -mode batch -nojournal -nolog -notrace -source temp.tcl",
+		 vivado_exe);
+	printf("Running %s...\n",cmd);
+	system(cmd);
+	unlink("temp.tcl");
+      } else {
+	// No Vivado.exe, so try to use internal fpgajtag implementation.
+	if (fpga_serial) {
+	  fpgajtag_main(bitstream,fpga_serial);
+	}
+	else {
+	  fpgajtag_main(bitstream,NULL);
+	}
       }
-      fprintf(tclfile,
-	      "open_hw_manager\n"
-	      "connect_hw_server -allow_non_jtag\n"
-	      "open_hw_target\n"
-	      "current_hw_device [get_hw_devices xc7a100t_0]\n"
-	      "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
-	      "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
-	      "\n"
-	      "set_property PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
-	      "set_property FULL_PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
-	      "set_property PROGRAM.FILE {%s} [get_hw_devices xc7a100t_0]\n"
-	      "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
-	      "program_hw_devices [get_hw_devices xc7a100t_0]\n"
-	      "refresh_hw_device [lindex [get_hw_devices xc7a100t_0] 0]\n"
-	      "quit\n",bitstream);
-      fclose(tclfile);
-      char cmd[8192];
-      snprintf(cmd,8192,"%s -mode batch -nojournal -nolog -notrace -source temp.tcl",
-	       vivado_exe);
-      printf("Running %s...\n",cmd);
-      system(cmd);
-      unlink("temp.tcl");
-    }
-    fprintf(stderr,"[T+%I64dsec] Bitstream loaded\n",(long long)time(0)-start_time);
-#else
-    if (fpga_serial) {
-      fpgajtag_main(bitstream,fpga_serial);
-    }
-    //      snprintf(cmd,1024,"fpgajtag -s %s -a %s",
-    //	       fpga_serial,bitstream);
-    else {
-      fpgajtag_main(bitstream,NULL);
-      //      snprintf(cmd,1024,"fpgajtag -a %s",bitstream);
-    }
-    //fprintf(stderr,"%s\n",cmd);
-    //    system(cmd);
-    fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
+#ifdef WINDOWS
+      fprintf(stderr,"[T+%I64dsec] Bitstream loaded\n",(long long)time(0)-start_time);
+#else    
+      fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
 #endif
-  }
+    }
 
   if (virtual_f011) {
     if ((!bitstream)||(!hyppo)) {
@@ -2988,7 +2985,7 @@ int main(int argc,char **argv)
 	errno=0;
 	b=serialport_read(fd,(unsigned char *)read_buff,1024);
 	if (b>0) {
-//printf("%s\n", read_buff);
+	  //printf("%s\n", read_buff);
 	  int i;
 	  for(i=0;i<b;i++) {
 	    process_char(read_buff[i],1);
@@ -2999,9 +2996,9 @@ int main(int argc,char **argv)
 
 	//        fast_mode = saw_c65_mode || saw_c64_mode;
 	if (gettime_ms()>last_check) {
-  //          if(fast_mode) {
-  //	  } else
-  {
+	  //          if(fast_mode) {
+	  //	  } else
+	  {
 	    if (state==99) printf("sending R command to sync @ %dpbs.\n",serial_speed);
 	    if (hyppo_report) {
 	      switch (phase%(5+hypervisor_paused)) {
@@ -3024,7 +3021,7 @@ int main(int argc,char **argv)
 	      default: phase=0;
 	      }
 	    }
-          } 
+	  } 
 	  phase++;	  
 	  last_check=gettime_ms()+ (fast_mode ? 5 : 50);
 	}
@@ -3037,15 +3034,15 @@ int main(int argc,char **argv)
 	usleep(1000);	
       }
     }
-
+    
   do_exit(0);
 }
-
+ 
 void do_exit(int retval) {
 #ifndef WINDOWS
-    printf("Background tasks running. CONTROL+C to stop...\n");
-    for(int i=0;i<thread_count;i++)
+  printf("Background tasks running. CONTROL+C to stop...\n");
+  for(int i=0;i<thread_count;i++)
     pthread_join(threads[i], NULL);     
 #endif  
-    exit(retval);
+  exit(retval);
 }
