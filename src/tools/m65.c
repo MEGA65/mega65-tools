@@ -77,7 +77,7 @@ FILE *__imp___acrt_iob_func(void)
 }
 #endif
 
-#ifdef APPLE
+#ifdef __APPLE__
 static const int B1000000 = 1000000;
 static const int B1500000 = 1500000;
 static const int B2000000 = 2000000;
