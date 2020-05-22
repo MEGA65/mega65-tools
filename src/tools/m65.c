@@ -131,6 +131,7 @@ int new_monitor=1;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
+int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer);
 int push_ram(unsigned long address,unsigned int count,unsigned char *buffer);
 int do_screen_shot(void);
 int process_char(unsigned char c,int live);
@@ -270,7 +271,7 @@ void timestamp_msg(char *msg)
   fprintf(stderr,"[T+%lldsec] %s",(long long)time(0)-start_time,msg);
 #endif
   
-  return 0;
+  return;
 }
 
 
@@ -474,10 +475,10 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     return 0;
   }
 
-    void mega65_poke(unsigned int addr,unsigned char value)
-    {
-    return push_ram(addr,1,&value);
-  }
+int mega65_poke(unsigned int addr,unsigned char value)
+{
+return push_ram(addr,1,&value);
+}
     
     
 int restart_hyppo(void)
@@ -558,7 +559,6 @@ int last_virtual_side=-1;
 
 int virtual_f011_read(int device,int track,int sector,int side)
 {
-  char cmd[1024];
 
   long long start=gettime_ms();
 
@@ -831,7 +831,7 @@ int breakpoint_set_and_wait(int pc)
   // Now read until we see the requested PC
   printf("Waiting for breakpoint at $%04X to trigger.\n",pc);
   while(1) {
-    int b=serialport_read(fd,read_buff,8192);  
+    int b=serialport_read(fd,(unsigned char *)read_buff,8192);  
 
     for(int i=0;i<b;i++) {
       if (read_buff[i]==pattern[match_state]) {
@@ -862,9 +862,9 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       monitor_sync();
       
       if (new_monitor) 
-	sprintf(cmd,"l%x %x\r",address+offset,(address+offset+b)&0xffff);
+	sprintf(cmd,"l%lx %lx\r",address+offset,(address+offset+b)&0xffff);
       else
-	sprintf(cmd,"l%x %x\r",address+offset-1,address+offset+b-1);
+	sprintf(cmd,"l%lx %lx\r",address+offset-1,address+offset+b-1);
       slow_write(fd,cmd,strlen(cmd));
       do_usleep(1000*SLOW_FACTOR);
       int n=b;
