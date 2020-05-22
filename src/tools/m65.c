@@ -126,7 +126,8 @@ int usedk=0;
 
 
 // 0 = old hard coded monitor, 1= Kenneth's 65C02 based fancy monitor
-int new_monitor=0;
+// Only REALLY old bitstreams don't have the new monitor
+int new_monitor=1;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
@@ -259,6 +260,19 @@ int saved_track = 0;
 int saved_sector = 0;
 int saved_side = 0;
 
+void timestamp_msg(char *msg)
+{
+  if (!start_time) start_time=time(0);
+#ifdef WINDOWS
+  fprintf(stderr,"[T+%I64dsec] %s",(long long)time(0)-start_time,msg);
+#else
+  fprintf(stderr,"[T+%lldsec] %s",(long long)time(0)-start_time,msg);
+#endif
+  
+  return 0;
+}
+
+
 int slow_write(PORT_TYPE fd,char *d,int l)
 {
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
@@ -313,7 +327,7 @@ int slow_write_safe(PORT_TYPE fd,char *d,int l)
 long long gettime_us()
 {
   long long retVal = -1;
-
+  
   do 
     {
       struct timeval nowtv;
@@ -323,16 +337,16 @@ long long gettime_us()
 	{
 	  break;
 	}
-
+      
       if (nowtv.tv_sec < 0 || nowtv.tv_usec < 0 || nowtv.tv_usec >= 1000000)
 	{
 	  break;
 	}
-
+      
       retVal = nowtv.tv_sec * 1000000LL + nowtv.tv_usec;
     }
   while (0);
-
+  
   return retVal;
 }
 
@@ -373,7 +387,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     fprintf(stderr,"Could not open file '%s'\n",filename);
     exit(-2);
   }
-
+  
   do_usleep(50000);
   unsigned char buf[65536];
   int max_bytes;
@@ -407,7 +421,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     if ((load_addr&0xffff)==0x0000) {
       munged_load_addr+=0x10000;
     }
-
+    
 #ifdef WINDOWS_GUS
     // Windows doesn't seem to work with the l fast-load monitor command
     printf("Asking Gus to write data...\n");
@@ -446,21 +460,25 @@ int load_file(char *filename,int load_addr,int patchHyppo)
 #endif
     
     load_addr+=b;
-
+    
     max_bytes=0x10000-(load_addr&0xffff);
     if (max_bytes>byte_limit) max_bytes=byte_limit;
     b=fread(buf,1,max_bytes,f);	  
   }
-  fclose(f);
-#ifdef WINDOWS
-  fprintf(stderr,"[T+%I64dsec] '%s' loaded.\n",(long long)time(0)-start_time,filename);
-#else
-  fprintf(stderr,"[T+%lldsec] '%s' loaded.\n",(long long)time(0)-start_time,filename);
-#endif
-  
-  return 0;
-}
 
+    fclose(f);
+    char msg[1024];
+    snprintf(msg,1024,"File '%s' loaded.\n",filename);
+    timestamp_msg(msg);
+    return 0;
+  }
+
+    void mega65_poke(unsigned int addr,unsigned char value)
+    {
+    return push_ram(addr,1,&value);
+  }
+    
+    
 int restart_hyppo(void)
 {
   // Start executing in new hyppo
@@ -624,14 +642,10 @@ int virtual_f011_read(int device,int track,int sector,int side)
     }
 
   /* signal done/result */
-  snprintf(cmd,1024,"sffd3086 %x\n",side);
-  slow_write(fd,cmd,strlen(cmd));
-  
-#ifdef WINDOWS
-  printf("T+%I64d ms : Finished V-FDC read.\n",gettime_ms()-start);
-#else
-  printf("T+%lld ms : Finished V-FDC read.\n",gettime_ms()-start);
-#endif
+  mega65_poke(0xffd3068,side);
+
+  timestamp_msg("Finished V-FDC read.\n");
+
   return 0;
 }
 
@@ -645,6 +659,8 @@ void show_hyppo_report(void)
   // $BE00 - $BEFF = Stack
   // $BF00 - $BFFF = ZP
 
+  fetch_ram(0xfffbc00,0x400,hyppo_buffer);
+  
   printf("Disk count = $%02x\n",hyppo_buffer[0x001]);
   printf("Default Disk = $%02x\n",hyppo_buffer[0x002]);
   printf("Current Disk = $%02x\n",hyppo_buffer[0x003]);
@@ -1047,47 +1063,6 @@ int process_line(char *line,int live)
       state=1;
     } else if ( //  (pc>=0x8000&&pc<0xc000)&&
 	       (hyppo)) {
-      int patchKS=0;
-      if (romfile&&(!flashmenufile)) patchKS=1;
-#ifdef WINDOWS
-      fprintf(stderr,"[T+%I64dsec] Replacing %shyppo...\n",
-	      (long long)time(0)-start_time,
-	      patchKS?"and patching ":"");
-#else
-      fprintf(stderr,"[T+%lldsec] Replacing %shyppo...\n",
-	      (long long)time(0)-start_time,
-	      patchKS?"and patching ":"");
-#endif
-      stop_cpu();
-      if (hyppo) { load_file(hyppo,0xfff8000,patchKS); } hyppo=NULL;
-      if (romfile) { load_file(romfile,0x20000,0); } romfile=NULL;
-      if (flashmenufile) { load_file(flashmenufile,0x50000,0); } romfile=NULL;
-      if (charromfile) load_file(charromfile,0xFF7E000,0);
-      if (colourramfile) load_file(colourramfile,0xFF80000,0);
-      if (virtual_f011) {
-	char cmd[1024];
-#ifdef WINDOWS
-	fprintf(stderr,"[T+%I64dsec] Virtualising F011 FDC access.\n",
-		(long long)time(0)-start_time);
-#else
-	fprintf(stderr,"[T+%lldsec] Virtualising F011 FDC access.\n",
-		(long long)time(0)-start_time);
-#endif
-	// Enable FDC virtualisation
-	snprintf(cmd,1024,"sffd3659 01\r");
-	slow_write(fd,cmd,strlen(cmd));
-	do_usleep(20000);
-	// Enable disk 0 (including for write)
-	snprintf(cmd,1024,"sffd368b 03\r");
-	slow_write(fd,cmd,strlen(cmd));
-      }
-      charromfile=NULL;
-      colourramfile=NULL;
-      if (!virtual_f011) restart_hyppo();
-      else {
-	hypervisor_paused=1;
-	printf("hypervisor paused\n");
-      }
     } else {
       if (state==99) {
 	// Synchronised with monitor
@@ -1099,167 +1074,9 @@ int process_line(char *line,int live)
 	  start_cpu();
 	}
 	do_usleep(20000);
-	if (reset_first) { slow_write(fd,"!\r",2); do_usleep(1000000); }
-	if (pal_mode) { slow_write(fd,"sffd306f 0\r",12); do_usleep(20000); }
-	if (ntsc_mode) { slow_write(fd,"sffd306f 80\r",12); do_usleep(20000); }
-	if (ethernet_video) {
-	  slow_write(fd,"sffd36e1 29\r",12); // turn on video streaming over ethernet
-	  do_usleep(20000);
-	}
-	if (ethernet_cpulog) {
-	  slow_write(fd,"sffd36e1 05\r",12); // turn on cpu instruction log streaming over ethernet
-	  do_usleep(20000);
-	}
 	printf("Synchronised with monitor.\n");
 
-	if (zap) {
-	  char cmd[1024];
-	  do_usleep(20000);
-	  snprintf(cmd,1024,"sffd36c8 %x %x %x %x\r",
-		   (zap_addr>>0)&0xff,
-		   (zap_addr>>8)&0xff,
-		   (zap_addr>>16)&0xff,
-		   (zap_addr>>24)&0xff);
-	  slow_write(fd,cmd,strlen(cmd));	  
-	  do_usleep(20000);
-	  snprintf(cmd,1024,"sffd36cf 42\r");
-	  slow_write(fd,cmd,strlen(cmd));
-	  fprintf(stderr,"FPGA reconfigure command issued.\n");
-	}
 	
-	if (break_point!=-1) {
-	  fprintf(stderr,"Setting CPU breakpoint at $%04x\n",break_point);
-	  char cmd[1024];
-	  sprintf(cmd,"b%x\r",break_point);
-	  do_usleep(20000);
-	  slow_write(fd,cmd,strlen(cmd));
-	  do_exit(0);
-	}
-	
-	if (type_text) {
-	  fprintf(stderr,"Typing text via virtual keyboard...\n");
-	  {
-	    int i;
-	    for(i=0;type_text[i];i++) {
-	      int c1=0x7f;
-	      int c2=0x7f;
-	      int c=tolower(type_text[i]);
-	      if (c!=type_text[i]) c2=0x0f; // left shift for upper case letters
-	      // Punctuation that requires shifts
-	      switch (c)
-		{
-		case '!': c='1'; c2=0x0f; break;
-		case '\"': c='2'; c2=0x0f; break;
-		case '#': c='3'; c2=0x0f; break;
-		case '$': c='4'; c2=0x0f; break;
-		case '%': c='5'; c2=0x0f; break;
-		case '(': c='8'; c2=0x0f; break;
-		case ')': c='9'; c2=0x0f; break;
-		case '?': c='/'; c2=0x0f; break;
-		case '<': c=','; c2=0x0f; break;
-		case '>': c='.'; c2=0x0f; break;
-		}
-	      switch (c)
-		{
-		case '~':
-		  // control sequences
-		  switch (type_text[i+1])
-		    {
-		    case 'C': c1=0x3f; break;              // RUN/STOP
-		    case 'D': c1=0x07; break;              // down
-		    case 'U': c1=0x07; c2=0x0f; break;     // up
-		    case 'L': c1=0x02; break;              // left
-		    case 'H': c1=0x33; break;              // HOME
-		    case 'R': c1=0x02; c2=0x0f; break;     // right
-		    case 'M': c1=0x01; break;              // RETURN 
-		    case 'T': c1=0x00; break;              // INST/DEL
-		    case '1': c1=0x04; break; // F1
-		    case '3': c1=0x05; break; // F3
-		    case '5': c1=0x06; break; // F5
-		    case '7': c1=0x03; break; // F7
-		    }
-		  i++;
-		  break;
-		case '3': c1=0x08; break;
-		case 'w': c1=0x09; break;
-		case 'a': c1=0x0a; break;
-		case '4': c1=0x0b; break;
-		case 'z': c1=0x0c; break;
-		case 's': c1=0x0d; break;
-		case 'e': c1=0x0e; break;
-
-		case '5': c1=0x10; break;
-		case 'r': c1=0x11; break;
-		case 'd': c1=0x12; break;
-		case '6': c1=0x13; break;
-		case 'c': c1=0x14; break;
-		case 'f': c1=0x15; break;
-		case 't': c1=0x16; break;
-		case 'x': c1=0x17; break;
-
-		case '7': c1=0x18; break;
-		case 'y': c1=0x19; break;
-		case 'g': c1=0x1a; break;
-		case '8': c1=0x1b; break;
-		case 'b': c1=0x1c; break;
-		case 'h': c1=0x1d; break;
-		case 'u': c1=0x1e; break;
-		case 'v': c1=0x1f; break;
-
-		case '9': c1=0x20; break;
-		case 'i': c1=0x21; break;
-		case 'j': c1=0x22; break;
-		case '0': c1=0x23; break;
-		case 'm': c1=0x24; break;
-		case 'k': c1=0x25; break;
-		case 'o': c1=0x26; break;
-		case 'n': c1=0x27; break;
-
-		case '+': c1=0x28; break;
-		case 'p': c1=0x29; break;
-		case 'l': c1=0x2a; break;
-		case '-': c1=0x2b; break;
-		case '.': c1=0x2c; break;
-		case ':': c1=0x2d; break;
-		case '@': c1=0x2e; break;
-		case ',': c1=0x2f; break;
-
-		case '}': c1=0x30; break;  // British pound symbol
-		case '*': c1=0x31; break;
-		case ';': c1=0x32; break;
-		case 0x13: c1=0x33; break; // home
-		  // case '': c1=0x34; break; right shift
-		case '=': c1=0x35; break;
-		case 0x91: c1=0x36; break;
-		case '/': c1=0x37; break;
-
-		case '1': c1=0x38; break;
-		case '_': c1=0x39; break;
-		  // case '': c1=0x3a; break; control
-		case '2': c1=0x3b; break;
-		case ' ': c1=0x3c; break;
-		  // case '': c1=0x3d; break; C=
-		case 'q': c1=0x3e; break;
-		case 0x0c: c1=0x3f; break;
-
-		default: c1=0x7f;
-		}
-	      char cmd[1024];
-	      snprintf(cmd,1024,"sffd3615 %02x %02x\n",c1,c2);
-	      slow_write(fd,cmd,strlen(cmd));
-	      // Stop pressing keys
-	      slow_write(fd,"sffd3615 7f 7f 7f \n",19);
-	    }
-	    // RETURN at end if requested
-	    if (type_text_cr)
-	      slow_write(fd,"sffd3615 01 7f 7f \n",19);
-	    // Stop pressing keys
-	    slow_write(fd,"sffd3615 7f 7f 7f \n",19);
-	    // Typing mode does only typing
-	    do_exit(0);
-	  }
-	}
-      }
     }
   }
   if (sscanf(line," :00000B7 %02x %*02x %*02x %*02x %02x %02x",
@@ -1313,13 +1130,6 @@ int process_line(char *line,int live)
     if (gotIt) {
       char fname[17];
       //      if (!screen_shot) printf("Read memory @ $%04x\n",addr);
-      if (addr>=0xfffbc00&&addr<0xfffc000) {
-	for(int i=0;i<16;i++) hyppo_buffer[addr-0xfffbc00+i]=b[i];
-	if (addr==0xfffbff0) {
-	  show_hyppo_report();
-	  exit(0);
-	}
-      }
       if (addr==name_addr) {
 	for(int i=0;i<16;i++) { fname[i]=b[i]; } fname[16]=0;
 	fname[name_len]=0;
@@ -1446,21 +1256,6 @@ int process_line(char *line,int live)
 	slow_write(fd,"Mffd3040\n",9);
       }
 
-      // We are in C65 mode - switch to C64 mode
-      if (osk_enable) {
-	char *cmd="sffd3615 ff\r";
-	slow_write(fd,cmd,strlen(cmd));      
-      }
-      if (do_go64) {
-	// PGS 20181123 - Keyboard buffer has moved in newer C65 ROMs from $34A to $2D0
-	saw_c65_mode=1; stuff_keybuffer("GO64\rY\r");
-	saw_c65_mode=0;
-#ifdef WINDOWS
-	if (first_go64) fprintf(stderr,"[T+%I64dsec] GO64\nY\n",(long long)time(0)-start_time);
-#else
-	if (first_go64) fprintf(stderr,"[T+%lldsec] GO64\nY\n",(long long)time(0)-start_time);
-#endif
-	first_go64=0;
       } else {
 	if (!saw_c65_mode) fprintf(stderr,"MEGA65 is in C65 mode.\n");
 	saw_c65_mode=1;
@@ -1637,6 +1432,129 @@ int process_line(char *line,int live)
       }
     }
   return 0;
+}
+
+void do_type_text(char *type_text)
+{
+  fprintf(stderr,"Typing text via virtual keyboard...\n");
+  {
+    int i;
+    for(i=0;type_text[i];i++) {
+      int c1=0x7f;
+      int c2=0x7f;
+      int c=tolower(type_text[i]);
+      if (c!=type_text[i]) c2=0x0f; // left shift for upper case letters
+      // Punctuation that requires shifts
+      switch (c)
+	{
+	case '!': c='1'; c2=0x0f; break;
+	case '\"': c='2'; c2=0x0f; break;
+	case '#': c='3'; c2=0x0f; break;
+	case '$': c='4'; c2=0x0f; break;
+	case '%': c='5'; c2=0x0f; break;
+	case '(': c='8'; c2=0x0f; break;
+	case ')': c='9'; c2=0x0f; break;
+	case '?': c='/'; c2=0x0f; break;
+	case '<': c=','; c2=0x0f; break;
+	case '>': c='.'; c2=0x0f; break;
+	}
+      switch (c)
+	{
+	case '~':
+	  // control sequences
+	  switch (type_text[i+1])
+	    {
+	    case 'C': c1=0x3f; break;              // RUN/STOP
+	    case 'D': c1=0x07; break;              // down
+	    case 'U': c1=0x07; c2=0x0f; break;     // up
+	    case 'L': c1=0x02; break;              // left
+	    case 'H': c1=0x33; break;              // HOME
+	    case 'R': c1=0x02; c2=0x0f; break;     // right
+	    case 'M': c1=0x01; break;              // RETURN 
+	    case 'T': c1=0x00; break;              // INST/DEL
+	    case '1': c1=0x04; break; // F1
+	    case '3': c1=0x05; break; // F3
+	    case '5': c1=0x06; break; // F5
+	    case '7': c1=0x03; break; // F7
+	    }
+	  i++;
+	  break;
+	case '3': c1=0x08; break;
+	case 'w': c1=0x09; break;
+	case 'a': c1=0x0a; break;
+	case '4': c1=0x0b; break;
+	case 'z': c1=0x0c; break;
+	case 's': c1=0x0d; break;
+	case 'e': c1=0x0e; break;
+	  
+	case '5': c1=0x10; break;
+	case 'r': c1=0x11; break;
+	case 'd': c1=0x12; break;
+	case '6': c1=0x13; break;
+	case 'c': c1=0x14; break;
+	case 'f': c1=0x15; break;
+	case 't': c1=0x16; break;
+	case 'x': c1=0x17; break;
+	  
+	case '7': c1=0x18; break;
+	case 'y': c1=0x19; break;
+	case 'g': c1=0x1a; break;
+	case '8': c1=0x1b; break;
+	case 'b': c1=0x1c; break;
+	case 'h': c1=0x1d; break;
+	case 'u': c1=0x1e; break;
+	case 'v': c1=0x1f; break;
+	  
+	case '9': c1=0x20; break;
+	case 'i': c1=0x21; break;
+	case 'j': c1=0x22; break;
+	case '0': c1=0x23; break;
+	case 'm': c1=0x24; break;
+	case 'k': c1=0x25; break;
+	case 'o': c1=0x26; break;
+	case 'n': c1=0x27; break;
+	  
+	case '+': c1=0x28; break;
+	case 'p': c1=0x29; break;
+	case 'l': c1=0x2a; break;
+	case '-': c1=0x2b; break;
+	case '.': c1=0x2c; break;
+	case ':': c1=0x2d; break;
+	case '@': c1=0x2e; break;
+	case ',': c1=0x2f; break;
+	  
+	case '}': c1=0x30; break;  // British pound symbol
+	case '*': c1=0x31; break;
+	case ';': c1=0x32; break;
+	case 0x13: c1=0x33; break; // home
+	  // case '': c1=0x34; break; right shift
+	case '=': c1=0x35; break;
+	case 0x91: c1=0x36; break;
+	case '/': c1=0x37; break;
+	  
+	case '1': c1=0x38; break;
+	case '_': c1=0x39; break;
+	  // case '': c1=0x3a; break; control
+	case '2': c1=0x3b; break;
+	case ' ': c1=0x3c; break;
+	  // case '': c1=0x3d; break; C=
+	case 'q': c1=0x3e; break;
+	case 0x0c: c1=0x3f; break;
+	  
+	default: c1=0x7f;
+	}
+      char cmd[1024];
+      snprintf(cmd,1024,"sffd3615 %02x %02x\n",c1,c2);
+      slow_write(fd,cmd,strlen(cmd));
+      // Stop pressing keys
+      slow_write(fd,"sffd3615 7f 7f 7f \n",19);
+    }
+    // RETURN at end if requested
+    if (type_text_cr)
+      slow_write(fd,"sffd3615 01 7f 7f \n",19);
+    // Stop pressing keys
+    slow_write(fd,"sffd3615 7f 7f 7f \n",19);
+  }
 }
 
 
@@ -2276,6 +2194,72 @@ void download_hyppo(void)
   hyppo="/tmp/monitor_load.HICKUP.M65";
 }
 
+void load_bitstream(char *bitstream)
+{
+  if (vivado_bat!=NULL)	{
+    /*  For Windows we just call Vivado to do the FPGA programming,
+	while we are having horrible USB problems otherwise. */
+    FILE *tclfile=fopen("temp.tcl","w");
+    if (!tclfile) {
+      fprintf(stderr,"ERROR: Could not create temp.tcl");
+      exit(-1);
+    }
+    fprintf(tclfile,
+	    "open_hw\n" // "open_hw_manager\n"
+	    "connect_hw_server\n" // -allow_non_jtag\n"
+	    "open_hw_target\n"
+	    "current_hw_device [get_hw_devices xc7a100t_0]\n"
+	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	    "\n"
+	    "set_property PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
+	    "set_property FULL_PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
+	    "set_property PROGRAM.FILE {%s} [get_hw_devices xc7a100t_0]\n"
+	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	    "program_hw_devices [get_hw_devices xc7a100t_0]\n"
+	    "refresh_hw_device [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	    "quit\n",bitstream);
+    fclose(tclfile);
+    char cmd[8192];
+    snprintf(cmd,8192,"%s -mode batch -nojournal -nolog -notrace -source temp.tcl",
+	     vivado_bat);
+    printf("Running %s...\n",cmd);
+    system(cmd);
+    unlink("temp.tcl");
+  } else {
+    // No Vivado.bat, so try to use internal fpgajtag implementation.
+    if (fpga_serial) {
+      fpgajtag_main(bitstream,fpga_serial);
+    }
+    else {
+      fpgajtag_main(bitstream,NULL);
+    }
+  }
+  timestamp_msg("Bitstream loaded.\n");
+}
+
+void open_the_serial_port(void)
+{
+#ifdef WINDOWS
+  fd=open_serial_port(serial_port,2000000);
+  if (fd==INVALID_HANDLE_VALUE) {
+    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
+    exit(-1);
+  }
+  
+#else
+  errno=0;
+  fd=open(serial_port,O_RDWR);
+  if (fd==-1) {
+    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
+    perror("open");
+    exit(-1);
+  }
+
+  set_serial_speed(fd,serial_speed);
+#endif
+}
+
 int main(int argc,char **argv)
 {
   start_time=time(0);
@@ -2357,25 +2341,28 @@ int main(int argc,char **argv)
     }
   }    
   
+  // Automatically find the serial port on Linux, if one has not been
+  // provided
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
 #ifndef WINDOWS
   init_fpgajtag(NULL, bitstream, 0x3631093); // 0xffffffff);
 #endif
   
-  if (boundary_scan) {
 #ifdef WINDOWS
+  fprintf(stderr,"WARNING: JTAG boundary scan not implemented on Windows.\n");
+#else
+  if (boundary_scan) {
     fprintf(stderr,"ERROR: threading on Windows not implemented.\n");
     exit(-1);
-#else
     // Launch boundary scan in a separate thread, so that we can monitor signals while
     // running other operations.
     if (pthread_create(&threads[thread_count++], NULL, run_boundary_scan, NULL))
       perror("Failed to create JTAG boundary scan thread.\n");
     else 
       fprintf(stderr,"JTAG boundary scan launched in separate thread.\n");
-#endif
   }
+#endif
 
   if (jtag_only) do_exit(0);
   
@@ -2387,93 +2374,89 @@ int main(int argc,char **argv)
   if (argv[optind]) filename=strdup(argv[optind]);
   if (argc-optind>1) usage();
   
-  // Load bitstream if file provided
-  if (bitstream)
-    {
-      if (vivado_bat!=NULL)	{
-	/*  For Windows we just call Vivado to do the FPGA programming,
-	    while we are having horrible USB problems otherwise. */
-	FILE *tclfile=fopen("temp.tcl","w");
-	if (!tclfile) {
-	  fprintf(stderr,"ERROR: Could not create temp.tcl");
-	  exit(-1);
-	}
-	fprintf(tclfile,
-		"open_hw\n" // "open_hw_manager\n"
-		"connect_hw_server\n" // -allow_non_jtag\n"
-		"open_hw_target\n"
-		"current_hw_device [get_hw_devices xc7a100t_0]\n"
-		"refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
-		"refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
-		"\n"
-		"set_property PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
-		"set_property FULL_PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
-		"set_property PROGRAM.FILE {%s} [get_hw_devices xc7a100t_0]\n"
-		"refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
-		"program_hw_devices [get_hw_devices xc7a100t_0]\n"
-		"refresh_hw_device [lindex [get_hw_devices xc7a100t_0] 0]\n"
-		"quit\n",bitstream);
-	fclose(tclfile);
-	char cmd[8192];
-	snprintf(cmd,8192,"%s -mode batch -nojournal -nolog -notrace -source temp.tcl",
-		 vivado_bat);
-	printf("Running %s...\n",cmd);
-	system(cmd);
-	unlink("temp.tcl");
-      } else {
-	// No Vivado.bat, so try to use internal fpgajtag implementation.
-	if (fpga_serial) {
-	  fpgajtag_main(bitstream,fpga_serial);
-	}
-	else {
-	  fpgajtag_main(bitstream,NULL);
-	}
-      }
-#ifdef WINDOWS
-      fprintf(stderr,"[T+%I64dsec] Bitstream loaded\n",(long long)time(0)-start_time);
-#else    
-      fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
-#endif
-    }
+  // -b Load bitstream if file provided
+  if (bitstream) load_bitstream(bitstream);
 
   if (virtual_f011) {
-    if ((!bitstream)||(!hyppo)) {
-      fprintf(stderr,"ERROR: -d requires -b and -k to also be specified.\n");
+    if (!hyppo) {
+      fprintf(stderr,"ERROR: -d requires -k to also be specified.\n");
       exit(-1);
     }
-#ifdef WINDOWS
-    fprintf(stderr,"[T+%I64dsec] Remote access to disk image '%s' requested\n",(long long)time(0)-start_time,d81file);
-#else
-    fprintf(stderr,"[T+%lldsec] Remote access to disk image '%s' requested\n",(long long)time(0)-start_time,d81file);
-#endif
-    
+    char msg[1024];
+    snprintf(msg,1024,"Remote access to disk image '%s' requested.\n",d81file);
+    timestamp_msg(msg);
   }
 
-#ifdef WINDOWS
-  fd=open_serial_port(serial_port,2000000);
-  if (fd==INVALID_HANDLE_VALUE) {
-    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
-    exit(-1);
-  }
+  open_the_serial_port();
   
-#else
-  errno=0;
-  fd=open(serial_port,O_RDWR);
-  if (fd==-1) {
-    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
-    perror("open");
-    exit(-1);
-  }
-
-  set_serial_speed(fd,serial_speed);
-#endif
-
+  // XXX - Auto-detect if serial speed is not correct?
+  
   printf("Calling monitor_sync()\n");
   monitor_sync();
 
-  printf("Calling detect_mode()\n");
+  if (zap) {
+    char cmd[1024];
+    monitor_sync();
+    snprintf(cmd,1024,"sffd36c8 %x %x %x %x\r",
+	     (zap_addr>>0)&0xff,
+	     (zap_addr>>8)&0xff,
+	     (zap_addr>>16)&0xff,
+	     (zap_addr>>24)&0xff);
+    slow_write(fd,cmd,strlen(cmd));	  
+    monitor_sync();
+    mega65_poke(0xffd36cf,0x42);
+    fprintf(stderr,"FPGA reconfigure command issued.\n");
+    // XXX This can take a while, which we should accommodate
+    monitor_sync();
+  }  
+  
+  printf("Detecting C64/C65 mode status.\n");
   detect_mode();
 
+  if (hyppo) {
+    int patchKS=0;
+    if (romfile&&(!flashmenufile)) patchKS=1;
+
+    timestamp_msg("Replacing HYPPO...\n");
+    
+    stop_cpu();
+    if (hyppo) { load_file(hyppo,0xfff8000,patchKS); } 
+    if (romfile) { load_file(romfile,0x20000,0); } 
+    if (flashmenufile) { load_file(flashmenufile,0x50000,0); } 
+    if (charromfile) load_file(charromfile,0xFF7E000,0); 
+    if (colourramfile) load_file(colourramfile,0xFF80000,0); 
+    if (virtual_f011) {
+      timestamp_msg("Virtualising F011 FDC access.\n");
+
+      // Enable FDC virtualisation
+      mega65_poke(0xffd3659,0x01);
+      // Enable disk 0 (including for write)
+      mega65_poke(0xffd368b,0x03);
+    }
+    if (!reset_first) start_cpu();
+  }
+  
+  // -F reset
+  if (reset_first) { start_cpu(); slow_write(fd,"!\r",2); monitor_sync(); }
+
+  if (break_point!=-1) {
+    fprintf(stderr,"Setting CPU breakpoint at $%04x\n",break_point);
+    char cmd[1024];
+    sprintf(cmd,"b%x\r",break_point);
+    do_usleep(20000);
+    slow_write(fd,cmd,strlen(cmd));
+    do_exit(0);
+  }
+
+  if (pal_mode) { mega65_poke(0xffd306f,0); }
+  if (ntsc_mode) { mega65_poke(0xffd306f,0x80); }
+  if (ethernet_video) { mega65_poke(0xffd36e1,0x29); }
+  if (ethernet_cpulog) { mega65_poke(0xffd36e1,0x05); }
+
+  
+  if (type_text) do_type_text(type_text);
+  
+  // -4 Switch to C64 mode
   if (saw_c65_mode&&do_go64) {
     printf("Trying to switch to C64 mode...\n");
     monitor_sync();
@@ -2486,9 +2469,8 @@ int main(int argc,char **argv)
       exit(-1);
     }
   }
-  
-  printf("Progressing...\n");
-  
+
+  // Increase serial speed, if possible
 #ifndef WINDOWS
   if (virtual_f011&&serial_speed==2000000) {
     // Try bumping up to 4mbit
@@ -2498,75 +2480,18 @@ int main(int argc,char **argv)
   }
 #endif
 
-  if (screen_shot) {
-    stop_cpu();
-    do_screen_shot();
-    start_cpu();
+  // OSK enable
+  if (osk_enable) { mega65_poke(0xffd361f,0xff); printf("OSK Enabled\n"); }  
+
+  // -S screen shot
+  if (screen_shot) { stop_cpu(); do_screen_shot(); start_cpu(); exit(0); }
+
+  if (filename) {
+    fprintf(stderr,"Loading file '%s'\n",filename);
   }
   
-  unsigned long long last_check = gettime_ms();
-  int phase=0;
-
-  while(1)
-    {
-      int b;
-      int fast_mode=0;
-      char read_buff[1024];
-      switch(state) {
-      case 0: case 2: case 3: case 99:
-	errno=0;
-	b=serialport_read(fd,(unsigned char *)read_buff,1024);
-	if (b>0) {
-	  //printf("%s\n", read_buff);
-	  int i;
-	  for(i=0;i<b;i++) {
-	    process_char(read_buff[i],1);
-	  }
-	} else {
-	  do_usleep(1000*SLOW_FACTOR);
-	}
-
-	//        fast_mode = saw_c65_mode || saw_c64_mode;
-	if (gettime_ms()>last_check) {
-	  //          if(fast_mode) {
-	  //	  } else
-	  {
-	    if (state==99) printf("sending R command to sync @ %dpbs.\n",serial_speed);
-	    if (hyppo_report) {
-	      switch (phase%(5+hypervisor_paused)) {
-	      case 0: slow_write_safe(fd,"Mfffbc00\r",9); break;
-	      case 1: slow_write_safe(fd,"Mfffbd00\r",9); break;
-	      case 2: slow_write_safe(fd,"Mfffbe00\r",9); break;
-	      case 3: slow_write_safe(fd,"Mfffbf00\r",9); break;
-	      }
-	    } else {
-	      switch (phase%(5+hypervisor_paused)) {
-	      case 0: slow_write_safe(fd,"r\r",2); break; // PC check
-	      case 1: slow_write_safe(fd,"m800\r",5); break; // C65 Mode check
-	      case 2: slow_write_safe(fd,"m42c\r",5); break; // C64 mode check
-	      case 3: slow_write_safe(fd,"mffd3077\r",9); break; 
-	      case 4:
-		// Requests screen address if we are taking a screenshot
-		//		if (screen_shot) slow_write_safe(fd,"Mffd3058\r",9);
-		break;
-	      case 5: slow_write_safe(fd,"mffd3659\r",9); break; // Hypervisor virtualisation/security mode flag check
-	      default: phase=0;
-	      }
-	    }
-	  } 
-	  phase++;	  
-	  last_check=gettime_ms()+ (fast_mode ? 5 : 50);
-	}
-	break;
-      case 1: // trapped LOAD, so read file name
-	slow_write(fd,"mb7\r",4);
-	state=0;
-	break;
-      default:
-	do_usleep(1000*SLOW_FACTOR);	
-      }
-    }
-    
+  // XXX - loop for virtualisation, JTAG boundary scanning etc
+  
   do_exit(0);
 }
  
