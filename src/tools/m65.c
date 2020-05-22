@@ -842,7 +842,6 @@ int breakpoint_pc=-1;
 int breakpoint_set(int pc)
 {
   char cmd[8192];
-  char read_buff[8192];
   monitor_sync();
   start_cpu();
   snprintf(cmd,8192,"b%x\r",pc);
@@ -2200,8 +2199,7 @@ int main(int argc,char **argv)
       int b=fread(buf,1,max_bytes,f);
       while(b>0) {
 	timestamp_msg("");
-	printf("Read block for $%04x -- $%04x (%d bytes)\n",load_addr,load_addr+b-1,b);
-	fflush(stdout);
+	fprintf(stderr,"Read block for $%04x -- $%04x (%d bytes)\n",load_addr,load_addr+b-1,b);
 	
 #ifdef WINDOWS_GUS
 	// Windows doesn't seem to work with the l fast-load monitor command
@@ -2260,7 +2258,7 @@ int main(int argc,char **argv)
       sprintf(cmd,"s380 a2 %x a0 %x 18 60\r",
 	      load_addr&0xff,(load_addr>>8)&0xff);
       timestamp_msg("");
-      printf("Returning top of load address = $%04X\n",load_addr);
+      fprintf(stderr,"Returning top of load address = $%04X\n",load_addr);
       slow_write(fd,cmd,strlen(cmd));
       monitor_sync();
 
