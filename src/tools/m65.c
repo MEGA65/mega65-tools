@@ -1887,6 +1887,7 @@ int check_file_access(char *file)
   FILE *f=fopen(file,"rb");
   if (!f) {
     fprintf(stderr,"ERROR: Cannot access file '%s'\n",file);
+    exit(-1);
   } else   fclose(f);
 
   return 0;
