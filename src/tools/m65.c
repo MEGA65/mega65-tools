@@ -315,7 +315,7 @@ int slow_write_safe(PORT_TYPE fd,char *d,int l)
   // resume the CPU when it should be stopping.
   // (We can work around this by using the fact that the new UART
   // monitor tells us when a breakpoint has been reached.
-  //  if (!cpu_stopped)
+  if (!cpu_stopped)
     slow_write(fd,"t1\r",3);
   slow_write(fd,d,l);
   if (!cpu_stopped) {
@@ -363,6 +363,10 @@ unsigned long long gettime_ms()
 
 int stop_cpu(void)
 {
+  if (cpu_stopped) {
+    printf("CPU already stopped.\n");
+    return 1;
+  }
   // Stop CPU
   printf("Stopping CPU\n");
   do_usleep(50000);
@@ -737,8 +741,11 @@ int monitor_sync(void)
   do_usleep(20000); // Give plenty of time for things to settle
   int b=1;
   // Purge input  
-  while(b>0) { b=serialport_read(fd,read_buff,8192); }
   printf("Purging input.\n");
+  while(b>0) {
+    b=serialport_read(fd,read_buff,8192);
+    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
+  }
 
   for(int tries=0;tries<10;tries++) {
 #ifdef WINDOWS
@@ -755,11 +762,13 @@ int monitor_sync(void)
       if (b<0) b=0;
       if (b>8191) b=8191;
       read_buff[b]=0;
+      //      if (b>0) dump_bytes(2,"Sync input",read_buff,b);
+      
       //      if (b>0) dump_bytes(0,"read_data",read_buff,b);
       if (strstr((char *)read_buff,cmd)) {
 	printf("Found token. Synchronised with monitor.\n");
 	state=99;
-	return 0;
+	return 0;      
       }
     }
     do_usleep(10000*SLOW_FACTOR);
@@ -777,6 +786,7 @@ void progress_to_RTI(void)
   slow_write_safe(fd,"tc\r",3);
   while(1) {
     b=serialport_read(fd,buff,8192);
+    if (b>0) dump_bytes(2,"RTI search input",buff,b);
     if (b>0) {
       bytes+=b;
       buff[b]=0;
@@ -806,44 +816,54 @@ int get_pc(void)
   if (b<0) b=0;
   if (b>8191) b=8191;
   buff[b]=0;
+  //  if (b>0) dump_bytes(2,"PC read input",buff,b);
   char *s=strstr((char *)buff,"\n,");
   if (s) return strtoll(&s[6],NULL,16);
   else return -1;
 }
 
-int breakpoint_set_and_wait(int pc)
+ int breakpoint_pc=-1;
+int breakpoint_set(int pc)
 {
   char cmd[8192];
   char read_buff[8192];
   monitor_sync();
-  stop_cpu();
-  snprintf(cmd,8192,"b%x\r",pc);
-  slow_write(fd,cmd,strlen(cmd));
-  monitor_sync();
   start_cpu();
+  snprintf(cmd,8192,"b%x\r",pc);
+  breakpoint_pc=pc;
+  slow_write(fd,cmd,strlen(cmd));
+  // XXX any t0 or t1 cancels a queued breakpoint,
+  // so must be avoided
+  return 0;
+ }
 
+ int breakpoint_wait(void)
+{
+  char read_buff[8192];
   char pattern[16];
 
-  snprintf(pattern,16,"\r%04X",pc);
+  snprintf(pattern,16,"\n%04X",breakpoint_pc);
 
   int match_state=0;
   
   // Now read until we see the requested PC
-  printf("Waiting for breakpoint at $%04X to trigger.\n",pc);
+  printf("Waiting for breakpoint at $%04X to trigger.\n",breakpoint_pc);
   while(1) {
     int b=serialport_read(fd,(unsigned char *)read_buff,8192);  
 
     for(int i=0;i<b;i++) {
       if (read_buff[i]==pattern[match_state]) {
-	match_state++;
 	if (match_state==4) {
-	  stop_cpu();
 	  monitor_sync();
-	  printf("Breakpoint @ $%04X triggered.\n",pc);
+	  printf("Breakpoint @ $%04X triggered.\n",breakpoint_pc);
 	  return 0;
 	} else match_state++;
-      } else match_state=0;
+      } else {
+	match_state=0;
+      }
     }
+    //    if (b>0) dump_bytes(2,"Breakpoint wait input",read_buff,b);
+    
   }
   
 }
@@ -1009,6 +1029,13 @@ int detect_mode(void)
   */
   unsigned char mem_buff[8192];
   fetch_ram(0xffd3030,1,mem_buff);
+  while(mem_buff[0]&0x01) {
+    timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
+    do_usleep(200000);
+    fetch_ram(0xffd3030,1,mem_buff);    
+  }
+
+  
   printf("$D030 = $%02X\n",mem_buff[0]);
   if (mem_buff[0]==0x64) {
     // Probably C65 mode
@@ -1984,7 +2011,7 @@ int main(int argc,char **argv)
   }
   
   // -F reset
-  if (reset_first) { start_cpu(); slow_write(fd,"!\r",2); monitor_sync(); }
+  if (reset_first) { start_cpu(); slow_write(fd,"\r!\r",3); monitor_sync(); sleep(5); }
 
   if (break_point!=-1) {
     fprintf(stderr,"Setting CPU breakpoint at $%04x\n",break_point);
@@ -2041,11 +2068,11 @@ int main(int argc,char **argv)
 
     // Type LOAD command and set breakpoint to catch the ROM routine
     // when it executes.
-    stop_cpu();
+    breakpoint_set(load_routine_addr);
     if (saw_c64_mode) stuff_keybuffer("Lo\"!\",8,1\r");      
     else stuff_keybuffer("DLo\"!\r");
-    breakpoint_set_and_wait(load_routine_addr);
-
+    breakpoint_wait();
+    
     // We can ignore the filename.
     // Next we just load the file
     
