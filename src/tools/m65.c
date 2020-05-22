@@ -750,6 +750,7 @@ int monitor_sync(void)
     slow_write_safe(fd,cmd,strlen(cmd));
 
     for(int i=0;i<10;i++) {
+      do_usleep(10000*SLOW_FACTOR);      
       b=serialport_read(fd,read_buff,8192);
       if (b<0) b=0;
       if (b>8191) b=8191;
@@ -760,8 +761,8 @@ int monitor_sync(void)
 	state=99;
 	return 0;
       }
-      do_usleep(2000*SLOW_FACTOR);
     }
+    do_usleep(10000*SLOW_FACTOR);
   }
   printf("Failed to synchronise with the monitor.\n");
   return 1;
