@@ -774,7 +774,7 @@ int monitor_sync(void)
       
       //      if (b>0) dump_bytes(0,"read_data",read_buff,b);
       if (strstr((char *)read_buff,cmd)) {
-	printf("Found token. Synchronised with monitor.\n");
+	//	printf("Found token. Synchronised with monitor.\n");
 	state=99;
 	return 0;      
       }
@@ -1065,12 +1065,20 @@ int detect_mode(void)
     // Probably C65 mode
     int in_range=0;
     // Allow more tries to allow more time for ROM checksum to finish
+    // or boot attempt from floppy to finish
     for (int i=0;i<10;i++) {
       int pc=get_pc();
       if (pc>=0xe1ae&&pc<=0xe1b4) in_range++; else {
 	// C65 ROM does checksum, so wait a while if it is in that range
-	//	printf("Odd PC=$%04x\n",pc);
 	if (pc>=0xb000&&pc<0xc000) sleep(1);
+	// Or booting from internal drive is also slow
+	if (pc>=0x9c00&&pc<0x9d00) sleep(1);
+	// Or something else it does while booting
+	if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
+	else {
+	  fprintf(stderr,"Odd PC=$%04x\n",pc);
+	  do_usleep(100000);
+	}
       }
     }
     if (in_range>3) {
@@ -1098,7 +1106,7 @@ int detect_mode(void)
       return 0;
     }
   }
-  printf("Could not determine C64/C65/MEGA65 mode.\n");
+  timestamp_msg("Could not determine C64/C65/MEGA65 mode.\n");
   return 1;
 }
 
@@ -2013,9 +2021,6 @@ int main(int argc,char **argv)
     monitor_sync();
   }  
   
-  printf("Detecting C64/C65 mode status.\n");
-  detect_mode();
-
   if (hyppo) {
     int patchKS=0;
     if (romfile&&(!flashmenufile)) patchKS=1;
@@ -2056,7 +2061,9 @@ int main(int argc,char **argv)
   if (ethernet_video) { mega65_poke(0xffd36e1,0x29); }
   if (ethernet_cpulog) { mega65_poke(0xffd36e1,0x05); }
 
-  
+  printf("Detecting C64/C65 mode status.\n");
+  detect_mode();
+   
   if (type_text) do_type_text(type_text);
   
   // -4 Switch to C64 mode
@@ -2101,8 +2108,18 @@ int main(int argc,char **argv)
 
     // We REALLY need to know which mode we are in for LOAD
     while (do_go64&&(!saw_c64_mode)) {
-      fprintf(stderr,"ERROR: In C65 mode, but expected C64 mode\n");
-      exit(-1);
+      detect_mode();
+      if (!saw_c64_mode) {
+	fprintf(stderr,"ERROR: In C65 mode, but expected C64 mode\n");
+	exit(-1);
+      }
+    }
+    while ((!do_go64)&&(!saw_c65_mode)) {
+      detect_mode();
+      if (!saw_c65_mode) {
+	fprintf(stderr,"ERROR: Should be in C65 mode, but don't seem to be.\n");
+	exit(-1);
+      }
     }
     
     while(!filename_matches) {    
