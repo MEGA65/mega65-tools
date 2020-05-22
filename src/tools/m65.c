@@ -2007,6 +2007,8 @@ int main(int argc,char **argv)
   }
   
   if (argv[optind]) filename=strdup(argv[optind]);
+  check_file_access(filename);
+  
   if (argc-optind>1) usage();
   
   // -b Load bitstream if file provided
