@@ -484,6 +484,13 @@ int mega65_poke(unsigned int addr,unsigned char value)
 return push_ram(addr,1,&value);
 }
     
+unsigned char mega65_peek(unsigned int addr)
+{
+  unsigned char b;
+  fetch_ram(addr,1,&b);
+  return b;
+}
+    
     
 int restart_hyppo(void)
 {
@@ -953,6 +960,10 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	} 
 	s[42]=b;
 	for(int i=0;i<16;i++) {
+
+	  // Don't write more bytes than requested
+	  if ((addr-address+i)>=count) break;
+	  
 	  char hex[3];
 	  hex[0]=s[1+10+i*2+0];
 	  hex[1]=s[1+10+i*2+1];
@@ -1030,6 +1041,9 @@ int detect_mode(void)
     input loop for either of the modes, if possible. OpenROMs being
     under development makes this tricky.
   */
+  saw_c65_mode=0;
+  saw_c64_mode=0;
+  
   unsigned char mem_buff[8192];
   fetch_ram(0xffd3030,1,mem_buff);
   while(mem_buff[0]&0x01) {
@@ -1038,6 +1052,13 @@ int detect_mode(void)
     fetch_ram(0xffd3030,1,mem_buff);    
   }
 
+  // Wait for HYPPO to exit
+  int d054=mega65_peek(0xffd3054);
+  while(d054&7) {
+    do_usleep(50000);
+    d054=mega65_peek(0xffd3054);
+  }
+  
   
   printf("$D030 = $%02X\n",mem_buff[0]);
   if (mem_buff[0]==0x64) {
@@ -1048,7 +1069,7 @@ int detect_mode(void)
       int pc=get_pc();
       if (pc>=0xe1ae&&pc<=0xe1b4) in_range++; else {
 	// C65 ROM does checksum, so wait a while if it is in that range
-	printf("Odd PC=$%04x\n",pc);
+	//	printf("Odd PC=$%04x\n",pc);
 	if (pc>=0xb000&&pc<0xc000) sleep(1);
       }
     }
@@ -1064,7 +1085,11 @@ int detect_mode(void)
     for (int i=0;i<5;i++) {
       int pc=get_pc();
       // XXX Might not work with OpenROMs?
-      if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;  else { printf("Odd PC=$%04x\n",pc); usleep(100000); }
+      if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;
+      else {
+	//	printf("Odd PC=$%04x\n",pc);
+	usleep(100000);
+      }
     }
     if (in_range>3) {
       // We are in C64 BASIC main loop, so assume it is C65 mode
@@ -2015,7 +2040,7 @@ int main(int argc,char **argv)
   }
   
   // -F reset
-  if (reset_first) { start_cpu(); slow_write(fd,"\r!\r",3); monitor_sync(); }
+  if (reset_first) { start_cpu(); slow_write(fd,"\r!\r",3); monitor_sync(); sleep(2); }
 
   if (break_point!=-1) {
     fprintf(stderr,"Setting CPU breakpoint at $%04x\n",break_point);
@@ -2035,20 +2060,18 @@ int main(int argc,char **argv)
   if (type_text) do_type_text(type_text);
   
   // -4 Switch to C64 mode
-  if (saw_c65_mode&&do_go64) {
+  if ((!saw_c64_mode)&&do_go64) {
     printf("Trying to switch to C64 mode...\n");
     monitor_sync();
-    stuff_keybuffer("GO64\rY\r");
-    usleep(100000);
+    stuff_keybuffer("GO64\rY\r");    
     saw_c65_mode=0;
     detect_mode();
-    if (!saw_c64_mode) {
-      // Try a 2nd time
+    while (!saw_c64_mode) {
+      fprintf(stderr,"WARNING: Failed to switch to C64 mode.\n");
+      monitor_sync();
+      stuff_keybuffer("GO64\rY\r");    
+      do_usleep(100000);
       detect_mode();
-      if (!saw_c64_mode) {      
-	fprintf(stderr,"ERROR: Failed to switch to C64 mode.\n");
-	exit(-1);
-      }
     }
   }
 
@@ -2073,19 +2096,49 @@ int main(int argc,char **argv)
 
     unsigned int load_routine_addr=0xf664;
 
+    int filename_matches=0;
+    int first_time=1;
+
     // We REALLY need to know which mode we are in for LOAD
-    while (!(saw_c64_mode|saw_c65_mode)) detect_mode();
-    
-    if (saw_c64_mode) load_routine_addr=0xf4a5;
-    // Type LOAD command and set breakpoint to catch the ROM routine
-    // when it executes.
-    breakpoint_set(load_routine_addr);
-    if (saw_c64_mode) stuff_keybuffer("Lo\"!\",8,1\r");      
-    else {
-      // Really wait for C65 to get to READY prompt
-      stuff_keybuffer("DLo\"!\r");
+    while (do_go64&&(!saw_c64_mode)) {
+      fprintf(stderr,"ERROR: In C65 mode, but expected C64 mode\n");
+      exit(-1);
     }
-    breakpoint_wait();
+    
+    while(!filename_matches) {    
+      
+      if (saw_c64_mode) load_routine_addr=0xf4a5;
+      // Type LOAD command and set breakpoint to catch the ROM routine
+      // when it executes.
+      breakpoint_set(load_routine_addr);
+      if (first_time) {
+	if (saw_c64_mode) stuff_keybuffer("Lo\"!\",8,1\r");      
+	else {
+	  // Really wait for C65 to get to READY prompt
+	  stuff_keybuffer("DLo\"!\r");
+	}
+      }
+      first_time=0;
+      breakpoint_wait();
+
+      int filename_addr=1;
+      unsigned char filename_len=mega65_peek(0xb7);
+      if (saw_c64_mode) filename_addr= mega65_peek(0xbb)+mega65_peek(0xbc)*256;
+      else {
+	filename_addr= mega65_peek(0xbb)+mega65_peek(0xbc)*256+mega65_peek(0xbe)*65536;
+      }
+      char requested_name[256];
+      fetch_ram(filename_addr,filename_len,requested_name);
+      requested_name[filename_len]=0;
+      printf("Requested file is '%s' (len=%d)\n",requested_name,filename_len);
+      // If we caught the boot load request, then feed the DLOAD command again
+      if (!strcmp(requested_name,"0:AUTOBOOT.C65*")) first_time=1;
+
+      if (!strcmp(requested_name,"!")) break;
+      if (!strcmp(requested_name,"0:!")) break;
+
+      start_cpu();
+    }
 
     // We can ignore the filename.
     // Next we just load the file
