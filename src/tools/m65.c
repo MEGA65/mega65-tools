@@ -843,7 +843,7 @@ int breakpoint_wait(void)
   char read_buff[8192];
   char pattern[16];
 
-  snprintf(pattern,16,"\n%04X",breakpoint_pc);
+  snprintf(pattern,16,"\n,077");
 
   int match_state=0;
   
@@ -1043,7 +1043,8 @@ int detect_mode(void)
   if (mem_buff[0]==0x64) {
     // Probably C65 mode
     int in_range=0;
-    for (int i=0;i<5;i++) {
+    // Allow more tries to allow more time for ROM checksum to finish
+    for (int i=0;i<10;i++) {
       int pc=get_pc();
       if (pc>=0xe1ae&&pc<=0xe1b4) in_range++; else {
 	// C65 ROM does checksum, so wait a while if it is in that range
@@ -2014,7 +2015,7 @@ int main(int argc,char **argv)
   }
   
   // -F reset
-  if (reset_first) { start_cpu(); slow_write(fd,"\r!\r",3); monitor_sync(); sleep(5); }
+  if (reset_first) { start_cpu(); slow_write(fd,"\r!\r",3); monitor_sync(); }
 
   if (break_point!=-1) {
     fprintf(stderr,"Setting CPU breakpoint at $%04x\n",break_point);
@@ -2071,13 +2072,19 @@ int main(int argc,char **argv)
     fprintf(stderr,"Loading file '%s'\n",filename);
 
     unsigned int load_routine_addr=0xf664;
-    if (saw_c64_mode) load_routine_addr=0xf4a5;
 
+    // We REALLY need to know which mode we are in for LOAD
+    while (!(saw_c64_mode|saw_c65_mode)) detect_mode();
+    
+    if (saw_c64_mode) load_routine_addr=0xf4a5;
     // Type LOAD command and set breakpoint to catch the ROM routine
     // when it executes.
     breakpoint_set(load_routine_addr);
     if (saw_c64_mode) stuff_keybuffer("Lo\"!\",8,1\r");      
-    else stuff_keybuffer("DLo\"!\r");
+    else {
+      // Really wait for C65 to get to READY prompt
+      stuff_keybuffer("DLo\"!\r");
+    }
     breakpoint_wait();
 
     // We can ignore the filename.
