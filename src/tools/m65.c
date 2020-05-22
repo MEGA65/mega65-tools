@@ -734,9 +734,10 @@ int monitor_sync(void)
   // Begin by sending a null command and purging input
   char cmd[8192];
   cmd[0]=0x15; // ^U
-  cmd[1]=0x0d; // Carriage return
+  cmd[1]='#'; // prevent instruction stepping
+  cmd[2]=0x0d; // Carriage return
   do_usleep(20000); // Give plenty of time for things to settle
-  slow_write_safe(fd,cmd,2);
+  slow_write_safe(fd,cmd,3);
   printf("Wrote empty command.\n");
   do_usleep(20000); // Give plenty of time for things to settle
   int b=1;
@@ -2079,8 +2080,6 @@ int main(int argc,char **argv)
     else stuff_keybuffer("DLo\"!\r");
     breakpoint_wait();
 
-    printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
-    
     // We can ignore the filename.
     // Next we just load the file
     
@@ -2146,8 +2145,6 @@ int main(int argc,char **argv)
       }
       fclose(f); f=NULL;
 
-      printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
-      
       // set end address, clear input buffer, release break point,
       // jump to end of load routine, resume CPU at a CLC, RTS
       monitor_sync();
@@ -2158,15 +2155,11 @@ int main(int argc,char **argv)
       slow_write(fd,cmd,strlen(cmd));
       monitor_sync();
 
-      printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
-    
       // Remove breakpoint
       sprintf(cmd,"b\r");
       slow_write(fd,cmd,strlen(cmd));
       monitor_sync();
 
-      printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
-      
       // We need to set X and Y to load address before
       // returning: LDX #$ll / LDY #$yy / CLC / RTS
       sprintf(cmd,"s380 a2 %x a0 %x 18 60\r",
@@ -2175,9 +2168,6 @@ int main(int argc,char **argv)
       slow_write(fd,cmd,strlen(cmd));
       monitor_sync();
 
-    printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
-      
-      
       sprintf(cmd,"g0380\r");
 #if 1
       slow_write(fd,cmd,strlen(cmd)); 
