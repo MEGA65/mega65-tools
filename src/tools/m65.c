@@ -1900,7 +1900,7 @@ int main(int argc,char **argv)
   start_time=time(0);
 
   fprintf(stderr,"MEGA65 Cross-Platform tool.\n"
-	  "%s\n",version_string);
+	  "version: %s\n",version_string);
   
   timestamp_msg("");
   fprintf(stderr,"Getting started..\n");
