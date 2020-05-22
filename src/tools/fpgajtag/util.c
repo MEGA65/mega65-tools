@@ -52,7 +52,11 @@ int ftdi_interface;
 #define USB_TIMEOUT     5000
 #define ENDPOINT_IN     ((ftdi_interface == 0) ? 0x02 : 0x04)
 #define ENDPOINT_OUT    ((ftdi_interface == 0) ? 0x81 : 0x83)
+#ifdef WINDOWS
+#define USB_CHUNKSIZE   256
+#else
 #define USB_CHUNKSIZE   4096
+#endif
 #define USB_INDEX       ((ftdi_interface == 0) ? 1 : 2)
 
 #define USBSIO_RESET                     0 /* Reset the port */
