@@ -52,7 +52,7 @@
 #ifdef WINDOWS
 #include <windows.h>
 #undef SLOW_FACTOR
-#define SLOW_FACTOR 5
+#define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
 // #define do_usleep usleep
 void do_usleep(__int64 usec) 
@@ -1882,6 +1882,16 @@ void open_the_serial_port(void)
 #endif
 }
 
+int check_file_access(char *file)
+{
+  FILE *f=fopen(file,"rb");
+  if (!f) {
+    fprintf(stderr,"ERROR: Cannot access file '%s'\n",file);
+  } else   fclose(f);
+
+  return 0;
+}
+
 int main(int argc,char **argv)
 {
   start_time=time(0);
@@ -1905,11 +1915,11 @@ int main(int argc,char **argv)
     case 'B': sscanf(optarg,"%x",&break_point); break;
     case 'L': if (ethernet_video) { usage(); } else { ethernet_cpulog=1; } break;
     case 'E': if (ethernet_cpulog) { usage(); } else { ethernet_video=1; } break;
-    case 'U': flashmenufile=strdup(optarg); break;
-    case 'R': romfile=strdup(optarg); break;
+    case 'U': flashmenufile=strdup(optarg); check_file_access(optarg); break;      
+    case 'R': romfile=strdup(optarg); check_file_access(optarg); break;      
     case 'H': halt=1; break;
-    case 'C': charromfile=strdup(optarg); break;
-    case 'c': colourramfile=strdup(optarg); break;
+    case 'C': charromfile=strdup(optarg); check_file_access(optarg); break;      
+    case 'c': colourramfile=strdup(optarg); check_file_access(optarg); break;      
     case '4': do_go64=1; break;
     case '1': comma_eight_comma_one=1; break;
     case 'p': pal_mode=1; break;
@@ -1938,6 +1948,7 @@ int main(int argc,char **argv)
     case 'b':
       bitstream=strdup(optarg);
       if (bitstream[0]=='@') download_bitstream();
+      check_file_access(bitstream);
       break;
     case 'v':
       vivado_bat=strdup(optarg);
@@ -1954,6 +1965,7 @@ int main(int argc,char **argv)
     case 'k':
       hyppo=strdup(optarg);
       if (hyppo[0]=='@') download_hyppo();
+      check_file_access(hyppo);
       break;
     case 't': case 'T':
       type_text=strdup(optarg);
