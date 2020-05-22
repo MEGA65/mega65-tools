@@ -46,10 +46,29 @@
 #include <inttypes.h>
 #include <pthread.h>
 
+#define SLOW_FACTOR 1
+
 #ifdef WINDOWS
 #include <windows.h>
+#undef SLOW_FACTOR
+#define SLOW_FACTOR 10
+#define do_usleep usleep
+void do_usleep_NOT(__int64 usec) 
+{ 
+    HANDLE timer; 
+    LARGE_INTEGER ft; 
+
+    ft.QuadPart = -(10*usec); // Convert to 100 nanosecond interval, negative value indicates relative time
+
+    timer = CreateWaitableTimer(NULL, TRUE, NULL); 
+    SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0); 
+    WaitForSingleObject(timer, INFINITE); 
+    CloseHandle(timer); 
+}
+
 #else
 #include <termios.h>
+#define do_usleep usleep
 #endif
 
 #ifdef __APPLE__
@@ -244,20 +263,22 @@ int slow_write(PORT_TYPE fd,char *d,int l)
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
   int i;
 #if 0
-  printf("Writing ");
+  printf("\nWriting ");
   for(i=0;i<l;i++)
     {
       if (d[i]>=' ') printf("%c",d[i]); else printf("[$%02X]",d[i]);
     }
   printf("\n");
+  char line[1024];
+  fgets(line,1024,stdin);
 #endif
   
   for(i=0;i<l;i++)
     {
-      if (serial_speed==4000000) usleep(1000); else usleep(2000);
+      if (serial_speed==4000000) do_usleep(1000*SLOW_FACTOR); else do_usleep(2000*SLOW_FACTOR);
       int w=serialport_write(fd,(unsigned char *)&d[i],1);
       while (w<1) {
-	if (serial_speed==4000000) usleep(500); else usleep(1000);
+	if (serial_speed==4000000) do_usleep(500*SLOW_FACTOR); else do_usleep(1000*SLOW_FACTOR);
 	w=serialport_write(fd,(unsigned char *)&d[i],1);
       }
     }
@@ -276,7 +297,7 @@ int slow_write_safe(PORT_TYPE fd,char *d,int l)
   // resume the CPU when it should be stopping.
   // (We can work around this by using the fact that the new UART
   // monitor tells us when a breakpoint has been reached.
-  if (!cpu_stopped)
+  //  if (!cpu_stopped)
     slow_write(fd,"t1\r",3);
   slow_write(fd,d,l);
   if (!cpu_stopped) {
@@ -326,7 +347,7 @@ int stop_cpu(void)
 {
   // Stop CPU
   printf("Stopping CPU\n");
-  usleep(50000);
+  do_usleep(50000);
   slow_write(fd,"t1\r",3);
   cpu_stopped=1;
   return 0;
@@ -335,7 +356,7 @@ int start_cpu(void)
 {
   // Stop CPU
   printf("Starting CPU\n");
-  usleep(50000);
+  do_usleep(50000);
   slow_write(fd,"t0\r",3);
   cpu_stopped=0;
   return 0;
@@ -351,7 +372,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     exit(-2);
   }
 
-  usleep(50000);
+  do_usleep(50000);
   unsigned char buf[65536];
   int max_bytes;
   int byte_limit=32768;
@@ -384,6 +405,18 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     if ((load_addr&0xffff)==0x0000) {
       munged_load_addr+=0x10000;
     }
+
+#ifdef WINDOWS
+    // Windows doesn't seem to work with the l fast-load monitor command
+    printf("Asking Gus to write data...\n");
+    for(int i=0;i<b;i+=16) {
+      int ofs=0;
+      sprintf(cmd,"s%x",load_addr+i); ofs=strlen(cmd);
+      for(int j=0;(j<16)&&(i+j)<b;j++) { sprintf(&cmd[ofs]," %x",buf[i+j]); ofs=strlen(cmd); }
+      sprintf(&cmd[ofs],"\r"); ofs=strlen(cmd);
+      slow_write(fd,cmd,strlen(cmd));
+    }
+#else
     // The old uart monitor could handle being given a 28-bit address for the end address,
     // but Kenneth's implementation requires it be a 16 bit address.
     // Also, Kenneth's implementation doesn't need the -1, so we need to know which version we
@@ -394,21 +427,22 @@ int load_file(char *filename,int load_addr,int patchHyppo)
       sprintf(cmd,"l%x %x\r",munged_load_addr-1,(munged_load_addr+b-1)&0xffff);
     // printf("  command ='%s'\n",cmd);
     slow_write(fd,cmd,strlen(cmd));
-    usleep(1000);
+    do_usleep(1000*SLOW_FACTOR);
     int n=b;
     unsigned char *p=buf;
     while(n>0) {
       int w=serialport_write(fd,p,n);
-      if (w>0) { p+=w; n-=w; } else usleep(1000);
+      if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
     }
-    if (serial_speed==230400) usleep(10000+50*b);
+    if (serial_speed==230400) do_usleep(10000+50*b);
     else if (serial_speed==2000000)
       // 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
-      usleep(5.1*b);
+      do_usleep(5.1*b*SLOW_FACTOR);
     else
       // 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
-      usleep(2.6*b);
-      
+      do_usleep(2.6*b*SLOW_FACTOR);
+#endif
+    
     load_addr+=b;
 
     max_bytes=0x10000-(load_addr&0xffff);
@@ -430,9 +464,9 @@ int restart_hyppo(void)
   // Start executing in new hyppo
   if (!halt) {
     printf("Re-Starting CPU in new HYPPO\n");
-    usleep(50000);
+    do_usleep(50000);
     slow_write(fd,"g8100\r",6);
-    usleep(10000);
+    do_usleep(10000);
     slow_write(fd,"t0\r",3);
     cpu_stopped=0;
   }
@@ -566,14 +600,14 @@ int virtual_f011_read(int device,int track,int sector,int side)
 	    sprintf(cmd,"l%x %x\r",READ_SECTOR_BUFFER_ADDRESS-1,
 		    READ_SECTOR_BUFFER_ADDRESS+0x200-1);
 	  slow_write(fd,cmd,strlen(cmd));
-	  usleep(1000);
+	  do_usleep(1000*SLOW_FACTOR);
 	  int n=0x200;
 	  unsigned char *p=buf;
 	  //	      fprintf(stderr,"%s\n",cmd);
 	  //	      dump_bytes(0,"F011 virtual sector data",p,512);
 	  while(n>0) {
 	    int w=serialport_write(fd,p,n);
-	    if (w>0) { p+=w; n-=w; } else usleep(1000);
+	    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	  }
 #ifdef WINDOWS       
 	  printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
@@ -676,10 +710,10 @@ int monitor_sync(void)
   char cmd[8192];
   cmd[0]=0x15; // ^U
   cmd[1]=0x0d; // Carriage return
-  usleep(20000); // Give plenty of time for things to settle
+  do_usleep(20000); // Give plenty of time for things to settle
   slow_write_safe(fd,cmd,2);
   printf("Wrote empty command.\n");
-  usleep(20000); // Give plenty of time for things to settle
+  do_usleep(20000); // Give plenty of time for things to settle
   int b=1;
   // Purge input  
   while(b>0) { b=serialport_read(fd,read_buff,8192); }
@@ -705,7 +739,7 @@ int monitor_sync(void)
 	state=99;
 	return 0;
       }
-      usleep(2000);
+      do_usleep(2000*SLOW_FACTOR);
     }
   }
   printf("Failed to synchronise with the monitor.\n");
@@ -744,7 +778,7 @@ int get_pc(void)
     Get current programme counter value of CPU
   */
   slow_write_safe(fd,"r\r",2);
-  usleep(50000);
+  do_usleep(50000);
   unsigned char buff[8192];
   int b=serialport_read(fd,buff,8192);
   if (b<0) b=0;
@@ -914,7 +948,7 @@ int detect_mode(void)
 int process_line(char *line,int live)
 {
   int pc,a,x,y,sp,p;
-  //  printf("[%s]\n",line);
+  //   printf("[%s]\n",line);
   if (!live) return 0;
   if (strstr(line,"ws h RECA8LHC")) {
     if (!new_monitor) printf("Detected new-style UART monitor.\n");
@@ -926,6 +960,7 @@ int process_line(char *line,int live)
     if (pc==0xf4a5||pc==0xf4a2||pc==0xf666) {
       // Intercepted LOAD command
       printf("LOAD vector intercepted\n");
+      stop_cpu();
       state=1;
     } else if ( //  (pc>=0x8000&&pc<0xc000)&&
 	       (hyppo)) {
@@ -958,7 +993,7 @@ int process_line(char *line,int live)
 	// Enable FDC virtualisation
 	snprintf(cmd,1024,"sffd3659 01\r");
 	slow_write(fd,cmd,strlen(cmd));
-	usleep(20000);
+	do_usleep(20000);
 	// Enable disk 0 (including for write)
 	snprintf(cmd,1024,"sffd368b 03\r");
 	slow_write(fd,cmd,strlen(cmd));
@@ -975,35 +1010,35 @@ int process_line(char *line,int live)
 	// Synchronised with monitor
 	state=0;
 	// Send ^U r <return> to print registers and get into a known state.
-	usleep(50000);
+	do_usleep(50000);
 	slow_write(fd,"\r",1);
 	if (!halt) {
 	  start_cpu();
 	}
-	usleep(20000);
-	if (reset_first) { slow_write(fd,"!\r",2); sleep(1); }
-	if (pal_mode) { slow_write(fd,"sffd306f 0\r",12); usleep(20000); }
-	if (ntsc_mode) { slow_write(fd,"sffd306f 80\r",12); usleep(20000); }
+	do_usleep(20000);
+	if (reset_first) { slow_write(fd,"!\r",2); do_usleep(1000000); }
+	if (pal_mode) { slow_write(fd,"sffd306f 0\r",12); do_usleep(20000); }
+	if (ntsc_mode) { slow_write(fd,"sffd306f 80\r",12); do_usleep(20000); }
 	if (ethernet_video) {
 	  slow_write(fd,"sffd36e1 29\r",12); // turn on video streaming over ethernet
-	  usleep(20000);
+	  do_usleep(20000);
 	}
 	if (ethernet_cpulog) {
 	  slow_write(fd,"sffd36e1 05\r",12); // turn on cpu instruction log streaming over ethernet
-	  usleep(20000);
+	  do_usleep(20000);
 	}
 	printf("Synchronised with monitor.\n");
 
 	if (zap) {
 	  char cmd[1024];
-	  usleep(20000);
+	  do_usleep(20000);
 	  snprintf(cmd,1024,"sffd36c8 %x %x %x %x\r",
 		   (zap_addr>>0)&0xff,
 		   (zap_addr>>8)&0xff,
 		   (zap_addr>>16)&0xff,
 		   (zap_addr>>24)&0xff);
 	  slow_write(fd,cmd,strlen(cmd));	  
-	  usleep(20000);
+	  do_usleep(20000);
 	  snprintf(cmd,1024,"sffd36cf 42\r");
 	  slow_write(fd,cmd,strlen(cmd));
 	  fprintf(stderr,"FPGA reconfigure command issued.\n");
@@ -1013,7 +1048,7 @@ int process_line(char *line,int live)
 	  fprintf(stderr,"Setting CPU breakpoint at $%04x\n",break_point);
 	  char cmd[1024];
 	  sprintf(cmd,"b%x\r",break_point);
-	  usleep(20000);
+	  do_usleep(20000);
 	  slow_write(fd,cmd,strlen(cmd));
 	  do_exit(0);
 	}
@@ -1152,7 +1187,7 @@ int process_line(char *line,int live)
 	     name_len,name_addr);
       char filename[16];
       snprintf(filename,16,"m%04x\r",name_addr);
-      usleep(10000);
+      do_usleep(10000);
       slow_write(fd,filename,strlen(filename));
       printf("Asking for filename from memory: %s\n",filename);
       state=3;
@@ -1169,7 +1204,7 @@ int process_line(char *line,int live)
 	     name_len,name_addr);
       char filename[16];
       snprintf(filename,16,"m%04x\r",name_addr);
-      usleep(10000);
+      do_usleep(10000);
       slow_write(fd,filename,strlen(filename));
       printf("Asking for filename from memory: %s\n",filename);
       state=3;
@@ -1295,12 +1330,12 @@ int process_line(char *line,int live)
 	slow_write(fd,modeline_cmd,strlen(modeline_cmd));
 
 	// Disable on-screen keyboard to be sure
-	usleep(50000);
+	do_usleep(50000);
 	slow_write(fd,"sffd3615 7f\n",12);
       
       
 	// Force mode change to take effect, after first giving time for VICIV to recalc parameters      
-	usleep(50000);
+	do_usleep(50000);
 	slow_write(fd,"sffd3011 1b\n",12);
 
 #if 0
@@ -1313,14 +1348,14 @@ int process_line(char *line,int live)
 	    slow_write(fd,cmd,strlen(cmd));
 	    snprintf(cmd,1024,"mffd307d\n");
 	    slow_write(fd,cmd,strlen(cmd));
-	    usleep(50000);
+	    do_usleep(50000);
 	    read_and_print(fd);
 	  }
 #endif
       
 	// Then ask for current mode information via VIC-IV registers, but first give a little time
 	// for the mode change to take effect
-	usleep(100000);
+	do_usleep(100000);
 	slow_write(fd,"Mffd3040\n",9);
       
       }
@@ -1394,6 +1429,8 @@ int process_line(char *line,int live)
       saw_c64_mode=1;
       slow_write(fd,cmd,strlen(cmd));
       stuff_keybuffer("Lo\"!\",8,1\r");
+      // We are waiting for a breakpoint that will almost certainly come soon.
+      cpu_stopped=1;
 #ifdef WINDOWS
       if (first_load) fprintf(stderr,"[T+%I64dsec] LOAD\"!\n",(long long)time(0)-start_time);
 #else
@@ -1429,54 +1466,67 @@ int process_line(char *line,int live)
 	}
 	else
 	  printf("Load address is $%04x\n",load_addr);	
-	usleep(50000);
+	do_usleep(50000);
 	unsigned char buf[16384];
 	int max_bytes=4096;
 	int b=fread(buf,1,max_bytes,f);
 	while(b>0) {
 	  printf("Read to $%04x (%d bytes)\n",load_addr,b);
 	  fflush(stdout);
+
+#ifdef WINDOWS
+	  // Windows doesn't seem to work with the l fast-load monitor command
+	  printf("Asking Gus to write data...\n");
+	  for(int i=0;i<b;i+=16) {
+	    int ofs=0;
+	    sprintf(cmd,"s%x",load_addr+i); ofs=strlen(cmd);
+	    for(int j=0;(j<16)&&(i+j)<b;j++) { sprintf(&cmd[ofs]," %x",buf[i+j]); ofs=strlen(cmd); }
+	    sprintf(&cmd[ofs],"\r"); ofs=strlen(cmd);
+	    slow_write(fd,cmd,strlen(cmd));
+	    }
+#else	  
 	  // load_addr=0x400;
 	  if (new_monitor) 
 	    sprintf(cmd,"l%x %x\r",load_addr,(load_addr+b)&0xffff);
 	  else
 	    sprintf(cmd,"l%x %x\r",load_addr-1,load_addr+b-1);
 	  slow_write(fd,cmd,strlen(cmd));
-	  usleep(1000);
+	  do_usleep(1000*SLOW_FACTOR);
 	  int n=b;
 	  unsigned char *p=buf;
 	  while(n>0) {
 	    int w=serialport_write(fd,p,n);
-	    if (w>0) { p+=w; n-=w; } else usleep(1000);
+	    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	  }
-	  if (serial_speed==230400) usleep(10000+50*b);
-	  else usleep(10000+6*b);
+	  if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
+	  else do_usleep(10000+6*b*SLOW_FACTOR);
+#endif
 	  load_addr+=b;
 	  b=fread(buf,1,max_bytes,f);	  
 	}
 	fclose(f); f=NULL;
 	// set end address, clear input buffer, release break point,
 	// jump to end of load routine, resume CPU at a CLC, RTS
-	usleep(50000);
+	do_usleep(50000);
 
 	// Clear keyboard input buffer
 	if (saw_c64_mode) sprintf(cmd,"sc6 0\r");
 	else sprintf(cmd,"sd0 0\r");
-	slow_write(fd,cmd,strlen(cmd));	usleep(20000);
+	slow_write(fd,cmd,strlen(cmd));	do_usleep(20000);
 
 	// Remove breakpoint
 	sprintf(cmd,"b\r");
-	slow_write(fd,cmd,strlen(cmd));	usleep(20000);
+	slow_write(fd,cmd,strlen(cmd));	do_usleep(20000);
 
 	// We need to set X and Y to load address before
 	// returning: LDX #$ll / LDY #$yy / CLC / RTS
 	sprintf(cmd,"s380 a2 %x a0 %x 18 60\r",
 		load_addr&0xff,(load_addr>>8)&0xff);
 	printf("Returning top of load address = $%04X\n",load_addr);
-	slow_write(fd,cmd,strlen(cmd));	usleep(20000);
+	slow_write(fd,cmd,strlen(cmd));	do_usleep(20000);
 
 	sprintf(cmd,"g0380\r");
-	slow_write(fd,cmd,strlen(cmd));	usleep(20000);
+	slow_write(fd,cmd,strlen(cmd));	do_usleep(20000);
 
 	if (!halt) {
 	  start_cpu();
@@ -1936,6 +1986,8 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
       print_error("Failed to write all bytes to port");
       return -1;
     }
+  success = FlushFileBuffers(port);
+  if (!success) print_error("Failed to flush buffers"); 
   return size;
 }
  
@@ -2370,7 +2422,7 @@ int main(int argc,char **argv)
 	    process_char(read_buff[i],1);
 	  }
 	} else {
-	  usleep(1000);
+	  do_usleep(1000*SLOW_FACTOR);
 	}
 
 	//        fast_mode = saw_c65_mode || saw_c64_mode;
@@ -2410,7 +2462,7 @@ int main(int argc,char **argv)
 	state=0;
 	break;
       default:
-	usleep(1000);	
+	do_usleep(1000*SLOW_FACTOR);	
       }
     }
     
