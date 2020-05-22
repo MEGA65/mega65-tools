@@ -406,7 +406,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
       munged_load_addr+=0x10000;
     }
 
-#ifdef WINDOWS
+#ifdef WINDOWS_GUS
     // Windows doesn't seem to work with the l fast-load monitor command
     printf("Asking Gus to write data...\n");
     for(int i=0;i<b;i+=16) {
@@ -1474,7 +1474,7 @@ int process_line(char *line,int live)
 	  printf("Read to $%04x (%d bytes)\n",load_addr,b);
 	  fflush(stdout);
 
-#ifdef WINDOWS
+#ifdef WINDOWS_GUS
 	  // Windows doesn't seem to work with the l fast-load monitor command
 	  printf("Asking Gus to write data...\n");
 	  for(int i=0;i<b;i+=16) {
