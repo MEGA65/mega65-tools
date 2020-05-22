@@ -983,7 +983,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	addr+=16;
 
 	// Shuffle buffer down
-	int s_offset=(long)s-(long)read_buff+42;
+	int s_offset=(long long)s-(long long)read_buff+42;
 	bcopy(&read_buff[s_offset],&read_buff[0],8192-(ofs-s_offset));
 	ofs-=s_offset;
       }
@@ -2160,7 +2160,7 @@ int main(int argc,char **argv)
 	filename_addr= mega65_peek(0xbb)+mega65_peek(0xbc)*256+mega65_peek(0xbe)*65536;
       }
       char requested_name[256];
-      fetch_ram(filename_addr,filename_len,requested_name);
+      fetch_ram(filename_addr,filename_len,(unsigned char *)requested_name);
       requested_name[filename_len]=0;
       timestamp_msg("");
       fprintf(stderr,"Requested file is '%s' (len=%d)\n",requested_name,filename_len);
