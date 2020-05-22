@@ -47,13 +47,15 @@
 #include <pthread.h>
 
 #define SLOW_FACTOR 1
+#define SLOW_FACTOR2 1
 
 #ifdef WINDOWS
 #include <windows.h>
 #undef SLOW_FACTOR
-#define SLOW_FACTOR 10
-#define do_usleep usleep
-void do_usleep_NOT(__int64 usec) 
+#define SLOW_FACTOR 5
+#define SLOW_FACTOR2 1
+// #define do_usleep usleep
+void do_usleep(__int64 usec) 
 { 
     HANDLE timer; 
     LARGE_INTEGER ft; 
@@ -427,20 +429,20 @@ int load_file(char *filename,int load_addr,int patchHyppo)
       sprintf(cmd,"l%x %x\r",munged_load_addr-1,(munged_load_addr+b-1)&0xffff);
     // printf("  command ='%s'\n",cmd);
     slow_write(fd,cmd,strlen(cmd));
-    do_usleep(1000*SLOW_FACTOR);
+    do_usleep(5000*SLOW_FACTOR);
     int n=b;
     unsigned char *p=buf;
     while(n>0) {
       int w=serialport_write(fd,p,n);
       if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
     }
-    if (serial_speed==230400) do_usleep(10000+50*b);
+    if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
     else if (serial_speed==2000000)
       // 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
-      do_usleep(5.1*b*SLOW_FACTOR);
+      do_usleep(6*b*SLOW_FACTOR2);
     else
       // 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
-      do_usleep(2.6*b*SLOW_FACTOR);
+      do_usleep(3*b*SLOW_FACTOR2);
 #endif
     
     load_addr+=b;
@@ -609,6 +611,8 @@ int virtual_f011_read(int device,int track,int sector,int side)
 	    int w=serialport_write(fd,p,n);
 	    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	  }
+	  if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
+	  else do_usleep(10000+6*b*SLOW_FACTOR);
 #ifdef WINDOWS       
 	  printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
 #else	
@@ -789,6 +793,81 @@ int get_pc(void)
   else return -1;
 }
 
+int breakpoint_set_and_wait(int pc)
+{
+  char cmd[8192];
+  char read_buff[8192];
+  monitor_sync();
+  stop_cpu();
+  snprintf(cmd,8192,"b%x\r",pc);
+  slow_write(fd,cmd,strlen(cmd));
+  monitor_sync();
+  start_cpu();
+
+  char pattern[16];
+
+  snprintf(pattern,16,"\r%04X",pc);
+
+  int match_state=0;
+  
+  // Now read until we see the requested PC
+  printf("Waiting for breakpoint at $%04X to trigger.\n",pc);
+  while(1) {
+    int b=serialport_read(fd,read_buff,8192);  
+
+    for(int i=0;i<b;i++) {
+      if (read_buff[i]==pattern[match_state]) {
+	match_state++;
+	if (match_state==4) {
+	  stop_cpu();
+	  monitor_sync();
+	  printf("Breakpoint @ $%04X triggered.\n",pc);
+	  return 0;
+	} else match_state++;
+      } else match_state=0;
+    }
+  }
+  
+}
+
+int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
+{
+  char cmd[8192];
+  for(unsigned int offset=0;offset<count;)
+    {
+      int b=count-offset;      
+      // Limit to same 64KB slab
+      if (b>(0xffff-((address+offset)&0xffff)))
+	b=(0xffff-((address+offset)&0xffff));
+      if (b>32768) b=32768;
+
+      monitor_sync();
+      
+      if (new_monitor) 
+	sprintf(cmd,"l%x %x\r",address+offset,(address+offset+b)&0xffff);
+      else
+	sprintf(cmd,"l%x %x\r",address+offset-1,address+offset+b-1);
+      slow_write(fd,cmd,strlen(cmd));
+      do_usleep(1000*SLOW_FACTOR);
+      int n=b;
+      unsigned char *p=&buffer[offset];
+      while(n>0) {
+	int w=serialport_write(fd,p,n);
+	if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+      }
+      if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
+      else if (serial_speed==2000000)
+	// 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
+	do_usleep(6*b*SLOW_FACTOR2);
+      else
+	// 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
+	do_usleep(3*b*SLOW_FACTOR2);
+
+      offset+=b;
+    }
+  return 0;
+}
+
 int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
   /* Fetch a block of RAM into the provided buffer.
@@ -918,7 +997,11 @@ int detect_mode(void)
     int in_range=0;
     for (int i=0;i<5;i++) {
       int pc=get_pc();
-      if (pc>=0xe1af&&pc<=0xe1b4) in_range++; else printf("Odd PC=$%04x\n",pc);
+      if (pc>=0xe1ae&&pc<=0xe1b4) in_range++; else {
+	// C65 ROM does checksum, so wait a while if it is in that range
+	printf("Odd PC=$%04x\n",pc);
+	if (pc>=0xb000&&pc<0xc000) sleep(1);
+      }
     }
     if (in_range>3) {
       // We are in C65 BASIC main loop, so assume it is C65 mode
@@ -932,7 +1015,7 @@ int detect_mode(void)
     for (int i=0;i<5;i++) {
       int pc=get_pc();
       // XXX Might not work with OpenROMs?
-      if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;  else printf("Odd PC=$%04x\n",pc);
+      if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;  else { printf("Odd PC=$%04x\n",pc); usleep(100000); }
     }
     if (in_range>3) {
       // We are in C64 BASIC main loop, so assume it is C65 mode
@@ -1499,7 +1582,12 @@ int process_line(char *line,int live)
 	    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	  }
 	  if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
-	  else do_usleep(10000+6*b*SLOW_FACTOR);
+	  else if (serial_speed==2000000)
+	    // 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
+	    do_usleep(6*b*SLOW_FACTOR2);
+	  else
+	    // 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
+	    do_usleep(3*b*SLOW_FACTOR2);
 #endif
 	  load_addr+=b;
 	  b=fread(buf,1,max_bytes,f);	  
@@ -2386,6 +2474,19 @@ int main(int argc,char **argv)
   printf("Calling detect_mode()\n");
   detect_mode();
 
+  if (saw_c65_mode&&do_go64) {
+    printf("Trying to switch to C64 mode...\n");
+    monitor_sync();
+    stuff_keybuffer("GO64\rY\r");
+    usleep(100000);
+    saw_c65_mode=0;
+    detect_mode();
+    if (!saw_c64_mode) {
+      fprintf(stderr,"ERROR: Failed to switch to C64 mode.\n");
+      exit(-1);
+    }
+  }
+  
   printf("Progressing...\n");
   
 #ifndef WINDOWS
