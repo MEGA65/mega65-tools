@@ -2085,6 +2085,7 @@ int main(int argc,char **argv)
     monitor_sync();
     stuff_keybuffer("GO64\rY\r");    
     saw_c65_mode=0;
+    do_usleep(100000);
     detect_mode();
     while (!saw_c64_mode) {
       fprintf(stderr,"WARNING: Failed to switch to C64 mode.\n");
