@@ -736,6 +736,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
     uinfo = fpgausb_init();   /*** Initialize USB interface ***/
     int usb_index = 0;
     for (i = 0; uinfo[i].dev; i++) {
+      timestamp_msg("");
       fprintf(stderr, "#%d: fpgajtag: %s:%s:%s; bcd:%x", i, uinfo[i].iManufacturer,
             uinfo[i].iProduct, uinfo[i].iSerialNumber, uinfo[i].bcdDevice);
         if (!filename) {
@@ -756,7 +757,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
     //    if (!filename)
     //        exit(1);
     while (1) {
-      printf("Trying usb_index=%d\n",usb_index);
+      //      printf("Trying usb_index=%d\n",usb_index);
       if (!uinfo[usb_index].dev) {
 	fprintf(stderr, "fpgajtag: Can't find usable usb interface\n");
 	if (!bitstream) exit(-1); else return;
@@ -769,7 +770,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
 	  // Found the correct interface.
 	  // Now extract the real serial port name as well, so that monitor_load can use it.
 	  
-#if 1
+#if 0
 	  fprintf(stderr,"USB device info: dev=%p, idVendor=%x, idProduct=%x, bcdDevice=%x(0d%d)\n",
 		  uinfo[usb_index].dev,
 		  uinfo[usb_index].idVendor,
@@ -807,6 +808,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
 		if (strstr(link,match)) {
 		  char serial_path[1024];
 		  snprintf(serial_path,1024,"/dev/%s",de->d_name);
+		  timestamp_msg("");
 		  fprintf(stderr,"Auto-detected serial port '%s'\n",serial_path);
 		  serial_port=strdup(serial_path);
 		}

@@ -377,7 +377,10 @@ int stop_cpu(void)
 int start_cpu(void)
 {
   // Stop CPU
-  printf("Starting CPU\n");
+  if (cpu_stopped) {
+    timestamp_msg("");
+    fprintf(stderr,"Starting CPU\n");
+  }
   do_usleep(50000);
   slow_write(fd,"t0\r",3);
   cpu_stopped=0;
@@ -553,7 +556,12 @@ int stuff_keybuffer(char *s)
     buffer_len_addr=0xd0;
   }
 
-  printf("Injecting string '%s' into key buffer at $%04X\n",s,buffer_addr);
+  timestamp_msg("Injecting string into key buffer at ");
+  fprintf(stderr,"$%04X : ",buffer_addr);
+  for(int i=0;s[i];i++) {
+    if (s[i]>=' '&&s[i]<0x7c) fprintf(stderr,"%c",s[i]); else fprintf(stderr,"[$%02x]",s[i]);    
+  }
+  fprintf(stderr,"\n");
   
   char cmd[1024];
   snprintf(cmd,1024,"s%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\rs%x %d\r",
@@ -745,11 +753,11 @@ int monitor_sync(void)
   cmd[2]=0x0d; // Carriage return
   do_usleep(20000); // Give plenty of time for things to settle
   slow_write_safe(fd,cmd,3);
-  printf("Wrote empty command.\n");
+  //  printf("Wrote empty command.\n");
   do_usleep(20000); // Give plenty of time for things to settle
   int b=1;
   // Purge input  
-  printf("Purging input.\n");
+  //  printf("Purging input.\n");
   while(b>0) {
     b=serialport_read(fd,read_buff,8192);
     //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
@@ -855,17 +863,19 @@ int breakpoint_wait(void)
   int match_state=0;
   
   // Now read until we see the requested PC
-  printf("Waiting for breakpoint at $%04X to trigger.\n",breakpoint_pc);
+  timestamp_msg("");
+  fprintf(stderr,"Waiting for breakpoint at $%04X to trigger.\n",breakpoint_pc);
   while(1) {
     int b=serialport_read(fd,(unsigned char *)read_buff,8192);  
 
     for(int i=0;i<b;i++) {
       if (read_buff[i]==pattern[match_state]) {
 	if (match_state==4) {
-	  printf("Breakpoint @ $%04X triggered.\n",breakpoint_pc);
+	  timestamp_msg("");
+	  fprintf(stderr,"Breakpoint @ $%04X triggered.\n",breakpoint_pc);
 	  slow_write(fd,"t1\r",3);
 	  cpu_stopped=1;
-	  printf("stopped following breakpoing.\n");
+	  //	  printf("stopped following breakpoing.\n");
 	  return 0;
 	} else match_state++;
       } else {
@@ -1060,7 +1070,7 @@ int detect_mode(void)
   }
   
   
-  printf("$D030 = $%02X\n",mem_buff[0]);
+  //  printf("$D030 = $%02X\n",mem_buff[0]);
   if (mem_buff[0]==0x64) {
     // Probably C65 mode
     int in_range=0;
@@ -1076,7 +1086,7 @@ int detect_mode(void)
 	// Or something else it does while booting
 	if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
 	else {
-	  fprintf(stderr,"Odd PC=$%04x\n",pc);
+	  //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
 	  do_usleep(100000);
 	}
       }
@@ -1084,7 +1094,8 @@ int detect_mode(void)
     if (in_range>3) {
       // We are in C65 BASIC main loop, so assume it is C65 mode
       saw_c65_mode=1;
-      printf("CPU in C65 BASIC 10 main loop.\n");
+      timestamp_msg("");
+      fprintf(stderr,"CPU in C65 BASIC 10 main loop.\n");
       return 0;
     }
   } else if (mem_buff[0]==0x00) {
@@ -1102,7 +1113,8 @@ int detect_mode(void)
     if (in_range>3) {
       // We are in C64 BASIC main loop, so assume it is C65 mode
       saw_c64_mode=1;
-      printf("CPU in C64 BASIC 2 main loop.\n");
+      timestamp_msg("");
+      fprintf(stderr,"CPU in C64 BASIC 2 main loop.\n");
       return 0;
     }
   }
@@ -1875,7 +1887,8 @@ int main(int argc,char **argv)
 {
   start_time=time(0);
 
-  printf("Getting started..\n");
+  timestamp_msg("");
+  fprintf(stderr,"Getting started..\n");
   
   int opt;
   while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:m:MnoprR:Ss:t:T:U:v:V:XZ:")) != -1) {
@@ -2002,7 +2015,7 @@ int main(int argc,char **argv)
   
   // XXX - Auto-detect if serial speed is not correct?
   
-  printf("Calling monitor_sync()\n");
+  //  printf("Calling monitor_sync()\n");
   monitor_sync();
 
   if (zap) {
@@ -2061,7 +2074,8 @@ int main(int argc,char **argv)
   if (ethernet_video) { mega65_poke(0xffd36e1,0x29); }
   if (ethernet_cpulog) { mega65_poke(0xffd36e1,0x05); }
 
-  printf("Detecting C64/C65 mode status.\n");
+  timestamp_msg("");
+  fprintf(stderr,"Detecting C64/C65 mode status.\n");
   detect_mode();
    
   if (type_text) do_type_text(type_text);
@@ -2099,6 +2113,7 @@ int main(int argc,char **argv)
   if (screen_shot) { stop_cpu(); do_screen_shot(); start_cpu(); exit(0); }
 
   if (filename) {
+    timestamp_msg("");
     fprintf(stderr,"Loading file '%s'\n",filename);
 
     unsigned int load_routine_addr=0xf664;
@@ -2147,7 +2162,8 @@ int main(int argc,char **argv)
       char requested_name[256];
       fetch_ram(filename_addr,filename_len,requested_name);
       requested_name[filename_len]=0;
-      printf("Requested file is '%s' (len=%d)\n",requested_name,filename_len);
+      timestamp_msg("");
+      fprintf(stderr,"Requested file is '%s' (len=%d)\n",requested_name,filename_len);
       // If we caught the boot load request, then feed the DLOAD command again
       if (!strcmp(requested_name,"0:AUTOBOOT.C65*")) first_time=1;
 
@@ -2173,7 +2189,8 @@ int main(int argc,char **argv)
 	  load_addr=0x0801;
 	else
 	  load_addr=0x2001;
-	printf("Forcing load address to $%04X\n",load_addr);
+	timestamp_msg("");
+	fprintf(stderr,"Forcing load address to $%04X\n",load_addr);
       }
       else
 	printf("Load address is $%04x\n",load_addr);	
@@ -2182,6 +2199,7 @@ int main(int argc,char **argv)
       int max_bytes=32768;
       int b=fread(buf,1,max_bytes,f);
       while(b>0) {
+	timestamp_msg("");
 	printf("Read block for $%04x -- $%04x (%d bytes)\n",load_addr,load_addr+b-1,b);
 	fflush(stdout);
 	
@@ -2241,6 +2259,7 @@ int main(int argc,char **argv)
       // returning: LDX #$ll / LDY #$yy / CLC / RTS
       sprintf(cmd,"s380 a2 %x a0 %x 18 60\r",
 	      load_addr&0xff,(load_addr>>8)&0xff);
+      timestamp_msg("");
       printf("Returning top of load address = $%04X\n",load_addr);
       slow_write(fd,cmd,strlen(cmd));
       monitor_sync();
@@ -2260,9 +2279,9 @@ int main(int argc,char **argv)
       }
 #endif
       
-      printf("\n");
       // loaded ok.
-      printf("LOADED.\n");
+      timestamp_msg("");
+      fprintf(stderr,"LOADED.\n");
       
     }
   }
@@ -2274,7 +2293,8 @@ int main(int argc,char **argv)
  
 void do_exit(int retval) {
 #ifndef WINDOWS
-  printf("Background tasks running. CONTROL+C to stop...\n");
+  timestamp_msg("");
+  fprintf(stderr,"Background tasks may be running running. CONTROL+C to stop...\n");
   for(int i=0;i<thread_count;i++)
     pthread_join(threads[i], NULL);     
 #endif  
