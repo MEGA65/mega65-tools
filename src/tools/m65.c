@@ -822,7 +822,7 @@ int get_pc(void)
   else return -1;
 }
 
- int breakpoint_pc=-1;
+int breakpoint_pc=-1;
 int breakpoint_set(int pc)
 {
   char cmd[8192];
@@ -837,7 +837,7 @@ int breakpoint_set(int pc)
   return 0;
  }
 
- int breakpoint_wait(void)
+int breakpoint_wait(void)
 {
   char read_buff[8192];
   char pattern[16];
@@ -854,8 +854,10 @@ int breakpoint_set(int pc)
     for(int i=0;i<b;i++) {
       if (read_buff[i]==pattern[match_state]) {
 	if (match_state==4) {
-	  monitor_sync();
 	  printf("Breakpoint @ $%04X triggered.\n",breakpoint_pc);
+	  slow_write(fd,"t1\r",3);
+	  cpu_stopped=1;
+	  printf("stopped following breakpoing.\n");
 	  return 0;
 	} else match_state++;
       } else {
@@ -2039,8 +2041,12 @@ int main(int argc,char **argv)
     saw_c65_mode=0;
     detect_mode();
     if (!saw_c64_mode) {
-      fprintf(stderr,"ERROR: Failed to switch to C64 mode.\n");
-      exit(-1);
+      // Try a 2nd time
+      detect_mode();
+      if (!saw_c64_mode) {      
+	fprintf(stderr,"ERROR: Failed to switch to C64 mode.\n");
+	exit(-1);
+      }
     }
   }
 
@@ -2072,6 +2078,8 @@ int main(int argc,char **argv)
     if (saw_c64_mode) stuff_keybuffer("Lo\"!\",8,1\r");      
     else stuff_keybuffer("DLo\"!\r");
     breakpoint_wait();
+
+    printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
     
     // We can ignore the filename.
     // Next we just load the file
@@ -2137,28 +2145,43 @@ int main(int argc,char **argv)
 	b=fread(buf,1,max_bytes,f);	  
       }
       fclose(f); f=NULL;
+
+      printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
+      
       // set end address, clear input buffer, release break point,
       // jump to end of load routine, resume CPU at a CLC, RTS
-      do_usleep(50000);
+      monitor_sync();
       
       // Clear keyboard input buffer
       if (saw_c64_mode) sprintf(cmd,"sc6 0\r");
       else sprintf(cmd,"sd0 0\r");
-      slow_write(fd,cmd,strlen(cmd));	do_usleep(20000);
-      
+      slow_write(fd,cmd,strlen(cmd));
+      monitor_sync();
+
+      printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
+    
       // Remove breakpoint
       sprintf(cmd,"b\r");
-      slow_write(fd,cmd,strlen(cmd));	do_usleep(20000);
+      slow_write(fd,cmd,strlen(cmd));
+      monitor_sync();
+
+      printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
       
       // We need to set X and Y to load address before
       // returning: LDX #$ll / LDY #$yy / CLC / RTS
       sprintf(cmd,"s380 a2 %x a0 %x 18 60\r",
 	      load_addr&0xff,(load_addr>>8)&0xff);
       printf("Returning top of load address = $%04X\n",load_addr);
-      slow_write(fd,cmd,strlen(cmd));	do_usleep(20000);
+      slow_write(fd,cmd,strlen(cmd));
+      monitor_sync();
+
+    printf("%s:%d: cpu_stopped=%d\n",__FILE__,__LINE__,cpu_stopped);
+      
       
       sprintf(cmd,"g0380\r");
-      slow_write(fd,cmd,strlen(cmd));	do_usleep(20000);
+#if 1
+      slow_write(fd,cmd,strlen(cmd)); 
+      //      monitor_sync();
       
       if (!halt) {
 	start_cpu();
@@ -2168,6 +2191,7 @@ int main(int argc,char **argv)
 	stuff_keybuffer("RUN:\r");
 	timestamp_msg("RUNning.\n");
       }
+#endif
       
       printf("\n");
       // loaded ok.
