@@ -672,14 +672,17 @@ int virtual_f011_read(int device,int track,int sector,int side)
 
 void show_hyppo_report(void)
 {
-  printf("HYPPO status:\n");
   // Buffer starats at $BC00 in HYPPO
   // $BC00 - $BCFF = DOS work area
   // $BD00 - $BDFF = Process Descriptor
   // $BE00 - $BEFF = Stack
   // $BF00 - $BFFF = ZP
 
+  unsigned char syspart_buffer[0x40];
+  
+  fetch_ram(0xfffbbc0,0x40,syspart_buffer);
   fetch_ram(0xfffbc00,0x400,hyppo_buffer);
+  printf("HYPPO status:\n");
   
   printf("Disk count = $%02x\n",hyppo_buffer[0x001]);
   printf("Default Disk = $%02x\n",hyppo_buffer[0x002]);
@@ -735,7 +738,9 @@ void show_hyppo_report(void)
   printf("Dos error code = $%02x\n",hyppo_buffer[0xf6]);
   printf("SYSPART error code = $%02x\n",hyppo_buffer[0xf7]);
   printf("SYSPART present = $%02x\n",hyppo_buffer[0xf8]);
-
+  printf("SYSPART start = $%02x%02x%02x%02x\n",
+	 syspart_buffer[3],syspart_buffer[2],syspart_buffer[1],syspart_buffer[0]);
+  
 }
 
 int monitor_sync(void)
@@ -1882,11 +1887,11 @@ void open_the_serial_port(void)
 #endif
 }
 
-int check_file_access(char *file)
+int check_file_access(char *file,char *purpose)
 {
   FILE *f=fopen(file,"rb");
   if (!f) {
-    fprintf(stderr,"ERROR: Cannot access file '%s'\n",file);
+    fprintf(stderr,"ERROR: Cannot access %s file '%s'\n",purpose,file);
     exit(-1);
   } else   fclose(f);
 
@@ -1921,11 +1926,11 @@ int main(int argc,char **argv)
     case 'B': sscanf(optarg,"%x",&break_point); break;
     case 'L': if (ethernet_video) { usage(); } else { ethernet_cpulog=1; } break;
     case 'E': if (ethernet_cpulog) { usage(); } else { ethernet_video=1; } break;
-    case 'U': flashmenufile=strdup(optarg); check_file_access(optarg); break;      
-    case 'R': romfile=strdup(optarg); check_file_access(optarg); break;      
+    case 'U': flashmenufile=strdup(optarg); check_file_access(optarg,"flash menu"); break;      
+    case 'R': romfile=strdup(optarg); check_file_access(optarg,"ROM"); break;      
     case 'H': halt=1; break;
-    case 'C': charromfile=strdup(optarg); check_file_access(optarg); break;      
-    case 'c': colourramfile=strdup(optarg); check_file_access(optarg); break;      
+    case 'C': charromfile=strdup(optarg); check_file_access(optarg,"char ROM"); break;      
+    case 'c': colourramfile=strdup(optarg); check_file_access(optarg,"colour RAM"); break;      
     case '4': do_go64=1; break;
     case '1': comma_eight_comma_one=1; break;
     case 'p': pal_mode=1; break;
@@ -1954,7 +1959,7 @@ int main(int argc,char **argv)
     case 'b':
       bitstream=strdup(optarg);
       if (bitstream[0]=='@') download_bitstream();
-      check_file_access(bitstream);
+      check_file_access(bitstream,"bitstream");
       break;
     case 'v':
       vivado_bat=strdup(optarg);
@@ -1971,7 +1976,7 @@ int main(int argc,char **argv)
     case 'k':
       hyppo=strdup(optarg);
       if (hyppo[0]=='@') download_hyppo();
-      check_file_access(hyppo);
+      check_file_access(hyppo,"HYPPO");
       break;
     case 't': case 'T':
       type_text=strdup(optarg);
@@ -2012,8 +2017,10 @@ int main(int argc,char **argv)
     usage();
   }
   
-  if (argv[optind]) filename=strdup(argv[optind]);
-  check_file_access(filename);
+  if (argv[optind]) {
+    filename=strdup(argv[optind]);
+    check_file_access(filename,"programme");
+  }
   
   if (argc-optind>1) usage();
   
@@ -2052,7 +2059,9 @@ int main(int argc,char **argv)
     // XXX This can take a while, which we should accommodate
     monitor_sync();
   }  
-  
+
+  if (hyppo_report) show_hyppo_report();
+    
   if (hyppo) {
     int patchKS=0;
     if (romfile&&(!flashmenufile)) patchKS=1;
