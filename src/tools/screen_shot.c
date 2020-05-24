@@ -508,8 +508,10 @@ void paint_screen_shot(void)
       if (sixteenbit_mode)
 	char_value|=(screen_data[cy*screen_line_step+cx*(1+sixteenbit_mode)+1]<<8);
       int colour_value=colour_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
-      if (sixteenbit_mode)
-	colour_value|=(colour_data[cy*screen_line_step+cx*(1+sixteenbit_mode)+1]<<8);
+      if (sixteenbit_mode) {
+	colour_value=colour_value<<8;
+	colour_value|=(colour_data[cy*screen_line_step+cx*(1+sixteenbit_mode)+1]);
+      }
       if (extended_background_mode) {
 	char_id=char_value&=0x3f;
 	char_background_colour=vic_regs[0x21+((char_value>>6)&3)];
