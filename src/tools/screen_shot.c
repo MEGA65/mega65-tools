@@ -711,8 +711,8 @@ void paint_screen_shot(void)
 
 int do_screen_shot(void)
 {
+  printf("Syncing to monitor.\n");
   monitor_sync();
-  detect_mode();
 
   get_video_state();
 

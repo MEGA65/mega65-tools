@@ -1996,7 +1996,9 @@ int main(int argc,char **argv)
 #endif
   
 #ifdef WINDOWS
-  fprintf(stderr,"WARNING: JTAG boundary scan not implemented on Windows.\n");
+  if (boundary_scan) {
+    fprintf(stderr,"WARNING: JTAG boundary scan not implemented on Windows.\n");
+  }
 #else
   if (boundary_scan) {
     fprintf(stderr,"ERROR: threading on Windows not implemented.\n");
@@ -2102,9 +2104,11 @@ int main(int argc,char **argv)
   if (ethernet_video) { mega65_poke(0xffd36e1,0x29); }
   if (ethernet_cpulog) { mega65_poke(0xffd36e1,0x05); }
 
-  timestamp_msg("");
-  fprintf(stderr,"Detecting C64/C65 mode status.\n");
-  detect_mode();
+  if (filename||do_go64) {
+    timestamp_msg("");
+    fprintf(stderr,"Detecting C64/C65 mode status.\n");
+    detect_mode();
+  }
    
   if (type_text) do_type_text(type_text);
   
