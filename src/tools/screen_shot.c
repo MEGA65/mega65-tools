@@ -401,9 +401,9 @@ void get_video_state(void)
   screen_address=vic_regs[0x60]+(vic_regs[0x61]<<8)+(vic_regs[0x62]<<16);
   charset_address=vic_regs[0x68]+(vic_regs[0x69]<<8)+(vic_regs[0x6A]<<16);
   if (charset_address==0x1000) charset_address=0x2D000;
-  if (charset_address==0x9000) charset_address=0x3D000;
+  if (charset_address==0x9000) charset_address=0x29000;
   if (charset_address==0x1800) charset_address=0x2D800;
-  if (charset_address==0x9800) charset_address=0x3D800;
+  if (charset_address==0x9800) charset_address=0x29800;
 
   is_pal_mode=(vic_regs[0x6f]&0x80)^0x80;
   screen_line_step=vic_regs[0x58]+(vic_regs[0x59]<<8);
@@ -551,7 +551,6 @@ void paint_screen_shot(void)
       if (vic_regs[0x54]&2) if (char_id<0x100) glyph_full_colour=1;
       if (vic_regs[0x54]&4) if (char_id>0x0FF) glyph_full_colour=1;
       int glyph_4bit=colour_value&0x0800;
-      if (glyph_4bit) glyph_full_colour=1;
       if (colour_value&0x0400) glyph_width_deduct+=8;
 
       // Lookup the char data, and work out how many pixels we need to paint
@@ -571,7 +570,7 @@ void paint_screen_shot(void)
 	  fetch_ram_cacheable(char_id*64+glyph_row*8,8,glyph_data);
 	} else {
 	  // Use existing char data we have already fetched
-	  //	  printf("Chardata for char $%03x = $%02x\n",char_id,char_data[char_id*8+glyph_row]);
+	  // printf("Chardata for char $%03x = $%02x\n",char_id,char_data[char_id*8+glyph_row]);
 	  if (!bitmap_mode) {
 	    for(int i=0;i<8;i++)
 	      if ((char_data[char_id*8+glyph_row]>>i)&1) glyph_data[i]=0xff; else glyph_data[i]=0;
