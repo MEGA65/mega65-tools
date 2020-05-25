@@ -2176,8 +2176,16 @@ int main(int argc,char **argv)
       // Type LOAD command and set breakpoint to catch the ROM routine
       // when it executes.
       breakpoint_set(load_routine_addr);
-      if (first_time) {
-	if (saw_c64_mode) stuff_keybuffer("Lo\"!\",8,1\r");      
+      if (first_time) {	
+	if (saw_c64_mode) {
+	  // What we stuff in the keyboard buffer here is actually
+	  // not important for ,1 loading.  That gets handled in the loading
+	  // logic.  But we reflect it here, so that it doesn't confuse people.
+	  if (comma_eight_comma_one)
+	    stuff_keybuffer("Lo\"!\",8,1\r");
+	  else
+	    stuff_keybuffer("Lo\"!\",8\r");
+	}
 	else {
 	  // Really wait for C65 to get to READY prompt
 	  stuff_keybuffer("DLo\"!\r");
