@@ -1607,10 +1607,11 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
 {
   DWORD offset=0;
   DWORD written;
+  BOOL success;
   //  printf("Calling WriteFile(%d)\n",size);
 
   while(offset<size) {  
-    BOOL success = WriteFile(port, &buffer[offset], size - offset, &written, NULL);
+    success = WriteFile(port, &buffer[offset], size - offset, &written, NULL);
     //  printf("  WriteFile() returned.\n");
     if (!success)
       {
