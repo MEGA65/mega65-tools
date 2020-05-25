@@ -1605,20 +1605,24 @@ HANDLE open_serial_port(const char * device, uint32_t baud_rate)
 // Writes bytes to the serial port, returning 0 on success and -1 on failure.
 int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
 {
+  DWORD offset=0;
   DWORD written;
   //  printf("Calling WriteFile(%d)\n",size);
-  BOOL success = WriteFile(port, buffer, size, &written, NULL);
-  //  printf("  WriteFile() returned.\n");
-  if (!success)
-    {
-      print_error("Failed to write to port");
-      return -1;
+
+  while(offset<size) {  
+    BOOL success = WriteFile(port, &buffer[offset], size - offset, &written, NULL);
+    //  printf("  WriteFile() returned.\n");
+    if (!success)
+      {
+	print_error("Failed to write to port");
+	return -1;
+      }
+    if (written>0) offset+=written;
+    if (offset<size) {
+      // Assume buffer is full, so wait a little while
+      usleep(1000);
     }
-  if (written != size)
-    {
-      print_error("Failed to write all bytes to port");
-      return -1;
-    }
+  }
   success = FlushFileBuffers(port);
   if (!success) print_error("Failed to flush buffers"); 
   return size;
@@ -1646,7 +1650,14 @@ SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
 #else
 int serialport_write(int fd, uint8_t * buffer, size_t size)
 {
-  return write(fd,buffer,size);
+  size_t offset=0;
+  while(offset<size) {
+    int written=write(fd,&buffer[offset],size-offset);
+    if (written>0) offset+=written;
+    if (offset<size) { usleep(1000);
+      //      printf("Wrote %d bytes\n",written);
+    }
+  }
 }
 
 size_t serialport_read(int fd, uint8_t * buffer, size_t size)
@@ -2237,7 +2248,7 @@ int main(int argc,char **argv)
 	printf("Load address is $%04x\n",load_addr);	
       do_usleep(50000);
       unsigned char buf[32768];
-      int max_bytes=8192;
+      int max_bytes=32768;
       int b=fread(buf,1,max_bytes,f);
       while(b>0) {
 	timestamp_msg("");
