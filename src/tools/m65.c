@@ -2229,7 +2229,7 @@ int main(int argc,char **argv)
 	printf("Load address is $%04x\n",load_addr);	
       do_usleep(50000);
       unsigned char buf[32768];
-      int max_bytes=32768;
+      int max_bytes=8192;
       int b=fread(buf,1,max_bytes,f);
       while(b>0) {
 	timestamp_msg("");
