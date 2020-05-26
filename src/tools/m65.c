@@ -1877,6 +1877,29 @@ void load_bitstream(char *bitstream)
   timestamp_msg("Bitstream loaded.\n");
 }
 
+void enter_hypervisor_mode(void)
+{
+  /* Ach! for some things we want to make sure we are in the hypervisor.
+     This is a bit annoying, as we have to make sure we save state etc 
+     properly.
+  */
+  monitor_sync();
+  slow_write_safe(fd,"t1\r",3);
+  slow_write_safe(fd,"sffd367f 0\r",11);
+  slow_write_safe(fd,"\r",1);
+  fprintf(stderr,"Foo!\n");
+  sleep(10);
+}
+
+void return_from_hypervisor_mode(void)
+{
+  monitor_sync();
+  slow_write_safe(fd,"t1\r",3);
+  slow_write_safe(fd,"sffd367f 0\r",11);
+  slow_write_safe(fd,"\r",1);
+}
+  
+
 void open_the_serial_port(void)
 {
 #ifdef WINDOWS
@@ -1921,10 +1944,13 @@ int main(int argc,char **argv)
   
   timestamp_msg("");
   fprintf(stderr,"Getting started..\n");
+
+  if (argc==1) usage();
   
   int opt;
-  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:m:MnoprR:Ss:t:T:U:v:V:XZ:")) != -1) {
+  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:m:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
+    case 'h': case '?': usage();
     case 'X': hyppo_report=1; break;
     case 'K': usedk=1; break;
     case 'Z':
@@ -2026,11 +2052,6 @@ int main(int argc,char **argv)
 
   if (jtag_only) do_exit(0);
   
-  if ((romfile||charromfile)&&(!hyppo)) {
-    fprintf(stderr,"-k is required with -R or -C\n");
-    usage();
-  }
-  
   if (argv[optind]) {
     filename=strdup(argv[optind]);
     check_file_access(filename,"programme");
@@ -2076,7 +2097,19 @@ int main(int argc,char **argv)
 
   if (hyppo_report) show_hyppo_report();
     
-  if (hyppo) {
+  if (!hyppo) {
+    stop_cpu();
+
+    // XXX These two need the CPU to be in hypervisor mode
+    enter_hypervisor_mode();
+    if (romfile) { load_file(romfile,0x20000,0); } 
+    if (charromfile) load_file(charromfile,0xFF7E000,0);
+    return_from_hypervisor_mode();
+    
+    if (colourramfile) load_file(colourramfile,0xFF80000,0);
+    if (flashmenufile) { load_file(flashmenufile,0x50000,0); } 
+    start_cpu();
+  } else {
     int patchKS=0;
     if (romfile&&(!flashmenufile)) patchKS=1;
 
@@ -2084,8 +2117,8 @@ int main(int argc,char **argv)
     
     stop_cpu();
     if (hyppo) { load_file(hyppo,0xfff8000,patchKS); } 
-    if (romfile) { load_file(romfile,0x20000,0); } 
     if (flashmenufile) { load_file(flashmenufile,0x50000,0); } 
+    if (romfile) { load_file(romfile,0x20000,0); } 
     if (charromfile) load_file(charromfile,0xFF7E000,0); 
     if (colourramfile) load_file(colourramfile,0xFF80000,0); 
     if (virtual_f011) {
