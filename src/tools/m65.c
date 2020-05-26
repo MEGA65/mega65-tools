@@ -2103,7 +2103,15 @@ int main(int argc,char **argv)
     // XXX These two need the CPU to be in hypervisor mode
     if (romfile||charromfile) {
       enter_hypervisor_mode();
-      if (romfile) { load_file(romfile,0x20000,0); } 
+      if (romfile) {
+	// Un-protect
+	mega65_poke(0xffd367d,mega65_peek(0xffd367d)&(0xff-4));
+		    
+	load_file(romfile,0x20000,0);
+	// reenable ROM write protect
+	mega65_poke(0xffd367d,mega65_peek(0xffd367d)|0x04);
+	
+      } 
       if (charromfile) load_file(charromfile,0xFF7E000,0);
       return_from_hypervisor_mode();
     }
