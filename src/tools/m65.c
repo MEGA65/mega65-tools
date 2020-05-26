@@ -374,6 +374,7 @@ int stop_cpu(void)
   cpu_stopped=1;
   return 0;
 }
+
 int start_cpu(void)
 {
   // Stop CPU
@@ -1884,19 +1885,18 @@ void enter_hypervisor_mode(void)
      properly.
   */
   monitor_sync();
-  slow_write_safe(fd,"t1\r",3);
-  slow_write_safe(fd,"sffd367f 0\r",11);
+  stop_cpu();
+  slow_write_safe(fd,"sffd367e 0\r",11);
   slow_write_safe(fd,"\r",1);
   fprintf(stderr,"Foo!\n");
-  sleep(10);
 }
 
 void return_from_hypervisor_mode(void)
 {
   monitor_sync();
-  slow_write_safe(fd,"t1\r",3);
   slow_write_safe(fd,"sffd367f 0\r",11);
-  slow_write_safe(fd,"\r",1);
+  monitor_sync();
+  slow_write_safe(fd,"t0\r",3);
 }
   
 
@@ -2101,10 +2101,12 @@ int main(int argc,char **argv)
     stop_cpu();
 
     // XXX These two need the CPU to be in hypervisor mode
-    enter_hypervisor_mode();
-    if (romfile) { load_file(romfile,0x20000,0); } 
-    if (charromfile) load_file(charromfile,0xFF7E000,0);
-    return_from_hypervisor_mode();
+    if (romfile||charromfile) {
+      enter_hypervisor_mode();
+      if (romfile) { load_file(romfile,0x20000,0); } 
+      if (charromfile) load_file(charromfile,0xFF7E000,0);
+      return_from_hypervisor_mode();
+    }
     
     if (colourramfile) load_file(colourramfile,0xFF80000,0);
     if (flashmenufile) { load_file(flashmenufile,0x50000,0); } 
