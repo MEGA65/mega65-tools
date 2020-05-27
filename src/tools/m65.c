@@ -2098,8 +2098,7 @@ int main(int argc,char **argv)
   if (hyppo_report) show_hyppo_report();
     
   if (!hyppo) {
-    stop_cpu();
-
+    
     // XXX These two need the CPU to be in hypervisor mode
     if (romfile||charromfile) {
       enter_hypervisor_mode();
@@ -2118,7 +2117,6 @@ int main(int argc,char **argv)
     
     if (colourramfile) load_file(colourramfile,0xFF80000,0);
     if (flashmenufile) { load_file(flashmenufile,0x50000,0); } 
-    start_cpu();
   } else {
     int patchKS=0;
     if (romfile&&(!flashmenufile)) patchKS=1;
