@@ -401,7 +401,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
   do_usleep(50000);
   unsigned char buf[65536];
   int max_bytes;
-  int byte_limit=32768;
+  int byte_limit=4096;
   max_bytes=0x10000-(load_addr&0xffff);
   if (max_bytes>byte_limit) max_bytes=byte_limit;
   int b=fread(buf,1,max_bytes,f);
@@ -902,7 +902,7 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       // Limit to same 64KB slab
       if (b>(0xffff-((address+offset)&0xffff)))
 	b=(0xffff-((address+offset)&0xffff));
-      if (b>32768) b=32768;
+      if (b>4096) b=4096;
 
       monitor_sync();
       
@@ -2290,7 +2290,7 @@ int main(int argc,char **argv)
 	printf("Load address is $%04x\n",load_addr);	
       do_usleep(50000);
       unsigned char buf[32768];
-      int max_bytes=32768;
+      int max_bytes=4096;
       int b=fread(buf,1,max_bytes,f);
       while(b>0) {
 	timestamp_msg("");
