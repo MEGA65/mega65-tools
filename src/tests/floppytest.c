@@ -13,6 +13,10 @@ unsigned short interval_length;
 
 void get_interval(void)
 {
+  // Make sure we start measuring a fresh interval
+  a=PEEK(0xD6AA);
+  while(a==PEEK(0xD6AA)) continue;
+	
   do {
     a=PEEK(0xD6A9); b=PEEK(0xD6AA);
     c=PEEK(0xD6A9); d=PEEK(0xD6AA);
@@ -114,6 +118,7 @@ void activate_double_buffer(void)
 }
 
 unsigned char histo_bins[640];
+char peak_msg[40+1];
 
 void gap_histogram(void)
 {
@@ -137,7 +142,11 @@ void gap_histogram(void)
       get_interval();
       if (interval_length>=640) continue;
       // Stop as soon as a single histogram bin fills
-      if (histo_bins[interval_length]==255) break;
+      if (histo_bins[interval_length]==255) {
+	snprintf(peak_msg,40,"Peak @ %d     ",interval_length);
+	print_text(0,2,7,peak_msg);
+	break;
+      }
       histo_bins[interval_length]++;
     }
 
