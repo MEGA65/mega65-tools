@@ -119,6 +119,7 @@ void activate_double_buffer(void)
 
 unsigned char histo_bins[640];
 char peak_msg[40+1];
+unsigned char random_target=40;
 
 void gap_histogram(void)
 {
@@ -171,7 +172,9 @@ void gap_histogram(void)
 	     PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
 	     );
     print_text(0,4,7,peak_msg);
-
+    snprintf(peak_msg,40,"Target track is T:$%02X",random_target);
+    print_text(0,5,7,peak_msg);
+    
     
     activate_double_buffer();
 
@@ -179,6 +182,24 @@ void gap_histogram(void)
       switch(PEEK(0xD610)) {
       case 0x11: POKE(0xD081,0x10); break;
       case 0x91: POKE(0xD081,0x18); break;
+      case 0x52: case 0x72:
+	// Seek to random track.
+	random_target=PEEK(0xD012)%80;
+	a=(PEEK(0xD6A3)&0x7f)-random_target;
+	if (a&0x80) {
+	  while(a) {
+	    POKE(0xD081,0x18);
+	    usleep(6000);
+	    a++;
+	  }
+	} else {
+	  while(a) {
+	    POKE(0xD081,0x10);
+	    usleep(6000);
+	    a--;
+	  }
+	}
+	break;
       }
       POKE(0xD610,0);
     }
