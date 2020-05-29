@@ -38,10 +38,12 @@ void graphics_mode(void)
   POKE(0xD054,0x05);
   // H640, fast CPU
   POKE(0xD031,0xC0);
+  // Adjust D016 smooth scrolling for VIC-III H640 offset
+  POKE(0xD016,0xC9);
   // 640x200 16bits per char, 16 pixels wide per char
   // = 640/16 x 16 bits = 80 bytes per row
   POKE(0xD058,80);
-  POKE(0xD059,80);
+  POKE(0xD059,80/256);
   // Draw 40 (double-wide) chars per row
   POKE(0xD05E,40);
   // Put 2KB screen at $C000
@@ -65,6 +67,7 @@ void graphics_mode(void)
     lpoke(0xff80000L+0+i,0x08);
     lpoke(0xff80000L+1+i,0x00);
   }
+  POKE(0xD020,0);
   POKE(0xD021,0);
 
   graphics_clear_screen();
@@ -87,6 +90,23 @@ void plot_pixel(unsigned short x,unsigned char y,unsigned char colour)
   lpoke(0x50000L+pixel_addr,pixel_temp);
 }
 
+unsigned char char_code;
+void print_text(unsigned char x,unsigned char y,unsigned char colour,char *msg)
+{
+  pixel_addr=0xC000+x*2+y*80;
+  while(*msg) {
+    char_code=*msg;
+    if (*msg>=0xc0&&*msg<=0xe0) char_code=*msg-0x80;
+    if (*msg>=0x40&&*msg<=0x60) char_code=*msg-0x40;
+    POKE(pixel_addr+0,char_code);
+    POKE(pixel_addr+1,0);
+    lpoke(0xff80000-0xc000+pixel_addr+0,0x00);
+    lpoke(0xff80000-0xc000+pixel_addr+1,colour);
+    msg++;
+    pixel_addr+=2;
+  }
+}
+
 void activate_double_buffer(void)
 {
   lcopy(0x50000,0x40000,0x8000);
@@ -103,6 +123,8 @@ void gap_histogram(void)
   
   graphics_mode();
 
+  print_text(0,0,1,"Magnetic Domain Interval Histogram");
+  
   for(a=0;a<200;a++)
     plot_pixel(a,a,a&0xf);
   
