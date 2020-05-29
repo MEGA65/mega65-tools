@@ -120,6 +120,28 @@ void activate_double_buffer(void)
 unsigned char histo_bins[640];
 char peak_msg[40+1];
 unsigned char random_target=40;
+unsigned char last_random_target=40;
+
+void seek_random_track(void)
+{
+  // Seek to random track.
+  last_random_target=random_target;
+  random_target=PEEK(0xD012)%80;
+  a=(PEEK(0xD6A3)&0x7f)-random_target;
+  if (a&0x80) {
+    while(a) {
+      POKE(0xD081,0x18);
+      usleep(6000);
+      a++;
+    }
+  } else {
+    while(a) {
+      POKE(0xD081,0x10);
+      usleep(6000);
+      a--;
+    }
+  }
+}
 
 void gap_histogram(void)
 {
@@ -130,6 +152,8 @@ void gap_histogram(void)
   graphics_mode();
 
   print_text(0,0,1,"Magnetic Domain Interval Histogram");
+
+  random_target=(PEEK(0xD6A3)&0x7f);
   
   while(1) {
     // Clear histogram bins
@@ -172,8 +196,12 @@ void gap_histogram(void)
 	     PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
 	     );
     print_text(0,4,7,peak_msg);
-    snprintf(peak_msg,40,"Target track is T:$%02X",random_target);
+    snprintf(peak_msg,40,"Target track is T:$%02X (last was T:$%02X)",
+	     random_target,last_random_target);
     print_text(0,5,7,peak_msg);
+
+    if ((PEEK(0xD6A3)&0x7f)==random_target)
+      seek_random_track();
     
     
     activate_double_buffer();
@@ -183,22 +211,7 @@ void gap_histogram(void)
       case 0x11: POKE(0xD081,0x10); break;
       case 0x91: POKE(0xD081,0x18); break;
       case 0x52: case 0x72:
-	// Seek to random track.
-	random_target=PEEK(0xD012)%80;
-	a=(PEEK(0xD6A3)&0x7f)-random_target;
-	if (a&0x80) {
-	  while(a) {
-	    POKE(0xD081,0x18);
-	    usleep(6000);
-	    a++;
-	  }
-	} else {
-	  while(a) {
-	    POKE(0xD081,0x10);
-	    usleep(6000);
-	    a--;
-	  }
-	}
+	seek_random_track();
 	break;
       }
       POKE(0xD610,0);
