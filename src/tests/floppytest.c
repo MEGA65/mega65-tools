@@ -26,6 +26,12 @@ void graphics_clear_screen(void)
   lfill(0x48000,0,32768);
 }
 
+void graphics_clear_double_buffer(void)
+{
+  lfill(0x50000,0,32768);
+  lfill(0x58000,0,32768);
+}
+
 void graphics_mode(void)
 {
   // 16-bit text mode, full-colour text for high chars
@@ -50,16 +56,16 @@ void graphics_mode(void)
     for(b=0;b<25;b++) {
       POKE(0xC000+b*80+a*2+0,i&0xff);
       POKE(0xC000+b*80+a*2+1,i>>8);
+
       i++;
     }
 
-  // Clear colour RAM
-  // A bit of a hack so that low and high bytes can both be the same,
-  // while enabling 4-bit pixels. So we have to make background colour
-  // match the transparency colour that corresponds with 4-bit mode in
-  // the other byte
-  lfill(0xff80000L,8,2000);
-  POKE(0xD021,8);
+  // Clear colour RAM, while setting all chars to 4-bits per pixel
+  for(i=0;i<2000;i+=2) {
+    lpoke(0xff80000L+0+i,0x08);
+    lpoke(0xff80000L+1+i,0x00);
+  }
+  POKE(0xD021,0);
 
   graphics_clear_screen();
 }
@@ -70,7 +76,7 @@ void plot_pixel(unsigned short x,unsigned char y,unsigned char colour)
 {
   pixel_addr=((x&0xf)>>1)+64*25*(x>>4);
   pixel_addr+=y<<3;
-  pixel_temp=lpeek(0x40000L+pixel_addr);
+  pixel_temp=lpeek(0x50000L+pixel_addr);
   if (x&1) {
     pixel_temp&=0x0f;
     pixel_temp|=colour<<4;
@@ -78,7 +84,13 @@ void plot_pixel(unsigned short x,unsigned char y,unsigned char colour)
     pixel_temp&=0xf0;
     pixel_temp|=colour&0xf;
   }
-  lpoke(0x40000L+pixel_addr,pixel_temp);
+  lpoke(0x50000L+pixel_addr,pixel_temp);
+}
+
+void activate_double_buffer(void)
+{
+  lcopy(0x50000,0x40000,0x8000);
+  lcopy(0x58000,0x48000,0x8000);
 }
 
 unsigned char histo_bins[640];
@@ -86,7 +98,13 @@ unsigned char histo_bins[640];
 void gap_histogram(void)
 {
 
+  // Floppy motor on
+  POKE(0xD080,0x60);  
+  
   graphics_mode();
+
+  for(a=0;a<200;a++)
+    plot_pixel(a,a,a&0xf);
   
   while(1) {
     // Clear histogram bins
@@ -103,7 +121,15 @@ void gap_histogram(void)
 
     // Re-draw histogram.
     // We use 640x200 16-colour char mode
-    
+    graphics_clear_double_buffer();
+    for(i=0;i<640;i++) {
+      b=5;
+      if (histo_bins[i]>128) b=7;
+      if (histo_bins[i]>192) b=10;
+      for(a=199-(histo_bins[i]>>1);a<200;a++)
+	plot_pixel(i,a,b);
+    }
+    activate_double_buffer();
   }
 }
 
