@@ -130,13 +130,16 @@ void gap_histogram(void)
 
   print_text(0,0,1,"Magnetic Domain Interval Histogram");
   
-  for(a=0;a<200;a++)
-    plot_pixel(a,a,a&0xf);
-  
   while(1) {
     // Clear histogram bins
     for(i=0;i<640;i++) histo_bins[i]=0;
 
+    // Schedule a sector read
+    POKE(0xD084,40);
+    POKE(0xD085,1);
+    POKE(0xD086,0);
+    POKE(0xD081,0x40);
+    
     // Get new histogram data
     while(1) {
       get_interval();
@@ -160,7 +163,25 @@ void gap_histogram(void)
       for(a=199-(histo_bins[i]>>1);a<200;a++)
 	plot_pixel(i,a,b);
     }
+
+    snprintf(peak_msg,40,"Floppy Status = $%02X,$%02X",
+	     PEEK(0xD082),PEEK(0xD083)	     );
+    print_text(0,3,7,peak_msg);
+    snprintf(peak_msg,40,"Last sector  T:%02X, S:%02X, H:%02x",
+	     PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
+	     );
+    print_text(0,4,7,peak_msg);
+
+    
     activate_double_buffer();
+
+    if (PEEK(0xD610)) {
+      switch(PEEK(0xD610)) {
+      case 0x11: POKE(0xD081,0x10); break;
+      case 0x91: POKE(0xD081,0x18); break;
+      }
+      POKE(0xD610,0);
+    }
   }
 }
 
