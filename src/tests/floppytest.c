@@ -121,27 +121,32 @@ unsigned char histo_bins[640];
 char peak_msg[40+1];
 unsigned char random_target=40;
 unsigned char last_random_target=40;
+unsigned int random_seek_count=0;
+unsigned char request_track=40;
 
 void seek_random_track(void)
 {
   // Seek to random track.
   last_random_target=random_target;
   random_target=PEEK(0xD012)%80;
+  POKE(0xD084,request_track);
   a=(PEEK(0xD6A3)&0x7f)-random_target;
   if (a&0x80) {
     while(a) {
       POKE(0xD081,0x18);
-      usleep(6000);
+      while (PEEK(0xD082)&0x80) continue;
       a++;
     }
   } else {
     while(a) {
       POKE(0xD081,0x10);
-      usleep(6000);
+      while ((PEEK(0xD082)&0x80)) continue;
+      //      usleep(6000);
       a--;
     }
   }
 }
+
 
 void gap_histogram(void)
 {
@@ -159,19 +164,14 @@ void gap_histogram(void)
     // Clear histogram bins
     for(i=0;i<640;i++) histo_bins[i]=0;
 
-    // Schedule a sector read
-    POKE(0xD084,40);
-    POKE(0xD085,1);
-    POKE(0xD086,0);
-    POKE(0xD081,0x40);
-    
     // Get new histogram data
     while(1) {
       get_interval();
       if (interval_length>=640) continue;
       // Stop as soon as a single histogram bin fills
       if (histo_bins[interval_length]==255) {
-	snprintf(peak_msg,40,"Peak @ %d     ",interval_length);
+	snprintf(peak_msg,40,"Peak @ %d, auto_tune=%d     ",
+		 interval_length,PEEK(0xD689)&0x10);
 	print_text(0,2,7,peak_msg);
 	break;
       }
@@ -189,28 +189,74 @@ void gap_histogram(void)
 	plot_pixel(i,a,b);
     }
 
-    snprintf(peak_msg,40,"Floppy Status = $%02X,$%02X",
-	     PEEK(0xD082),PEEK(0xD083)	     );
+    snprintf(peak_msg,40,"FDC Status = $%02X,$%02X, requested T:$%02x",
+	     PEEK(0xD082),PEEK(0xD083),request_track);
     print_text(0,3,7,peak_msg);
-    snprintf(peak_msg,40,"Last sector  T:%02X, S:%02X, H:%02x",
+    snprintf(peak_msg,40,"Last sector           T:$%02X S:%02X H:%02x",
 	     PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
 	     );
     print_text(0,4,7,peak_msg);
-    snprintf(peak_msg,40,"Target track is T:$%02X (last was T:$%02X)",
+    snprintf(peak_msg,40,"Target track %-5d is T:$%02X, prev $%02X",
+	     random_seek_count,
 	     random_target,last_random_target);
     print_text(0,5,7,peak_msg);
 
-    if ((PEEK(0xD6A3)&0x7f)==random_target)
+    if ((PEEK(0xD6A3)&0x7f)==random_target) {
+      random_seek_count++;
       seek_random_track();
+    }
     
     
     activate_double_buffer();
 
     if (PEEK(0xD610)) {
       switch(PEEK(0xD610)) {
-      case 0x11: POKE(0xD081,0x10); break;
-      case 0x91: POKE(0xD081,0x18); break;
+      case 0x11: case '-': POKE(0xD081,0x10); break;
+      case 0x91: case '+': POKE(0xD081,0x18); break;
+      case '0':
+	request_track=0;
+	break;
+      case '4':
+	request_track=40;
+	break;
+      case '8':
+	request_track=80;
+	break;
+      case '1':
+	request_track=81;
+	break;
+      case 0x9d:
+	request_track--;
+	break;
+      case 0x1d:
+	request_track++;
+	break;
+      case 0x20:
+	last_random_target=random_target;
+	random_target=255;
+	break;
+      case 0x41: case 0x61:
+	// Switch auto/manual tracking in FDC
+	POKE(0xD689,PEEK(0xD689)|0x10);
+	break;
+      case 0x4d: case 0x6d:
+	POKE(0xD689,PEEK(0xD689)&0xEF);
+	break;
       case 0x52: case 0x72:
+	// Schedule a sector read
+	POKE(0xD081,0x00); // Cancel previous action
+
+	// Select track, sector, side
+	POKE(0xD084,request_track);
+	POKE(0xD085,1);
+	POKE(0xD086,0);
+	
+	// Issue read command
+	POKE(0xD081,0x40);
+	
+	break;
+      case 0x53: case 0x73:
+	random_seek_count=0;
 	seek_random_track();
 	break;
       }
