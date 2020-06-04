@@ -123,6 +123,9 @@ unsigned char random_target=40;
 unsigned char last_random_target=40;
 unsigned int random_seek_count=0;
 unsigned char request_track=40;
+unsigned char read_sectors[41]={0};
+unsigned char last_track_seen=255;
+unsigned int histo_samples=0;
 
 void seek_random_track(void)
 {
@@ -163,6 +166,7 @@ void gap_histogram(void)
   while(1) {
     // Clear histogram bins
     for(i=0;i<640;i++) histo_bins[i]=0;
+    histo_samples=0;
 
     // Get new histogram data
     while(1) {
@@ -176,6 +180,8 @@ void gap_histogram(void)
 	break;
       }
       histo_bins[interval_length]++;
+      histo_samples++;
+      if (histo_samples==4096) break;
     }
 
     // Re-draw histogram.
@@ -195,6 +201,18 @@ void gap_histogram(void)
     snprintf(peak_msg,40,"Last sector           T:$%02X S:%02X H:%02x",
 	     PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
 	     );
+    if ((PEEK(0xD6A3)&0x7f)!=last_track_seen) {
+      last_track_seen=PEEK(0xD6A3)&0x7f;
+      // Zero out list of sectors seen
+      snprintf(read_sectors,41,"Sectors read:      ....................");
+    } else {
+      // Note this sector
+      read_sectors[18+(PEEK(0xD6A5)&0x1)*10+(PEEK(0xD6A4)&0x1f)]=0x52;
+      POKE(0xD080,PEEK(0xD080)&0xf7+(PEEK(0xD012)&8));      
+    }
+    read_sectors[40]=0;
+    print_text(0,6,5,read_sectors);
+    
     print_text(0,4,7,peak_msg);
     snprintf(peak_msg,40,"Target track %-5d is T:$%02X, prev $%02X",
 	     random_seek_count,
@@ -265,6 +283,91 @@ void gap_histogram(void)
   }
 }
 
+char read_message[41];
+
+void read_all_sectors()
+{  
+  unsigned char t,s,ss,h;
+  unsigned char xx,yy,y;
+  unsigned int x;
+  
+  // Floppy motor on
+  POKE(0xD080,0x60);  
+
+  // Enable auto-tracking
+  POKE(0xD689,PEEK(0xD689)&0xEF);
+	
+  // Disable matching on any sector, use real drive
+  POKE(0xD6A1,0x01);
+  
+  graphics_mode();
+
+  while(1) {
+    graphics_clear_double_buffer();  
+    print_text(0,0,1,"Reading all sectors...");
+
+    for(t=0;t<85;t++) {
+      for(h=0;h<2;h++) {
+	for(ss=1;ss<=10;ss++) {
+	  unsigned char sector_order[10]={1,3,5,7,9,2,4,6,8,10};
+	  
+	  s=sector_order[ss-1];
+	  
+	  snprintf(read_message,40,"Trying T:$%02x, S:$%02x, H:$%02x",t,s,h);
+	  print_text(0,1,7,read_message);
+	  
+	  // Schedule a sector read
+	  POKE(0xD081,0x00); // Cancel previous action
+
+	  // Select track, sector, side
+	  POKE(0xD084,t);
+	  POKE(0xD085,s);
+	  POKE(0xD086,h);
+
+	  // Select correct side of the disk
+	  if (h) POKE(0xD080,0x68);
+	  else POKE(0xD080,0x60);
+	  
+	  // Issue read command
+	  POKE(0xD081,0x40);
+	  
+	  x=t*7; y=16+(s-1)*8+(h*80);
+
+	  for (xx=0;xx<6;xx++)
+	    for (yy=0;yy<7;yy++)
+	      plot_pixel(x+xx,y+yy,14);
+
+	  activate_double_buffer();
+	  
+	  // Give time for busy flag to assert
+	  usleep(1000);
+	  
+	  // Wait until busy flag clears
+	  while(PEEK(0xD082)&0x80) {
+	    snprintf(peak_msg,40,"Sector under head T:$%02X S:%02X H:%02x",
+		     PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
+	     );
+	    print_text(0,24,7,peak_msg);		     
+	    continue;
+	  }
+	  if (PEEK(0xD082)&0x10) {
+	    for (xx=0;xx<6;xx++)
+	      for (yy=0;yy<7;yy++)
+		plot_pixel(x+xx,y+yy,2);
+	  } else {
+	    for (xx=0;xx<6;xx++)
+	      for (yy=0;yy<7;yy++)
+		plot_pixel(x+xx,y+yy,5);
+	  }
+	  activate_double_buffer();
+	  
+	}
+      }
+    }
+  }
+  
+}
+
 void main(void)
 {
   // Fast CPU, M65 IO
@@ -272,6 +375,7 @@ void main(void)
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
-  gap_histogram();
-  
+  //  gap_histogram();
+  read_all_sectors();
 }
+
