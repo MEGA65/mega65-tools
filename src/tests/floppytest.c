@@ -322,6 +322,8 @@ void read_all_sectors()
   while(1) {
     graphics_clear_double_buffer();  
     print_text(0,0,1,"Reading all sectors...");
+    print_text(0,22,15,"GREEN = good, RED = bad");
+    print_text(0,23,15,"YELLOW = Track >80 bad");
 
     // Seek back to track 0
     while(!(PEEK(0xD082)&1))
@@ -347,7 +349,7 @@ void read_all_sectors()
 	  // Select track, sector, side
 	  POKE(0xD084,t);
 	  POKE(0xD085,s);
-	  POKE(0xD086,0);
+	  POKE(0xD086,0); // Always zero: only SIDE1 flag should be set for side 1
 
 	  // Select correct side of the disk
 	  if (h) POKE(0xD080,0x68);
