@@ -13,6 +13,26 @@ unsigned char sid_num;
 unsigned int sid_addr;
 unsigned int notes[5]={5001,5613,4455,2227,3338};
 
+unsigned char i;
+
+// This is a bit of a pain, as we wrote it while fixing the keyboard disco light mode.
+// Prior to the fix, exactly only one channel could be set, while after, they can all
+// be set individually. So we have to clear them all, and then set exactly the one we
+// want, for it to work on both revisions.
+void keyboard_set_rgb(unsigned char c)
+{
+  for(i=0;i<12;i++) {
+    if (i!=c) {
+      POKE(0xD61E,0x00);
+      POKE(0xD61D,0x80+i);
+    }
+    usleep(1000);
+  }
+  POKE(0xD61D,0x80+c);
+  POKE(0xD61E,0xFF);
+}
+
+
 void test_audio(void)
 {
   /*
@@ -31,11 +51,11 @@ void test_audio(void)
   for(note=0;note<5;note++)
     {
       switch(note) {
-      case 0: sid_num=0; POKE(0xD61D,0x88); break;
-      case 1: sid_num=2; POKE(0xD61D,0x82); break;
-      case 2: sid_num=1; POKE(0xD61D,0x88); break;
-      case 3: sid_num=3; POKE(0xD61D,0x82); break;
-      case 4: sid_num=0; POKE(0xD61D,0x88); break;
+      case 0: sid_num=0; keyboard_set_rgb(8); break;
+      case 1: sid_num=2; keyboard_set_rgb(2); break;
+      case 2: sid_num=1; keyboard_set_rgb(8); break;
+      case 3: sid_num=3; keyboard_set_rgb(2); break;
+      case 4: sid_num=0; keyboard_set_rgb(8); break;
       }
 	
       sid_addr=0xd400+(0x20*sid_num);
@@ -126,6 +146,7 @@ void set_keyboard_rgb(unsigned char rl, unsigned char gl, unsigned char bl,
 unsigned char palP=0;
 unsigned char audioP=0;
 
+
 void main(void)
 {
   // Fast CPU, M65 IO
@@ -142,8 +163,7 @@ void main(void)
   
   while(1) {
     // Keyboard LEDs indicate mode
-    POKE(0xD61D,0x80+palP*6+audioP);
-    POKE(0xD61E,0xFF);
+    keyboard_set_rgb(palP*6+audioP);
 
     printf("%c%s, %s",0x13,palP?"PAL ":"NTSC",audioP?"HDMI Audio on   ":"HDMI Audio muted");
     
