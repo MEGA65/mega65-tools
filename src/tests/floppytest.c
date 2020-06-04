@@ -289,7 +289,7 @@ void read_all_sectors()
 {  
   unsigned char t,s,ss,h;
   unsigned char xx,yy,y;
-  unsigned int x;
+  unsigned int x,c;
   
   // Floppy motor on
   POKE(0xD080,0x68);  
@@ -306,43 +306,6 @@ void read_all_sectors()
   graphics_mode();
   graphics_clear_double_buffer();
   activate_double_buffer();
-
-  do { 
-    t=39; s=1; h=0;
-    
-    // Schedule a sector read
-    POKE(0xD081,0x00); // Cancel previous action
-    
-    // Select track, sector, side
-    POKE(0xD084,t);
-    POKE(0xD085,s);
-    POKE(0xD086,h);
-    
-    // Select correct side of the disk
-    // XXX Wrong way around?
-    if (h) POKE(0xD080,0x60);
-    else POKE(0xD080,0x68);
-    
-    // Issue read command
-    POKE(0xD081,0x40);
-    
-    // Wait until busy flag clears
-    while(PEEK(0xD082)&0x80) {
-      snprintf(peak_msg,40,"Sector under head T:$%02X S:%02X H:%02x",
-	       PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
-	       );
-      print_text(0,24,7,peak_msg);		     
-      continue;
-    }
-    for(i=0;i<512;i++) POKE(0x8000+i,PEEK(0xD087));
-    lcopy(0xffd6000L,0x4e200L,0x200);  
-    
-    //  while(1) {
-    //   POKE(0xD020,PEEK(0xD6A6)&0x0f);
-    //   if (!(PEEK(0xD082)&0x80))
-    //    POKE(0xD081,0x40);
-    // }
-  } while(1);
   
   // Wait until busy flag clears
   while(PEEK(0xD082)&0x80) {
@@ -353,12 +316,19 @@ void read_all_sectors()
     continue;
   }
   for(i=0;i<512;i++) POKE(0x8000+i,PEEK(0xD087));
-  lcopy(0xffd6000L,0x4e200L,0x200);  
-  
+  //  lcopy(0xffd6000L,0x4e200L,0x200);  
+
   while(1) {
     graphics_clear_double_buffer();  
     print_text(0,0,1,"Reading all sectors...");
 
+    // Seek back to track 0
+    while(!(PEEK(0xD082)&1))
+      {
+	POKE(0xD081,0x10);
+	usleep(6000);
+      }
+    
     for(t=0;t<85;t++) {
       for(h=0;h<2;h++) {
 	for(ss=1;ss<=10;ss++) {
@@ -376,7 +346,7 @@ void read_all_sectors()
 	  // Select track, sector, side
 	  POKE(0xD084,t);
 	  POKE(0xD085,s);
-	  POKE(0xD086,h);
+	  POKE(0xD086,0);
 
 	  // Select correct side of the disk
 	  if (h) POKE(0xD080,0x68);
@@ -402,20 +372,24 @@ void read_all_sectors()
 		     PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
 	     );
 	    print_text(0,24,7,peak_msg);		     
-	    lcopy(0xffd6000L,0x4e200L,0x200);  
+	    //	    lcopy(0xffd6000L,0x4e200L,0x200);  
 	    continue;
 	  }
 	  if (PEEK(0xD082)&0x10) {
+	    c=2;
+	    if (t>79) c=7;  // extra tracks aren't expected to be read
 	    for (xx=0;xx<6;xx++)
 	      for (yy=0;yy<7;yy++)
-		plot_pixel(x+xx,y+yy,2);
+		plot_pixel(x+xx,y+yy,c);
 	  } else {
+	    c=5;
+	    if (((t/10)+h)&1) c=13;
 	    for (xx=0;xx<6;xx++)
 	      for (yy=0;yy<7;yy++)
-		plot_pixel(x+xx,y+yy,5);
+		plot_pixel(x+xx,y+yy,c);
 	  }
 	  activate_double_buffer();
-	  lcopy(0xffd6000L,0x4e200L,0x200);  
+	  //	  lcopy(0xffd6000L,0x4e200L,0x200);  
 	  
 	  
 	}
