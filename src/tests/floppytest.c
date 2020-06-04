@@ -174,7 +174,7 @@ void gap_histogram(void)
       if (interval_length>=640) continue;
       // Stop as soon as a single histogram bin fills
       if (histo_bins[interval_length]==255) {
-	snprintf(peak_msg,40,"Peak @ %d, auto_tune=%d     ",
+	snprintf(peak_msg,40,"Peak @ %d, auto-tune=%d     ",
 		 interval_length,PEEK(0xD689)&0x10);
 	print_text(0,2,7,peak_msg);
 	break;
@@ -253,11 +253,12 @@ void gap_histogram(void)
 	last_random_target=random_target;
 	random_target=255;
 	break;
-      case 0x41: case 0x61:
-	// Switch auto/manual tracking in FDC
+      case 0x4D: case 0x6D:
+	// Switch auto/manual tracking in FDC to manual
 	POKE(0xD689,PEEK(0xD689)|0x10);
 	break;
-      case 0x4d: case 0x6d:
+      case 0x41: case 0x61:
+	// Auto-tune on
 	POKE(0xD689,PEEK(0xD689)&0xEF);
 	break;
       case 0x52: case 0x72:
@@ -369,7 +370,7 @@ void read_all_sectors()
 	  // Wait until busy flag clears
 	  while(PEEK(0xD082)&0x80) {
 	    snprintf(peak_msg,40,"Sector under head T:$%02X S:%02X H:%02x",
-		     PEEK(0xD6A3),PEEK(0xD6A4),PEEK(0xD6A5)
+		     PEEK(0xD6A3)&0x7f,PEEK(0xD6A4)&0x7f,PEEK(0xD6A5)&0x7f
 	     );
 	    print_text(0,24,7,peak_msg);		     
 	    //	    lcopy(0xffd6000L,0x4e200L,0x200);  
@@ -406,7 +407,21 @@ void main(void)
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
-  //  gap_histogram();
-  read_all_sectors();
+  while(1) {
+    POKE(0xD054,0); POKE(0xD031,0);
+    POKE(0xD060,0); POKE(0xD061,0x04); POKE(0xD062,0);
+    POKE(0xD011,0x1b);
+    
+    printf("%cMEGA65 Floppy Test Utility.\n\n",0x93);
+    
+    printf("1. MFM Histogram and seeking tests.\n");
+    printf("2. Test all sectors on disk.\n");
+    
+    while(!PEEK(0xD610)) continue;
+    switch(PEEK(0xD610)) {
+    case '1': POKE(0xD610,0); gap_histogram(); break;
+    case '2': POKE(0xD610,0); read_all_sectors(); break;
+    }
+  }
 }
 
