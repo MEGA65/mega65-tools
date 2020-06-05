@@ -129,14 +129,46 @@ void main(void)
   while(1) {
     printf("%c",0x13);
 
+    if (PEEK(0xD610)) {
+      switch(PEEK(0xD610)) {
+      case 0x4d: case 0x6d:
+	// M - Toggle master enable
+       	POKE(0xD711,PEEK(0xD711)^0x80);
+	break;
+      case 0x57: case 0x77:
+	// W - Toggle write enable
+       	POKE(0xD711,PEEK(0xD711)^0x20);
+	break;
+      case 0x30:
+	// 0 - Toggle channel 0 enable
+       	POKE(0xD720,PEEK(0xD720)^0x80);
+	break;
+      }
+      POKE(0xD610,0);
+    }
+    
     printf("Audio DMA tick counter = $%02x%02x%02x%02x\n",
 	   PEEK(0xD71F),PEEK(0xD71E),PEEK(0xD71D),PEEK(0xD71C));
-    
+
+    printf("Master enable = %d,\n   blocked=%d, block_timeout=%d    \n"
+	   "   write_enable=%d\n",
+	   PEEK(0xD711)&0x80?1:0,
+	   PEEK(0xD711)&0x40?1:0,
+	   PEEK(0xD711)&0x0f,
+	   PEEK(0xD711)&0x20?1:0
+	   
+	   );
     for(i=0;i<4;i++) {
       // Display Audio DMA channel
-      printf("#%d: en=%d, v=$%02x, base=$%02x%02x%02x, top=$%04x    curr=$%02x%02x%02x, tb=$%02x%02x%02x, ct=$%02x%02x%02x",
+      printf("%d: en=%d, loop=%d, pending=%d, B24=%d, SS=%d\n"
+	     "   v=$%02x, base=$%02x%02x%02x, top=$%04x\n"
+	     "   curr=$%02x%02x%02x, tb=$%02x%02x%02x, ct=$%02x%02x%02x\n",
 	     i,
 	     (PEEK(0xD720+i*16+0)&0x80)?1:0,
+	     (PEEK(0xD720+i*16+0)&0x40)?1:0,
+	     (PEEK(0xD720+i*16+0)&0x20)?1:0,
+	     (PEEK(0xD720+i*16+0)&0x10)?1:0,
+	     (PEEK(0xD720+i*16+0)&0x3),
 	     PEEK(0xD729+i*16),
 	     PEEK(0xD723+i*16),PEEK(0xD722+i*16),PEEK(0xD721+i*16),
 	     PEEK(0xD727+i*16)+(PEEK(0xD728+i*16)<<8+i*16),

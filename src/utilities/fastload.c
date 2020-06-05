@@ -59,7 +59,7 @@ void scan_directory(void)
   // Get directory header
   read_sector(t,s,h);
 
-  usleep(50000);
+  //  usleep(50000);
   
   // Get track and sector of next dir block
   t=lpeek(0xffd6000L);
@@ -80,7 +80,7 @@ void scan_directory(void)
   
   while(t&&(t!=0xff)) {
     read_sector(t,s,h);
-    usleep(50000);
+    //    usleep(50000);
 
     lcopy(0xffd6000L+half,0x0400,0x100);
     
