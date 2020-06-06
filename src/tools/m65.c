@@ -1535,6 +1535,7 @@ void set_serial_speed(int fd,int serial_speed)
 
 #ifdef __APPLE__
   speed_t speed = serial_speed;
+  fprintf(stderr,"Setting serial speed to %d bps using OSX method.\n",speed); 
   if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
     perror("Failed to set output baud rate using IOSSIOSPEED");
   }
