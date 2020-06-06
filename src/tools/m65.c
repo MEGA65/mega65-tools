@@ -1290,12 +1290,27 @@ void do_type_text(char *type_text)
       
       c=getc(stdin);
       while(c!=25) {
-      //      printf("$%02x -> ",c);
+	printf("$%02x -> ",c);
       switch(c) {
     case 0x7f: c=0x14; break; // DELETE
     case 0x0a: c=0x0d; break; // RETURN
-    }
-      //      printf("$%02x\n",c);
+      case 0x1b:
+	// Escape code
+	c=getc(stdin);
+	if (c=='[') {
+	  c=getc(stdin);
+	  switch(c) {
+	  case 0x41: c=0x91; break; // up
+	  case 0x42: c=0x11; break; // down
+	  case 0x43: c=0x1d; break; // right
+	  case 0x44: c=0x9d; break; // left
+	  case 0x48: c=0x13; break; // home
+	  default:
+	    c=0;
+	} 
+	} else c=0;
+      }
+      printf("$%02x\n",c);
       if (c) {
       do_type_key(c);
     } else usleep(1000);
