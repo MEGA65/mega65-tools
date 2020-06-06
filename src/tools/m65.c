@@ -1158,12 +1158,12 @@ void do_type_key(unsigned char key)
     case 0x9d: c1=0x02; c2=0x0f; break; // Cursor left
     case 0x11: c1=0x07; break; // Cursor down
     case 0x91: c1=0x07; c2=0x0f; break; // Cursor up
-    case 0x0d: c1=0x01; // RETURN
-    case 0x14: c1=0x00; // INST/DEL
-    case 0xF1: c1=0x04; // F1
-    case 0xF3: c1=0x05; // F3
-    case 0xF5: c1=0x06; // F5
-    case 0xF7: c1=0x03; // F7
+    case 0x0d: c1=0x01; break; // RETURN
+    case 0x14: c1=0x00; break; // INST/DEL
+    case 0xF1: c1=0x04; break; // F1
+    case 0xF3: c1=0x05; break; // F3
+    case 0xF5: c1=0x06; break; // F5
+    case 0xF7: c1=0x03; break; // F7
       
     case '3': c1=0x08; break;
     case 'w': c1=0x09; break;
@@ -1231,6 +1231,7 @@ void do_type_key(unsigned char key)
     default: c1=0x7f;
     }
   char cmd[1024];
+  //  fprintf(stderr,"keys $%02x $%02x\n",c1,c2);
   snprintf(cmd,1024,"sffd3615 %02x %02x\n",c1,c2);
   slow_write(fd,cmd,strlen(cmd));
   // Stop pressing keys
@@ -1242,18 +1243,21 @@ void do_type_text(char *type_text)
 {
   fprintf(stderr,"Typing text via virtual keyboard...\n");
 
+  int use_line_mode=0;
+  
   if (!strcmp(type_text,"-")) {
-    fprintf(stderr,"Reading input from stdin.\nType . on a line by itself to end.\n");
-    char line[1024];
-    line[0]=0; fgets(line,1024,stdin);
-    while(line[0]) {
+#ifndef WINDOWS
+    if (use_line_mode) {
+#endif
+      fprintf(stderr,"Reading input from stdin.\nType . on a line by itself to end.\n");
+      char line[1024];
+      line[0]=0; fgets(line,1024,stdin);
+      while(line[0]) {
       while(line[0]&&((line[strlen(line)-1]=='\n')||line[strlen(line)-1]=='\r'))
 	line[strlen(line)-1]=0;
       if (!strcmp(line,".")) break;
-
-      for(int i=0;line[i];i++) {
-	do_type_key(line[i]);
-      }
+      
+      for(int i=0;line[i];i++) do_type_key(line[i]);
       
       // carriage return at end of line
       slow_write(fd,"sffd3615 01 7f 7f \n",19);
@@ -1261,7 +1265,51 @@ void do_type_text(char *type_text)
       
       line[0]=0; fgets(line,1024,stdin);
     }
-  } else {  
+#ifndef WINDOWS
+    }
+      else
+	{
+      // Char mode
+      struct termios old_tio, new_tio;
+      unsigned char c;
+      
+      /* get the terminal settings for stdin */
+      tcgetattr(STDIN_FILENO,&old_tio);
+      
+      /* we want to keep the old setting to restore them a the end */
+      new_tio=old_tio;
+      
+      /* disable canonical mode (buffered i/o) and local echo */
+      new_tio.c_lflag &=(~ICANON & ~ECHO);
+      
+      /* set the new settings immediately */
+      tcsetattr(STDIN_FILENO,TCSANOW,&new_tio);
+
+      fprintf(stderr,"Reading input from terminal in character mode.\n"
+	"Type CONTROL-Y to end.\n");
+      
+      c=getc(stdin);
+      while(c!=25) {
+      //      printf("$%02x -> ",c);
+      switch(c) {
+    case 0x7f: c=0x14; break; // DELETE
+    case 0x0a: c=0x0d; break; // RETURN
+    }
+      //      printf("$%02x\n",c);
+      if (c) {
+      do_type_key(c);
+    } else usleep(1000);
+      c=getc(stdin);
+    }
+      /* enable canonical mode (buffered i/o) and local echo */
+      new_tio.c_lflag |=(ICANON | ECHO);
+      
+      /* set the new settings immediately */
+      tcsetattr(STDIN_FILENO,TCSANOW,&new_tio);
+      
+    }
+#endif      
+    } else {  
     int i;
     for(i=0;type_text[i];i++) {
       if (type_text[i]=='~') {
