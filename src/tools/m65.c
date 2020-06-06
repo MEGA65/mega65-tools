@@ -146,7 +146,7 @@ void do_exit(int retval);
 void usage(void)
 {
   fprintf(stderr,"MEGA65 cross-development tool.\n");
-  fprintf(stderr,"usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-m modeline] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
+  fprintf(stderr,"usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
   fprintf(stderr,"  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr,"  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr,"       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
@@ -169,7 +169,6 @@ void usage(void)
   fprintf(stderr,"  -H - Halt CPU after loading ROMs.\n");
   fprintf(stderr,"  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n");
   fprintf(stderr,"  -r - Automatically RUN programme after loading.\n");
-  fprintf(stderr,"  -m - Set video mode to Xorg style modeline.\n");
   fprintf(stderr,"  -o - Enable on-screen keyboard\n");
   fprintf(stderr,"  -d - Enable virtual D81 access\n");
   fprintf(stderr,"  -p - Force PAL video mode\n");
@@ -1256,261 +1255,6 @@ char line[1024];
 int line_len=0;
 
 
-int assemble_modeline( int *b,
-		       int pixel_clock,
-		       int hpixels,int hwidth,
-		       int vpixels,int vheight,
-		       int hsync_polarity,int vsync_polarity,
-		       int vsync_start,int vsync_end,
-		       int hsync_start_in,int hsync_end_in,
-		       int rasters_per_vicii_raster)
-{
-
-  // VSYNC pulse ends at end of frame. vsync_delay says how many
-  // rasters after vpixels the vsync starts
-  // (This means that we need to adjust the start of the frame vertically,
-  // for which we don't currently have a register)
-  int vsync_rasters=vsync_end-vsync_start+1;
-  int vsync_delay=vheight-vpixels-vsync_rasters;
-
-  // Adjust raster length for difference in pixel clock
-  float factor=pixel_clock/100000000.0;
-  hwidth/=factor;
-  if (factor<1) hpixels/=factor;
-
-  if (0) 
-    if (hpixels%800) {
-      fprintf(stderr,"Adjusting hpixels to %d (modulo was %d)\n",hpixels-hpixels%800,hpixels%800);
-      hpixels-=hpixels%800;
-    }     
-  
-  int hsync_start=hsync_start_in+0x10;
-  int hsync_end=hsync_end_in+0x10;
-  hsync_start/=factor;
-  hsync_end/=factor;
-  if (hsync_start>=hwidth) hsync_start-=hwidth;
-  if (hsync_end>=hwidth) hsync_end=hsync_start + 400;
-  if (hsync_end<hsync_start) hsync_end=hsync_start + 400;
-  if (hsync_end>=hwidth) hsync_end=hwidth-200;
-  fprintf(stderr,"After HSYNC tweak: hsync_start=%d, hsync_end=%d\n",hsync_start,hsync_end);
-
-  int yscale=rasters_per_vicii_raster-1;
-
-  // Primary mode register set
-  b[0x72]=/* $D072 */       vsync_delay; 
-  b[0x73]=/* $D073 */       ((hsync_end>>10)&0xf)+(yscale<<4);
-  b[0x74]=/* $D074 */       (hsync_end>>2)&0xff;
-  b[0x75]=/* $D075 */	 (hpixels>>2)&0xff;
-  b[0x76]=/* $D076 */	 (hwidth>>2)&0xff;
-  b[0x77]=/* $D077 */	 ((hpixels>>10)&0xf) + ((hwidth>>6)&0xf0);
-  b[0x78]=/* $D078 */	 vpixels&0xff;
-  b[0x79]=/* $D079 */	 vheight&0xff;
-  b[0x7a]=/* $D07A */	 ((vpixels>>8)&0xf) + ((vheight>>4)&0xf0);
-  b[0x7b]=/* $D07B */	 (hsync_start>>2)&0xff;
-  b[0x7c]=/* $D07C */	 ((hsync_start>>10)&0xf)
-    + (hsync_polarity?0x10:0)
-    + (vsync_polarity?0x20:0);
-
-  // Horizontal and vertical scaling
-  float xscale=hpixels/(640.0+80+80);
-  int xscale_120=120/xscale;
-
-  // Side and top-border sizes 
-  int screen_width=xscale*640;
-  int side_border_width=(hpixels-screen_width)/2;
-
-  b[0x5a]=xscale_120;
-  b[0x5c]=side_border_width & 0xff;
-  b[0x5d]=(side_border_width >> 8)&0x3f;
-  b[0x5e]=xscale;
-  
-  fprintf(stderr,"Assembled mode with hfreq=%.2fKHz, vfreq=%.2fHz (hwidth=%d), vsync=%d rasters, %dx vertical scale.\n",
-	  100000000.0/hwidth,100000000.0/hwidth/vheight,hwidth,
-	  vheight-vpixels-vsync_delay,rasters_per_vicii_raster);
-  fprintf(stderr,"  xscale=%.2fx (%d/120), side borders %d pixels each.\n",
-	  xscale,xscale_120,side_border_width);
-  
-  return 0;
-}
-
-void parse_video_mode(int b[0x80])
-{
-  int vsync_delay=b[0x72];
-  int hsync_end=(((b[0x73]&0xf)<<8)+b[4])<<2;
-  int hpixels=(b[0x75]+((b[0x77]&0xf)<<8))<<2;
-  int hwidth=(b[0x76]+((b[0x77]&0xf0)<<4))<<2;
-  int vpixels=b[0x78]+((b[0x7a]&0xf)<<8);
-  int vheight=b[0x79]+((b[0x7a]&0xf0)<<4);
-  int hsync_start=(b[0x7b]+((b[0x7c]&0xf)<<8))<<2;
-  int hsync_polarity=b[0x7c]&0x10;
-  int vsync_polarity=b[0x7c]&0x20;
-  int rasters_per_vicii_raster=((b[0x73]&0xf0)>>4)+1;
-  
-  float pixelclock=100000000;
-  float frame_hertz=pixelclock/(hwidth*vheight);
-  float hfreq=pixelclock/hwidth/1000.0;
-  
-  fprintf(stderr,"Video mode is %dx%d pixels, %dx%d frame, sync=%c/%c, vertical scale=%dx, frame rate=%.1fHz, hfreq=%.3fKHz.\n",
-	  hpixels,vpixels,hwidth,vheight,
-	  hsync_polarity ? '-' : '+',
-	  vsync_polarity ? '-' : '+',
-	  rasters_per_vicii_raster,
-	  frame_hertz,hfreq);
-  fprintf(stderr,"   hpixels=$%04x (%d) $D075,$D077.0-3\n",
-	  hpixels,hpixels);
-  fprintf(stderr,"   hwidth=$%04x (%d) $D076,$D077.7-4\n",
-	  hwidth,hwidth);
-  fprintf(stderr,"   vpixels=$%04x (%d) $D078,$D07A.0-3\n",
-	  vpixels,vpixels);
-  fprintf(stderr,"   vsync=$%04x (%d) - $%04x (%d)\n",
-	  vpixels+vsync_delay,vpixels+vsync_delay,
-	  vheight,vheight);
-  fprintf(stderr,"   hsync=$%04x (%d) -- $%04x (%d)\n",
-	  hsync_start,hsync_start,
-	  hsync_end,hsync_end);
-
-  
-  
-  return;
-}
-
-int viciv_mode_report(unsigned char *r)
-{
-  fprintf(stderr,"VIC-IV set the video mode to:\n");
-  
-  // First report on $D072-$D07C modeline
-  int b[128];
-  int i;
-  for(i=0;i<128;i++) b[i]=r[i];
-  parse_video_mode(b);
-
-  // Get border positions
-  int top_border=(r[0x48]+((r[0x49]&0xf)<<8))&0xfff;
-  int bottom_border=(r[0x4a]+((r[0x4b]&0xf)<<8))&0xfff;
-  int chargen_start=(r[0x4c]+((r[0x4d]&0xf)<<8))&0xfff;
-  int left_border=((r[0x5c]+(r[0x5d]<<8))&0x3fff);
-  int right_border=((r[0x5e]+(r[0x5f]<<8))&0x3fff);
-  int hscale=r[0x5a];
-  int vscale=r[0x5b]+1;
-  int xpixels=(r[0x75]+((r[0x77]&0xf)<<8))<<2;
-  int ypixels=(r[0x78]+((r[0x7a]&0xf)<<8));
-
-  fprintf(stderr,"Display is %dx%d pixels\n",xpixels,ypixels);
-  fprintf(stderr,"  Side borders are %d and %d pixels wide @ $%x and $%x\n",
-	  left_border,right_border,left_border,right_border);
-  fprintf(stderr,"  Top borders are %d and %d pixels high\n",
-	  top_border,ypixels-bottom_border);
-  fprintf(stderr,"  Character generator begins at postion %d\n",
-	  chargen_start);
-  fprintf(stderr,"  Scale = %d/120ths (%.2f per pixel) horizontally and %dx vertically\n",hscale,120.0/hscale,vscale);
-	  
-  
-  return 0;
-}
-
-
-typedef struct {
-  char *name;
-  char *line;
-} modeline_t;
-
-// Modeline table "Modeline" word must have correct case, because these strings can't be mutated.
-modeline_t modelines[]={
-  // The primary modes we expect for HD out
-  {"1920x1200@60","Modeline \"1920x1200\" 151.138 1920 1960 1992 2040 1200 1201 1204 1232 -hsync"},
-  {"1920x1080@50","Modeline \"1920x1080\" 148.50 1920 2448 2492 2640 1080 1084 1089 1125 +HSync +VSync"},
-  {"1920x1080@60","Modeline \"1920x1080\" 148.35 1920 2008 2052 2200 1080 1084 1089 1125 +HSync +VSync"},
-
-  // Need modes for 800x480 50Hz and 60Hz for MEGAphone. LCD panel limit is 50MHz
-  // Totally untested on any monitor
-  {"800x480@50","Modeline \"800x480\" 24.13 800 832 920 952 480 490 494 505 +hsync"},
-  {"800x480@60","Modeline \"800x480\" 29.59 800 870 0 962 480 490 495 505 +hsync"},
-  
-  // Some lower resolution modes
-  {"800x600@50","Modeline \"800x600\" 30 800 814 0 960 600 601 606 625 +hsync +vsync"},
-  {"800x600@60","Modeline \"800x600\" 40 800 840 0 1056 600 601 605 628 +HSync +VSync "},
-  
-  {NULL,NULL}
-};
-
-int prepare_modeline(char *modeline)
-{
-  // Parse something like:
-  // Modeline "1920x1200" 151.138 1920 1960 1992 2040 1200 1201 1204 1232 -hsync  
-  
-  char opt1[1024]="",opt2[1024]="";
-  float pixel_clock_mhz;
-  int hpixels,hsync_start,hsync_end,hwidth;
-  int vpixels,vsync_start,vsync_end,vheight;
-  int hsync_polarity=0;
-  int vsync_polarity=0;
-
-  // Add some modeline short cuts
-  if (strncasecmp(modeline,"modeline ",9)) {
-    int i;
-    for(i=0;modelines[i].name;i++)
-      if (!strcasecmp(modelines[i].name,modeline)) break;
-    if (!modelines[i].name) {
-      fprintf(stderr,"Modeline must be a valid Xorg style modeline, or one of the following short-cuts:\n");
-      for(i=0;modelines[i].name;i++)
-	fprintf(stderr,"  %s = '%s'\n",modelines[i].name,modelines[i].line);
-      usage();
-    } else
-      modeline=modelines[i].line;
-  }
-  
-  fprintf(stderr,"Parsing [%s] as modeline\n",modeline);
-  if (modeline[0]=='m') modeline[4]='M';
-  if (modeline[4]=='L') modeline[4]='l';
-  int fields=sscanf(modeline,"Modeline %*[^ ] %f %d %d %d %d %d %d %d %d %s %s",
-		    &pixel_clock_mhz,
-		    &hpixels,&hsync_start,&hsync_end,&hwidth,
-		    &vpixels,&vsync_start,&vsync_end,&vheight,
-		    opt1,opt2);
-
-  if (fields<9)
-    {
-      fprintf(stderr,"ERROR: Could only parse %d of 9 fields.\n",fields);
-      usage();
-      return -1;
-    }
-  else
-    {
-      int pixel_clock=pixel_clock_mhz*1000000;
-      int rasters_per_vicii_raster=(vpixels-80)/200;
-      int b[128];
-
-      if (!strcasecmp("-hsync",opt1)) hsync_polarity=1;
-      if (!strcasecmp("-hsync",opt2)) hsync_polarity=1;
-      if (!strcasecmp("-vsync",opt1)) vsync_polarity=1;
-      if (!strcasecmp("-vsync",opt2)) vsync_polarity=1;
-      
-      assemble_modeline(b,pixel_clock,hpixels,hwidth,vpixels,vheight,
-			hsync_polarity,vsync_polarity,
-			vsync_start,vsync_end,
-			hsync_start,hsync_end,
-			rasters_per_vicii_raster);
-
-      snprintf(modeline_cmd,1024,
-	       // Main modeline parameters
-	       "\nsffd3072 %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n"
-	       // X pixel scaling
-	       "sffd305a %02x\n"
-	       // Side border width
-	       "sffd305c %02x %02x %02x\n"
-	       ,
-	       b[0x72],b[0x73],b[0x74],b[0x75],b[0x76],
-	       b[0x77],b[0x78],b[0x79],b[0x7a],b[0x7b],b[0x7c],
-	       b[0x5a],
-	       b[0x5c],b[0x5d],b[0x5e]
-	       );
-
-      parse_video_mode(b);
-      
-    }
-
-  return 0;
-}
 
 #ifdef WINDOWS
 
@@ -1766,8 +1510,8 @@ void download_bitstream(void)
     fprintf(stderr,"ERROR: Could not read WebDAV retrieved folder name from /tmp/monitor_load.folder.txt\n");
     exit(-2);
   }
-  char folder[8192]="";
-  fread(folder,1,8192,f);  
+  char folder[1024]="";
+  fread(folder,1,1024,f);  
   fclose(f);
   while(folder[0]&&folder[strlen(folder)-1]<' ') folder[strlen(folder)-1]=0;
   fprintf(stderr,"Resolved %d/%d to %d/%s\n",issue,tag,issue,folder);
@@ -1821,8 +1565,8 @@ void download_hyppo(void)
     fprintf(stderr,"ERROR: Could not read WebDAV retrieved folder name from /tmp/monitor_load.folder.txt\n");
     exit(-2);
   }
-  char folder[8192]="";
-  fread(folder,1,8192,f);  
+  char folder[1024]="";
+  fread(folder,1,1024,f);  
   fclose(f);
   while(folder[0]&&folder[strlen(folder)-1]<' ') folder[strlen(folder)-1]=0;
   fprintf(stderr,"Resolved %d/%d to %d/%s\n",issue,tag,issue,folder);
@@ -1948,7 +1692,7 @@ int main(int argc,char **argv)
   if (argc==1) usage();
   
   int opt;
-  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:m:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
     case 'h': case '?': usage();
     case 'X': hyppo_report=1; break;
@@ -1977,7 +1721,6 @@ int main(int argc,char **argv)
     case 'r': do_run=1; break;
     case 'f': fpga_serial=strdup(optarg); break;
     case 'l': serial_port=strdup(optarg); break;
-    case 'm': prepare_modeline(optarg); mode_report=1; break;
     case 'M': mode_report=1; break;
     case 'o': osk_enable=1; break;
     case 'd': virtual_f011=1; d81file=strdup(optarg); break;
@@ -2065,10 +1808,6 @@ int main(int argc,char **argv)
   if (bitstream) load_bitstream(bitstream);
 
   if (virtual_f011) {
-    if (!hyppo) {
-      fprintf(stderr,"ERROR: -d requires -k to also be specified.\n");
-      exit(-1);
-    }
     char msg[1024];
     snprintf(msg,1024,"Remote access to disk image '%s' requested.\n",d81file);
     timestamp_msg(msg);
@@ -2098,7 +1837,27 @@ int main(int argc,char **argv)
   }  
 
   if (hyppo_report) show_hyppo_report();
-    
+
+  // If we have no HYPPO file provided, but need one, then
+  // extract one out of the running bitstream.
+  if (!hyppo) {
+    if (virtual_f011) {
+      timestamp_msg("Extracting HYPPO from running system...\n");
+      unsigned char hyppo_data[0x4000];
+      fetch_ram(0xFFF8000,0x4000,hyppo_data);
+      char *temp_name="/tmp/HYPPOEXT.M65";
+      FILE *f=fopen(temp_name,"wb");
+      if (!f) {
+	perror("Could not create temporary HYPPO file.");
+	exit(-1);
+      }
+      fwrite(hyppo_data,0x4000,1,f);
+      fclose(f);
+      hyppo=strdup(temp_name);
+    }
+  }
+  
+
   if (!hyppo) {
     
     // XXX These two need the CPU to be in hypervisor mode
