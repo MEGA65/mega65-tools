@@ -1513,9 +1513,9 @@ SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
 #else
 int serialport_write(int fd, uint8_t * buffer, size_t size)
 {
-#ifdef __APPLE__
-  return write(fd,buffer,size);
-#else
+  //#ifdef __APPLE__
+  //  return write(fd,buffer,size);
+  //#else
   size_t offset=0;
   while(offset<size) {
     int written=write(fd,&buffer[offset],size-offset);
@@ -1524,7 +1524,7 @@ int serialport_write(int fd, uint8_t * buffer, size_t size)
       //      printf("Wrote %d bytes\n",written);
     }
   }
-#endif
+  //#endif
 }
 
 size_t serialport_read(int fd, uint8_t * buffer, size_t size)
@@ -1547,6 +1547,9 @@ void set_serial_speed(int fd,int serial_speed)
   if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
     perror("Failed to set output baud rate using IOSSIOSPEED");
   }
+  if (tcgetattr(fd, &t)) perror("Failed to get terminal parameters");
+  cfmakeraw(&t);
+  if (tcsetattr(fd, TCSANOW, &t)) perror("Failed to set OSX terminal parameters");  
 #else  
   if (serial_speed==230400) {
     if (cfsetospeed(&t, B230400)) perror("Failed to set output baud rate");
@@ -1564,7 +1567,7 @@ void set_serial_speed(int fd,int serial_speed)
     if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
     if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
   }
-#endif
+
   t.c_cflag &= ~PARENB;
   t.c_cflag &= ~CSTOPB;
   t.c_cflag &= ~CSIZE;
@@ -1575,6 +1578,7 @@ void set_serial_speed(int fd,int serial_speed)
                  INPCK | ISTRIP | IXON | IXOFF | IXANY | PARMRK);
   t.c_oflag &= ~OPOST;
   if (tcsetattr(fd, TCSANOW, &t)) perror("Failed to set terminal parameters");
+#endif
   
 }
 #endif
