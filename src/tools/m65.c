@@ -2171,7 +2171,8 @@ int main(int argc,char **argv)
       char cmd[1024];
       int load_addr=fgetc(f);
       load_addr|=fgetc(f)<<8;
-      if (load_addr==0x5350) {
+      if ((load_addr==0x5350)||(load_addr==0x5352))
+	{
 	// It's probably a SID file
 
 	timestamp_msg("Examining SID file...\n");
@@ -2211,10 +2212,22 @@ int main(int argc,char **argv)
 	  0x4c,0x04,0x04
 	};
 
-	player[2+0]=(start_addr>>0)&0xff;
-	player[2+1]=(start_addr>>8)&0xff;
-	player[17+0]=(play_addr>>0)&0xff;
-	player[17+1]=(play_addr>>8)&0xff;
+	if (start_addr) {
+	  player[2+0]=(start_addr>>0)&0xff;
+	  player[2+1]=(start_addr>>8)&0xff;
+	} else {
+	  player[1+0]=0xea;
+	  player[1+1]=0xea;
+	  player[1+2]=0xea;
+	}
+	if (play_addr) {
+	  player[17+0]=(play_addr>>0)&0xff;
+	  player[17+1]=(play_addr>>8)&0xff;
+	} else {
+	  player[16+0]=0xea;
+	  player[16+1]=0xea;
+	  player[16+2]=0xea;
+	}
 	
 	if (new_monitor) 
 	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+34)&0xffff);
@@ -2312,7 +2325,7 @@ int main(int argc,char **argv)
       slow_write(fd,cmd,strlen(cmd));
       monitor_sync();
 
-      if (!is_sid_tune) {
+      if ((!is_sid_tune)||(!do_run)) {
 	sprintf(cmd,"g0380\r");
       } else
 	sprintf(cmd,"g0400\r");
