@@ -1903,9 +1903,9 @@ int main(int argc,char **argv)
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
 #ifndef WINDOWS
-#ifndef __APPLE__
+  //#ifndef __APPLE__
     init_fpgajtag(NULL, bitstream, 0x3631093); // 0xffffffff);
-#endif
+    //#endif
 #endif
   
 #ifdef WINDOWS
@@ -2258,11 +2258,24 @@ int main(int argc,char **argv)
       
       do_usleep(50000);
       unsigned char buf[32768];
-      int max_bytes=4096;
-      int b=fread(buf,1,max_bytes,f);
+      int max_bytes=32768;
+      int b=fread(buf,1,max_bytes,f);     
       while(b>0) {
 	timestamp_msg("");
 	fprintf(stderr,"Read block for $%04x -- $%04x (%d bytes)\n",load_addr,load_addr+b-1,b);
+
+	if (is_sid_tune) {
+	  for(int i=0;i<b;i++) {
+	    switch (buf[i]) {
+	    case 0xD4: case 0xD5: case 0xD6: case 0xDE: case 0xDF:
+	      // Possible SID addresses
+	      // Check if opcode is an absolute load or store
+	      // If so, note the SID address, so we can reallocate any
+	      // that are out of range etc
+	      break;
+	    }
+	  }
+	}
 	
 #ifdef WINDOWS_GUS
 	// Windows doesn't seem to work with the l fast-load monitor command
