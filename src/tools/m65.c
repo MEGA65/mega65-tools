@@ -1903,9 +1903,10 @@ int main(int argc,char **argv)
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
 #ifndef WINDOWS
-  //#ifndef __APPLE__
+#ifdef __APPLE__
+  if (bitstream)
+#endif
     init_fpgajtag(NULL, bitstream, 0x3631093); // 0xffffffff);
-    //#endif
 #endif
   
 #ifdef WINDOWS
