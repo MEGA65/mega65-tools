@@ -1127,128 +1127,155 @@ int detect_mode(void)
 }
 
 
+void do_type_key(unsigned char key)
+{  
+  int c1=0x7f;
+  int c2=0x7f;
+  
+  // left shift for upper case letters
+  if (key>=0x41&&key<=0x5A) c2=0x0f;
+  
+  switch (key)
+    {
+      // Punctuation that requires shifts
+    case '!': key='1'; c2=0x0f; break;
+    case '\"': key='2'; c2=0x0f; break;
+    case '#': key='3'; c2=0x0f; break;
+    case '$': key='4'; c2=0x0f; break;
+    case '%': key='5'; c2=0x0f; break;
+    case '(': key='8'; c2=0x0f; break;
+    case ')': key='9'; c2=0x0f; break;
+    case '?': key='/'; c2=0x0f; break;
+    case '<': key=','; c2=0x0f; break;
+    case '>': key='.'; c2=0x0f; break;
+    }
+  
+  
+  switch (key)
+    {	  
+    case 0x03: c1=0x3f; break; // RUN/STOP
+    case 0x1d: c1=0x02; break; // Cursor right
+    case 0x9d: c1=0x02; c2=0x0f; break; // Cursor left
+    case 0x11: c1=0x07; break; // Cursor down
+    case 0x91: c1=0x07; c2=0x0f; break; // Cursor up
+    case 0x0d: c1=0x01; // RETURN
+    case 0x14: c1=0x00; // INST/DEL
+    case 0xF1: c1=0x04; // F1
+    case 0xF3: c1=0x05; // F3
+    case 0xF5: c1=0x06; // F5
+    case 0xF7: c1=0x03; // F7
+      
+    case '3': c1=0x08; break;
+    case 'w': c1=0x09; break;
+    case 'a': c1=0x0a; break;
+    case '4': c1=0x0b; break;
+    case 'z': c1=0x0c; break;
+    case 's': c1=0x0d; break;
+    case 'e': c1=0x0e; break;
+      
+    case '5': c1=0x10; break;
+    case 'r': c1=0x11; break;
+    case 'd': c1=0x12; break;
+    case '6': c1=0x13; break;
+    case 'c': c1=0x14; break;
+    case 'f': c1=0x15; break;
+    case 't': c1=0x16; break;
+    case 'x': c1=0x17; break;
+      
+    case '7': c1=0x18; break;
+    case 'y': c1=0x19; break;
+    case 'g': c1=0x1a; break;
+    case '8': c1=0x1b; break;
+    case 'b': c1=0x1c; break;
+    case 'h': c1=0x1d; break;
+    case 'u': c1=0x1e; break;
+    case 'v': c1=0x1f; break;
+      
+    case '9': c1=0x20; break;
+    case 'i': c1=0x21; break;
+    case 'j': c1=0x22; break;
+    case '0': c1=0x23; break;
+    case 'm': c1=0x24; break;
+    case 'k': c1=0x25; break;
+    case 'o': c1=0x26; break;
+    case 'n': c1=0x27; break;
+      
+    case '+': c1=0x28; break;
+    case 'p': c1=0x29; break;
+    case 'l': c1=0x2a; break;
+    case '-': c1=0x2b; break;
+    case '.': c1=0x2c; break;
+    case ':': c1=0x2d; break;
+    case '@': c1=0x2e; break;
+    case ',': c1=0x2f; break;
+      
+    case '}': c1=0x30; break;  // British pound symbol
+    case '*': c1=0x31; break;
+    case ';': c1=0x32; break;
+    case 0x13: c1=0x33; break; // home
+      // case '': c1=0x34; break; right shift
+    case '=': c1=0x35; break;
+      // What was this with 0x91?
+      //	case 0x91: c1=0x36; break;
+    case '/': c1=0x37; break;
+      
+    case '1': c1=0x38; break;
+    case '_': c1=0x39; break;
+      // case '': c1=0x3a; break; control
+    case '2': c1=0x3b; break;
+    case ' ': c1=0x3c; break;
+      // case '': c1=0x3d; break; C=
+    case 'q': c1=0x3e; break;
+    case 0x0c: c1=0x3f; break;
+      
+    default: c1=0x7f;
+    }
+  char cmd[1024];
+  snprintf(cmd,1024,"sffd3615 %02x %02x\n",c1,c2);
+  slow_write(fd,cmd,strlen(cmd));
+  // Stop pressing keys
+  slow_write(fd,"sffd3615 7f 7f 7f \n",19);
+  
+}
+
 void do_type_text(char *type_text)
 {
   fprintf(stderr,"Typing text via virtual keyboard...\n");
-  {
-    int i;
-    for(i=0;type_text[i];i++) {
-      int c1=0x7f;
-      int c2=0x7f;
-      int c=tolower(type_text[i]);
-      if (c!=type_text[i]) c2=0x0f; // left shift for upper case letters
-      // Punctuation that requires shifts
-      switch (c)
+  int i;
+  for(i=0;type_text[i];i++) {
+    if (type_text[i]=='~') {
+      unsigned char c1;
+      // control sequences
+      switch (type_text[i+1])
 	{
-	case '!': c='1'; c2=0x0f; break;
-	case '\"': c='2'; c2=0x0f; break;
-	case '#': c='3'; c2=0x0f; break;
-	case '$': c='4'; c2=0x0f; break;
-	case '%': c='5'; c2=0x0f; break;
-	case '(': c='8'; c2=0x0f; break;
-	case ')': c='9'; c2=0x0f; break;
-	case '?': c='/'; c2=0x0f; break;
-	case '<': c=','; c2=0x0f; break;
-	case '>': c='.'; c2=0x0f; break;
+	case 'C': c1=0x03; break;              // RUN/STOP
+	case 'D': c1=0x11; break;              // down
+	case 'U': c1=0x91; break;     // up
+	case 'L': c1=0x9D; break;              // left
+	case 'H': c1=0x13; break;              // HOME
+	case 'R': c1=0x1D; break;     // right
+	case 'M': c1=0x0D; break;              // RETURN 
+	case 'T': c1=0x14; break;              // INST/DEL
+	case '1': c1=0xF1; break; // F1
+	case '3': c1=0xF3; break; // F3
+	case '5': c1=0xF5; break; // F5
+	case '7': c1=0xF7; break; // F7
 	}
-      switch (c)
-	{
-	case '~':
-	  // control sequences
-	  switch (type_text[i+1])
-	    {
-	    case 'C': c1=0x3f; break;              // RUN/STOP
-	    case 'D': c1=0x07; break;              // down
-	    case 'U': c1=0x07; c2=0x0f; break;     // up
-	    case 'L': c1=0x02; break;              // left
-	    case 'H': c1=0x33; break;              // HOME
-	    case 'R': c1=0x02; c2=0x0f; break;     // right
-	    case 'M': c1=0x01; break;              // RETURN 
-	    case 'T': c1=0x00; break;              // INST/DEL
-	    case '1': c1=0x04; break; // F1
-	    case '3': c1=0x05; break; // F3
-	    case '5': c1=0x06; break; // F5
-	    case '7': c1=0x03; break; // F7
-	    }
-	  i++;
-	  break;
-	case '3': c1=0x08; break;
-	case 'w': c1=0x09; break;
-	case 'a': c1=0x0a; break;
-	case '4': c1=0x0b; break;
-	case 'z': c1=0x0c; break;
-	case 's': c1=0x0d; break;
-	case 'e': c1=0x0e; break;
-	  
-	case '5': c1=0x10; break;
-	case 'r': c1=0x11; break;
-	case 'd': c1=0x12; break;
-	case '6': c1=0x13; break;
-	case 'c': c1=0x14; break;
-	case 'f': c1=0x15; break;
-	case 't': c1=0x16; break;
-	case 'x': c1=0x17; break;
-	  
-	case '7': c1=0x18; break;
-	case 'y': c1=0x19; break;
-	case 'g': c1=0x1a; break;
-	case '8': c1=0x1b; break;
-	case 'b': c1=0x1c; break;
-	case 'h': c1=0x1d; break;
-	case 'u': c1=0x1e; break;
-	case 'v': c1=0x1f; break;
-	  
-	case '9': c1=0x20; break;
-	case 'i': c1=0x21; break;
-	case 'j': c1=0x22; break;
-	case '0': c1=0x23; break;
-	case 'm': c1=0x24; break;
-	case 'k': c1=0x25; break;
-	case 'o': c1=0x26; break;
-	case 'n': c1=0x27; break;
-	  
-	case '+': c1=0x28; break;
-	case 'p': c1=0x29; break;
-	case 'l': c1=0x2a; break;
-	case '-': c1=0x2b; break;
-	case '.': c1=0x2c; break;
-	case ':': c1=0x2d; break;
-	case '@': c1=0x2e; break;
-	case ',': c1=0x2f; break;
-	  
-	case '}': c1=0x30; break;  // British pound symbol
-	case '*': c1=0x31; break;
-	case ';': c1=0x32; break;
-	case 0x13: c1=0x33; break; // home
-	  // case '': c1=0x34; break; right shift
-	case '=': c1=0x35; break;
-	case 0x91: c1=0x36; break;
-	case '/': c1=0x37; break;
-	  
-	case '1': c1=0x38; break;
-	case '_': c1=0x39; break;
-	  // case '': c1=0x3a; break; control
-	case '2': c1=0x3b; break;
-	case ' ': c1=0x3c; break;
-	  // case '': c1=0x3d; break; C=
-	case 'q': c1=0x3e; break;
-	case 0x0c: c1=0x3f; break;
-	  
-	default: c1=0x7f;
-	}
-      char cmd[1024];
-      snprintf(cmd,1024,"sffd3615 %02x %02x\n",c1,c2);
-      slow_write(fd,cmd,strlen(cmd));
-      // Stop pressing keys
-      slow_write(fd,"sffd3615 7f 7f 7f \n",19);
+      do_type_key(c1);
+      i++;
+      break;
     }
-    // RETURN at end if requested
-    if (type_text_cr)
-      slow_write(fd,"sffd3615 01 7f 7f \n",19);
-    // Stop pressing keys
-    slow_write(fd,"sffd3615 7f 7f 7f \n",19);
+    else
+      do_type_key(type_text[i]);
   }
+  
+  // RETURN at end if requested
+  if (type_text_cr)
+    slow_write(fd,"sffd3615 01 7f 7f \n",19);
+  // Stop pressing keys
+  slow_write(fd,"sffd3615 7f 7f 7f \n",19);
 }
+    
 
 
 char line[1024];
