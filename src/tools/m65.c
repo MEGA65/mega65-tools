@@ -1270,6 +1270,11 @@ void do_type_text(char *type_text)
       else
 	{
       // Char mode
+
+	  // XXX Windows needs a quite different approach.
+	  // See, e.g.: https://cpp.hotexamples.com/examples/-/-/ReadConsoleInput/cpp-readconsoleinput-function-examples.html
+	  // But probably easier to just add this functionality in to tayger's MEGA65 Connect programme instead.
+	  
       struct termios old_tio, new_tio;
       unsigned char c;
       
