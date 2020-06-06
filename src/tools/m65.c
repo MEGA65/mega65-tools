@@ -1533,6 +1533,10 @@ void set_serial_speed(int fd,int serial_speed)
   fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
   struct termios t;
 
+  if (fd<0) {
+    fprintf(stderr,"WARNING: serial port file descriptor is -1\n");    
+  }
+  
 #ifdef __APPLE__
   speed_t speed = serial_speed;
   fprintf(stderr,"Setting serial speed to %d bps using OSX method.\n",speed); 
