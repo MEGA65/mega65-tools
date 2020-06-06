@@ -1241,37 +1241,59 @@ void do_type_key(unsigned char key)
 void do_type_text(char *type_text)
 {
   fprintf(stderr,"Typing text via virtual keyboard...\n");
-  int i;
-  for(i=0;type_text[i];i++) {
-    if (type_text[i]=='~') {
-      unsigned char c1;
-      // control sequences
-      switch (type_text[i+1])
-	{
-	case 'C': c1=0x03; break;              // RUN/STOP
-	case 'D': c1=0x11; break;              // down
-	case 'U': c1=0x91; break;     // up
-	case 'L': c1=0x9D; break;              // left
-	case 'H': c1=0x13; break;              // HOME
-	case 'R': c1=0x1D; break;     // right
-	case 'M': c1=0x0D; break;              // RETURN 
-	case 'T': c1=0x14; break;              // INST/DEL
-	case '1': c1=0xF1; break; // F1
-	case '3': c1=0xF3; break; // F3
-	case '5': c1=0xF5; break; // F5
-	case '7': c1=0xF7; break; // F7
-	}
-      do_type_key(c1);
-      i++;
-      break;
+
+  if (!strcmp(type_text,"-")) {
+    fprintf(stderr,"Reading input from stdin.\nType . on a line by itself to end.\n");
+    char line[1024];
+    line[0]=0; fgets(line,1024,stdin);
+    while(line[0]) {
+      while(line[0]&&((line[strlen(line)-1]=='\n')||line[strlen(line)-1]=='\r'))
+	line[strlen(line)-1]=0;
+      if (!strcmp(line,".")) break;
+
+      for(int i=0;line[i];i++) {
+	do_type_key(line[i]);
+      }
+      
+      // carriage return at end of line
+      slow_write(fd,"sffd3615 01 7f 7f \n",19);
+      slow_write(fd,"sffd3615 7f 7f 7f \n",19);
+      
+      line[0]=0; fgets(line,1024,stdin);
     }
-    else
-      do_type_key(type_text[i]);
-  }
+  } else {  
+    int i;
+    for(i=0;type_text[i];i++) {
+      if (type_text[i]=='~') {
+	unsigned char c1;
+	// control sequences
+	switch (type_text[i+1])
+	  {
+	  case 'C': c1=0x03; break;              // RUN/STOP
+	  case 'D': c1=0x11; break;              // down
+	  case 'U': c1=0x91; break;     // up
+	  case 'L': c1=0x9D; break;              // left
+	  case 'H': c1=0x13; break;              // HOME
+	  case 'R': c1=0x1D; break;     // right
+	  case 'M': c1=0x0D; break;              // RETURN 
+	  case 'T': c1=0x14; break;              // INST/DEL
+	  case '1': c1=0xF1; break; // F1
+	  case '3': c1=0xF3; break; // F3
+	  case '5': c1=0xF5; break; // F5
+	  case '7': c1=0xF7; break; // F7
+	  }
+	do_type_key(c1);
+	i++;
+	break;
+      }
+      else
+	do_type_key(type_text[i]);
+    }
   
-  // RETURN at end if requested
-  if (type_text_cr)
-    slow_write(fd,"sffd3615 01 7f 7f \n",19);
+    // RETURN at end if requested
+    if (type_text_cr)
+      slow_write(fd,"sffd3615 01 7f 7f \n",19);
+  }
   // Stop pressing keys
   slow_write(fd,"sffd3615 7f 7f 7f \n",19);
 }
