@@ -2147,6 +2147,8 @@ int main(int argc,char **argv)
 
     // We can ignore the filename.
     // Next we just load the file
+
+    int is_sid_tune=0;
     
     FILE *f=fopen(filename,"rb");
     if (f==NULL) {
@@ -2156,7 +2158,68 @@ int main(int argc,char **argv)
       char cmd[1024];
       int load_addr=fgetc(f);
       load_addr|=fgetc(f)<<8;
-      if (!comma_eight_comma_one) {
+      if (load_addr==0x5350) {
+	// It's probably a SID file
+
+	timestamp_msg("Examining SID file...\n");
+
+	// Read header
+	unsigned char sid_header[0x7c];
+	fread(sid_header,0x7c,1,f);
+	
+
+	unsigned int start_addr=(sid_header[0x0a-0x02]<<8)+sid_header[0x0b-0x02];
+	unsigned int play_addr=(sid_header[0x0c-0x02]<<8)+sid_header[0x0d-0x02];
+	unsigned int play_speed=sid_header[0x12-0x02];
+
+	char *name=&sid_header[0x16-0x02];
+	char *author=&sid_header[0x36-0x02];
+	char *released=&sid_header[0x56-0x02];
+
+	timestamp_msg("");
+	fprintf(stderr,"SID tune '%s' by '%s' (%s)\n",
+		name,author,released);
+	
+	// Patch load address
+	load_addr=(sid_header[0x7d-0x02]<<8)+sid_header[0x7c-0x02];
+	timestamp_msg("");
+	fprintf(stderr,"SID load address is $%04x\n",load_addr);
+	//	dump_bytes(0,"sid header",sid_header,0x7c);
+	
+	// Prepare simple play routine
+	// XXX For now it is always VIC frame locked
+	timestamp_msg("Uploading play routine\n");
+	unsigned char player[34]={
+	  0x78,
+	  0x20,0x34,0x12,
+	  0xa9,0x80,0xcd,0x12,0xd0,0xd0,0xfb,0xa9,0x01,0x8d,0x20,0xd0,
+	  0x20,0x78,0x56,
+	  0xa9,0x00,0x8d,0x20,0xd0,0xa9,0x80,0xcd,0x12,0xd0,0xf0,0xfb,
+	  0x4c,0x04,0x04
+	};
+
+	player[2+0]=(start_addr>>0)&0xff;
+	player[2+1]=(start_addr>>8)&0xff;
+	player[17+0]=(play_addr>>0)&0xff;
+	player[17+1]=(play_addr>>8)&0xff;
+	
+	if (new_monitor) 
+	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+34)&0xffff);
+	else
+	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+34-1);
+	slow_write(fd,cmd,strlen(cmd));
+	do_usleep(1000*SLOW_FACTOR);
+	int b=34;
+	int n=b;
+	unsigned char *p=player;
+	while(n>0) {
+	  int w=serialport_write(fd,p,n);
+	  if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+	}
+
+	is_sid_tune=1;
+	
+      } else if (!comma_eight_comma_one) {
 	if (saw_c64_mode)
 	  load_addr=0x0801;
 	else
@@ -2164,8 +2227,9 @@ int main(int argc,char **argv)
 	timestamp_msg("");
 	fprintf(stderr,"Forcing load address to $%04X\n",load_addr);
       }
-      else
-	printf("Load address is $%04x\n",load_addr);	
+      else printf("Load address is $%04x\n",load_addr);
+
+      
       do_usleep(50000);
       unsigned char buf[32768];
       int max_bytes=4096;
@@ -2235,7 +2299,11 @@ int main(int argc,char **argv)
       slow_write(fd,cmd,strlen(cmd));
       monitor_sync();
 
-      sprintf(cmd,"g0380\r");
+      if (!is_sid_tune) {
+	sprintf(cmd,"g0380\r");
+      } else
+	sprintf(cmd,"g0400\r");
+
 #if 1
       slow_write(fd,cmd,strlen(cmd)); 
       //      monitor_sync();
