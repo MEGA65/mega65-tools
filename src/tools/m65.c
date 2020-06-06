@@ -1513,9 +1513,9 @@ SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
 #else
 int serialport_write(int fd, uint8_t * buffer, size_t size)
 {
-  //#ifdef __APPLE__
-  //  return write(fd,buffer,size);
-  //#else
+#ifdef __APPLE__
+  return write(fd,buffer,size);
+#else
   size_t offset=0;
   while(offset<size) {
     int written=write(fd,&buffer[offset],size-offset);
@@ -1524,7 +1524,7 @@ int serialport_write(int fd, uint8_t * buffer, size_t size)
       //      printf("Wrote %d bytes\n",written);
     }
   }
-  //#endif
+#endif
 }
 
 size_t serialport_read(int fd, uint8_t * buffer, size_t size)
