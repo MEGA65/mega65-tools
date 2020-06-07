@@ -29,8 +29,8 @@ void h640_text_mode(void)
 
   // Normal text mode
   POKE(0xD054,0x00);
-  // H640, fast CPU
-  POKE(0xD031,0xC0);
+  // H640, fast CPU, extended attributes
+  POKE(0xD031,0xE0);
   // Adjust D016 smooth scrolling for VIC-III H640 offset
   POKE(0xD016,0xC9);
   // 640x200 16bits per char, 16 pixels wide per char
@@ -134,7 +134,7 @@ void print_text80(unsigned char x,unsigned char y,unsigned char colour,char *msg
     else if (*msg>=0x40&&*msg<=0x60) char_code=*msg-0x40;
     else if (*msg>=0x60&&*msg<=0x7A) char_code=*msg-0x20;
     POKE(pixel_addr+0,char_code);
-    lpoke(0xff80000-0xc000+pixel_addr,colour);
+    lpoke(0xff80000L-0xc000+pixel_addr,colour);
     msg++;
     pixel_addr+=1;
   }
@@ -213,9 +213,9 @@ char *note_name(unsigned short period)
   case 604: return "F#1";
   case 570: return "G-1";
   case 538: return "G#1";
-  case 508: return "A-2";
-  case 480: return "A#2";
-  case 453: return "B-2";
+  case 508: return "A-1";
+  case 480: return "A#1";
+  case 453: return "B-1";
 
   case 428: return "C-2";
   case 404: return "C#2";
@@ -226,9 +226,9 @@ char *note_name(unsigned short period)
   case 302: return "F#2";
   case 285: return "G-2";
   case 269: return "G#2";
-  case 254: return "A-3";
-  case 240: return "A#3";
-  case 226: return "B-3";
+  case 254: return "A-2";
+  case 240: return "A#2";
+  case 226: return "B-2";
 
   case 214: return "C-3";
   case 202: return "C#3";
@@ -239,9 +239,9 @@ char *note_name(unsigned short period)
   case 151: return "F#3";
   case 143: return "G-3";
   case 135: return "G#3";
-  case 127: return "A-4";
-  case 120: return "A#4";
-  case 113: return "B-4";
+  case 127: return "A-3";
+  case 120: return "A#3";
+  case 113: return "B-3";
 
   default: return "???";
   }
@@ -262,7 +262,7 @@ void draw_pattern_row(unsigned char screen_row,
   lcopy(0x40000+1084+(current_pattern<<10)+(pattern_row<<4),pattern_buffer,16);
   // Draw row number
   snprintf(note_fmt,9,"%02d",pattern_row);
-  print_text80(0,screen_row,note_fmt,0x01);
+  print_text80(0,screen_row,0x01,note_fmt);
   // Draw the four notes
   format_note(&pattern_buffer[0]);
   print_text80(4,screen_row,colour,note_fmt);
@@ -279,7 +279,7 @@ void show_current_position_in_song(void)
   if (current_pattern_position<screen_first_row)
     screen_first_row=current_pattern_position;
   while (current_pattern_position<screen_first_row) {
-    screen_first_row+=12;
+    screen_first_row+=24;
   }
   if (screen_first_row>(63-(25-5)))
     screen_first_row=(63-(25-5));
@@ -414,8 +414,10 @@ void main(void)
   current_pattern_in_song=0;
   current_pattern=song_pattern_list[0];
   current_pattern_position=0;
-  show_current_position_in_song();
   
+  show_current_position_in_song();
+
+  while(1) continue;
 
   
 #ifdef SINE_TEST
