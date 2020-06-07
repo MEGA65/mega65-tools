@@ -2194,6 +2194,59 @@ int main(int argc,char **argv)
 	timestamp_msg("");
 	fprintf(stderr,"SID tune '%s' by '%s' (%s)\n",
 		name,author,released);
+
+	// Also show player info on the screen
+	char player_screen[1000]={
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "M65 TOOL CRUSTY SID PLAYER V00.00 ALPHA "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "0 - 9 = SELECT TRACK                    "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	  "                                        "
+	};
+	for(int i=0;name[i];i++) player_screen[40*6+i]=name[i];
+	for(int i=0;author[i];i++) player_screen[40*8+i]=author[i];
+	for(int i=0;released[i];i++) player_screen[40*10+i]=released[i];
+	
+	for(int i=0;i<1000;i++) {
+	  if (player_screen[i]>='@'&&player_screen[i]<='Z') player_screen[i]&=0x1f;
+	  if (player_screen[i]>='a'&&player_screen[i]<='z') player_screen[i]&=0x1f;
+	}
+
+	if (new_monitor) 
+	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+1000)&0xffff);
+	else
+	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+1000-1);
+	slow_write(fd,cmd,strlen(cmd));
+	do_usleep(1000*SLOW_FACTOR);
+	{
+	  int n=1000;
+	  unsigned char *p=player_screen;
+	  while(n>0) {
+	    int w=serialport_write(fd,p,n);
+	    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+	  }
+	}
+	do_usleep(50000);
 	
 	// Patch load address
 	load_addr=(sid_header[0x7d-0x02]<<8)+sid_header[0x7c-0x02];
@@ -2260,7 +2313,7 @@ int main(int argc,char **argv)
 	  int w=serialport_write(fd,p,n);
 	  if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	}
-
+	
 	is_sid_tune=1;
 	
       } else if (!comma_eight_comma_one) {
