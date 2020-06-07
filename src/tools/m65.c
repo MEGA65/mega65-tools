@@ -2204,39 +2204,44 @@ int main(int argc,char **argv)
 	// Prepare simple play routine
 	// XXX For now it is always VIC frame locked
 	timestamp_msg("Uploading play routine\n");
-	unsigned char player[34]={
+	unsigned char player[40]={
 	  0x78,
+	  0xa9,0x35,
+	  0x85,0x01,
+	  0xa9,0x01,
 	  0x20,0x34,0x12,
 	  0xa9,0x80,0xcd,0x12,0xd0,0xd0,0xfb,0xa9,0x01,0x8d,0x20,0xd0,
 	  0x20,0x78,0x56,
 	  0xa9,0x00,0x8d,0x20,0xd0,0xa9,0x80,0xcd,0x12,0xd0,0xf0,0xfb,
-	  0x4c,0x04,0x04
+	  0x4c,0x0A,0x04
 	};
 
+	player[6+0]=sid_header[0x11-0x02];
+	
 	if (start_addr) {
-	  player[2+0]=(start_addr>>0)&0xff;
-	  player[2+1]=(start_addr>>8)&0xff;
+	  player[8+0]=(start_addr>>0)&0xff;
+	  player[8+1]=(start_addr>>8)&0xff;
 	} else {
-	  player[1+0]=0xea;
-	  player[1+1]=0xea;
-	  player[1+2]=0xea;
+	  player[7+0]=0xea;
+	  player[7+1]=0xea;
+	  player[7+2]=0xea;
 	}
 	if (play_addr) {
-	  player[17+0]=(play_addr>>0)&0xff;
-	  player[17+1]=(play_addr>>8)&0xff;
+	  player[23+0]=(play_addr>>0)&0xff;
+	  player[23+1]=(play_addr>>8)&0xff;
 	} else {
-	  player[16+0]=0xea;
-	  player[16+1]=0xea;
-	  player[16+2]=0xea;
+	  player[22+0]=0xea;
+	  player[22+1]=0xea;
+	  player[22+2]=0xea;
 	}
 	
 	if (new_monitor) 
-	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+34)&0xffff);
+	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+40)&0xffff);
 	else
-	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+34-1);
+	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+40-1);
 	slow_write(fd,cmd,strlen(cmd));
 	do_usleep(1000*SLOW_FACTOR);
-	int b=34;
+	int b=40;
 	int n=b;
 	unsigned char *p=player;
 	while(n>0) {
