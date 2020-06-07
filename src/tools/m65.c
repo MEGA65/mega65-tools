@@ -2338,6 +2338,7 @@ int main(int argc,char **argv)
 	if (is_sid_tune) {
 	  int num_sids=0;
 	  int sid_addrs[256];
+	  int fix_addrs[256];
 	  int this_sid=0;
 	  for(int i=0;i<b;i++) {
 	    switch (buf[i]) {
@@ -2369,6 +2370,47 @@ int main(int argc,char **argv)
 	    }
 	  }
 	  fprintf(stderr,"Tune uses a total of %d SIDs.\n",num_sids);
+	  for(int i=0;i<num_sids;i++) {
+	    if (sid_addrs[i]>=0xd600) {
+	      fix_addrs[i]=0xd400+0x20*i;
+	      fprintf(stderr,"Relocating SID at $%02x to $%04x\n",
+		      sid_addrs[i],fix_addrs[i]);
+	    } else fix_addrs[i]=sid_addrs[i];
+	    
+	  }
+	  for(int i=0;i<b;i++) {
+	    switch (buf[i]) {
+	    case 0xD4: case 0xD5: case 0xD6: case 0xDE: case 0xDF:
+	      // Possible SID addresses
+	      // Check if opcode is an absolute load or store
+	      // If so, note the SID address, so we can reallocate any
+	      // that are out of range etc
+	      if (i>=2) {
+		// Look for absolute store instructions
+		switch(buf[i-2]) {
+		case 0x8D: //   STA $nnnn
+		case 0x99: //   STA $nnnn,Y
+		case 0x9D: //  STA $nnnn,X
+		case 0x8E: //  STX $nnnn
+		case 0x8C: //  STY $nnnn
+		  this_sid=buf[i]<<8; this_sid|=buf[i-1];
+
+		  int j=0;
+		  for(j=0;j<num_sids;j++)
+		    if ((this_sid&0xffe0)==sid_addrs[j]) break;
+		  if (fix_addrs[j]!=sid_addrs[j]) {
+		    fprintf(stderr,"@ $%04X Patching $%04X to $%04X\n",
+			    i+load_addr,
+			    this_sid,fix_addrs[j]|(this_sid&0x1f));
+		    int fixed_addr=fix_addrs[j]|(this_sid&0x1f);
+		    buf[i-1]=fixed_addr&0xff;
+		    buf[i]=fixed_addr>>8;
+		  }
+		}
+	      }
+	      break;
+	    }
+	  }
 	}
 	
 #ifdef WINDOWS_GUS
