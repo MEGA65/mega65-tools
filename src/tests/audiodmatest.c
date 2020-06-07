@@ -22,6 +22,34 @@ void graphics_clear_double_buffer(void)
   lfill(0x58000L,0,32768L);
 }
 
+void h640_text_mode(void)
+{
+  // lower case
+  POKE(0xD018,0x16);
+
+  // Normal text mode
+  POKE(0xD054,0x00);
+  // H640, fast CPU
+  POKE(0xD031,0xC0);
+  // Adjust D016 smooth scrolling for VIC-III H640 offset
+  POKE(0xD016,0xC9);
+  // 640x200 16bits per char, 16 pixels wide per char
+  // = 640/16 x 16 bits = 80 bytes per row
+  POKE(0xD058,80);
+  POKE(0xD059,80/256);
+  // Draw 80 chars per row
+  POKE(0xD05E,80);
+  // Put 2KB screen at $C000
+  POKE(0xD060,0x00);
+  POKE(0xD061,0xc0);
+  POKE(0xD062,0x00);
+  
+  lfill(0xc000,0x20,2000);
+  // Clear colour RAM, while setting all chars to 4-bits per pixel
+  lfill(0xff80000L,0x0E,2000);
+
+}
+
 void graphics_mode(void)
 {
   // 16-bit text mode, full-colour text for high chars
@@ -53,8 +81,8 @@ void graphics_mode(void)
     }
 
   // Clear colour RAM, while setting all chars to 4-bits per pixel
-  for(i=0;i<2000;i+=2) {
-    lpoke(0xff80000L+0+i,0x08);
+  for(i=0;i<2000;i) {
+    lpoke(0xff80000L+0+i,0x0E);
     lpoke(0xff80000L+1+i,0x00);
   }
   POKE(0xD020,0);
@@ -94,6 +122,21 @@ void print_text(unsigned char x,unsigned char y,unsigned char colour,char *msg)
     lpoke(0xff80000-0xc000+pixel_addr+1,colour);
     msg++;
     pixel_addr+=2;
+  }
+}
+
+void print_text80(unsigned char x,unsigned char y,unsigned char colour,char *msg)
+{
+  pixel_addr=0xC000+x+y*80;
+  while(*msg) {
+    char_code=*msg;
+    if (*msg>=0xc0&&*msg<=0xe0) char_code=*msg-0x80;
+    else if (*msg>=0x40&&*msg<=0x60) char_code=*msg-0x40;
+    else if (*msg>=0x60&&*msg<=0x7A) char_code=*msg-0x20;
+    POKE(pixel_addr+0,char_code);
+    lpoke(0xff80000-0xc000+pixel_addr,colour);
+    msg++;
+    pixel_addr+=1;
   }
 }
 
@@ -148,6 +191,109 @@ char filename[16]={0x50,0x4f,0x50,0x43,0x4f,0x52,0x4e,0x2e,0x4d,0x4f,0x44,0x00,
 };
 
 
+unsigned char current_pattern_in_song=0;
+unsigned char current_pattern=0;
+unsigned char current_pattern_position=0;
+
+unsigned char screen_first_row=0;
+
+unsigned char pattern_buffer[16];
+char note_fmt[9+1];
+
+char *note_name(unsigned short period)
+{
+  switch(period) {
+  case 0: return "---";
+  case 856: return "C-1";
+  case 808: return "C#1";
+  case 762: return "D-1";
+  case 720: return "D#1";
+  case 678: return "E-1";
+  case 640: return "F-1";
+  case 604: return "F#1";
+  case 570: return "G-1";
+  case 538: return "G#1";
+  case 508: return "A-2";
+  case 480: return "A#2";
+  case 453: return "B-2";
+
+  case 428: return "C-2";
+  case 404: return "C#2";
+  case 381: return "D-2";
+  case 360: return "D#2";
+  case 339: return "E-2";
+  case 320: return "F-2";
+  case 302: return "F#2";
+  case 285: return "G-2";
+  case 269: return "G#2";
+  case 254: return "A-3";
+  case 240: return "A#3";
+  case 226: return "B-3";
+
+  case 214: return "C-3";
+  case 202: return "C#3";
+  case 190: return "D-3";
+  case 180: return "D#3";
+  case 170: return "E-3";
+  case 160: return "F-3";
+  case 151: return "F#3";
+  case 143: return "G-3";
+  case 135: return "G#3";
+  case 127: return "A-4";
+  case 120: return "A#4";
+  case 113: return "B-4";
+
+  default: return "???";
+  }
+}
+
+void format_note(unsigned char *n)
+{
+  snprintf(note_fmt,9,"%s%X%02X%02X",
+	   note_name(((n[0]&0xf)<<8)|n[1]),
+	   n[0]>>4,n[2],n[3]);
+}
+
+void draw_pattern_row(unsigned char screen_row,
+		      unsigned char pattern_row,
+		      unsigned char colour)
+{
+  // Get pattern row
+  lcopy(0x40000+1084+(current_pattern<<10)+(pattern_row<<4),pattern_buffer,16);
+  // Draw row number
+  snprintf(note_fmt,9,"%02d",pattern_row);
+  print_text80(0,screen_row,note_fmt,0x01);
+  // Draw the four notes
+  format_note(&pattern_buffer[0]);
+  print_text80(4,screen_row,colour,note_fmt);
+  format_note(&pattern_buffer[4]);
+  print_text80(13,screen_row,colour,note_fmt);
+  format_note(&pattern_buffer[8]);
+  print_text80(22,screen_row,colour,note_fmt);
+  format_note(&pattern_buffer[12]);
+  print_text80(31,screen_row,colour,note_fmt);
+}
+
+void show_current_position_in_song(void)
+{
+  if (current_pattern_position<screen_first_row)
+    screen_first_row=current_pattern_position;
+  while (current_pattern_position<screen_first_row) {
+    screen_first_row+=12;
+  }
+  if (screen_first_row>(63-(25-5)))
+    screen_first_row=(63-(25-5));
+  
+  for(i=5;i<25;i++)
+    {
+      draw_pattern_row(i,screen_first_row+i-5,
+		       ((screen_first_row+i-5)==current_pattern_position)?0x27:0x0d);
+    }
+    
+}
+  
+
+
 unsigned short top_addr;
 
 void play_sample(unsigned char channel,
@@ -171,7 +317,7 @@ void play_sample(unsigned char channel,
   POKE(0xD727+ch_ofs,(top_addr>>0)&0xff);
   POKE(0xD728+ch_ofs,(top_addr>>8)&0xff);
   // Volume
-  POKE(0xD729,instrument_vol[instrument]);
+  POKE(0xD729,instrument_vol[instrument]>>2);
   // Load sample address into base and current addr
 
   // Calculate time base.
@@ -186,8 +332,8 @@ void play_sample(unsigned char channel,
   POKE(0xD725+ch_ofs,(time_base>>8)&0xff);
   POKE(0xD726+ch_ofs,(time_base>>16)&0xff);
   
-  // Enable playback+looping of channel 0, 8-bit samples
-  POKE(0xD720+ch_ofs,0xC0);
+  // Enable playback+looping of channel 0, 8-bit signed samples
+  POKE(0xD720+ch_ofs,0xD0);
   // Enable audio dma
   POKE(0xD711,0x80);
   
@@ -217,21 +363,23 @@ void main(void)
     if (count<512) break;
   }
 
-  printf("%c",0x93);
-
+  h640_text_mode();
+  lfill(0xc000,0x20,2000);
+  
   lcopy(0x40000,mod_name,20);
   mod_name[20]=0;
   
   // Show MOD file name
-  printf("%s\n",mod_name);
-  
+  print_text80(0,0,1,mod_name);
+
   // Show  instruments from MOD file
   for(i=0;i<31;i++)
     {
       lcopy(0x40014+i*30,mod_name,22);
       mod_name[22]=0;
       if (mod_name[0]) {
-	printf("Instr#%d is %s\n",i,mod_name);
+	print_text80(57,i,13,mod_name);
+	//	printf("Instr#%d is %s\n",i,mod_name);
       }
       // Get instrument data for plucking
       lcopy(0x40014+i*30+22,mod_name,22);
@@ -247,22 +395,29 @@ void main(void)
 
   song_length=lpeek(0x40000+950);
   song_loop_point=lpeek(0x40000+951);
-  printf("Song length = %d, loop point = %d\n",
-	 song_length,song_loop_point);
+  //  printf("Song length = %d, loop point = %d\n",
+  //	 song_length,song_loop_point);
   lcopy(0x40000+952,song_pattern_list,128);
   for(i=0;i<song_length;i++) {
-    printf(" $%02x",song_pattern_list[i]);
+    //    printf(" $%02x",song_pattern_list[i]);
     if (song_pattern_list[i]>max_pattern) max_pattern=song_pattern_list[i];
   }
-  printf("\n%d unique patterns.\n",max_pattern);
+  //  printf("\n%d unique patterns.\n",max_pattern);
   sample_data_start=0x40000L+1084+(max_pattern+1)*1024;
-  printf("sample data starts at $%lx\n",sample_data_start);
+  //  printf("sample data starts at $%lx\n",sample_data_start);
   for(i=0;i<MAX_INSTRUMENTS;i++) {
     instrument_addr[i]=sample_data_start;
     sample_data_start+=instrument_lengths[i];
     //    printf("Instr #%d @ $%05lx\n",i,instrument_addr[i]);
   }
 
+  current_pattern_in_song=0;
+  current_pattern=song_pattern_list[0];
+  current_pattern_position=0;
+  show_current_position_in_song();
+  
+
+  
 #ifdef SINE_TEST
   // Play sine wave for frequency matching
   POKE(0xD721,((unsigned short)&sin_table)&0xff);
@@ -289,7 +444,7 @@ void main(void)
     POKE(0xD726,time_base>>16);
 
     i=0;
-    printf("%d: en=%d, loop=%d, pending=%d, B24=%d, SS=%d\n"
+    printf("%d: en=%d, loop=%d, pending=%d, B24=%d, SS=%d\n"	   
 	   "   v=$%02x, base=$%02x%02x%02x, top=$%04x\n"
 	   "   curr=$%02x%02x%02x, tb=$%02x%02x%02x, ct=$%02x%02x%02x\n",
 	   i,
