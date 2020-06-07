@@ -2204,8 +2204,9 @@ int main(int argc,char **argv)
 	// Prepare simple play routine
 	// XXX For now it is always VIC frame locked
 	timestamp_msg("Uploading play routine\n");
-	unsigned char player[40]={
-	  0x78,
+	int b=56;
+	unsigned char player[56]={
+	  0x78,	  
 	  0xa9,0x35,
 	  0x85,0x01,
 	  0xa9,0x01,
@@ -2213,6 +2214,14 @@ int main(int argc,char **argv)
 	  0xa9,0x80,0xcd,0x12,0xd0,0xd0,0xfb,0xa9,0x01,0x8d,0x20,0xd0,
 	  0x20,0x78,0x56,
 	  0xa9,0x00,0x8d,0x20,0xd0,0xa9,0x80,0xcd,0x12,0xd0,0xf0,0xfb,
+
+	  0xad,0x10,0xd6,
+	  0xf0,0x0b,
+	  0x8d,0x10,0xd6,
+	  0x29,0x0f,
+	  0x8d,0x21,0xd0,
+	  0x4c,0x07,0x04,
+	  
 	  0x4c,0x0A,0x04
 	};
 
@@ -2234,14 +2243,17 @@ int main(int argc,char **argv)
 	  player[22+1]=0xea;
 	  player[22+2]=0xea;
 	}
+
+	// Enable M65 IO for keyboard scanning
+	slow_write(fd,"sffd302f 47\n",12);
+	slow_write(fd,"sffd302f 53\n",12);
 	
 	if (new_monitor) 
-	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+40)&0xffff);
+	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+b)&0xffff);
 	else
-	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+40-1);
+	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+b-1);
 	slow_write(fd,cmd,strlen(cmd));
 	do_usleep(1000*SLOW_FACTOR);
-	int b=40;
 	int n=b;
 	unsigned char *p=player;
 	while(n>0) {
@@ -2271,6 +2283,9 @@ int main(int argc,char **argv)
 	fprintf(stderr,"Read block for $%04x -- $%04x (%d bytes)\n",load_addr,load_addr+b-1,b);
 
 	if (is_sid_tune) {
+	  int num_sids=0;
+	  int sid_addrs[256];
+	  int this_sid=0;
 	  for(int i=0;i<b;i++) {
 	    switch (buf[i]) {
 	    case 0xD4: case 0xD5: case 0xD6: case 0xDE: case 0xDF:
@@ -2278,9 +2293,29 @@ int main(int argc,char **argv)
 	      // Check if opcode is an absolute load or store
 	      // If so, note the SID address, so we can reallocate any
 	      // that are out of range etc
+	      if (i>=2) {
+		// Look for absolute store instructions
+		switch(buf[i-2]) {
+		case 0x8D: //   STA $nnnn
+		case 0x99: //   STA $nnnn,Y
+		case 0x9D: //  STA $nnnn,X
+		case 0x8E: //  STX $nnnn
+		case 0x8C: //  STY $nnnn
+		  this_sid=buf[i]<<8; this_sid|=buf[i-1];
+		  this_sid&=0xffe0;
+		  int j=0;
+		  for(j=0;j<num_sids;j++)
+		    if (this_sid==sid_addrs[j]) break;
+		  if (j==num_sids) {
+		    sid_addrs[num_sids++]=this_sid;
+		    fprintf(stderr,"Tune uses SID at $%04x\n",this_sid);
+		  }
+		}
+	      }
 	      break;
 	    }
 	  }
+	  fprintf(stderr,"Tune uses a total of %d SIDs.\n",num_sids);
 	}
 	
 #ifdef WINDOWS_GUS

@@ -121,14 +121,27 @@ void main(void)
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
+  // time base = $000001
+  POKE(0xD724,0x01);
+  POKE(0xD725,0x00);
+  POKE(0xD726,0x00);
+  // Top address
+  POKE(0xD727,0xFE);
+  POKE(0xD728,0xFF);
+  // Enable audio dma, 16 bit samples
+  POKE(0xD711,0x80);
+  // Enable playback+looping of channel 0
+  POKE(0xD720,0xC3);
+  
+  
   //  graphics_mode();
   //  print_text(0,0,1,"");
 
   printf("%c",0x93);
 
   while(1) {
-    printf("%c",0x13);
-
+    printf("%c",0x13);    
+    
     if (PEEK(0xD610)) {
       switch(PEEK(0xD610)) {
       case 0x4d: case 0x6d:
@@ -177,6 +190,9 @@ void main(void)
 	     PEEK(0xD72F+i*16),PEEK(0xD72E+i*16),PEEK(0xD72D+i*16));
     }
 
+    printf("Audio left/right: $%02x%02x, $%02X%02X\n",
+	   PEEK(0xD6F8),PEEK(0xD6F9),PEEK(0xD6FA),PEEK(0xD6FB));
+    
   }
   
   
