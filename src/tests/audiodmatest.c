@@ -12,14 +12,14 @@ unsigned char a,b,c,d;
 
 void graphics_clear_screen(void)
 {
-  lfill(0x40000,0,32768);
-  lfill(0x48000,0,32768);
+  lfill(0x40000L,0,32768L);
+  lfill(0x48000L,0,32768L);
 }
 
 void graphics_clear_double_buffer(void)
 {
-  lfill(0x50000,0,32768);
-  lfill(0x58000,0,32768);
+  lfill(0x50000L,0,32768L);
+  lfill(0x58000L,0,32768L);
 }
 
 void graphics_mode(void)
@@ -114,6 +114,31 @@ unsigned char last_track_seen=255;
 unsigned int histo_samples=0;
 
 
+unsigned char fd;
+int count;
+unsigned char buffer[512];
+
+unsigned long load_addr;
+
+unsigned char mod_name[23];
+
+#define MAX_INSTRUMENTS 32
+unsigned short instrument_lengths[MAX_INSTRUMENTS];
+unsigned short instrument_[MAX_INSTRUMENTS];
+unsigned long instrument_addr[MAX_INSTRUMENTS];
+unsigned char instrument_vol[MAX_INSTRUMENTS];
+
+unsigned char song_length;
+unsigned char song_loop_point;
+unsigned char song_pattern_list[128];
+unsigned char max_pattern=0;
+unsigned long sample_data_start=0x40000;
+
+// CC65 PETSCII conversion is a pain, so we provide the exact bytes of the file name
+char filename[16]={0x50,0x4f,0x50,0x43,0x4f,0x52,0x4e,0x2e,0x4d,0x4f,0x44,0x00,
+		   0x00,0x00,0x00,0x00
+};
+
 void main(void)
 {
   // Fast CPU, M65 IO
@@ -121,16 +146,87 @@ void main(void)
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
-  // time base = $000001
+  // Load a MOD file for testing
+  closeall();
+  fd=open(filename); 
+  if (fd==0xff) {
+    printf("Could not read MOD file\n");
+    return;
+  }
+  load_addr=0x40000;
+  while((count=read512(buffer))>0) {
+    if (count>512) break;
+    lcopy((unsigned long)buffer,(unsigned long)load_addr,512);
+    POKE(0xD020,(PEEK(0xD020)+1)&0xf);
+    load_addr+=512;
+    
+    if (count<512) break;
+  }
+
+  printf("%c",0x93);
+
+  lcopy(0x40000,mod_name,20);
+  mod_name[20]=0;
+  
+  // Show MOD file name
+  printf("%s\n",mod_name);
+  
+  // Show  instruments from MOD file
+  for(i=0;i<31;i++)
+    {
+      lcopy(0x40014+i*30,mod_name,22);
+      mod_name[22]=0;
+      if (mod_name[0]) {
+	printf("Instr#%d is %s\n",i,mod_name);
+      }
+      // Get instrument data for plucking
+      lcopy(0x40014+i*30+22,mod_name,22);
+      instrument_lengths[i]=mod_name[1]+(mod_name[0]<<8);
+      if ((instrument_lengths[i]&0x8000)) {
+	printf("ERROR: MOD file has samples >64KB\n");
+	return;	
+      }
+      // Redenominate instrument length into bytes
+      instrument_lengths[i]<<=1;
+      instrument_vol[i]=mod_name[3];
+    }
+
+  song_length=lpeek(0x40000+950);
+  song_loop_point=lpeek(0x40000+951);
+  printf("Song length = %d, loop point = %d\n",
+	 song_length,song_loop_point);
+  lcopy(0x40000+952,song_pattern_list,128);
+  for(i=0;i<song_length;i++) {
+    printf(" $%02x",song_pattern_list[i]);
+    if (song_pattern_list[i]>max_pattern) max_pattern=song_pattern_list[i];
+  }
+  printf("\n%d unique patterns.\n",max_pattern);
+  sample_data_start=0x40000L+1084+(max_pattern+1)*1024;
+  printf("sample data starts at $%lx\n",sample_data_start);
+  for(i=0;i<MAX_INSTRUMENTS;i++) {
+    instrument_addr[i]=sample_data_start;
+    sample_data_start+=instrument_lengths[i];
+    //    printf("Instr #%d @ $%05lx\n",i,instrument_addr[i]);
+  }
+  
+  while(1) continue;
+  
+  // base addr = $040000
+  POKE(0xD721,0x00);
+  POKE(0xD722,0x00);
+  POKE(0xD723,0x04);
+  // time base = $001000
   POKE(0xD724,0x01);
-  POKE(0xD725,0x00);
+  POKE(0xD725,0x10);
   POKE(0xD726,0x00);
   // Top address
   POKE(0xD727,0xFE);
   POKE(0xD728,0xFF);
+  // Full volume
+  POKE(0xD729,0xFF);
   // Enable audio dma, 16 bit samples
-  POKE(0xD711,0x80);
-  // Enable playback+looping of channel 0
+  POKE(0xD711,0x90);
+  // Enable playback+looping of channel 0, 16-bit samples
   POKE(0xD720,0xC3);
   
   
