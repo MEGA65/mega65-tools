@@ -7,6 +7,11 @@
 #include <dirent.h>
 #include <fileio.h>
 
+#define MOD_TEST
+#undef SINE_TEST
+#undef DIRECT_TEST
+
+
 unsigned short i;
 unsigned char a,b,c,d;
 
@@ -287,7 +292,7 @@ void show_current_position_in_song(void)
   for(i=5;i<25;i++)
     {
       draw_pattern_row(i,screen_first_row+i-5,
-		       ((screen_first_row+i-5)==current_pattern_position)?0x27:0x0d);
+		       ((screen_first_row+i-5)==current_pattern_position)?0x27:0x0c);
     }
     
 }
@@ -301,7 +306,7 @@ void play_sample(unsigned char channel,
 		 unsigned short freq,
 		 unsigned short effect)
 {
-  unsigned ch_ofs=channel<<4;
+  unsigned ch_ofs=channel<<7;
   
   // Stop playback while loading new sample data
   POKE(0xD720+ch_ofs,0x00);
@@ -326,16 +331,32 @@ void play_sample(unsigned char channel,
   // SPEED = SAMPLE RATE * 0.414252
   // But I don't (yet) know how to get the fundamental frequency of a sample
   // from a MOD file
-  time_base=freq*10;
-  time_base&=0xfffff;
-  POKE(0xD724+ch_ofs,(time_base>>0)&0xff);
-  POKE(0xD725+ch_ofs,(time_base>>8)&0xff);
-  POKE(0xD726+ch_ofs,(time_base>>16)&0xff);
+
+  // The natural timebase for MOD files is ~3.5MHz
+  // This means we need a time-base of ~11.42 for PAL and ~11.31 for
+  // NTSC
+  // Here the MEGA65's 25x18 hardware multiplier comes in handy.
+  // 11.42x ~= 748316 / 65536   = $B6B1C / $10000
+  // 11.31x ~= 741494 / 65536   = $B5075 / $10000
   
-  // Enable playback+looping of channel 0, 8-bit signed samples
-  POKE(0xD720+ch_ofs,0xD0);
-  // Enable audio dma
-  POKE(0xD711,0x80);
+  // time_base=freq * 11.41;
+  POKE(0xD770,0x1C);
+  POKE(0xD771,0x6B);
+  POKE(0xD772,0x0B);
+  POKE(0xD773,0x00);
+  POKE(0xD774,freq<<2);
+  POKE(0xD775,freq>>6);
+  POKE(0xD776,freq>>14);
+
+  // Picking result from 2 bytes up does the divide by 65536
+  POKE(0xD724+ch_ofs,PEEK(0xD77A));
+  POKE(0xD725+ch_ofs,PEEK(0xD77B));
+  POKE(0xD726+ch_ofs,PEEK(0xD77C));
+  
+  // Enable playback+looping of channel 0, 8-bit, no unsigned samples
+  POKE(0xD720+ch_ofs,0xC0);
+  // Enable audio dma, enable bypass of audio mixer, signed samples
+  POKE(0xD711,0x98);
   
 }
 
@@ -346,6 +367,19 @@ void main(void)
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
+#ifdef DIRECT_TEST
+  while(1) {
+    for(top_addr=0;top_addr<32;top_addr++) {
+      POKE(0xD6F9,sin_table[top_addr]);
+      POKE(0xD6FB,sin_table[top_addr]);
+      for(i=0;i<100;i++) continue;
+      POKE(0xD020,(PEEK(0xD020)+1)&0x0f);
+    }
+  }  
+#endif
+  
+#ifdef MOD_TEST
+  
   // Load a MOD file for testing
   closeall();
   fd=open(filename); 
@@ -378,7 +412,8 @@ void main(void)
       lcopy(0x40014+i*30,mod_name,22);
       mod_name[22]=0;
       if (mod_name[0]) {
-	print_text80(57,i,13,mod_name);
+	if (i+5<25)
+	  print_text80(57,i+5,0x0c,mod_name);
 	//	printf("Instr#%d is %s\n",i,mod_name);
       }
       // Get instrument data for plucking
@@ -404,9 +439,10 @@ void main(void)
   }
   //  printf("\n%d unique patterns.\n",max_pattern);
   sample_data_start=0x40000L+1084+(max_pattern+1)*1024;
+  
   //  printf("sample data starts at $%lx\n",sample_data_start);
   for(i=0;i<MAX_INSTRUMENTS;i++) {
-    instrument_addr[i]=sample_data_start;
+    instrument_addr[i]=sample_data_start;    
     sample_data_start+=instrument_lengths[i];
     //    printf("Instr #%d @ $%05lx\n",i,instrument_addr[i]);
   }
@@ -417,23 +453,49 @@ void main(void)
   
   show_current_position_in_song();
 
-  while(1) continue;
-
+  while(1) {
+    if (PEEK(0xD610)) {
+      switch(PEEK(0xD610)) {
+      case 0x4d: case 0x6d:
+	// M - Toggle master enable
+       	POKE(0xD711,PEEK(0xD711)^0x80);
+	break;
+      case 0x57: case 0x77:
+	// W - Toggle write enable
+       	POKE(0xD711,PEEK(0xD711)^0x20);
+	break;
+      case 0x30:
+	// 0 - Toggle channel 0 enable
+       	POKE(0xD720,PEEK(0xD720)^0x80);
+	break;	
+      }
+      if (PEEK(0xD610)>=0x61&&PEEK(0xD610)<0x6d) {
+	play_sample(0,PEEK(0xD610)&0xf,200,0);
+	POKE(0xD020,PEEK(0xD610)&0xf);
+      }
+      POKE(0xD610,0);
+    }
+  }
+#endif
   
 #ifdef SINE_TEST
+
   // Play sine wave for frequency matching
   POKE(0xD721,((unsigned short)&sin_table)&0xff);
   POKE(0xD722,((unsigned short)&sin_table)>>8);
   POKE(0xD723,0);
+  POKE(0xD72A,((unsigned short)&sin_table)&0xff);
+  POKE(0xD72B,((unsigned short)&sin_table)>>8);
+  POKE(0xD72C,0);
   // 16 bytes long
   POKE(0xD727,((unsigned short)&sin_table+32)&0xff);
   POKE(0xD728,((unsigned short)&sin_table+32)>>8);
   // Full volume
   POKE(0xD729,0xFF);
-  // Enable playback+looping of channel 0, 8-bit samples
-  POKE(0xD720,0xC0);
+  // Enable playback+looping of channel 0, 8-bit samples, signed
+  POKE(0xD720,0xE0);
   // Enable audio dma
-  POKE(0xD711,0x80);
+  POKE(0xD711,0x90);
 
   printf("%c",0x93);
   while(1) {
@@ -468,8 +530,17 @@ void main(void)
       case 0x1d: time_base-=0x100; break;
       case 0x9d: time_base+=0x100; break;	
       }
+      time_base&=0x0fffff;
+
+  POKE(0xD72A,((unsigned short)&sin_table)&0xff);
+  POKE(0xD72B,((unsigned short)&sin_table)>>8);
+  POKE(0xD72C,0);
+      
+      
       POKE(0xD610,0);      
     }
+
+    POKE(0x400+999,PEEK(0x400+999)+1);
   }
 #endif
 
@@ -498,30 +569,7 @@ void main(void)
   printf("%c",0x93);
 
   while(1) {
-    printf("%c",0x13);    
-    
-    if (PEEK(0xD610)) {
-      switch(PEEK(0xD610)) {
-      case 0x4d: case 0x6d:
-	// M - Toggle master enable
-       	POKE(0xD711,PEEK(0xD711)^0x80);
-	break;
-      case 0x57: case 0x77:
-	// W - Toggle write enable
-       	POKE(0xD711,PEEK(0xD711)^0x20);
-	break;
-      case 0x30:
-	// 0 - Toggle channel 0 enable
-       	POKE(0xD720,PEEK(0xD720)^0x80);
-	break;	
-      }
-      if (PEEK(0xD610)>=0x61&&PEEK(0xD610)<0x6d) {
-	play_sample(0,PEEK(0xD610)&0xf,200,0);
-	POKE(0xD020,PEEK(0xD610)&0xf);
-      }
-      POKE(0xD610,0);
-    }
-    
+    printf("%c",0x13);            
     
     printf("Audio DMA tick counter = $%02x%02x%02x%02x\n",
 	   PEEK(0xD71F),PEEK(0xD71E),PEEK(0xD71D),PEEK(0xD71C));
