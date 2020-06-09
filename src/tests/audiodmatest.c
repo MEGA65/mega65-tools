@@ -306,7 +306,7 @@ void play_sample(unsigned char channel,
 		 unsigned short freq,
 		 unsigned short effect)
 {
-  unsigned ch_ofs=channel<<7;
+  unsigned ch_ofs=channel<<4;
   
   // Stop playback while loading new sample data
   POKE(0xD720+ch_ofs,0x00);
@@ -344,20 +344,46 @@ void play_sample(unsigned char channel,
   POKE(0xD771,0x6B);
   POKE(0xD772,0x0B);
   POKE(0xD773,0x00);
-  POKE(0xD774,freq<<2);
-  POKE(0xD775,freq>>6);
-  POKE(0xD776,freq>>14);
-
+  POKE(0xD774,freq<<(2-2));
+  POKE(0xD775,freq>>(6-2));
+  POKE(0xD776,freq>>(14-2));
+  
   // Picking result from 2 bytes up does the divide by 65536
   POKE(0xD724+ch_ofs,PEEK(0xD77A));
   POKE(0xD725+ch_ofs,PEEK(0xD77B));
   POKE(0xD726+ch_ofs,PEEK(0xD77C));
   
-  // Enable playback+looping of channel 0, 8-bit, no unsigned samples
-  POKE(0xD720+ch_ofs,0xC0);
+  // Enable playback+ nolooping of channel 0, 8-bit, no unsigned samples
+  POKE(0xD720+ch_ofs,0x80);
   // Enable audio dma, enable bypass of audio mixer, signed samples
   POKE(0xD711,0x98);
   
+}
+
+void play_note(unsigned char channel,unsigned char *note)
+{
+  unsigned char instrument;
+  unsigned short frequency;
+  unsigned short effect;
+
+  instrument=note[0]&0xf0;
+  instrument|=note[2]>>4;
+  frequency=((note[0]&0xf)<<8)+note[1];
+  effect=((note[2]&0xf)<<8)+note[3];
+
+  if (frequency) 
+    play_sample(channel,instrument,frequency,effect);  
+  
+}
+
+void play_mod_pattern_line(void)
+{
+  // Get pattern row
+  lcopy(0x40000+1084+(current_pattern<<10)+(current_pattern_position<<4),pattern_buffer,16);
+  play_note(0,&pattern_buffer[0]);
+  play_note(1,&pattern_buffer[4]);
+  play_note(2,&pattern_buffer[8]);
+  play_note(3,&pattern_buffer[12]);
 }
 
 void main(void)
@@ -467,8 +493,11 @@ void main(void)
       case 0x30:
 	// 0 - Toggle channel 0 enable
        	POKE(0xD720,PEEK(0xD720)^0x80);
-	break;	
-      }
+	break;
+      case 0x50: case 0x70:
+	// P - Play current note
+	play_mod_pattern_line();
+      }      
       if (PEEK(0xD610)>=0x61&&PEEK(0xD610)<0x6d) {
 	play_sample(0,PEEK(0xD610)&0xf,200,0);
 	POKE(0xD020,PEEK(0xD610)&0xf);
