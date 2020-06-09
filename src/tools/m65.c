@@ -2278,7 +2278,7 @@ int main(int argc,char **argv)
 	  0x4c,0x0A,0x04
 	};
 
-	player[6+0]=sid_header[0x11-0x02];
+	player[6+0]=sid_header[0x11-0x02] - 1;
 	
 	if (start_addr) {
 	  player[8+0]=(start_addr>>0)&0xff;
