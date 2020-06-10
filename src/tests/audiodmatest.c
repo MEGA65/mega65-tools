@@ -339,19 +339,21 @@ void play_sample(unsigned char channel,
   POKE(0xD728+ch_ofs,(top_addr>>8)&0xff);
 
   // Volume
-  POKE(0xD729,instrument_vol[instrument]);
+  POKE(0xD729+ch_ofs,instrument_vol[instrument]>>1);
   
   // XXX - We should set base addr and top addr to the looping range, if the
   // sample has one.
   if (instrument_loopstart[instrument]) {
     // start of loop
-    POKE(0xD721+ch_ofs,(((unsigned short)instrument_addr[instrument]+2*instrument_loopstart[instrument])>>0)&0xff);
-    POKE(0xD722+ch_ofs,(((unsigned short)instrument_addr[instrument]+2*instrument_loopstart[instrument])>>8)&0xff);
+    POKE(0xD721+ch_ofs,(((unsigned long)instrument_addr[instrument]+2*instrument_loopstart[instrument])>>0)&0xff);
+    POKE(0xD722+ch_ofs,(((unsigned long)instrument_addr[instrument]+2*instrument_loopstart[instrument])>>8)&0xff);
     POKE(0xD723+ch_ofs,(((unsigned long)instrument_addr[instrument]+2*instrument_loopstart[instrument])>>16)&0xff);
 
     // Top addr
-    POKE(0xD721+ch_ofs,(((unsigned short)instrument_addr[instrument]+2*(instrument_loopstart[instrument]+instrument_looplen[instrument]))>>0)&0xff);
-    POKE(0xD722+ch_ofs,(((unsigned short)instrument_addr[instrument]+2*(instrument_loopstart[instrument]+instrument_looplen[instrument]))>>8)&0xff);
+    POKE(0xD727+ch_ofs,(((unsigned short)instrument_addr[instrument]
+			 +2*(instrument_loopstart[instrument]+instrument_looplen[instrument]-1))>>0)&0xff);
+    POKE(0xD728+ch_ofs,(((unsigned short)instrument_addr[instrument]
+			 +2*(instrument_loopstart[instrument]+instrument_looplen[instrument]-1))>>8)&0xff);
     
   }
   
@@ -425,6 +427,8 @@ void play_note(unsigned char channel,unsigned char *note)
   frequency=((note[0]&0xf)<<8)+note[1];
   effect=((note[2]&0xf)<<8)+note[3];
 
+  frequency=frequency>>2;
+  
   if (frequency) 
     play_sample(channel,instrument,frequency,effect);  
   
@@ -459,7 +463,7 @@ void play_sine(unsigned char ch, unsigned long time_base)
   // Enable playback+looping of channel 0, 8-bit samples, signed
   POKE(0xD720+ch_ofs,0xE0);
   // Enable audio dma
-  POKE(0xD711+ch_ofs,0x90);
+  POKE(0xD711+ch_ofs,0x80);
 
   // time base = $001000
   POKE(0xD724+ch_ofs,time_base&0xff);
@@ -477,6 +481,8 @@ void wait_frames(unsigned char n)
     n--;
   }
 }
+
+char msg[64+1];
 
 void main(void)
 {
@@ -680,6 +686,22 @@ void main(void)
       POKE(0xD610,0);
     }
 
+    for(i=0;i<4;i++) {
+      // Display Audio DMA channel
+      snprintf(msg,64,"%x: e=%x l=%x p=%x st=%x v=$%02x cur=$%02x%02x%02x tb=$%02x%02x%02x ct=$%02x%02x%02x",
+	     i,
+	     (PEEK(0xD720+i*16+0)&0x80)?1:0,
+	     (PEEK(0xD720+i*16+0)&0x40)?1:0,
+	     (PEEK(0xD720+i*16+0)&0x10)?1:0,
+	     (PEEK(0xD720+i*16+0)&0x08)?1:0,
+	     PEEK(0xD729+i*16),
+	     PEEK(0xD72C+i*16),PEEK(0xD72B+i*16),PEEK(0xD72A+i*16),
+	     PEEK(0xD726+i*16),PEEK(0xD725+i*16),PEEK(0xD724+i*16),
+	     PEEK(0xD72F+i*16),PEEK(0xD72E+i*16),PEEK(0xD72D+i*16));
+      print_text80(16,i,15,msg);
+    }
+
+    
     if (playing) {
       play_mod_pattern_line();
       wait_frames(tempo);
@@ -765,7 +787,7 @@ void main(void)
   // Full volume
   POKE(0xD729,0xFF);
   // Enable audio dma, 16 bit samples
-  POKE(0xD711,0x90);
+  POKE(0xD711,0x80);
   // Enable playback+looping of channel 0, 16-bit samples
   //  POKE(0xD720,0xC3);
   
