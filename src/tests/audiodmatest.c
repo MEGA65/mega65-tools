@@ -15,6 +15,30 @@
 unsigned short i;
 unsigned char a,b,c,d;
 
+/*
+  Our sample clock is in 1/2^24ths of a 40.5MHz clock.
+  So a value of 0xFFFFFF ~= 40MHz sample rate (impossible in practice)
+  Target is to have 40.5MHz / Amiga Paul clock.
+  But we actually aim for 2^16x that, so that we can scale it back down
+  from the high-precision multiplier output.
+  So MOD frequency 1 should be set to:
+  FREQ/(PAL RASTERS PER SECOND) * CPU_FREQUENCY/AMIGA_PAULA_CLOCK * 2^24
+  Everything else is a constant, so we can say:
+  SAMPLE_CLOCK = FREQ * CPU_FREQUENCY/AMIGA_PAULA_CLOCK * 2^24 / PAL_RASTERS_PER_SECOND
+ */
+#define CPU_FREQUENCY 40500000
+#define AMIGA_PAULA_CLOCK (70937892/20)
+#define RASTERS_PER_SECOND (313*50)
+
+// long sample_rate_divisor=CPU_FREQUENCY*0x100000/(AMIGA_PAULA_CLOCK * RASTERS_PER_SECOND);
+// 2^24×(16574÷40500000)/214 Hz nominal frequency
+// /2 = fudge factor?
+long sample_rate_divisor=65536*6866/214   /2 ;
+#define RASTERS_PER_MINUTE (RASTERS_PER_SECOND*60)
+#define BEATS_PER_MINUTE 125
+#define ROWS_PER_BEAT 8
+unsigned short tempo=RASTERS_PER_MINUTE/BEATS_PER_MINUTE/ROWS_PER_BEAT;
+
 void graphics_clear_screen(void)
 {
   lfill(0x40000L,0,32768L);
@@ -216,6 +240,19 @@ unsigned ch_en[4]={1,1,1,1};
 unsigned char pattern_buffer[16];
 char note_fmt[9+1];
 
+void audioxbar_setcoefficient(uint8_t n,uint8_t value)
+{
+  // Select the coefficient
+  POKE(0xD6F4,n);
+
+  // Now wait at least 16 cycles for it to settle
+  POKE(0xD020U,PEEK(0xD020U));
+  POKE(0xD020U,PEEK(0xD020U));
+
+  POKE(0xD6F5U,value); 
+}
+
+
 char *note_name(unsigned short period)
 {
   switch(period) {
@@ -313,8 +350,6 @@ void show_current_position_in_song(void)
     
 }
   
-
-
 unsigned short top_addr;
 
 void play_sample(unsigned char channel,
@@ -357,8 +392,8 @@ void play_sample(unsigned char channel,
     
   }
   
-  POKE(0xC050+channel,instrument);
-  POKE(0xC0A0+channel,instrument_vol[instrument]);
+  //  POKE(0xC050+channel,instrument);
+  //  POKE(0xC0A0+channel,instrument_vol[instrument]);
   
   // Calculate time base.
   // XXX Here we use a slightly randomly chosen fudge-factor
@@ -379,7 +414,7 @@ void play_sample(unsigned char channel,
   // sample in POPCORN.MOD is an example of this
   
   // time_base=freq * 11.41;
-  POKE(0xC0F0+channel,instrument_finetune[instrument]);
+  //  POKE(0xC0F0+channel,instrument_finetune[instrument]);
   if (instrument_finetune[instrument]) {
     // We really should have a proper fix for the fine tune byte.
     // For now we are just fudging things
@@ -388,16 +423,16 @@ void play_sample(unsigned char channel,
     POKE(0xD772,0x0B);
     POKE(0xD773,0x00);
   } else {
-    POKE(0xD770,0x1C);
-    POKE(0xD771,0x6B);
-    POKE(0xD772,0x0B);
+    POKE(0xD770,sample_rate_divisor);
+    POKE(0xD771,sample_rate_divisor>>8);
+    POKE(0xD772,sample_rate_divisor>>16);
     POKE(0xD773,0x00);
   }
-  POKE(0xD774,freq<<(2));
-  POKE(0xD775,freq>>(6));
-  POKE(0xD776,freq>>(14));
+  POKE(0xD774,freq);
+  POKE(0xD775,freq>>8);
+  POKE(0xD776,freq>>16);
   
-  // Picking result from 2 bytes up does the divide by 65536
+  // Pick results from output / 2^16
   POKE(0xD724+ch_ofs,PEEK(0xD77A));
   POKE(0xD725+ch_ofs,PEEK(0xD77B));
   POKE(0xD726+ch_ofs,PEEK(0xD77C));
@@ -411,9 +446,11 @@ void play_sample(unsigned char channel,
   }
 
   // Enable audio dma, enable bypass of audio mixer, signed samples
-  POKE(0xD711,0x90);
+  POKE(0xD711,0x80);
   
 }
+
+unsigned char last_instruments[4]={0,0,0,0};
 
 void play_note(unsigned char channel,unsigned char *note)
 {
@@ -423,7 +460,9 @@ void play_note(unsigned char channel,unsigned char *note)
 
   instrument=note[0]&0xf0;
   instrument|=note[2]>>4;
-  instrument--;
+  if (!instrument) instrument=last_instruments[channel];
+  else instrument--;
+  last_instruments[channel]=instrument;
   frequency=((note[0]&0xf)<<8)+note[1];
   effect=((note[2]&0xf)<<8)+note[3];
 
@@ -438,10 +477,10 @@ void play_mod_pattern_line(void)
 {
   // Get pattern row
   lcopy(0x40000+1084+(current_pattern<<10)+(current_pattern_position<<4),pattern_buffer,16);
-  if (ch_en[0]) play_note(0,&pattern_buffer[0]); else POKE(0xC050+0,0x18);
-  if (ch_en[1]) play_note(1,&pattern_buffer[4]); else POKE(0xC050+1,0x18);
-  if (ch_en[2]) play_note(2,&pattern_buffer[8]); else POKE(0xC050+2,0x18);
-  if (ch_en[3]) play_note(3,&pattern_buffer[12]); else POKE(0xC050+3,0x18);
+  if (ch_en[0]) play_note(0,&pattern_buffer[0]);
+  if (ch_en[1]) play_note(1,&pattern_buffer[4]);
+  if (ch_en[2]) play_note(2,&pattern_buffer[8]);
+  if (ch_en[3]) play_note(3,&pattern_buffer[12]);
 }
 
 void play_sine(unsigned char ch, unsigned long time_base)
@@ -488,7 +527,6 @@ void main(void)
 {
   unsigned char ch;
   unsigned char playing=0;
-  unsigned char tempo=4;
 
   // Fast CPU, M65 IO
   POKE(0,65);
@@ -517,6 +555,9 @@ void main(void)
   
 #ifdef MOD_TEST
 
+  // Audio cross-bar full volume
+  for(i=0;i<256;i++) audioxbar_setcoefficient(i,0xff);
+  
   // Load a MOD file for testing
   closeall();
   fd=open(filename); 
@@ -570,10 +611,10 @@ void main(void)
       // Repeat start point and end point
       instrument_loopstart[i]=mod_name[5]+(mod_name[4]<<8);      
       instrument_looplen[i]=mod_name[7]+(mod_name[6]<<8);
-      POKE(0xC048+(i+5)*80,mod_name[5]);
-      POKE(0xC049+(i+5)*80,mod_name[4]);
-      POKE(0xC04A+(i+5)*80,mod_name[7]);
-      POKE(0xC04B+(i+5)*80,mod_name[6]);
+      //      POKE(0xC048+(i+5)*80,mod_name[5]);
+      //      POKE(0xC049+(i+5)*80,mod_name[4]);
+      //      POKE(0xC04A+(i+5)*80,mod_name[7]);
+      //      POKE(0xC04B+(i+5)*80,mod_name[6]);
     }
 
   song_length=lpeek(0x40000+950);
@@ -604,6 +645,14 @@ void main(void)
   while(1) {
     if (PEEK(0xD610)) {
       switch(PEEK(0xD610)) {
+      case 0xF1: sample_rate_divisor+=0x10000; break;
+      case 0xF2: sample_rate_divisor-=0x10000; break;
+      case 0xF3: sample_rate_divisor+=0x100; break;
+      case 0xF4: sample_rate_divisor-=0x100; break;
+      case 0xF5: sample_rate_divisor+=0x1; break;
+      case 0xF6: sample_rate_divisor-=0x1; break;
+      case 0xF7: tempo+=0x20; break;
+      case 0xF8: tempo-=0x20; break;
       case 0x4d: case 0x6d:
 	// M - Toggle master enable
        	POKE(0xD711,PEEK(0xD711)^0x80);
@@ -686,25 +735,33 @@ void main(void)
       POKE(0xD610,0);
     }
 
-    for(i=0;i<4;i++) {
-      // Display Audio DMA channel
-      snprintf(msg,64,"%x: e=%x l=%x p=%x st=%x v=$%02x cur=$%02x%02x%02x tb=$%02x%02x%02x ct=$%02x%02x%02x",
-	     i,
-	     (PEEK(0xD720+i*16+0)&0x80)?1:0,
-	     (PEEK(0xD720+i*16+0)&0x40)?1:0,
-	     (PEEK(0xD720+i*16+0)&0x10)?1:0,
-	     (PEEK(0xD720+i*16+0)&0x08)?1:0,
-	     PEEK(0xD729+i*16),
-	     PEEK(0xD72C+i*16),PEEK(0xD72B+i*16),PEEK(0xD72A+i*16),
-	     PEEK(0xD726+i*16),PEEK(0xD725+i*16),PEEK(0xD724+i*16),
-	     PEEK(0xD72F+i*16),PEEK(0xD72E+i*16),PEEK(0xD72D+i*16));
-      print_text80(16,i,15,msg);
-    }
-
+    if (0)
+      for(i=0;i<4;i++) {
+	// Display Audio DMA channel
+	snprintf(msg,64,"%x: e=%x l=%x p=%x st=%x v=$%02x cur=$%02x%02x%02x tb=$%02x%02x%02x ct=$%02x%02x%02x",
+		 i,
+		 (PEEK(0xD720+i*16+0)&0x80)?1:0,
+		 (PEEK(0xD720+i*16+0)&0x40)?1:0,
+		 (PEEK(0xD720+i*16+0)&0x10)?1:0,
+		 (PEEK(0xD720+i*16+0)&0x08)?1:0,
+		 PEEK(0xD729+i*16),
+		 PEEK(0xD72C+i*16),PEEK(0xD72B+i*16),PEEK(0xD72A+i*16),
+		 PEEK(0xD726+i*16),PEEK(0xD725+i*16),PEEK(0xD724+i*16),
+		 PEEK(0xD72F+i*16),PEEK(0xD72E+i*16),PEEK(0xD72D+i*16));
+	print_text80(16,i,15,msg);
+      }
+    snprintf(msg,64,"Sample divisor = $%06lx, tempo=$%04x",
+	     sample_rate_divisor,
+	     tempo);
+    print_text80(0,3,15,msg);
+    
     
     if (playing) {
       play_mod_pattern_line();
-      wait_frames(tempo);
+      for(i=0;i<tempo;i++) {
+	c=PEEK(0xD012);
+	while(PEEK(0xD012)==c) continue;
+      }
       current_pattern_position++;
       if (current_pattern_position>0x3f ) {
 	current_pattern_position = 0x00;
