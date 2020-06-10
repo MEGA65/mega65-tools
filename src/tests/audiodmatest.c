@@ -283,8 +283,8 @@ void show_current_position_in_song(void)
 {
   if (current_pattern_position<screen_first_row)
     screen_first_row=current_pattern_position;
-  while (current_pattern_position<screen_first_row) {
-    screen_first_row+=24;
+  while (current_pattern_position>(screen_first_row+16)) {
+    screen_first_row+=16;
   }
   if (screen_first_row>(63-(25-5)))
     screen_first_row=(63-(25-5));
@@ -344,9 +344,9 @@ void play_sample(unsigned char channel,
   POKE(0xD771,0x6B);
   POKE(0xD772,0x0B);
   POKE(0xD773,0x00);
-  POKE(0xD774,freq<<(2-2));
-  POKE(0xD775,freq>>(6-2));
-  POKE(0xD776,freq>>(14-2));
+  POKE(0xD774,freq<<(2));
+  POKE(0xD775,freq>>(6));
+  POKE(0xD776,freq>>(14));
   
   // Picking result from 2 bytes up does the divide by 65536
   POKE(0xD724+ch_ofs,PEEK(0xD77A));
@@ -368,11 +368,12 @@ void play_note(unsigned char channel,unsigned char *note)
 
   instrument=note[0]&0xf0;
   instrument|=note[2]>>4;
+  POKE(0xC050+channel,instrument);
   frequency=((note[0]&0xf)<<8)+note[1];
   effect=((note[2]&0xf)<<8)+note[3];
 
   if (frequency) 
-    play_sample(channel,instrument,frequency,effect);  
+    play_sample(channel,instrument,frequency>>1,effect);  
   
 }
 
@@ -386,13 +387,64 @@ void play_mod_pattern_line(void)
   play_note(3,&pattern_buffer[12]);
 }
 
+void play_sine(unsigned char ch, unsigned long time_base)
+{
+  unsigned ch_ofs=ch<<4;
+  
+  // Play sine wave for frequency matching
+  POKE(0xD721+ch_ofs,((unsigned short)&sin_table)&0xff);
+  POKE(0xD722+ch_ofs,((unsigned short)&sin_table)>>8);
+  POKE(0xD723+ch_ofs,0);
+  POKE(0xD72A+ch_ofs,((unsigned short)&sin_table)&0xff);
+  POKE(0xD72B+ch_ofs,((unsigned short)&sin_table)>>8);
+  POKE(0xD72C+ch_ofs,0);
+  // 16 bytes long
+  POKE(0xD727+ch_ofs,((unsigned short)&sin_table+32)&0xff);
+  POKE(0xD728+ch_ofs,((unsigned short)&sin_table+32)>>8);
+  // 1/4 Full volume
+  POKE(0xD729+ch_ofs,0x3F);
+  // Enable playback+looping of channel 0, 8-bit samples, signed
+  POKE(0xD720+ch_ofs,0xE0);
+  // Enable audio dma
+  POKE(0xD711+ch_ofs,0x90);
+
+  // time base = $001000
+  POKE(0xD724+ch_ofs,time_base&0xff);
+  POKE(0xD725+ch_ofs,time_base>>8);
+  POKE(0xD726+ch_ofs,time_base>>16);
+  
+  
+}
+
+void wait_frames(unsigned char n)
+{
+  while(n) {
+    while (PEEK(0xD012)!=0x80) continue;
+    while (PEEK(0xD012)==0x80) continue;
+    n--;
+  }
+}
+
 void main(void)
 {
+  unsigned char ch;
+  unsigned char playing=0;
+  unsigned char tempo=4;
+
   // Fast CPU, M65 IO
   POKE(0,65);
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
+  POKE(0xD020,0);
+  POKE(0xD021,0);
+
+  // Stop all DMA audio first
+  POKE(0xD720,0);
+  POKE(0xD730,0);
+  POKE(0xD740,0);
+  POKE(0xD750,0);
+  
 #ifdef DIRECT_TEST
   while(1) {
     for(top_addr=0;top_addr<32;top_addr++) {
@@ -486,17 +538,64 @@ void main(void)
 	// M - Toggle master enable
        	POKE(0xD711,PEEK(0xD711)^0x80);
 	break;
-      case 0x57: case 0x77:
-	// W - Toggle write enable
-       	POKE(0xD711,PEEK(0xD711)^0x20);
-	break;
       case 0x30:
-	// 0 - Toggle channel 0 enable
-       	POKE(0xD720,PEEK(0xD720)^0x80);
+	// 0 - Reset song to start
+	current_pattern_in_song=0;
+	current_pattern=song_pattern_list[0];
+	current_pattern_position=0;
+	
+	show_current_position_in_song();
+	
 	break;
       case 0x50: case 0x70:
 	// P - Play current note
-	play_mod_pattern_line();
+	playing^=1;
+	break;
+      case 0x9d:
+	current_pattern_in_song--;
+	if (current_pattern_in_song>=song_length) current_pattern_in_song=0;
+	current_pattern=song_pattern_list[current_pattern_in_song];
+	show_current_position_in_song();
+	break;
+      case 0x1d:
+	current_pattern_in_song++;
+	if (current_pattern_in_song==song_length) current_pattern_in_song=0;
+	current_pattern=song_pattern_list[current_pattern_in_song];
+	show_current_position_in_song();
+	break;
+      case 0x11:
+	current_pattern_position++;
+	if (current_pattern_position>0x3f ) {
+	  current_pattern_position = 0x00;
+	  current_pattern_in_song++;
+	  if (current_pattern_in_song==song_length) current_pattern_in_song=0;
+	  current_pattern=song_pattern_list[current_pattern_in_song];
+	  current_pattern_position=0;
+	}	
+	show_current_position_in_song();
+	break;
+      case 0x91:
+	current_pattern_position--;
+	if (current_pattern_position>0x3f ) {
+	  current_pattern_position = 0x3f;
+	  current_pattern_in_song--;
+	  if (current_pattern_in_song<0) current_pattern_in_song=0;
+	  current_pattern=song_pattern_list[current_pattern_in_song];
+	  current_pattern_position=0;
+	}	
+	show_current_position_in_song();
+	break;
+      case 0x20:
+	playing=2;
+	break;
+      case '+':
+	tempo--;
+	if (tempo==0xff) tempo=0;
+	break;
+      case '-':
+	tempo++;
+	if (tempo==0) tempo=0xff;
+	break;
       }      
       if (PEEK(0xD610)>=0x61&&PEEK(0xD610)<0x6d) {
 	play_sample(0,PEEK(0xD610)&0xf,200,0);
@@ -504,56 +603,58 @@ void main(void)
       }
       POKE(0xD610,0);
     }
+
+    if (playing) {
+      play_mod_pattern_line();
+      wait_frames(tempo);
+      current_pattern_position++;
+      if (current_pattern_position>0x3f ) {
+	current_pattern_position = 0x00;
+	current_pattern_in_song++;
+	if (current_pattern_in_song==song_length) current_pattern_in_song=0;
+	current_pattern=song_pattern_list[current_pattern_in_song];
+	current_pattern_position=0;
+      }
+      show_current_position_in_song();
+    }
+    playing&=0x1;
   }
+  
 #endif
   
 #ifdef SINE_TEST
 
-  // Play sine wave for frequency matching
-  POKE(0xD721,((unsigned short)&sin_table)&0xff);
-  POKE(0xD722,((unsigned short)&sin_table)>>8);
-  POKE(0xD723,0);
-  POKE(0xD72A,((unsigned short)&sin_table)&0xff);
-  POKE(0xD72B,((unsigned short)&sin_table)>>8);
-  POKE(0xD72C,0);
-  // 16 bytes long
-  POKE(0xD727,((unsigned short)&sin_table+32)&0xff);
-  POKE(0xD728,((unsigned short)&sin_table+32)>>8);
-  // Full volume
-  POKE(0xD729,0xFF);
-  // Enable playback+looping of channel 0, 8-bit samples, signed
-  POKE(0xD720,0xE0);
-  // Enable audio dma
-  POKE(0xD711,0x90);
-
+  play_sine(0,time_base);
+  
   printf("%c",0x93);
   while(1) {
 
     printf("%c",0x13);
     
-    // time base = $001000
-    POKE(0xD724,time_base&0xff);
-    POKE(0xD725,time_base>>8);
-    POKE(0xD726,time_base>>16);
-
-    i=0;
-    printf("%d: en=%d, loop=%d, pending=%d, B24=%d, SS=%d\n"	   
-	   "   v=$%02x, base=$%02x%02x%02x, top=$%04x\n"
-	   "   curr=$%02x%02x%02x, tb=$%02x%02x%02x, ct=$%02x%02x%02x\n",
-	   i,
-	   (PEEK(0xD720+i*16+0)&0x80)?1:0,
-	   (PEEK(0xD720+i*16+0)&0x40)?1:0,
-	   (PEEK(0xD720+i*16+0)&0x20)?1:0,
-	   (PEEK(0xD720+i*16+0)&0x10)?1:0,
-	   (PEEK(0xD720+i*16+0)&0x3),
-	   PEEK(0xD729+i*16),
-	   PEEK(0xD723+i*16),PEEK(0xD722+i*16),PEEK(0xD721+i*16),
-	   PEEK(0xD727+i*16)+(PEEK(0xD728+i*16)<<8+i*16),
-	   PEEK(0xD72C+i*16),PEEK(0xD72B+i*16),PEEK(0xD72A+i*16),
-	   PEEK(0xD726+i*16),PEEK(0xD725+i*16),PEEK(0xD724+i*16),
-	   PEEK(0xD72F+i*16),PEEK(0xD72E+i*16),PEEK(0xD72D+i*16));
+    for(i=0;i<4;i++)
+      {
+	printf("%d: en=%d, loop=%d, pending=%d, B24=%d, SS=%d\n"	   
+	       "   v=$%02x, base=$%02x%02x%02x, top=$%04x\n"
+	       "   curr=$%02x%02x%02x, tb=$%02x%02x%02x, ct=$%02x%02x%02x\n",
+	       i,
+	       (PEEK(0xD720+i*16+0)&0x80)?1:0,
+	       (PEEK(0xD720+i*16+0)&0x40)?1:0,
+	       (PEEK(0xD720+i*16+0)&0x20)?1:0,
+	       (PEEK(0xD720+i*16+0)&0x10)?1:0,
+	       (PEEK(0xD720+i*16+0)&0x3),
+	       PEEK(0xD729+i*16),
+	       PEEK(0xD723+i*16),PEEK(0xD722+i*16),PEEK(0xD721+i*16),
+	       PEEK(0xD727+i*16)+(PEEK(0xD728+i*16)<<8+i*16),
+	       PEEK(0xD72C+i*16),PEEK(0xD72B+i*16),PEEK(0xD72A+i*16),
+	       PEEK(0xD726+i*16),PEEK(0xD725+i*16),PEEK(0xD724+i*16),
+	       PEEK(0xD72F+i*16),PEEK(0xD72E+i*16),PEEK(0xD72D+i*16));
+      }
     if (PEEK(0xD610)) {
       switch (PEEK(0xD610)) {
+      case 0x30: ch=0; break; 
+      case 0x31: ch=1; break;
+      case 0x32: ch=2; break;
+      case 0x33: ch=3; break;
       case 0x11: time_base--; break;
       case 0x91: time_base++; break;
       case 0x1d: time_base-=0x100; break;
@@ -561,11 +662,8 @@ void main(void)
       }
       time_base&=0x0fffff;
 
-  POKE(0xD72A,((unsigned short)&sin_table)&0xff);
-  POKE(0xD72B,((unsigned short)&sin_table)>>8);
-  POKE(0xD72C,0);
-      
-      
+      play_sine(ch,time_base);
+       
       POKE(0xD610,0);      
     }
 
