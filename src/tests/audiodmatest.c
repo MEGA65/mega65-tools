@@ -172,7 +172,9 @@ unsigned char mod_name[23];
 
 #define MAX_INSTRUMENTS 32
 unsigned short instrument_lengths[MAX_INSTRUMENTS];
-unsigned short instrument_[MAX_INSTRUMENTS];
+unsigned short instrument_loopstart[MAX_INSTRUMENTS];
+unsigned short instrument_looplen[MAX_INSTRUMENTS];
+unsigned char instrument_finetune[MAX_INSTRUMENTS];
 unsigned long instrument_addr[MAX_INSTRUMENTS];
 unsigned char instrument_vol[MAX_INSTRUMENTS];
 
@@ -191,9 +193,16 @@ unsigned char sin_table[32]={
 };
 
 // CC65 PETSCII conversion is a pain, so we provide the exact bytes of the file name
-char filename[16]={0x50,0x4f,0x50,0x43,0x4f,0x52,0x4e,0x2e,0x4d,0x4f,0x44,0x00,
-		   0x00,0x00,0x00,0x00
-};
+
+// POPCORN.MOD
+//char filename[16]={0x50,0x4f,0x50,0x43,0x4f,0x52,0x4e,0x2e,0x4d,0x4f,0x44,0x00,
+//		   0x00,0x00,0x00,0x00  };
+// AXELF.MOD
+//char filename[16]={0x41,0x58,0x45,0x4c,0x46,0x2e,0x4d,0x4f,0x44,0x00,0x00,0x00,
+//		   0x00,0x00,0x00,0x00 };
+// SWEET2.MOD
+char filename[16]={0x53,0x57,0x45,0x45,0x54,0x32,0x2e,0x4d,0x4f,0x44,0x00,0x00,
+		   0x00,0x00,0x00,0x00 };
 
 
 unsigned char current_pattern_in_song=0;
@@ -201,6 +210,8 @@ unsigned char current_pattern=0;
 unsigned char current_pattern_position=0;
 
 unsigned char screen_first_row=0;
+
+unsigned ch_en[4]={1,1,1,1};
 
 unsigned char pattern_buffer[16];
 char note_fmt[9+1];
@@ -263,20 +274,25 @@ void draw_pattern_row(unsigned char screen_row,
 		      unsigned char pattern_row,
 		      unsigned char colour)
 {
+  unsigned char c;
   // Get pattern row
   lcopy(0x40000+1084+(current_pattern<<10)+(pattern_row<<4),pattern_buffer,16);
   // Draw row number
   snprintf(note_fmt,9,"%02d",pattern_row);
   print_text80(0,screen_row,0x01,note_fmt);
   // Draw the four notes
+  c=ch_en[0]?colour:2;
   format_note(&pattern_buffer[0]);
-  print_text80(4,screen_row,colour,note_fmt);
+  print_text80(4,screen_row,c,note_fmt);
+  c=ch_en[1]?colour:2;
   format_note(&pattern_buffer[4]);
-  print_text80(13,screen_row,colour,note_fmt);
+  print_text80(13,screen_row,c,note_fmt);
+  c=ch_en[2]?colour:2;
   format_note(&pattern_buffer[8]);
-  print_text80(22,screen_row,colour,note_fmt);
+  print_text80(22,screen_row,c,note_fmt);
+  c=ch_en[3]?colour:2;
   format_note(&pattern_buffer[12]);
-  print_text80(31,screen_row,colour,note_fmt);
+  print_text80(31,screen_row,c,note_fmt);
 }
 
 void show_current_position_in_song(void)
@@ -321,10 +337,27 @@ void play_sample(unsigned char channel,
   top_addr=instrument_addr[instrument]+instrument_lengths[instrument];
   POKE(0xD727+ch_ofs,(top_addr>>0)&0xff);
   POKE(0xD728+ch_ofs,(top_addr>>8)&0xff);
-  // Volume
-  POKE(0xD729,instrument_vol[instrument]>>2);
-  // Load sample address into base and current addr
 
+  // Volume
+  POKE(0xD729,instrument_vol[instrument]);
+  
+  // XXX - We should set base addr and top addr to the looping range, if the
+  // sample has one.
+  if (instrument_loopstart[instrument]) {
+    // start of loop
+    POKE(0xD721+ch_ofs,(((unsigned short)instrument_addr[instrument]+2*instrument_loopstart[instrument])>>0)&0xff);
+    POKE(0xD722+ch_ofs,(((unsigned short)instrument_addr[instrument]+2*instrument_loopstart[instrument])>>8)&0xff);
+    POKE(0xD723+ch_ofs,(((unsigned long)instrument_addr[instrument]+2*instrument_loopstart[instrument])>>16)&0xff);
+
+    // Top addr
+    POKE(0xD721+ch_ofs,(((unsigned short)instrument_addr[instrument]+2*(instrument_loopstart[instrument]+instrument_looplen[instrument]))>>0)&0xff);
+    POKE(0xD722+ch_ofs,(((unsigned short)instrument_addr[instrument]+2*(instrument_loopstart[instrument]+instrument_looplen[instrument]))>>8)&0xff);
+    
+  }
+  
+  POKE(0xC050+channel,instrument);
+  POKE(0xC0A0+channel,instrument_vol[instrument]);
+  
   // Calculate time base.
   // XXX Here we use a slightly randomly chosen fudge-factor
   // It should be:
@@ -338,12 +371,26 @@ void play_sample(unsigned char channel,
   // Here the MEGA65's 25x18 hardware multiplier comes in handy.
   // 11.42x ~= 748316 / 65536   = $B6B1C / $10000
   // 11.31x ~= 741494 / 65536   = $B5075 / $10000
+
+  // XXX Some samples manifestly require a slower play back rate,
+  // but this does not seem to be encoded anywhere!? The "BOMI"
+  // sample in POPCORN.MOD is an example of this
   
   // time_base=freq * 11.41;
-  POKE(0xD770,0x1C);
-  POKE(0xD771,0x6B);
-  POKE(0xD772,0x0B);
-  POKE(0xD773,0x00);
+  POKE(0xC0F0+channel,instrument_finetune[instrument]);
+  if (instrument_finetune[instrument]) {
+    // We really should have a proper fix for the fine tune byte.
+    // For now we are just fudging things
+    POKE(0xD770,0x1C);
+    POKE(0xD771,0x6B);
+    POKE(0xD772,0x0B);
+    POKE(0xD773,0x00);
+  } else {
+    POKE(0xD770,0x1C);
+    POKE(0xD771,0x6B);
+    POKE(0xD772,0x0B);
+    POKE(0xD773,0x00);
+  }
   POKE(0xD774,freq<<(2));
   POKE(0xD775,freq>>(6));
   POKE(0xD776,freq>>(14));
@@ -353,10 +400,16 @@ void play_sample(unsigned char channel,
   POKE(0xD725+ch_ofs,PEEK(0xD77B));
   POKE(0xD726+ch_ofs,PEEK(0xD77C));
   
+  if (instrument_loopstart[instrument]) {
   // Enable playback+ nolooping of channel 0, 8-bit, no unsigned samples
-  POKE(0xD720+ch_ofs,0x80);
+  POKE(0xD720+ch_ofs,0xC0);
+  } else {
+    // Enable playback+ nolooping of channel 0, 8-bit, no unsigned samples
+    POKE(0xD720+ch_ofs,0x80);
+  }
+
   // Enable audio dma, enable bypass of audio mixer, signed samples
-  POKE(0xD711,0x98);
+  POKE(0xD711,0x90);
   
 }
 
@@ -368,12 +421,12 @@ void play_note(unsigned char channel,unsigned char *note)
 
   instrument=note[0]&0xf0;
   instrument|=note[2]>>4;
-  POKE(0xC050+channel,instrument);
+  instrument--;
   frequency=((note[0]&0xf)<<8)+note[1];
   effect=((note[2]&0xf)<<8)+note[3];
 
   if (frequency) 
-    play_sample(channel,instrument,frequency>>1,effect);  
+    play_sample(channel,instrument,frequency,effect);  
   
 }
 
@@ -381,10 +434,10 @@ void play_mod_pattern_line(void)
 {
   // Get pattern row
   lcopy(0x40000+1084+(current_pattern<<10)+(current_pattern_position<<4),pattern_buffer,16);
-  play_note(0,&pattern_buffer[0]);
-  play_note(1,&pattern_buffer[4]);
-  play_note(2,&pattern_buffer[8]);
-  play_note(3,&pattern_buffer[12]);
+  if (ch_en[0]) play_note(0,&pattern_buffer[0]); else POKE(0xC050+0,0x18);
+  if (ch_en[1]) play_note(1,&pattern_buffer[4]); else POKE(0xC050+1,0x18);
+  if (ch_en[2]) play_note(2,&pattern_buffer[8]); else POKE(0xC050+2,0x18);
+  if (ch_en[3]) play_note(3,&pattern_buffer[12]); else POKE(0xC050+3,0x18);
 }
 
 void play_sine(unsigned char ch, unsigned long time_base)
@@ -457,7 +510,7 @@ void main(void)
 #endif
   
 #ifdef MOD_TEST
-  
+
   // Load a MOD file for testing
   closeall();
   fd=open(filename); 
@@ -503,7 +556,18 @@ void main(void)
       }
       // Redenominate instrument length into bytes
       instrument_lengths[i]<<=1;
+      instrument_finetune[i]=mod_name[2];
+
+      // Instrument volume
       instrument_vol[i]=mod_name[3];
+
+      // Repeat start point and end point
+      instrument_loopstart[i]=mod_name[5]+(mod_name[4]<<8);      
+      instrument_looplen[i]=mod_name[7]+(mod_name[6]<<8);
+      POKE(0xC048+(i+5)*80,mod_name[5]);
+      POKE(0xC049+(i+5)*80,mod_name[4]);
+      POKE(0xC04A+(i+5)*80,mod_name[7]);
+      POKE(0xC04B+(i+5)*80,mod_name[6]);
     }
 
   song_length=lpeek(0x40000+950);
@@ -538,6 +602,10 @@ void main(void)
 	// M - Toggle master enable
        	POKE(0xD711,PEEK(0xD711)^0x80);
 	break;
+      case 0x31: ch_en[0]^=1; show_current_position_in_song(); break;
+      case 0x32: ch_en[1]^=1; show_current_position_in_song(); break;
+      case 0x33: ch_en[2]^=1; show_current_position_in_song(); break;
+      case 0x34: ch_en[3]^=1; show_current_position_in_song(); break;
       case 0x30:
 	// 0 - Reset song to start
 	current_pattern_in_song=0;
@@ -601,6 +669,14 @@ void main(void)
 	play_sample(0,PEEK(0xD610)&0xf,200,0);
 	POKE(0xD020,PEEK(0xD610)&0xf);
       }
+      if (PEEK(0xD610)>=0x41&&PEEK(0xD610)<0x4d) {
+	play_sample(0,PEEK(0xD610)&0xf,100,0);
+	POKE(0xD020,PEEK(0xD610)&0xf);
+      }
+      if (PEEK(0xD610)==0x40) {
+	play_sample(0,PEEK(0xD610)&0xf,200,0);
+	POKE(0xD020,PEEK(0xD610)&0xf);
+      }	
       POKE(0xD610,0);
     }
 
@@ -662,6 +738,10 @@ void main(void)
       }
       time_base&=0x0fffff;
 
+      POKE(0xD720,0);
+      POKE(0xD730,0);
+      POKE(0xD740,0);
+      POKE(0xD750,0);
       play_sine(ch,time_base);
        
       POKE(0xD610,0);      
