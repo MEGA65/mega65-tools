@@ -508,6 +508,17 @@ void play_note(unsigned char channel,unsigned char *note)
   period=((note[0]&0xf)<<8)+note[1];
   effect=((note[2]&0xf)<<8)+note[3];
 
+  switch (effect&0xf00)
+    {
+    case 0xf00:
+      if ((effect&0x0ff)<0x20)
+	{
+	  tempo=RASTERS_PER_MINUTE/BEATS_PER_MINUTE/ROWS_PER_BEAT;
+	  tempo=tempo*(effect&0x1f)/6;
+	}
+      break;
+    }
+  
   if (period) 
     play_sample(channel,instrument,period,effect);  
   
@@ -561,46 +572,13 @@ void wait_frames(unsigned char n)
   }
 }
 
-void main(void)
-{
-  unsigned char ch;
-  unsigned char playing=0;
-
-  // Fast CPU, M65 IO
-  POKE(0,65);
-  POKE(0xD02F,0x47);
-  POKE(0xD02F,0x53);
-
-  POKE(0xD020,0);
-  POKE(0xD021,0);
-
-  // Stop all DMA audio first
-  POKE(0xD720,0);
-  POKE(0xD730,0);
-  POKE(0xD740,0);
-  POKE(0xD750,0);
-  
-#ifdef DIRECT_TEST
-  while(1) {
-    for(top_addr=0;top_addr<32;top_addr++) {
-      POKE(0xD6F9,sin_table[top_addr]);
-      POKE(0xD6FB,sin_table[top_addr]);
-      for(i=0;i<100;i++) continue;
-      POKE(0xD020,(PEEK(0xD020)+1)&0x0f);
-    }
-  }  
-#endif
-  
-#ifdef MOD_TEST
-
-  // Audio cross-bar full volume
-  for(i=0;i<256;i++) audioxbar_setcoefficient(i,0xff);
-  
+void load_modfile(void)
+{  
   // Load a MOD file for testing
   closeall();
   fd=open(filename); 
   if (fd==0xff) {
-    printf("Could not read MOD file\n");
+    print_text80(0,0,2,"Could not read MOD file                                             ");
     return;
   }
   load_addr=0x40000;
@@ -679,6 +657,75 @@ void main(void)
   current_pattern_position=0;
   
   show_current_position_in_song();
+}
+
+void read_filename(void)
+{
+  unsigned char len=strlen(filename);
+  print_text80(0,0,1,"Enter name of MOD file to load:");
+  while(1)
+    {
+      print_text80(0,1,7,"                    ");
+      print_text80(0,1,7,filename);
+      while (!PEEK(0xD610)) continue;
+
+      if ((PEEK(0xD610)>=0x20)&&(PEEK(0xD610)<=0x7A)) {
+	if (len<16) {
+	  filename[len]=PEEK(0xD610);
+	  if ((filename[len]>=0x61)&&(filename[len]<=0x7A)) filename[len]-=0x20;
+	  filename[++len]=0;
+	}
+      } else if (PEEK(0xD610)==0x14) {
+        if (len) {
+	  len--;
+	  filename[len]=0;
+	}
+      } else if (PEEK(0xD610)==0x0d) {
+	POKE(0xD610,0x00);
+	return;
+      }
+      POKE(0xD610,0x00);
+      
+    }
+  
+}
+
+void main(void)
+{
+  unsigned char ch;
+  unsigned char playing=0;
+
+  // Fast CPU, M65 IO
+  POKE(0,65);
+  POKE(0xD02F,0x47);
+  POKE(0xD02F,0x53);
+
+  POKE(0xD020,0);
+  POKE(0xD021,0);
+
+  // Stop all DMA audio first
+  POKE(0xD720,0);
+  POKE(0xD730,0);
+  POKE(0xD740,0);
+  POKE(0xD750,0);
+  
+#ifdef DIRECT_TEST
+  while(1) {
+    for(top_addr=0;top_addr<32;top_addr++) {
+      POKE(0xD6F9,sin_table[top_addr]);
+      POKE(0xD6FB,sin_table[top_addr]);
+      for(i=0;i<100;i++) continue;
+      POKE(0xD020,(PEEK(0xD020)+1)&0x0f);
+    }
+  }  
+#endif
+  
+#ifdef MOD_TEST
+
+  // Audio cross-bar full volume
+  for(i=0;i<256;i++) audioxbar_setcoefficient(i,0xff);
+
+  load_modfile();
 
   while(1) {
     if (PEEK(0xD610)) {
@@ -707,6 +754,11 @@ void main(void)
 	
 	show_current_position_in_song();
 	
+	break;
+      case 0xCF: // MEGA+O
+	POKE(0xD610,0);
+	read_filename();
+	load_modfile();
 	break;
       case 0x0d:
 	// RETURN - Play current note
