@@ -27,6 +27,23 @@ unsigned char a,b,c,d;
   FREQ/(PAL RASTERS PER SECOND) * CPU_FREQUENCY/AMIGA_PAULA_CLOCK * 2^24
   Everything else is a constant, so we can say:
   SAMPLE_CLOCK = FREQ * CPU_FREQUENCY/AMIGA_PAULA_CLOCK * 2^24 / PAL_RASTERS_PER_SECOND
+
+  Well, that was all wrong, because we were talking about frequencies rather than period.
+  MODs use period.
+
+  Easy way: Period = 214 = 16574.27 Hz sample rate
+  Time base gets added 40.5M times per second.
+  16574.27*2^24 / 40.5M = 6866 for period = 214
+  If period is higher, then this number will be lower
+  So it should be 6866*214 / PERIOD
+  = 1469038 / PERIOD
+  
+  If we calculate N=2^24/PERIOD, then
+  what we want will be (1469038 x N ) >> 24
+  But our multiplier is only 23x18 bits
+  So N=2^16/PERIOD should fit, and still allow us
+  to just shift the result right by 2 bytes
+
  */
 #define CPU_FREQUENCY 40500000
 #define AMIGA_PAULA_CLOCK (70937892/20)
@@ -35,7 +52,7 @@ unsigned char a,b,c,d;
 // long sample_rate_divisor=CPU_FREQUENCY*0x100000/(AMIGA_PAULA_CLOCK * RASTERS_PER_SECOND);
 // 2^24×(16574÷40500000)/214 Hz nominal frequency
 // /2 = fudge factor?
-long sample_rate_divisor=65536*6866/214   /2 ;
+long sample_rate_divisor=1469038;
 #define RASTERS_PER_MINUTE (RASTERS_PER_SECOND*60)
 #define BEATS_PER_MINUTE 125
 #define ROWS_PER_BEAT 8
@@ -370,13 +387,16 @@ void show_current_position_in_song(void)
 }
   
 unsigned short top_addr;
+unsigned short freq;
 
 void play_sample(unsigned char channel,
 		 unsigned char instrument,
-		 unsigned short freq,
+		 unsigned short period,
 		 unsigned short effect)
 {
   unsigned ch_ofs=channel<<4;
+
+  freq=0xFFFFL/period;
   
   // Stop playback while loading new sample data
   POKE(0xD720+ch_ofs,0x00);
@@ -432,28 +452,19 @@ void play_sample(unsigned char channel,
   // but this does not seem to be encoded anywhere!? The "BOMI"
   // sample in POPCORN.MOD is an example of this
   
-  // time_base=freq * 11.41;
   //  POKE(0xC0F0+channel,instrument_finetune[instrument]);
-  if (0&&instrument_finetune[instrument]) {
-    // We really should have a proper fix for the fine tune byte.
-    // For now we are just fudging things
-    POKE(0xD770,0x1C);
-    POKE(0xD771,0x6B);
-    POKE(0xD772,0x0B);
-    POKE(0xD773,0x00);
-  } else {
-    POKE(0xD770,sample_rate_divisor);
-    POKE(0xD771,sample_rate_divisor>>8);
-    POKE(0xD772,sample_rate_divisor>>16);
-    POKE(0xD773,0x00);
-  }
+  POKE(0xD770,sample_rate_divisor);
+  POKE(0xD771,sample_rate_divisor>>8);
+  POKE(0xD772,sample_rate_divisor>>16);
+  POKE(0xD773,0x00);
+
   POKE(0xD774,freq);
   POKE(0xD775,freq>>8);
-  POKE(0xD776,0); // freq>>16);
+  POKE(0xD776,0);
 
 #if 0
-  snprintf(msg,64,"Freq=%4d ($%04x) -> $%02x%02x%02x",
-	   freq,freq,PEEK(0xD77C),PEEK(0xD77B),PEEK(0xD77A));
+  snprintf(msg,64,"Period=%4d ($%04x) -> $%02x%02x%02x%02x%02x%02x.       ",
+	   period,freq,PEEK(0xD77D),PEEK(0xD77C),PEEK(0xD77B),PEEK(0xD77A),PEEK(0xD779),PEEK(0xD778));
   print_text80(0,1,7,msg);
   snprintf(msg,64,"$%02x%02x%02x%02x x $%02x%02x%02x",
 	   PEEK(0xD773),PEEK(0xD772),PEEK(0xD771),PEEK(0xD770),
@@ -465,7 +476,8 @@ void play_sample(unsigned char channel,
   // Pick results from output / 2^16
   POKE(0xD724+ch_ofs,PEEK(0xD77A));
   POKE(0xD725+ch_ofs,PEEK(0xD77B));
-  POKE(0xD726+ch_ofs,PEEK(0xD77C));
+  //  POKE(0xD726+ch_ofs,PEEK(0xD77C));
+  POKE(0xD726+ch_ofs,0);
   
   if (instrument_loopstart[instrument]) {
   // Enable playback+ nolooping of channel 0, 8-bit, no unsigned samples
@@ -485,7 +497,7 @@ unsigned char last_instruments[4]={0,0,0,0};
 void play_note(unsigned char channel,unsigned char *note)
 {
   unsigned char instrument;
-  unsigned short frequency;
+  unsigned short period;
   unsigned short effect;
 
   instrument=note[0]&0xf0;
@@ -493,13 +505,11 @@ void play_note(unsigned char channel,unsigned char *note)
   if (!instrument) instrument=last_instruments[channel];
   else instrument--;
   last_instruments[channel]=instrument;
-  frequency=((note[0]&0xf)<<8)+note[1];
+  period=((note[0]&0xf)<<8)+note[1];
   effect=((note[2]&0xf)<<8)+note[3];
 
-  frequency=frequency>>2;
-  
-  if (frequency) 
-    play_sample(channel,instrument,frequency,effect);  
+  if (period) 
+    play_sample(channel,instrument,period,effect);  
   
 }
 
