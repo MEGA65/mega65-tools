@@ -11,6 +11,8 @@
 #undef SINE_TEST
 #undef DIRECT_TEST
 
+char msg[64+1];
+
 
 unsigned short i;
 unsigned char a,b,c,d;
@@ -225,7 +227,10 @@ unsigned char sin_table[32]={
 //char filename[16]={0x41,0x58,0x45,0x4c,0x46,0x2e,0x4d,0x4f,0x44,0x00,0x00,0x00,
 //		   0x00,0x00,0x00,0x00 };
 // SWEET2.MOD
-char filename[16]={0x53,0x57,0x45,0x45,0x54,0x32,0x2e,0x4d,0x4f,0x44,0x00,0x00,
+//char filename[16]={0x53,0x57,0x45,0x45,0x54,0x32,0x2e,0x4d,0x4f,0x44,0x00,0x00,
+//		   0x00,0x00,0x00,0x00 };
+// CCC.MOD
+char filename[16]={0x43,0x43,0x43,0x2e,0x4d,0x4f,0x44,0x00,0x00,0x00,0x00,0x00,
 		   0x00,0x00,0x00,0x00 };
 
 
@@ -257,6 +262,20 @@ char *note_name(unsigned short period)
 {
   switch(period) {
   case 0: return "---";
+
+  case 1712: return "C-0";
+  case 1616: return "C#0";
+  case 1524: return "D-0";
+  case 1440: return "D#0";
+  case 1356: return "E-0";
+  case 1280: return "F-0";
+  case 1208: return "F#0";
+  case 1140: return "G-0";
+  case 1076: return "G#0";
+  case 1016: return "A-0";
+  case 960: return "A#0";
+  case 906: return "B-0";
+    
   case 856: return "C-1";
   case 808: return "C#1";
   case 762: return "D-1";
@@ -415,7 +434,7 @@ void play_sample(unsigned char channel,
   
   // time_base=freq * 11.41;
   //  POKE(0xC0F0+channel,instrument_finetune[instrument]);
-  if (instrument_finetune[instrument]) {
+  if (0&&instrument_finetune[instrument]) {
     // We really should have a proper fix for the fine tune byte.
     // For now we are just fudging things
     POKE(0xD770,0x1C);
@@ -430,7 +449,18 @@ void play_sample(unsigned char channel,
   }
   POKE(0xD774,freq);
   POKE(0xD775,freq>>8);
-  POKE(0xD776,freq>>16);
+  POKE(0xD776,0); // freq>>16);
+
+#if 0
+  snprintf(msg,64,"Freq=%4d ($%04x) -> $%02x%02x%02x",
+	   freq,freq,PEEK(0xD77C),PEEK(0xD77B),PEEK(0xD77A));
+  print_text80(0,1,7,msg);
+  snprintf(msg,64,"$%02x%02x%02x%02x x $%02x%02x%02x",
+	   PEEK(0xD773),PEEK(0xD772),PEEK(0xD771),PEEK(0xD770),
+	   PEEK(0xD776),PEEK(0xD775),PEEK(0xD774)
+	   );
+  print_text80(0,2,8,msg);
+#endif
   
   // Pick results from output / 2^16
   POKE(0xD724+ch_ofs,PEEK(0xD77A));
@@ -520,8 +550,6 @@ void wait_frames(unsigned char n)
     n--;
   }
 }
-
-char msg[64+1];
 
 void main(void)
 {
@@ -676,7 +704,7 @@ void main(void)
 	break;
       case 0x9d:
 	current_pattern_in_song--;
-	if (current_pattern_in_song>=song_length) current_pattern_in_song=0;
+	if (current_pattern_in_song>=song_length) current_pattern_in_song=(song_length-1);
 	current_pattern=song_pattern_list[current_pattern_in_song];
 	show_current_position_in_song();
 	break;
