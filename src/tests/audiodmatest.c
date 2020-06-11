@@ -487,6 +487,23 @@ void play_sample(unsigned char channel,
     POKE(0xD720+ch_ofs,0x80);
   }
 
+  switch (effect&0xf00)
+    {
+    case 0xf00:
+      // Tempo/Speed
+      if ((effect&0x0ff)<0x20)
+	{
+	  tempo=RASTERS_PER_MINUTE/BEATS_PER_MINUTE/ROWS_PER_BEAT;
+	  tempo=tempo*(effect&0x1f)/6;
+	}
+      break;
+    case 0xc00:
+      // Channel volume
+      POKE(0xD029+(channel<<4),effect&0xff);
+      break;
+    }
+   
+  
   // Enable audio dma, enable bypass of audio mixer, signed samples
   POKE(0xD711,0x80);
   
@@ -508,17 +525,6 @@ void play_note(unsigned char channel,unsigned char *note)
   period=((note[0]&0xf)<<8)+note[1];
   effect=((note[2]&0xf)<<8)+note[3];
 
-  switch (effect&0xf00)
-    {
-    case 0xf00:
-      if ((effect&0x0ff)<0x20)
-	{
-	  tempo=RASTERS_PER_MINUTE/BEATS_PER_MINUTE/ROWS_PER_BEAT;
-	  tempo=tempo*(effect&0x1f)/6;
-	}
-      break;
-    }
-  
   if (period) 
     play_sample(channel,instrument,period,effect);  
   
