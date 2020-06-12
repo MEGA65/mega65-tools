@@ -30,6 +30,7 @@ ASSETS=		assets
 SRCDIR=		src
 BINDIR=		bin
 B65DIR=		bin65
+EXAMPLEDIR=	$(SRCDIR)/examples
 UTILDIR=	$(SRCDIR)/utilities
 TESTDIR=	$(SRCDIR)/tests
 LIBEXECDIR=	libexec
@@ -179,7 +180,7 @@ $(UTILDIR)/fastload.prg:       $(UTILDIR)/fastload.c $(CC65)
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
-$(TESTDIR)/audiodmatest.prg:       $(TESTDIR)/audiodmatest.c $(CC65)
+$(EXAMPLEDIR)/modplay.prg:       $(EXAMPLEDIR)/modplay.c $(CC65)
 	git submodule init
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s

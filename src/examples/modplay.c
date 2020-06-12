@@ -628,9 +628,6 @@ void load_modfile(void)
     if (a==4) song_offset=1084;
   }
 
-  snprintf(mod_name,16,"Song ofs=%d",song_offset);
-  print_text80(0,1,1,mod_name);
-  
   // Show  instruments from MOD file
   for(i=0;i<(song_offset==1084?31:15);i++)
     {
