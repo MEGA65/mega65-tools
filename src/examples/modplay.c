@@ -405,6 +405,8 @@ void play_sample(unsigned char channel,
 {
   unsigned ch_ofs=channel<<4;
 
+  if (channel>3) return;
+  
   freq=0xFFFFL/period;
   
   // Stop playback while loading new sample data
@@ -503,12 +505,12 @@ void play_sample(unsigned char channel,
       if ((effect&0x0ff)<0x20)
 	{
 	  tempo=RASTERS_PER_MINUTE/BEATS_PER_MINUTE/ROWS_PER_BEAT;
-	  tempo=tempo*(effect&0x1f)/6;
+	  tempo=tempo*6/(effect&0x1f);
 	}
       break;
     case 0xc00:
       // Channel volume
-      POKE(0xD029+(channel<<4),effect&0xff);
+      POKE(0xD729+ch_ofs,effect&0xff);
       break;
     }
    
@@ -552,6 +554,8 @@ void play_mod_pattern_line(void)
 void play_sine(unsigned char ch, unsigned long time_base)
 {
   unsigned ch_ofs=ch<<4;
+
+  if (ch>3) return;
   
   // Play sine wave for frequency matching
   POKE(0xD721+ch_ofs,((unsigned short)&sin_table)&0xff);
