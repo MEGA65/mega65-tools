@@ -13,9 +13,18 @@
 
 char msg[64+1];
 
+unsigned short song_offset=1084;
 
 unsigned short i;
 unsigned char a,b,c,d;
+
+#define NUM_SIGS 4
+char mod31_sigs[NUM_SIGS][4]={
+  {0x4D,0x2e,0x4b,0x2e},
+  {0x4D,0x21,0x4b,0x21},
+  {0x46,0x4c,0x54,0x34},
+  {0x46,0x4c,0x54,0x38}
+};
 
 /*
   Our sample clock is in 1/2^24ths of a 40.5MHz clock.
@@ -349,7 +358,7 @@ void draw_pattern_row(unsigned char screen_row,
 {
   unsigned char c;
   // Get pattern row
-  lcopy(0x40000+1084+(current_pattern<<10)+(pattern_row<<4),pattern_buffer,16);
+  lcopy(0x40000+song_offset+(current_pattern<<10)+(pattern_row<<4),pattern_buffer,16);
   // Draw row number
   snprintf(note_fmt,9,"%02d",pattern_row);
   print_text80(0,screen_row,0x01,note_fmt);
@@ -533,7 +542,7 @@ void play_note(unsigned char channel,unsigned char *note)
 void play_mod_pattern_line(void)
 {
   // Get pattern row
-  lcopy(0x40000+1084+(current_pattern<<10)+(current_pattern_position<<4),pattern_buffer,16);
+  lcopy(0x40000+song_offset+(current_pattern<<10)+(current_pattern_position<<4),pattern_buffer,16);
   if (ch_en[0]) play_note(0,&pattern_buffer[0]);
   if (ch_en[1]) play_note(1,&pattern_buffer[4]);
   if (ch_en[2]) play_note(2,&pattern_buffer[8]);
@@ -579,7 +588,9 @@ void wait_frames(unsigned char n)
 }
 
 void load_modfile(void)
-{  
+{
+  song_offset=1084;
+  
   // Load a MOD file for testing
   closeall();
   fd=open(filename); 
@@ -606,8 +617,22 @@ void load_modfile(void)
   // Show MOD file name
   print_text80(0,0,1,mod_name);
 
+  // Check if 15 orr 31 instrument mode
+  lcopy(0x40000+1080,mod_name,4);
+  mod_name[4]=0;
+  song_offset=1084-(16*30);
+
+  for(i=0;i<NUM_SIGS;i++) {
+    for(a=0;a<4;a++)
+      if (mod_name[a]!=mod31_sigs[i][a]) break;
+    if (a==4) song_offset=1084;
+  }
+
+  snprintf(mod_name,16,"Song ofs=%d",song_offset);
+  print_text80(0,1,1,mod_name);
+  
   // Show  instruments from MOD file
-  for(i=0;i<31;i++)
+  for(i=0;i<(song_offset==1084?31:15);i++)
     {
       lcopy(0x40014+i*30,mod_name,22);
       mod_name[22]=0;
@@ -649,7 +674,7 @@ void load_modfile(void)
     if (song_pattern_list[i]>max_pattern) max_pattern=song_pattern_list[i];
   }
   //  printf("\n%d unique patterns.\n",max_pattern);
-  sample_data_start=0x40000L+1084+(max_pattern+1)*1024;
+  sample_data_start=0x40000L+song_offset+(max_pattern+1)*1024;
   
   //  printf("sample data starts at $%lx\n",sample_data_start);
   for(i=0;i<MAX_INSTRUMENTS;i++) {
@@ -765,6 +790,7 @@ void main(void)
 	POKE(0xD610,0);
 	read_filename();
 	load_modfile();
+	show_current_position_in_song();
 	break;
       case 0x0d:
 	// RETURN - Play current note
