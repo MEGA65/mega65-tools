@@ -253,8 +253,9 @@ void main(void)
   while(1) {
 
     // Synchronise to start of wave
-    while(PEEK(0xD6FD)>2) continue;
-    while(PEEK(0xD6FD)<3) continue;
+    a=(unsigned char)&sin_table;
+    while(PEEK(0xD72A)==a) continue;
+    while(PEEK(0xD72A)!=a) continue;
     
     // Read a bunch of samples
     a=0;
