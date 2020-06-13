@@ -699,6 +699,9 @@ void read_filename(void)
     {
       print_text80(0,1,7,"                    ");
       print_text80(0,1,7,filename);
+      // Show block cursor
+      lpoke(0xff80000+80+strlen(filename),0x21);
+      
       while (!PEEK(0xD610)) continue;
 
       if ((PEEK(0xD610)>=0x20)&&(PEEK(0xD610)<=0x7A)) {
@@ -726,12 +729,14 @@ void main(void)
 {
   unsigned char ch;
   unsigned char playing=0;
-
+  
   // Fast CPU, M65 IO
   POKE(0,65);
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
+  while(PEEK(0xD610)) POKE(0xD610,0);
+  
   POKE(0xD020,0);
   POKE(0xD021,0);
 
