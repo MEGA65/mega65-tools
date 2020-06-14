@@ -13,6 +13,12 @@ unsigned short i;
 unsigned char a,b,c,d;
 unsigned char vol=0x01;
 
+unsigned char sin_table[32]={
+  //  128,177,218,246,255,246,218,177,
+  //  128,79,38,10,0,10,38,79
+  128,152,176,198,217,233,245,252,255,252,245,233,217,198,176,152,128,103,79,57,38,22,10,3,1,3,10,22,38,57,79,103
+};
+
 void graphics_clear_screen(void)
 {
   lfill(0x40000L,0,32768L);
@@ -178,13 +184,7 @@ unsigned long load_addr;
 unsigned long frequency=200;
 unsigned long new_freq=200;
 unsigned long time_base=0x4000;
-
-unsigned char sin_table[32]={
-  //  128,177,218,246,255,246,218,177,
-  //  128,79,38,10,0,10,38,79
-  128,152,176,198,217,233,245,252,255,252,245,233,217,198,176,152,128,103,79,57,38,22,10,3,1,3,10,22,38,57,79,103
-};
-
+unsigned char mic_num=3;
 
 void audioxbar_setcoefficient(uint8_t n,uint8_t value)
 {
@@ -217,24 +217,53 @@ void play_sine(unsigned char ch,unsigned char vol)
   if (ch>3) return;
   
   // Play sine wave for frequency matching
+  // We use the hardware ROM sine table for this.
+
+#if 0
+  POKE(0xD721+ch_ofs,0x00);
+  POKE(0xD722+ch_ofs,0x00);
+  POKE(0xD723+ch_ofs,0);
+  POKE(0xD72A+ch_ofs,0x00);
+  POKE(0xD72B+ch_ofs,0x00);
+  POKE(0xD72C+ch_ofs,0);
+  // 32 bytes long
+  POKE(0xD727+ch_ofs,0x20);
+  POKE(0xD728+ch_ofs,0x00);
+  // Enable playback+looping of channel 0, 8-bit samples, signed, play ROM sine
+  POKE(0xD720+ch_ofs,0xF0);
+#endif
+  
+  POKE(0xD720+ch_ofs,0x00);
   POKE(0xD721+ch_ofs,((unsigned short)&sin_table)&0xff);
   POKE(0xD722+ch_ofs,((unsigned short)&sin_table)>>8);
   POKE(0xD723+ch_ofs,0);
   POKE(0xD72A+ch_ofs,((unsigned short)&sin_table)&0xff);
   POKE(0xD72B+ch_ofs,((unsigned short)&sin_table)>>8);
   POKE(0xD72C+ch_ofs,0);
-  // 16 bytes long
   POKE(0xD727+ch_ofs,((unsigned short)&sin_table+32)&0xff);
   POKE(0xD728+ch_ofs,((unsigned short)&sin_table+32)>>8);
+  // Enable playback+looping of channel 0, 8-bit samples, signed, use soft table
+  POKE(0xD720+ch_ofs,0xE0);
+
+  
   // Set volume
   POKE(0xD729+ch_ofs,vol);
-  // Enable playback+looping of channel 0, 8-bit samples, signed
-  POKE(0xD720+ch_ofs,0xE0);
 
   // Enable audio dma
   // And bypass audio mixer for direct 100% volume output
   POKE(0xD711,0x90);
 
+  // Maximise volume level on amplifier
+
+  // Set left channel to +0dB ($00 would be +24dB, but then we get lots of background noise)
+  for(i=0;i<10000;i++) continue;
+  lpoke(0xffd7035,0x40);
+  for(i=0;i<10000;i++) continue;
+  // Right channel is not used, so mute to avoid over-current
+  lpoke(0xffd7036,0xFF); 
+  for(i=0;i<10000;i++) continue;
+  
+  
   // time base = $001000
   POKE(0xD724+ch_ofs,time_base&0xff);
   POKE(0xD725+ch_ofs,time_base>>8);
@@ -270,6 +299,9 @@ void main(void)
   POKE(0xD730,0);
   POKE(0xD740,0);
   POKE(0xD750,0);
+
+  // Turn on power to microphones
+  
   
   play_sine(0,vol);
   
@@ -293,14 +325,18 @@ void main(void)
 
     // Read back digital audio channel
     POKE(0xD6F4,0x08);  
+
+    // a=0;
+    a=&sin_table;
     
-    // Synchronise to start of wave
-    a=(unsigned char)&sin_table;
-    while(PEEK(0xD72A)==a) continue;
-    while(PEEK(0xD72A)!=a) continue;
+    if (frequency) {
+      // Synchronise to start of wave
+     
+      while(PEEK(0xD72A)==a) continue;
+      while(PEEK(0xD72A)!=a) continue;
+    }
     
     // Read a bunch of samples
-    a=0;
     do {
       samples[a]=PEEK(0xD6FD);      
       a++;
@@ -308,17 +344,22 @@ void main(void)
 
 
     // Read back MEMS microphone 2
-    POKE(0xD6F4,0x10+0);  
+    POKE(0xD6F4,0x0A+mic_num);  
+
+    // a=0;
+    a=&sin_table;
     
-    // Synchronise to start of wave
-    a=(unsigned char)&sin_table;
-    while(PEEK(0xD72A)==a) continue;
-    while(PEEK(0xD72A)!=a) continue;
+    if (frequency) {
+      // Synchronise to start of wave
+      while(PEEK(0xD72A)==a) continue;
+      while(PEEK(0xD72A)!=a) continue;
+    }
     
     // Read a bunch of samples
     a=0;
     do {
-      mic_samples[a]=PEEK(0xD6FD);      
+      // XXX Read LSB of microphone, while testing
+      mic_samples[a]=PEEK(0xD6FC);      
       a++;
     } while(a);    
     
@@ -348,51 +389,38 @@ void main(void)
     //    lcopy(samples,last_samples,256);
     //    activate_double_buffer();
     
-    if (0) {
-      printf("%c",0x13);
-      
-      for(i=0;i<4;i++)
-	{
-	  printf("%d: en=%d, loop=%d, pending=%d, B24=%d, SS=%d\n"	   
-		 "   v=$%02x, base=$%02x%02x%02x, top=$%04x\n"
-		 "   curr=$%02x%02x%02x, tb=$%02x%02x%02x, ct=$%02x%02x%02x\n",
-		 i,
-		 (PEEK(0xD720+i*16+0)&0x80)?1:0,
-		 (PEEK(0xD720+i*16+0)&0x40)?1:0,
-		 (PEEK(0xD720+i*16+0)&0x20)?1:0,
-		 (PEEK(0xD720+i*16+0)&0x10)?1:0,
-		 (PEEK(0xD720+i*16+0)&0x3),
-		 PEEK(0xD729+i*16),
-		 PEEK(0xD723+i*16),PEEK(0xD722+i*16),PEEK(0xD721+i*16),
-		 PEEK(0xD727+i*16)+(PEEK(0xD728+i*16)<<8+i*16),
-		 PEEK(0xD72C+i*16),PEEK(0xD72B+i*16),PEEK(0xD72A+i*16),
-		 PEEK(0xD726+i*16),PEEK(0xD725+i*16),PEEK(0xD724+i*16),
-		 PEEK(0xD72F+i*16),PEEK(0xD72E+i*16),PEEK(0xD72D+i*16));
-	}
-    }
     if (PEEK(0xD610)) {
       if (PEEK(0xD610)>='0'&&PEEK(0xD610)<='9') {
 	new_freq=new_freq*10+(PEEK(0xD610)-'0');
       }
       switch (PEEK(0xD610)) {
       case 0x14: new_freq/=10; break;
-      case 0x0d: frequency=new_freq; break;
+      case 0x0d: frequency=new_freq;
+	// RETURN = set frequency
+	new_freq=0;
+	break;
+      case 0x4e: case 0x6e:
+	// N = next mic
+	mic_num++;
+	mic_num&=3;
+	break;
+      case 0x56: case 0x76:
+	// V = set volume
+	if (new_freq<256) vol=new_freq;
+	new_freq=0;
+	break;
       case '+': vol++; break;
       case '-': vol--; break;
       case 0x4d: case 0x6d: vol=0; break;
-      case 0x11: frequency--; break;
-      case 0x91: frequency++; break;
-      case 0x1d: frequency-=0x100; break;
-      case 0x9d: frequency+=0x100; break;	
+      case 0x11: frequency-=50; break;
+      case 0x91: frequency-=50; break;
+      case 0x1d: frequency+=50; break;
+      case 0x9d: frequency+=50; break;	
       }
       frequency&=0xffff;
       if (!frequency) frequency=20;
 
-      POKE(0xD720,0);
-      POKE(0xD730,0);
-      POKE(0xD740,0);
-      POKE(0xD750,0);
-      play_sine(ch,vol);
+      play_sine(0,vol);
        
       POKE(0xD610,0);      
     }
