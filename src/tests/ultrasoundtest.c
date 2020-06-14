@@ -176,6 +176,7 @@ unsigned char buffer[512];
 unsigned long load_addr;
 
 unsigned long frequency=200;
+unsigned long new_freq=200;
 unsigned long time_base=0x4000;
 
 unsigned char sin_table[32]={
@@ -287,6 +288,8 @@ void main(void)
     snprintf(msg,64,"Freq = %5ld Hz, vol=$%02x",
 	     frequency,vol);
     print_text(0,1,7,msg);
+    snprintf(msg,64,"New Freq: %ld          ",new_freq);
+    print_text(0,2,12,msg);
 
     // Read back digital audio channel
     POKE(0xD6F4,0x08);  
@@ -305,7 +308,7 @@ void main(void)
 
 
     // Read back MEMS microphone 2
-    POKE(0xD6F4,0x10+2);  
+    POKE(0xD6F4,0x10+0);  
     
     // Synchronise to start of wave
     a=(unsigned char)&sin_table;
@@ -368,14 +371,15 @@ void main(void)
 	}
     }
     if (PEEK(0xD610)) {
+      if (PEEK(0xD610)>='0'&&PEEK(0xD610)<='9') {
+	new_freq=new_freq*10+(PEEK(0xD610)-'0');
+      }
       switch (PEEK(0xD610)) {
+      case 0x14: new_freq/=10; break;
+      case 0x0d: frequency=new_freq; break;
       case '+': vol++; break;
       case '-': vol--; break;
       case 0x4d: case 0x6d: vol=0; break;
-      case 0x30: ch=0; break; 
-      case 0x31: ch=1; break;
-      case 0x32: ch=2; break;
-      case 0x33: ch=3; break;
       case 0x11: frequency--; break;
       case 0x91: frequency++; break;
       case 0x1d: frequency-=0x100; break;
