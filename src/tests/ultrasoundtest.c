@@ -244,6 +244,8 @@ void play_sine(unsigned char ch,unsigned char vol)
 
 unsigned char last_samples[256];
 unsigned char samples[256];
+unsigned char last_mic_samples[256];
+unsigned char mic_samples[256];
 
 void main(void)
 {
@@ -280,14 +282,14 @@ void main(void)
 
   print_text(0,0,1,"Ultrasound Test");
 
-  // Read back digital audio channel
-  POKE(0xD6F4,0x08);
-  
   while(1) {
 
     snprintf(msg,64,"Freq = %5ld Hz, vol=$%02x",
 	     frequency,vol);
     print_text(0,1,7,msg);
+
+    // Read back digital audio channel
+    POKE(0xD6F4,0x08);  
     
     // Synchronise to start of wave
     a=(unsigned char)&sin_table;
@@ -301,9 +303,29 @@ void main(void)
       a++;
     } while(a);
 
+
+    // Read back MEMS microphone 2
+    POKE(0xD6F4,0x10+2);  
+    
+    // Synchronise to start of wave
+    a=(unsigned char)&sin_table;
+    while(PEEK(0xD72A)==a) continue;
+    while(PEEK(0xD72A)!=a) continue;
+    
+    // Read a bunch of samples
+    a=0;
+    do {
+      mic_samples[a]=PEEK(0xD6FD);      
+      a++;
+    } while(a);    
+    
     // Update oscilloscope
     for(i=0;i<256;i++) {
       b=last_samples[i]^0x80;
+      b=b>>1;
+      plot_pixel_direct(i,(200-129)+b,0);
+
+      b=last_mic_samples[i]^0x80;
       b=b>>1;
       plot_pixel_direct(i,(200-129)+b,0);
 
@@ -311,7 +333,12 @@ void main(void)
       b=b>>1;
       plot_pixel_direct(i,(200-129)+b,1);
 
+      b=mic_samples[i]^0x80;
+      b=b>>1;
+      plot_pixel_direct(i,(200-129)+b,7);
+      
       last_samples[i]=samples[i];
+      last_mic_samples[i]=mic_samples[i];
     }
     // XXX We can't use DMA during DMA audio, or it causes pauses
     // (or at least not big DMAs.)
