@@ -11,7 +11,6 @@ char msg[64+1];
 
 unsigned short i;
 unsigned char a,b,c,d;
-unsigned char vol=0x01;
 
 unsigned char sin_table[32]={
   //  128,177,218,246,255,246,218,177,
@@ -181,8 +180,9 @@ unsigned char buffer[512];
 
 unsigned long load_addr;
 
-unsigned long frequency=200;
-unsigned long new_freq=200;
+unsigned char vol=0xFF;
+unsigned long frequency=20000;
+unsigned long new_freq=20000;
 unsigned long time_base=0x4000;
 unsigned char mic_num=3;
 
@@ -257,7 +257,7 @@ void play_sine(unsigned char ch,unsigned char vol)
 
   // Set left channel to +0dB ($00 would be +24dB, but then we get lots of background noise)
   for(i=0;i<10000;i++) continue;
-  lpoke(0xffd7035,0x40);
+  lpoke(0xffd7035,0xff); // 0x40);
   for(i=0;i<10000;i++) continue;
   // Right channel is not used, so mute to avoid over-current
   lpoke(0xffd7036,0xFF); 
@@ -337,6 +337,7 @@ void main(void)
     }
     
     // Read a bunch of samples
+    a=0;
     do {
       samples[a]=PEEK(0xD6FD);      
       a++;
