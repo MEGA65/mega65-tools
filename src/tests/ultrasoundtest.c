@@ -11,6 +11,7 @@ char msg[64+1];
 
 unsigned short i;
 unsigned char a,b,c,d;
+unsigned char vol=0x01;
 
 void graphics_clear_screen(void)
 {
@@ -113,6 +114,23 @@ void plot_pixel(unsigned short x,unsigned char y,unsigned char colour)
 
 }
 
+void plot_pixel_direct(unsigned short x,unsigned char y,unsigned char colour)
+{
+  pixel_addr=((x&0xf)>>1)+64*25*(x>>4);
+  pixel_addr+=y<<3;
+
+  pixel_temp=lpeek(0x40000L+pixel_addr);
+  if (x&1) {
+    pixel_temp&=0x0f;
+    pixel_temp|=colour<<4;
+  } else {
+    pixel_temp&=0xf0;
+    pixel_temp|=colour&0xf;
+  }
+  lpoke(0x40000L+pixel_addr,pixel_temp);
+
+}
+
 unsigned char char_code;
 void print_text(unsigned char x,unsigned char y,unsigned char colour,char *msg)
 {
@@ -157,6 +175,7 @@ unsigned char buffer[512];
 
 unsigned long load_addr;
 
+unsigned long frequency=200;
 unsigned long time_base=0x4000;
 
 unsigned char sin_table[32]={
@@ -178,10 +197,22 @@ void audioxbar_setcoefficient(uint8_t n,uint8_t value)
   POKE(0xD6F5U,value); 
 }
 
-void play_sine(unsigned char ch, unsigned long time_base)
+void play_sine(unsigned char ch,unsigned char vol)
 {
   unsigned ch_ofs=ch<<4;
 
+  /* Work out time_base from frequency
+     time_base=0xffffff = 40.5MHz / sample length = 40.5M/32 = 1.265625 MHz
+     0xfffff is the highest practical frequency we can do via DMA like this,
+     which is about 79,101 Hz.
+     This means time_base needs to be 13.2562x the frequency.
+     As the max frequency is <2^17, we can do the multiplication as 
+     TIMEBASE * 2^12 = FREQ * (13.2562 * 2^12)
+                     = FREQ * 54297
+  */
+  time_base=frequency*54297L;
+  time_base=time_base>>12;
+  
   if (ch>3) return;
   
   // Play sine wave for frequency matching
@@ -194,8 +225,8 @@ void play_sine(unsigned char ch, unsigned long time_base)
   // 16 bytes long
   POKE(0xD727+ch_ofs,((unsigned short)&sin_table+32)&0xff);
   POKE(0xD728+ch_ofs,((unsigned short)&sin_table+32)>>8);
-  // 1/4 Full volume
-  POKE(0xD729+ch_ofs,0x3F);
+  // Set volume
+  POKE(0xD729+ch_ofs,vol);
   // Enable playback+looping of channel 0, 8-bit samples, signed
   POKE(0xD720+ch_ofs,0xE0);
 
@@ -218,6 +249,8 @@ void main(void)
 {
   unsigned char ch;
   unsigned char playing=0;
+
+  asm ( "sei" );
   
   // Fast CPU, M65 IO
   POKE(0,65);
@@ -235,7 +268,7 @@ void main(void)
   POKE(0xD740,0);
   POKE(0xD750,0);
   
-  play_sine(0,time_base);
+  play_sine(0,vol);
   
   //  printf("%c",0x93);
 
@@ -252,6 +285,10 @@ void main(void)
   
   while(1) {
 
+    snprintf(msg,64,"Freq = %5ld Hz, vol=$%02x",
+	     frequency,vol);
+    print_text(0,1,7,msg);
+    
     // Synchronise to start of wave
     a=(unsigned char)&sin_table;
     while(PEEK(0xD72A)==a) continue;
@@ -268,15 +305,18 @@ void main(void)
     for(i=0;i<256;i++) {
       b=last_samples[i]^0x80;
       b=b>>1;
-      plot_pixel(i,(200-129)+b,0);
+      plot_pixel_direct(i,(200-129)+b,0);
 
       b=samples[i]^0x80;
       b=b>>1;
-      plot_pixel(i,(200-129)+b,1);
+      plot_pixel_direct(i,(200-129)+b,1);
 
+      last_samples[i]=samples[i];
     }
-    lcopy(samples,last_samples,256);
-    activate_double_buffer();
+    // XXX We can't use DMA during DMA audio, or it causes pauses
+    // (or at least not big DMAs.)
+    //    lcopy(samples,last_samples,256);
+    //    activate_double_buffer();
     
     if (0) {
       printf("%c",0x13);
@@ -302,22 +342,26 @@ void main(void)
     }
     if (PEEK(0xD610)) {
       switch (PEEK(0xD610)) {
+      case '+': vol++; break;
+      case '-': vol--; break;
+      case 0x4d: case 0x6d: vol=0; break;
       case 0x30: ch=0; break; 
       case 0x31: ch=1; break;
       case 0x32: ch=2; break;
       case 0x33: ch=3; break;
-      case 0x11: time_base--; break;
-      case 0x91: time_base++; break;
-      case 0x1d: time_base-=0x100; break;
-      case 0x9d: time_base+=0x100; break;	
+      case 0x11: frequency--; break;
+      case 0x91: frequency++; break;
+      case 0x1d: frequency-=0x100; break;
+      case 0x9d: frequency+=0x100; break;	
       }
-      time_base&=0x0fffff;
+      frequency&=0xffff;
+      if (!frequency) frequency=20;
 
       POKE(0xD720,0);
       POKE(0xD730,0);
       POKE(0xD740,0);
       POKE(0xD750,0);
-      play_sine(ch,time_base);
+      play_sine(ch,vol);
        
       POKE(0xD610,0);      
     }
