@@ -90,7 +90,7 @@ char* get_extension(char* fname)
 typedef struct tfl
 {
   int addr;
-  const char* file;
+  char* file;
   int lineno;
   struct tfl *next;
 } type_fileloc;
@@ -101,7 +101,7 @@ type_fileloc* cur_file_loc = NULL;
 
 type_symmap_entry* lstSymMap = NULL;
 
-type_offsets segmentOffsets = {{ 0 }};
+type_offsets segmentOffsets = { 0 };
 
 type_offsets* lstModuleOffsets = NULL;
 
@@ -386,6 +386,18 @@ bool delete_from_watchlist(int wnum)
   return false;
 }
 
+char* get_nth_token(char* p, int n)
+{
+  static char token[128];
+
+  for (int k = 0; k < n; k++)
+  {
+    p = get_string_token(p, token);
+    if (p == 0)
+      return NULL;
+  }
+}
+
 char* get_string_token(char* p, char* name)
 {
   int found_start = 0;
@@ -420,20 +432,6 @@ char* get_string_token(char* p, char* name)
       idx++;
     }
   }
-}
-
-char* get_nth_token(char* p, int n)
-{
-  static char token[128];
-
-  for (int k = 0; k < n; k++)
-  {
-    p = get_string_token(p, token);
-    if (p == 0)
-      return NULL;
-  }
-
-  return p;
 }
 
 bool starts_with(const char *str, const char *pre)
@@ -480,7 +478,7 @@ void parse_ca65_modules(FILE* f, char* line)
   int val;
   int state = 0;
   char *p;
-  type_offsets mo = {{ 0 }};
+  type_offsets mo = { 0 };
 
   while (!feof(f))
   {
@@ -645,34 +643,6 @@ void load_map(const char* fname)
   }
 }
 
-int get_segment_offset(type_offsets* segment_offsets, const char* current_segment)
-{
-  for (int k = 0; k < segment_offsets->seg_cnt; k++)
-  {
-    if (strcmp(current_segment, segment_offsets->segments[k].name) == 0)
-      return segment_offsets->segments[k].offset;
-  }
-  printf("Unable to find '%s' segment\n", current_segment);
-  return 0;
-}
-
-int get_module_offset(const char* current_module, const char* current_segment)
-{
-  type_offsets* iter = lstModuleOffsets;
-
-  while (iter != NULL)
-  {
-    if (strcmp(current_module, iter->modulename) == 0)
-    {
-      return get_segment_offset(iter, current_segment);
-    }
-    iter = iter->next;
-  }
-
-  printf("Unable to find '%s' module\n", current_module);
-  return 0;
-}
-
 void load_ca65_list(const char* fname, FILE* f)
 {
   load_map(fname); // load the ca65 map file first, as it contains details that will help us parse the list file
@@ -680,26 +650,15 @@ void load_ca65_list(const char* fname, FILE* f)
   char line[1024];
   char current_module[256] = { 0 };
   char current_segment[64] = { 0 };
-  int lineno = 0;
 
   while (!feof(f))
   {
-    lineno++;
     fgets(line, 1024, f);
 
     if (starts_with(line, "Current file:"))
     {
-      current_module[0] = '\0';
-      current_segment[0] = '\0';
-
       // Retrieve the current file/module that was assembled
       strcpy(current_module, strchr(line, ':') + 2);
-      char* p = strchr(current_module, '\n');
-      if (p)
-      {
-        *(p-1) = 'o'; // change from .s to .o
-        *p = '\0';
-      }
     }
 
     if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n')
@@ -717,9 +676,6 @@ void load_ca65_list(const char* fname, FILE* f)
     if (line[0] != ' ' && line[1] != ' ' && line[2] != ' ' && line[3] != ' ' && line[4] != ' ' & line[5] != ' '
         && line[6] == 'r' && line[7] == ' ' && line[8] != ' ')
     {
-      if (strlen(current_segment) == 0)
-        continue;
-
       char saddr[8];
       int addr;
       strncpy(saddr, line, 6);
@@ -727,16 +683,23 @@ void load_ca65_list(const char* fname, FILE* f)
       addr = strtol(saddr, NULL, 16);
 
       // convert relocatable address into absolute address
-      addr += get_segment_offset(&segmentOffsets, current_segment);
+      addr += get_segment_offset(current_segment);
       addr += get_module_offset(current_module, current_segment);
+    }
+
+      int addr;
+      char file[1024];
+      int lineno;
+      strcpy(file, &strtok(s, ":")[1]);
+      sscanf(strtok(NULL, ":"), "%d", &lineno);
+      sscanf(line, " %X", &addr);
 
       //printf("%04X : %s:%d\n", addr, file, lineno);
       type_fileloc fl;
       fl.addr = addr;
-      fl.file = fname;
+      fl.file = file;
       fl.lineno = lineno;
       add_to_list(fl);
-    }
   }
 }
 
