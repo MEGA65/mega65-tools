@@ -78,6 +78,7 @@ type_command_details command_details[] =
   { "back", cmdBackTrace, NULL, "produces a rough backtrace from the current contents of the stack" },
   { "up", cmdUpFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level up from the current frame" },
   { "down", cmdDownFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level down from the current frame" },
+  { "se", cmdSearch, "<addr28> <len> <values>", "Searches the range you specify for the given values (either a list of hex bytes or a \"string\""},
   { NULL, NULL, NULL, NULL }
 };
 
@@ -89,7 +90,7 @@ char* get_extension(char* fname)
 typedef struct tfl
 {
   int addr;
-  char* file;
+  const char* file;
   int lineno;
   struct tfl *next;
 } type_fileloc;
@@ -100,7 +101,7 @@ type_fileloc* cur_file_loc = NULL;
 
 type_symmap_entry* lstSymMap = NULL;
 
-type_offsets segmentOffsets = { 0 };
+type_offsets segmentOffsets = {{ 0 }};
 
 type_offsets* lstModuleOffsets = NULL;
 
@@ -385,18 +386,6 @@ bool delete_from_watchlist(int wnum)
   return false;
 }
 
-char* get_nth_token(char* p, int n)
-{
-  static char token[128];
-
-  for (int k = 0; k < n; k++)
-  {
-    p = get_string_token(p, token);
-    if (p == 0)
-      return NULL;
-  }
-}
-
 char* get_string_token(char* p, char* name)
 {
   int found_start = 0;
@@ -431,6 +420,20 @@ char* get_string_token(char* p, char* name)
       idx++;
     }
   }
+}
+
+char* get_nth_token(char* p, int n)
+{
+  static char token[128];
+
+  for (int k = 0; k < n; k++)
+  {
+    p = get_string_token(p, token);
+    if (p == 0)
+      return NULL;
+  }
+
+  return p;
 }
 
 bool starts_with(const char *str, const char *pre)
@@ -477,7 +480,7 @@ void parse_ca65_modules(FILE* f, char* line)
   int val;
   int state = 0;
   char *p;
-  type_offsets mo = { 0 };
+  type_offsets mo = {{ 0 }};
 
   while (!feof(f))
   {
@@ -642,6 +645,34 @@ void load_map(const char* fname)
   }
 }
 
+int get_segment_offset(type_offsets* segment_offsets, const char* current_segment)
+{
+  for (int k = 0; k < segment_offsets->seg_cnt; k++)
+  {
+    if (strcmp(current_segment, segment_offsets->segments[k].name) == 0)
+      return segment_offsets->segments[k].offset;
+  }
+  printf("Unable to find '%s' segment\n", current_segment);
+  return 0;
+}
+
+int get_module_offset(const char* current_module, const char* current_segment)
+{
+  type_offsets* iter = lstModuleOffsets;
+
+  while (iter != NULL)
+  {
+    if (strcmp(current_module, iter->modulename) == 0)
+    {
+      return get_segment_offset(iter, current_segment);
+    }
+    iter = iter->next;
+  }
+
+  printf("Unable to find '%s' module\n", current_module);
+  return 0;
+}
+
 void load_ca65_list(const char* fname, FILE* f)
 {
   load_map(fname); // load the ca65 map file first, as it contains details that will help us parse the list file
@@ -649,15 +680,26 @@ void load_ca65_list(const char* fname, FILE* f)
   char line[1024];
   char current_module[256] = { 0 };
   char current_segment[64] = { 0 };
+  int lineno = 0;
 
   while (!feof(f))
   {
+    lineno++;
     fgets(line, 1024, f);
 
     if (starts_with(line, "Current file:"))
     {
+      current_module[0] = '\0';
+      current_segment[0] = '\0';
+
       // Retrieve the current file/module that was assembled
       strcpy(current_module, strchr(line, ':') + 2);
+      char* p = strchr(current_module, '\n');
+      if (p)
+      {
+        *(p-1) = 'o'; // change from .s to .o
+        *p = '\0';
+      }
     }
 
     if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n')
@@ -675,6 +717,9 @@ void load_ca65_list(const char* fname, FILE* f)
     if (line[0] != ' ' && line[1] != ' ' && line[2] != ' ' && line[3] != ' ' && line[4] != ' ' & line[5] != ' '
         && line[6] == 'r' && line[7] == ' ' && line[8] != ' ')
     {
+      if (strlen(current_segment) == 0)
+        continue;
+
       char saddr[8];
       int addr;
       strncpy(saddr, line, 6);
@@ -682,23 +727,16 @@ void load_ca65_list(const char* fname, FILE* f)
       addr = strtol(saddr, NULL, 16);
 
       // convert relocatable address into absolute address
-      addr += get_segment_offset(current_segment);
+      addr += get_segment_offset(&segmentOffsets, current_segment);
       addr += get_module_offset(current_module, current_segment);
-    }
-
-      int addr;
-      char file[1024];
-      int lineno;
-      strcpy(file, &strtok(s, ":")[1]);
-      sscanf(strtok(NULL, ":"), "%d", &lineno);
-      sscanf(line, " %X", &addr);
 
       //printf("%04X : %s:%d\n", addr, file, lineno);
       type_fileloc fl;
       fl.addr = addr;
-      fl.file = file;
+      fl.file = fname;
       fl.lineno = lineno;
       add_to_list(fl);
+    }
   }
 }
 
@@ -2049,6 +2087,118 @@ void cmdDownFrame(void)
   if (autocls)
     cmdClearScreen();
   cmdDisassemble();
+}
+
+void search_range(int addr, int total, unsigned char *bytes, int length)
+{
+  int cnt = 0;
+  bool found_start = false;
+  int found_count = 0;
+  int start_loc = 0;
+  int results_cnt = 0;
+
+  printf("Searching for: ");
+  for (int k = 0; k < length; k++)
+  {
+    printf("%02X ", bytes[k]);
+  }
+  printf("\n");
+
+  while (cnt < total)
+  {
+    // get memory at current pc
+    mem_data mem = get_mem(addr + cnt, true);
+
+    for (int k = 0; k < 16; k++)
+    {
+      if (!found_start)
+      {
+        if (mem.b[k] == bytes[0])
+        {
+          found_start = true;
+          start_loc = mem.addr + k;
+          found_count++;
+        }
+      }
+      else // matched till the end?
+      {
+        if (mem.b[k] == bytes[found_count])
+        {
+          found_count++;
+          // we found a complete match?
+          if (found_count == length)
+          {
+            printf("%07X\n", start_loc);
+            found_start = false;
+            found_count = 0;
+            start_loc = 0;
+            results_cnt++;
+          }
+        }
+        else
+        {
+          found_start = false;
+          start_loc = 0;
+          found_count = 0;
+        }
+      }
+    }
+
+    cnt+=16;
+
+    if (ctrlcflag)
+      break;
+  }
+
+  if (results_cnt == 0)
+  {
+    printf("None found...\n");
+  }
+}
+
+void cmdSearch(void)
+{
+  char* strAddr = strtok(NULL, " ");
+  char bytevals[64] = { 0 };
+  int len = 0;
+
+  if (strAddr == NULL)
+  {
+    printf("Missing <addr28> parameter!\n");
+    return;
+  }
+
+  int addr = get_sym_value(strAddr);
+
+  int total = 16;
+  char* strTotal = strtok(NULL, " ");
+
+  if (strTotal != NULL)
+  {
+    sscanf(strTotal, "%X", &total);
+  }
+
+  char* strValues = strtok(NULL, " ");
+
+  // provided a string?
+  if (strValues[0] == '\"')
+  {
+    search_range(addr, total, (unsigned char*)&strValues[1], strlen(strValues)-2);
+  }
+  else
+  {
+    char *sval = strValues;
+    do
+    {
+      int ival;
+      sscanf(sval, "%X", &ival);
+      bytevals[len] = ival;
+      len++;
+    }
+    while ( (sval = strtok(NULL, " ")) != NULL);
+
+    search_range(addr, total, (unsigned char*)bytevals, len);
+  }
 }
 
 int cmdGetCmdCount(void)

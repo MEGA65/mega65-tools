@@ -37,6 +37,7 @@ void cmdLoad(void);
 void cmdBackTrace(void);
 void cmdUpFrame(void);
 void cmdDownFrame(void);
+void cmdSearch(void);
 int  cmdGetCmdCount(void);
 char* cmdGetCmdName(int idx);
 
