@@ -288,6 +288,7 @@ unsigned short energy;
 unsigned long energy_n;
 unsigned short sum;
 unsigned char mic_mean,first_null;
+unsigned char last_energy[256];
 
 void main(void)
 {
@@ -327,6 +328,8 @@ void main(void)
 
   print_text(0,0,1,"Ultrasound Test");
 
+  for(i=0;i<256;i++) last_energy[i]=199;
+  
   while(1) {
 
     snprintf(msg,64,"Freq = %5ld Hz, vol=$%02x",
@@ -410,7 +413,11 @@ void main(void)
     // (Intrinsicly subtracts raw samples)
     first_null=0;
     for(i=1;i<255;i++) {
-      if (sums[i]<sums[first_null]) first_null=i; else break;
+      if (sums[i]<sums[first_null]) {
+	sums[i]=0;
+	first_null=i;
+      }
+      else break;
     }
     
     for(i=1;i<255;i++) {
@@ -435,10 +442,19 @@ void main(void)
       c=(energy_n&0x7f)+1;
       c=199-c;
 
-      //      plot_pixel_direct(i,c,2);
+      if (i>=first_null) {
+	if (last_energy[i]==c) {
+	  // nothing to do
+	} else if (last_energy[i]<c)
+	  for(a=last_energy[i];a!=c;a++) plot_pixel_direct(i,a,0);
+	else if (c<last_energy[i]) 
+	  for(a=c;a!=last_energy[i];a++) plot_pixel_direct(i,a,2);
+	last_energy[i]=c;
+	plot_pixel_direct(i,c,2);
+      }
       
-      for(a=199;a!=c;a--) plot_pixel_direct(i,a,2);
-      for(;a;a--) plot_pixel_direct(i,a,0);
+      //       for(a=199;a!=c;a--) plot_pixel_direct(i,a,2);
+      //      for(;a;a--) plot_pixel_direct(i,a,0);
 
       //    }       
 
