@@ -287,7 +287,7 @@ unsigned short sums[256];
 unsigned short energy;
 unsigned long energy_n;
 unsigned short sum;
-unsigned char mic_mean;
+unsigned char mic_mean,first_null;
 
 void main(void)
 {
@@ -408,18 +408,28 @@ void main(void)
     
     // Now deal with harmonics
     // (Intrinsicly subtracts raw samples)
+    first_null=0;
     for(i=1;i<255;i++) {
-      //      if (sums[i]>sums[0]) sums[i]-=sums[0]; else sums[i]=0;
-
-      //      for(j=i*2;j<256;j+=i) {
-      //	if (sums[j]>sums[i]) sums[j]-=sums[i]; else sums[j]=0;
-      //      }      
+      if (sums[i]<sums[first_null]) first_null=i; else break;
+    }
+    
+    for(i=1;i<255;i++) {
+      if (sums[i]>sums[0]) sums[i]-=sums[0]; else sums[i]=0;
+    }
+    for(i=255;i>=1;i--) {
+      // Subtract energy due to harmonics
+      for(a=2;a<5;a++)
+	if ((i/a)>first_null) {
+	  if (sums[i]>sums[i/a]) sums[i]-=sums[i/a]; else sums[i]=0;
+	}
     }
 
     for(i=0;i<255;i++) {
 
       c=i;
-      energy_n=sums[c]>>8;
+      a=4;
+      energy_n=((sums[c-1]>>a)+(sums[c]>>a)+(sums[c+1]>>a))/3;
+      if (!i) energy_n=sums[0]>>a;
 
       //      energy_n=energy_n>>0;
       c=(energy_n&0x7f)+1;
