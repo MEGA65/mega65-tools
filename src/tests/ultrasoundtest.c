@@ -9,7 +9,7 @@
 
 char msg[64+1];
 
-unsigned short i;
+unsigned short i,j;
 unsigned char a,b,c,d;
 
 unsigned char sin_table[32]={
@@ -17,6 +17,12 @@ unsigned char sin_table[32]={
   //  128,79,38,10,0,10,38,79
   128,152,176,198,217,233,245,252,255,252,245,233,217,198,176,152,128,103,79,57,38,22,10,3,1,3,10,22,38,57,79,103
 };
+
+unsigned short abs2(signed short s)
+{
+  if (s>0) return s;
+  return -s;
+}
 
 void graphics_clear_screen(void)
 {
@@ -180,7 +186,7 @@ unsigned char buffer[512];
 
 unsigned long load_addr;
 
-unsigned char vol=0xFF;
+unsigned char vol=0x00;
 unsigned long frequency=20000;
 unsigned long new_freq=20000;
 unsigned long time_base=0x4000;
@@ -219,7 +225,7 @@ void play_sine(unsigned char ch,unsigned char vol)
   // Play sine wave for frequency matching
   // We use the hardware ROM sine table for this.
 
-#if 0
+#if 1
   POKE(0xD721+ch_ofs,0x00);
   POKE(0xD722+ch_ofs,0x00);
   POKE(0xD723+ch_ofs,0);
@@ -232,7 +238,8 @@ void play_sine(unsigned char ch,unsigned char vol)
   // Enable playback+looping of channel 0, 8-bit samples, signed, play ROM sine
   POKE(0xD720+ch_ofs,0xF0);
 #endif
-  
+
+#if 0
   POKE(0xD720+ch_ofs,0x00);
   POKE(0xD721+ch_ofs,((unsigned short)&sin_table)&0xff);
   POKE(0xD722+ch_ofs,((unsigned short)&sin_table)>>8);
@@ -244,7 +251,7 @@ void play_sine(unsigned char ch,unsigned char vol)
   POKE(0xD728+ch_ofs,((unsigned short)&sin_table+32)>>8);
   // Enable playback+looping of channel 0, 8-bit samples, signed, use soft table
   POKE(0xD720+ch_ofs,0xE0);
-
+#endif
   
   // Set volume
   POKE(0xD729+ch_ofs,vol);
@@ -257,7 +264,7 @@ void play_sine(unsigned char ch,unsigned char vol)
 
   // Set left channel to +0dB ($00 would be +24dB, but then we get lots of background noise)
   for(i=0;i<10000;i++) continue;
-  lpoke(0xffd7035,0xff); // 0x40);
+  lpoke(0xffd7035,0x40);
   for(i=0;i<10000;i++) continue;
   // Right channel is not used, so mute to avoid over-current
   lpoke(0xffd7036,0xFF); 
@@ -276,6 +283,11 @@ unsigned char last_samples[256];
 unsigned char samples[256];
 unsigned char last_mic_samples[256];
 unsigned char mic_samples[256];
+unsigned short sums[256];
+unsigned short energy;
+unsigned long energy_n;
+unsigned short sum;
+unsigned char mic_mean;
 
 void main(void)
 {
@@ -326,8 +338,8 @@ void main(void)
     // Read back digital audio channel
     POKE(0xD6F4,0x08);  
 
-    // a=0;
-    a=&sin_table;
+    a=0;
+    // a=&sin_table;
     
     if (frequency) {
       // Synchronise to start of wave
@@ -347,8 +359,8 @@ void main(void)
     // Read back MEMS microphone 2
     POKE(0xD6F4,0x0A+mic_num);  
 
-    // a=0;
-    a=&sin_table;
+    a=0;
+    // a=&sin_table;
     
     if (frequency) {
       // Synchronise to start of wave
@@ -358,19 +370,81 @@ void main(void)
     
     // Read a bunch of samples
     a=0;
+    sum=0;
     do {
       // XXX Read LSB of microphone, while testing
       mic_samples[a]=PEEK(0xD6FC);      
       a++;
     } while(a);    
+
+    a=0;
+    do {
+      sum+=mic_samples[a];
+    } while(++a);
+    mic_mean=sum>>8;
     
-    // Update oscilloscope
-    for(i=0;i<256;i++) {
+    // Calculate and show energy at each frequency    
+    for(i=0;i<255;i++) {
+      
+      // Sum deviation from mean
+      c=i;
+      a=0;
+      sums[c]=0;
+      do {
+	// Add to a neighbouring sample
+	if (c)
+	  d=mic_samples[a]+mic_samples[a+c];
+        else
+	  d=mic_samples[a];
+	// Calculate magnitude
+	if (d&0x80) d=0xff-d;
+	
+	sums[c]+=d;
+	
+	a++;
+      } while(a);
+
+    }
+    
+    // Now deal with harmonics
+    // (Intrinsicly subtracts raw samples)
+    for(i=1;i<255;i++) {
+      //      if (sums[i]>sums[0]) sums[i]-=sums[0]; else sums[i]=0;
+
+      //      for(j=i*2;j<256;j+=i) {
+      //	if (sums[j]>sums[i]) sums[j]-=sums[i]; else sums[j]=0;
+      //      }      
+    }
+
+    for(i=0;i<255;i++) {
+
+      c=i;
+      energy_n=sums[c]>>8;
+
+      //      energy_n=energy_n>>0;
+      c=(energy_n&0x7f)+1;
+      c=199-c;
+
+      //      plot_pixel_direct(i,c,2);
+      
+      for(a=199;a!=c;a--) plot_pixel_direct(i,a,2);
+      for(;a;a--) plot_pixel_direct(i,a,0);
+
+      //    }       
+
+         // Update oscilloscope
+      //for(i=0;i<256;i++) {
       b=last_samples[i]^0x80;
       b=b>>1;
       plot_pixel_direct(i,(200-129)+b,0);
 
+#define DELTA 0
+
+#if DELTA>0
+      b=(last_mic_samples[i]+last_mic_samples[i+DELTA])^0x80;
+#else
       b=last_mic_samples[i]^0x80;
+#endif
       b=b>>1;
       plot_pixel_direct(i,(200-129)+b,0);
 
@@ -378,7 +452,11 @@ void main(void)
       b=b>>1;
       plot_pixel_direct(i,(200-129)+b,1);
 
+#if DELTA>0
+      b=(mic_samples[i]+mic_samples[i+DELTA])^0x80;
+#else
       b=mic_samples[i]^0x80;
+#endif
       b=b>>1;
       plot_pixel_direct(i,(200-129)+b,7);
       
@@ -389,7 +467,7 @@ void main(void)
     // (or at least not big DMAs.)
     //    lcopy(samples,last_samples,256);
     //    activate_double_buffer();
-    
+
     if (PEEK(0xD610)) {
       if (PEEK(0xD610)>='0'&&PEEK(0xD610)<='9') {
 	new_freq=new_freq*10+(PEEK(0xD610)-'0');
