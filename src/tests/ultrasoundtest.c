@@ -9,6 +9,12 @@
 
 char msg[64+1];
 
+unsigned short pwr_sum=0;
+unsigned char pwr_samples=0;
+unsigned char pwr_period=32;
+unsigned char pwr_last[3];
+unsigned char pwr_count=0;
+
 unsigned short i,j;
 unsigned char a,b,c,d;
 
@@ -336,7 +342,14 @@ void main(void)
 	     frequency,vol);
     print_text(0,1,7,msg);
     snprintf(msg,64,"New Freq: %ld          ",new_freq);
-    print_text(0,2,12,msg);
+    print_text(0,2,15,msg);
+    snprintf(msg,64,"Avg power: %d (%d samples) @ period %d",pwr_samples?pwr_sum/pwr_samples:0,pwr_samples,
+	     pwr_period);
+    print_text(0,3,8,msg);
+    snprintf(msg,64,"    (%d, %d, %d)         ",pwr_last[0],pwr_last[1],pwr_last[3]);
+    print_text(0,4,
+	       pwr_count<3?12:7
+	       ,msg);
 
     // Read back digital audio channel
     POKE(0xD6F4,0x08);  
@@ -370,6 +383,9 @@ void main(void)
       while(PEEK(0xD72A)==a) continue;
       while(PEEK(0xD72A)!=a) continue;
     }
+
+    if (frequency<6200) pwr_period=255;
+    else pwr_period=(6200L*256)/frequency;
     
     // Read a bunch of samples
     a=0;
@@ -439,14 +455,31 @@ void main(void)
       if (!i) energy_n=sums[0]>>a;
 
       //      energy_n=energy_n>>0;
+
+      if (i==pwr_period) {
+	if (pwr_samples<63) {
+	  pwr_sum+=energy_n;
+	  pwr_samples++;
+	} else {
+	  pwr_last[2]=pwr_last[1];
+	  pwr_last[1]=pwr_last[0];
+	  pwr_last[0]=pwr_sum/pwr_samples;
+	  pwr_samples=0; pwr_sum=0;
+	  pwr_count++;
+	}
+	  
+      }
+
       c=(energy_n&0x7f)+1;
       c=199-c;
 
+      d=0; if (i==pwr_period) d=3;
+      
       if (i>=first_null) {
 	if (last_energy[i]==c) {
 	  // nothing to do
 	} else if (last_energy[i]<c)
-	  for(a=last_energy[i];a!=c;a++) plot_pixel_direct(i,a,0);
+	  for(a=last_energy[i];a!=c;a++) plot_pixel_direct(i,a,d);
 	else if (c<last_energy[i]) 
 	  for(a=c;a!=last_energy[i];a++) plot_pixel_direct(i,a,2);
 	last_energy[i]=c;
@@ -503,6 +536,11 @@ void main(void)
       case 0x0d: frequency=new_freq;
 	// RETURN = set frequency
 	new_freq=0;
+	pwr_sum=0; pwr_samples=0;
+	pwr_last[2]=255;
+	pwr_last[1]=255;
+	pwr_last[0]=255;
+	pwr_count=0;
 	break;
       case 0x4e: case 0x6e:
 	// N = next mic
