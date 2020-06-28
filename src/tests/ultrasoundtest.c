@@ -14,6 +14,8 @@ unsigned char pwr_samples=0;
 unsigned char pwr_period=32;
 unsigned char pwr_last[3];
 unsigned char pwr_count=0;
+unsigned char zero_count=0;
+unsigned char scanning=1;
 
 unsigned short i,j;
 unsigned char a,b,c,d;
@@ -192,9 +194,9 @@ unsigned char buffer[512];
 
 unsigned long load_addr;
 
-unsigned char vol=0x00;
-unsigned long frequency=20000;
-unsigned long new_freq=20000;
+unsigned char vol=0xff;
+unsigned long frequency=30000;
+unsigned long new_freq=30000;
 unsigned long time_base=0x4000;
 unsigned char mic_num=3;
 
@@ -346,7 +348,7 @@ void main(void)
     snprintf(msg,64,"Avg power: %d (%d samples) @ period %d",pwr_samples?pwr_sum/pwr_samples:0,pwr_samples,
 	     pwr_period);
     print_text(0,3,8,msg);
-    snprintf(msg,64,"    (%d, %d, %d)         ",pwr_last[0],pwr_last[1],pwr_last[3]);
+    snprintf(msg,64,"    (%d, %d, %d)         ",pwr_last[0],pwr_last[1],pwr_last[2]);
     print_text(0,4,
 	       pwr_count<3?12:7
 	       ,msg);
@@ -457,6 +459,27 @@ void main(void)
       //      energy_n=energy_n>>0;
 
       if (i==pwr_period) {
+
+	if (energy_n) {
+	  zero_count=0;
+	  scanning=0;
+	}
+	else {
+	  zero_count++;
+	  if (zero_count>4) {
+	    zero_count=0;
+	    if (scanning) {
+	      frequency=frequency+50;
+	      pwr_sum=0; pwr_samples=0;
+	      pwr_last[2]=255;
+	      pwr_last[1]=255;
+	      pwr_last[0]=255;
+	      pwr_count=0;
+	      play_sine(0,vol);
+	    }
+	  }
+	}      
+	
 	if (pwr_samples<63) {
 	  pwr_sum+=energy_n;
 	  pwr_samples++;
@@ -533,6 +556,12 @@ void main(void)
       }
       switch (PEEK(0xD610)) {
       case 0x14: new_freq/=10; break;
+      case 0x53: case 0x73:
+	scanning^=1;
+	break;
+      case 0x51: case 0x71:
+	new_freq=frequency+100;
+	// FALL THROUGH
       case 0x0d: frequency=new_freq;
 	// RETURN = set frequency
 	new_freq=0;
