@@ -143,22 +143,22 @@ char side;
 unsigned long sideDistX;
 unsigned long sideDistY;
 
-unsigned short deltaDistX, deltaDistY;
-unsigned long perpWallDist;
+short deltaDistX, deltaDistY;
+long perpWallDist;
 
 short lineHeight,drawStart,drawEnd;
 
 unsigned short mapX, mapY;
-unsigned long cameraX;
-unsigned long rayDirX;
-unsigned long rayDirY;
+long cameraX;
+long rayDirX;
+long rayDirY;
 
 unsigned char colour;
 
 unsigned short posX = 22*256, posY = 12*256;  //x and y start position
-signed short dirX = -1*256, dirY = 0; //initial direction vector
-unsigned short planeX = 0;
-unsigned short planeY = 169;  // (short)(256*0.66); //the 2d raycaster version of camera plane
+signed long dirX = -1*256, dirY = 0; //initial direction vector
+short planeX = 0;
+short planeY = 169;  // (short)(256*0.66); //the 2d raycaster version of camera plane
 
 int x;
 
@@ -184,16 +184,23 @@ void print_text(unsigned char x,unsigned char y,unsigned char colour,char *msg)
 }
 
 
+void show_notice(char *m)
+{
+  d++; d&=3;
+  print_text(0,d,7,m);
+#if 0
+  while(!PEEK(0xD610)) continue;
+  POKE(0xD610,0);
+#endif
+}
+
 unsigned short reciprocal_16(short v)
 {
   // Calculate reciprocal as fast as we can
 #if 0
   snprintf(msg,80+1,"reciprocal of $%04x(%d) = $%04lx(%ld)\n",
 	   v,v,65535/v,65535/v);
-  d++; d&=3;
-  print_text(0,d,7,msg);
-  while(!PEEK(0xD610)) continue;
-  POKE(0xD610,0);
+  show_notice(msg);
 #endif
   
   return 65535/v;
@@ -230,13 +237,17 @@ int main(int /*argc*/, char */*argv*/[])
     for(x = 0; x < screenWidth; x++)
     {
       //calculate ray position and direction
-      cameraX = 256 * 2 * x / screenWidth - 1; //x-coordinate in camera space
-      rayDirX = dirX + planeX * cameraX;
-      rayDirY = dirY + planeY * cameraX;
+      cameraX = 256 * 2 * x / screenWidth - 1*256; //x-coordinate in camera space
+      rayDirX = dirX + (planeX * cameraX)>>16;
+      rayDirY = dirY + (planeY * cameraX)>>16;
       //which box of the map we're in
       mapX = posX;
       mapY = posY;
 
+      snprintf(msg,80+1,"rayDirX=%ld + %d * %ld = $%08lx, cameraX=$%08lx, rayDirY=%ld.\n",
+	       dirX,planeX,cameraX,rayDirX,cameraX,rayDirY);
+      show_notice(msg);
+      
        //length of ray from one x or y-side to next x or y-side
       //      double deltaDistX = std::abs(1 / rayDirX);
       //      double deltaDistY = std::abs(1 / rayDirY);
@@ -272,8 +283,7 @@ int main(int /*argc*/, char */*argv*/[])
       //perform DDA
       snprintf(msg,80+1,"sideDistX=$%04x, sideDistY=$%04x, stepX=$%x, stepY=$%x.",
 	       sideDistX,sideDistY,stepX,stepY);
-      d++; d&=3;
-      print_text(0,d,7,msg);
+      show_notice(msg);
       while (hit == 0)
       {
         //jump to next map square, OR in x-direction, OR in y-direction
@@ -293,10 +303,7 @@ int main(int /*argc*/, char */*argv*/[])
         if(worldMap[mapX>>8][mapY>>8] > 0) hit = 1;
 	snprintf(msg,80+1,"mapX=$%04x, mapY=$%04x, stepX=$%02x, stepY=$%02x, hit=%d",
 		 mapX,mapY,stepX,stepY,hit);	
-	d++; d&=3;
-	print_text(0,d,7,msg);
-	while(!PEEK(0xD610)) continue;
-	POKE(0xD610,0);
+	show_notice(msg);
       }
       //Calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
       if(side == 0) perpWallDist = 256*(mapX - posX + (1 - stepX)*128) / rayDirX;
