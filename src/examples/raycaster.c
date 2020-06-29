@@ -70,8 +70,8 @@ void graphics_mode(void)
   i=0x40000/0x40;
   for(a=0;a<80;a++)
     for(b=0;b<25;b++) {
-      POKE(0xC000+b*80+a*2+0,i&0xff);
-      POKE(0xC000+b*80+a*2+1,i>>8);
+      POKE(0xC000+b*160+a*2+0,i&0xff);
+      POKE(0xC000+b*160+a*2+1,i>>8);
 
       i++;
     }
@@ -85,9 +85,9 @@ void graphics_mode(void)
 
 unsigned long pixel_addr;
 unsigned char pixel_temp;
-void plot_pixel(unsigned short x,unsigned char y,unsigned char colour)
+void plot_pixel(unsigned long x,unsigned char y,unsigned char colour)
 {
-  pixel_addr=((x&0xf)>>1)+64L*25*(x>>4);
+  pixel_addr=((x&0xf)>>1)+64L*25L*(x>>4);
   pixel_addr+=y<<3;
 
   lpoke(0x40000L+pixel_addr,colour);
@@ -164,14 +164,40 @@ int x;
 
 unsigned long temp;
 
+char msg[80+1];
+
+unsigned char char_code;
+void print_text(unsigned char x,unsigned char y,unsigned char colour,char *msg)
+{
+  pixel_addr=0xC000+x*2+y*160;
+  while(*msg) {
+    char_code=*msg;
+    if (*msg>=0xc0&&*msg<=0xe0) char_code=*msg-0x80;
+    if (*msg>=0x40&&*msg<=0x60) char_code=*msg-0x40;
+    POKE(pixel_addr+0,char_code);
+    POKE(pixel_addr+1,0);
+    lpoke(0xff80000-0xc000+pixel_addr+0,0x00);
+    lpoke(0xff80000-0xc000+pixel_addr+1,colour);
+    msg++;
+    pixel_addr+=2;
+  }
+}
+
+
 unsigned short reciprocal_16(unsigned short v)
 {
   // Calculate reciprocal as fast as we can
   return 65536/v;
 }
 
+unsigned short yy;
 void vertical_line(unsigned short x,unsigned short start, unsigned short end,unsigned char colour)
 {
+  plot_pixel(x,0,2);
+  for(yy=0;yy<start;yy++) plot_pixel(x,yy,0);
+  for(;yy<end;yy++) plot_pixel(x,yy,colour);
+  for(;yy<screenHeight;yy++) plot_pixel(x,yy,0);
+  plot_pixel(x,0,1);
 }
 
 int main(int /*argc*/, char */*argv*/[])
@@ -212,28 +238,29 @@ int main(int /*argc*/, char */*argv*/[])
       //calculate step and initial sideDist
       if(rayDirX < 0)
       {
-        stepX = -1*256;
+        stepX = -1;
         sideDistX = (posX - mapX) * deltaDistX;
 	sideDistX = sideDistX >> 16;
       }
       else
       {
-        stepX = 1*256;
+        stepX = 1;
         sideDistX = (mapX + 1*256 - posX) * deltaDistX;
 	sideDistX = sideDistX >> 16;
       }
       if(rayDirY < 0)
       {
-        stepY = -1*256;
+        stepY = -1;
         sideDistY = (posY - mapY) * deltaDistY;
 	sideDistY = sideDistY >> 16;
       }
       else
       {
-        stepY = 1*256;
+        stepY = 1;
         sideDistY = (mapY + 1*256 - posY) * deltaDistY;
 	sideDistY = sideDistY >> 16;
       }
+#if 1
       //perform DDA
       while (hit == 0)
       {
@@ -241,25 +268,32 @@ int main(int /*argc*/, char */*argv*/[])
         if(sideDistX < sideDistY)
         {
           sideDistX += deltaDistX;
-          mapX += stepX;
+          mapX += stepX*256;
           side = 0;
         }
         else
         {
           sideDistY += deltaDistY;
-          mapY += stepY;
+          mapY += stepY*256;
           side = 1;
         }
         //Check if ray has hit a wall
         if(worldMap[mapX>>8][mapY>>8] > 0) hit = 1;
+	snprintf(msg,80+1,"mapX=$%04x, mapY=$%04x, stepX=$%02x, stepY=$%02x",
+		 mapX,mapY,stepX,stepY);
+	d++; d&=3;
+	print_text(0,d,7,msg);
       }
+#endif
       //Calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
-      if(side == 0) perpWallDist = 256*(mapX - posX + (1 - stepX) / 2) / rayDirX;
-      else          perpWallDist = 256*(mapY - posY + (1 - stepY) / 2) / rayDirY;
+      if(side == 0) perpWallDist = 256*(mapX - posX + (1 - stepX)*128) / rayDirX;
+      else          perpWallDist = 256*(mapY - posY + (1 - stepY)*128) / rayDirY;
 
       //Calculate height of line to draw on screen
       lineHeight = (int)(screenHeight / perpWallDist);
 
+      if (lineHeight<10) lineHeight=10;
+      
       //calculate lowest and highest pixel to fill in current stripe
       drawStart = -lineHeight / 2 + screenHeight / 2;
       if(drawStart < 0) drawStart = 0;
@@ -270,8 +304,8 @@ int main(int /*argc*/, char */*argv*/[])
       colour = worldMap[mapX>>8][mapY>>8];
 
       //give x and y sides different brightness
-      if(side == 1) {colour = colour << 1;}
-
+      if(side == 1) {colour = colour << 1;}      
+      
       //draw the pixels of the stripe as a vertical line
       vertical_line(x, drawStart, drawEnd, colour);
     }
