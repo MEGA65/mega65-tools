@@ -425,6 +425,8 @@ void play_sample(unsigned char channel,
 
   // Volume
   POKE(0xD729+ch_ofs,instrument_vol[instrument]>>1);
+  // Mirror channel quietly on other side for nicer stereo imaging
+  POKE(0xD71C+channel,instrument_vol[instrument]>>3);
   
   // XXX - We should set base addr and top addr to the looping range, if the
   // sample has one.
@@ -492,10 +494,10 @@ void play_sample(unsigned char channel,
   
   if (instrument_loopstart[instrument]) {
   // Enable playback+ nolooping of channel 0, 8-bit, no unsigned samples
-  POKE(0xD720+ch_ofs,0xC0);
+  POKE(0xD720+ch_ofs,0xC2);
   } else {
     // Enable playback+ nolooping of channel 0, 8-bit, no unsigned samples
-    POKE(0xD720+ch_ofs,0x80);
+    POKE(0xD720+ch_ofs,0x82);
   }
 
   switch (effect&0xf00)
@@ -570,7 +572,7 @@ void play_sine(unsigned char ch, unsigned long time_base)
   // 1/4 Full volume
   POKE(0xD729+ch_ofs,0x3F);
   // Enable playback+looping of channel 0, 8-bit samples, signed
-  POKE(0xD720+ch_ofs,0xE0);
+  POKE(0xD720+ch_ofs,0xE2);
   // Enable audio dma
   POKE(0xD711+ch_ofs,0x80);
 
