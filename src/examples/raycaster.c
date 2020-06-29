@@ -184,10 +184,19 @@ void print_text(unsigned char x,unsigned char y,unsigned char colour,char *msg)
 }
 
 
-unsigned short reciprocal_16(unsigned short v)
+unsigned short reciprocal_16(short v)
 {
   // Calculate reciprocal as fast as we can
-  return 65536/v;
+#if 0
+  snprintf(msg,80+1,"reciprocal of $%04x(%d) = $%04lx(%ld)\n",
+	   v,v,65535/v,65535/v);
+  d++; d&=3;
+  print_text(0,d,7,msg);
+  while(!PEEK(0xD610)) continue;
+  POKE(0xD610,0);
+#endif
+  
+  return 65535/v;
 }
 
 unsigned short yy;
@@ -260,8 +269,11 @@ int main(int /*argc*/, char */*argv*/[])
         sideDistY = (mapY + 1*256 - posY) * deltaDistY;
 	sideDistY = sideDistY >> 16;
       }
-#if 1
       //perform DDA
+      snprintf(msg,80+1,"sideDistX=$%04x, sideDistY=$%04x, stepX=$%x, stepY=$%x.",
+	       sideDistX,sideDistY,stepX,stepY);
+      d++; d&=3;
+      print_text(0,d,7,msg);
       while (hit == 0)
       {
         //jump to next map square, OR in x-direction, OR in y-direction
@@ -279,12 +291,13 @@ int main(int /*argc*/, char */*argv*/[])
         }
         //Check if ray has hit a wall
         if(worldMap[mapX>>8][mapY>>8] > 0) hit = 1;
-	snprintf(msg,80+1,"mapX=$%04x, mapY=$%04x, stepX=$%02x, stepY=$%02x",
-		 mapX,mapY,stepX,stepY);
+	snprintf(msg,80+1,"mapX=$%04x, mapY=$%04x, stepX=$%02x, stepY=$%02x, hit=%d",
+		 mapX,mapY,stepX,stepY,hit);	
 	d++; d&=3;
 	print_text(0,d,7,msg);
+	while(!PEEK(0xD610)) continue;
+	POKE(0xD610,0);
       }
-#endif
       //Calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
       if(side == 0) perpWallDist = 256*(mapX - posX + (1 - stepX)*128) / rayDirX;
       else          perpWallDist = 256*(mapY - posY + (1 - stepY)*128) / rayDirY;
