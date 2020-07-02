@@ -107,8 +107,9 @@ int set_pixel(int x,int y,int r,int g, int b)
 {
   if (y<min_y||y>max_y) return 0;
   if (y<0||y>(is_pal_mode?575:479)) {
-    fprintf(stderr,"ERROR: Impossible y value %d\n",y);
-    exit(-1);
+    //    fprintf(stderr,"ERROR: Impossible y value %d\n",y);
+    //    exit(-1);
+    return 1;
   }
   if (x<0||x>719) {
     fprintf(stderr,"ERROR: Impossible x value %d\n",x);
@@ -834,7 +835,7 @@ int do_screen_shot(void)
     
   } else {
     printf("Video mode does not use raster splits. Drawing normally.\n");
-    min_y=0; max_y=576;
+    min_y=0; max_y=is_pal_mode?576:480;
     paint_screen_shot();
   }
 
