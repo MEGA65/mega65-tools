@@ -18,6 +18,8 @@ KICKASS_JAR = KickAss/KickAss.jar
 
 VIVADO=	./vivado_wrapper
 
+ACME=	/usr/local/bin/acme
+
 CC65=  cc65/bin/cc65
 CA65=  cc65/bin/ca65 --cpu 4510
 LD65=  cc65/bin/ld65 -t none
@@ -174,6 +176,9 @@ $(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(CC65)
 	git submodule init
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
+$(UTILDIR)/c65toc64wrapper.prg:	$(UTILDIR)/c65toc64wrapper.asm $(ACME)
+	$(ACME) --setpc 0x2001 --cpu m65 --format cbm --outfile $(UTILDIR)/c65toc64wrapper.prg $(UTILDIR)/c65toc64wrapper.asm
 
 $(UTILDIR)/fastload.prg:       $(UTILDIR)/fastload.c $(CC65)
 	git submodule init
