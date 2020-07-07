@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
@@ -56,6 +57,9 @@ static const int B4000000 = 4000000;
 time_t start_time=0;
 long long start_usec=0;
 
+int fd=-1;
+int cpu_stopped=0;
+
 int open_file_system(void);
 int download_slot(int sllot,char *dest_name);
 int download_file(char *dest_name,char *local_name,int showClusters);
@@ -65,6 +69,10 @@ int upload_file(char *name,char *dest_name);
 int sdhc_check(void);
 int read_sector(const unsigned int sector_number,unsigned char *buffer, int noCacheP);
 int load_helper(void);
+int stuff_keybuffer(char *s);
+int get_pc(void);
+unsigned char mega65_peek(unsigned int addr);
+int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer);
 
 
 // Helper routine for faster sector writing
@@ -84,6 +92,8 @@ int halt=0;
 // 0 = old hard coded monitor, 1= Kenneth's 65C02 based fancy monitor
 int new_monitor=0;
 
+int saw_c64_mode=0;
+int saw_c65_mode=0;
 
 int first_load=1;
 int first_go64=1;
@@ -126,6 +136,252 @@ unsigned char mbr[512];
 unsigned char fat_mbr[512];
 unsigned char syspart_sector0[512];
 unsigned char syspart_configsector[512];
+
+#ifdef WINDOWS
+#include <windows.h>
+#undef SLOW_FACTOR
+#define SLOW_FACTOR 1
+#define SLOW_FACTOR2 1
+// #define do_usleep usleep
+void do_usleep(__int64 usec) 
+{ 
+    HANDLE timer; 
+    LARGE_INTEGER ft; 
+
+    ft.QuadPart = -(10*usec); // Convert to 100 nanosecond interval, negative value indicates relative time
+
+    timer = CreateWaitableTimer(NULL, TRUE, NULL); 
+    SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0); 
+    WaitForSingleObject(timer, INFINITE); 
+    CloseHandle(timer); 
+}
+
+#else
+#include <termios.h>
+#define do_usleep usleep
+#endif
+
+void timestamp_msg(char *msg)
+{
+  if (!start_time) start_time=time(0);
+#ifdef WINDOWS
+  fprintf(stderr,"[T+%I64dsec] %s",(long long)time(0)-start_time,msg);
+#else
+  fprintf(stderr,"[T+%lldsec] %s",(long long)time(0)-start_time,msg);
+#endif
+  
+  return;
+}
+
+#ifdef WINDOWS
+
+void print_error(const char * context)
+{
+  DWORD error_code = GetLastError();
+  char buffer[256];
+  DWORD size = FormatMessageA(
+			      FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+			      NULL, error_code, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+			      buffer, sizeof(buffer), NULL);
+  if (size == 0) { buffer[0] = 0; }
+  fprintf(stderr, "%s: %s\n", context, buffer);
+}
+ 
+
+// Opens the specified serial port, configures its timeouts, and sets its
+// baud rate.  Returns a handle on success, or INVALID_HANDLE_VALUE on failure.
+HANDLE open_serial_port(const char * device, uint32_t baud_rate)
+{
+  HANDLE port = CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+			    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (port == INVALID_HANDLE_VALUE)
+    {
+      print_error(device);
+      return INVALID_HANDLE_VALUE;
+    }
+ 
+  // Flush away any bytes previously read or written.
+  BOOL success = FlushFileBuffers(port);
+  if (!success)
+    {
+      print_error("Failed to flush serial port");
+      CloseHandle(port);
+      return INVALID_HANDLE_VALUE;
+    }
+ 
+  // Configure read and write operations to time out after 1 ms and 100 ms, respectively.
+  COMMTIMEOUTS timeouts = { 0 };
+  timeouts.ReadIntervalTimeout = 0;
+  timeouts.ReadTotalTimeoutConstant = 1;
+  timeouts.ReadTotalTimeoutMultiplier = 0;
+  timeouts.WriteTotalTimeoutConstant = 100;
+  timeouts.WriteTotalTimeoutMultiplier = 0;
+ 
+  success = SetCommTimeouts(port, &timeouts);
+  if (!success)
+    {
+      print_error("Failed to set serial timeouts");
+      CloseHandle(port);
+      return INVALID_HANDLE_VALUE;
+    }
+ 
+  DCB state;
+  state.DCBlength = sizeof(DCB);
+  success = GetCommState(port, &state);
+  if (!success)
+    {
+      print_error("Failed to get serial settings");
+      CloseHandle(port);
+      return INVALID_HANDLE_VALUE;
+    }
+
+  state.fBinary = TRUE;
+  state.fDtrControl = DTR_CONTROL_ENABLE;
+  state.fDsrSensitivity = FALSE;
+  state.fTXContinueOnXoff = FALSE;
+  state.fOutX = FALSE;
+  state.fInX = FALSE;
+  state.fErrorChar = FALSE;
+  state.fNull = FALSE;
+  state.fRtsControl = RTS_CONTROL_ENABLE;
+  state.fAbortOnError = FALSE;
+  state.fOutxCtsFlow = FALSE;
+  state.fOutxDsrFlow = FALSE;
+  state.ByteSize = 8;
+  state.StopBits = ONESTOPBIT;
+  state.Parity = NOPARITY;
+ 
+  state.BaudRate = baud_rate;
+ 
+  success = SetCommState(port, &state);
+  if (!success)
+    {
+      print_error("Failed to set serial settings");
+      CloseHandle(port);
+      return INVALID_HANDLE_VALUE;
+    }
+ 
+  return port;
+}
+
+// Writes bytes to the serial port, returning 0 on success and -1 on failure.
+int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
+{
+  DWORD offset=0;
+  DWORD written;
+  BOOL success;
+  //  printf("Calling WriteFile(%d)\n",size);
+
+  while(offset<size) {  
+    success = WriteFile(port, &buffer[offset], size - offset, &written, NULL);
+    //  printf("  WriteFile() returned.\n");
+    if (!success)
+      {
+	print_error("Failed to write to port");
+	return -1;
+      }
+    if (written>0) offset+=written;
+    if (offset<size) {
+      // Assume buffer is full, so wait a little while
+      usleep(1000);
+    }
+  }
+  success = FlushFileBuffers(port);
+  if (!success) print_error("Failed to flush buffers"); 
+  return size;
+}
+ 
+// Reads bytes from the serial port.
+// Returns after all the desired bytes have been read, or if there is a
+// timeout or other error.
+// Returns the number of bytes successfully read into the buffer, or -1 if
+// there was an error reading.
+SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
+{
+  DWORD received=0;
+  //  printf("Calling ReadFile(%I64d)\n",size);
+  BOOL success = ReadFile(port, buffer, size, &received, NULL);
+  if (!success)
+    {
+      print_error("Failed to read from port");
+      return -1;
+    }
+  //  printf("  ReadFile() returned. Received %ld bytes\n",received);
+  return received;
+}
+
+#else
+int serialport_write(int fd, uint8_t * buffer, size_t size)
+{
+#ifdef __APPLE__
+  return write(fd,buffer,size);
+#else
+  size_t offset=0;
+  while(offset<size) {
+    int written=write(fd,&buffer[offset],size-offset);
+    if (written>0) offset+=written;
+    if (offset<size) { usleep(1000);
+      //      printf("Wrote %d bytes\n",written);
+    }
+  }
+#endif
+}
+
+size_t serialport_read(int fd, uint8_t * buffer, size_t size)
+{
+  return read(fd,buffer,size);
+}
+
+void set_serial_speed(int fd,int serial_speed)
+{
+  fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
+  struct termios t;
+
+  if (fd<0) {
+    fprintf(stderr,"WARNING: serial port file descriptor is -1\n");    
+  }
+  
+#ifdef __APPLE__
+  speed_t speed = serial_speed;
+  fprintf(stderr,"Setting serial speed to %d bps using OSX method.\n",speed); 
+  if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
+    perror("Failed to set output baud rate using IOSSIOSPEED");
+  }
+  if (tcgetattr(fd, &t)) perror("Failed to get terminal parameters");
+  cfmakeraw(&t);
+  if (tcsetattr(fd, TCSANOW, &t)) perror("Failed to set OSX terminal parameters");  
+#else  
+  if (serial_speed==230400) {
+    if (cfsetospeed(&t, B230400)) perror("Failed to set output baud rate");
+    if (cfsetispeed(&t, B230400)) perror("Failed to set input baud rate");
+  } else if (serial_speed==2000000) {
+    if (cfsetospeed(&t, B2000000)) perror("Failed to set output baud rate");
+    if (cfsetispeed(&t, B2000000)) perror("Failed to set input baud rate");
+  } else if (serial_speed==1000000) {
+    if (cfsetospeed(&t, B1000000)) perror("Failed to set output baud rate");
+    if (cfsetispeed(&t, B1000000)) perror("Failed to set input baud rate");
+  } else if (serial_speed==1500000) {
+    if (cfsetospeed(&t, B1500000)) perror("Failed to set output baud rate");
+    if (cfsetispeed(&t, B1500000)) perror("Failed to set input baud rate");
+  } else {
+    if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
+    if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
+  }
+
+  t.c_cflag &= ~PARENB;
+  t.c_cflag &= ~CSTOPB;
+  t.c_cflag &= ~CSIZE;
+  t.c_cflag &= ~CRTSCTS;
+  t.c_cflag |= CS8 | CLOCAL;
+  t.c_lflag &= ~(ICANON | ISIG | IEXTEN | ECHO | ECHOE);
+  t.c_iflag &= ~(BRKINT | ICRNL | IGNBRK | IGNCR | INLCR |
+                 INPCK | ISTRIP | IXON | IXOFF | IXANY | PARMRK);
+  t.c_oflag &= ~OPOST;
+  if (tcsetattr(fd, TCSANOW, &t)) perror("Failed to set terminal parameters");
+#endif
+  
+}
+#endif
 
 // From os.c in serval-dna
 long long gettime_us()
@@ -172,6 +428,104 @@ void usage(void)
   exit(-3);
 }
 
+int monitor_sync(void)
+{
+  /* Synchronise with the monitor interface.
+     Send #<token> until we see the token returned to us.
+  */
+
+  unsigned char read_buff[8192];
+  
+  // Begin by sending a null command and purging input
+  char cmd[8192];
+  cmd[0]=0x15; // ^U
+  cmd[1]='#'; // prevent instruction stepping
+  cmd[2]=0x0d; // Carriage return
+  do_usleep(20000); // Give plenty of time for things to settle
+  slow_write_safe(fd,cmd,3);
+  //  printf("Wrote empty command.\n");
+  do_usleep(20000); // Give plenty of time for things to settle
+  int b=1;
+  // Purge input  
+  //  printf("Purging input.\n");
+  while(b>0) {
+    b=serialport_read(fd,read_buff,8192);
+    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
+  }
+
+  for(int tries=0;tries<10;tries++) {
+#ifdef WINDOWS
+    snprintf(cmd,1024,"#%08x\r",rand());
+#else
+    snprintf(cmd,1024,"#%08lx\r",random());
+#endif
+    //    printf("Writing token: '%s'\n",cmd);
+    slow_write_safe(fd,cmd,strlen(cmd));
+
+    for(int i=0;i<10;i++) {
+      usleep(10000);
+      b=serialport_read(fd,read_buff,8192);
+      if (b<0) b=0;
+      if (b>8191) b=8191;
+      read_buff[b]=0;
+      //      if (b>0) dump_bytes(2,"Sync input",read_buff,b);
+      
+      //      if (b>0) dump_bytes(0,"read_data",read_buff,b);
+      if (strstr((char *)read_buff,cmd)) {
+	//	printf("Found token. Synchronised with monitor.\n");
+	return 0;      
+      }
+    }
+    usleep(10000);
+  }
+  printf("Failed to synchronise with the monitor.\n");
+  return 1;
+}
+
+int get_pc(void)
+{
+  /*
+    Get current programme counter value of CPU
+  */
+  slow_write_safe(fd,"r\r",2);
+  do_usleep(50000);
+  unsigned char buff[8192];
+  int b=serialport_read(fd,buff,8192);
+  if (b<0) b=0;
+  if (b>8191) b=8191;
+  buff[b]=0;
+  //  if (b>0) dump_bytes(2,"PC read input",buff,b);
+  char *s=strstr((char *)buff,"\n,");
+  if (s) return strtoll(&s[6],NULL,16);
+  else return -1;
+}
+
+
+int stuff_keybuffer(char *s)
+{
+  int buffer_addr=0x277;
+  int buffer_len_addr=0xc6;
+
+  if (saw_c65_mode) {
+    buffer_addr=0x2b0;
+    buffer_len_addr=0xd0;
+  }
+
+  timestamp_msg("Injecting string into key buffer at ");
+  fprintf(stderr,"$%04X : ",buffer_addr);
+  for(int i=0;s[i];i++) {
+    if (s[i]>=' '&&s[i]<0x7c) fprintf(stderr,"%c",s[i]); else fprintf(stderr,"[$%02x]",s[i]);    
+  }
+  fprintf(stderr,"\n");
+  
+  char cmd[1024];
+  snprintf(cmd,1024,"s%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\rs%x %d\r",
+	   buffer_addr,s[0],s[1],s[2],s[3],s[4],s[5],s[6],s[7],s[8],s[9],
+	   buffer_len_addr,(int)strlen(s));
+  return slow_write(fd,cmd,strlen(cmd),0);
+}
+
+
 int slow_write(int fd,char *d,int l,int preWait)
 {
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
@@ -193,7 +547,35 @@ int slow_write(int fd,char *d,int l,int preWait)
   return 0;
 }
 
-int fd=-1;
+unsigned char mega65_peek(unsigned int addr)
+{
+  unsigned char b;
+  fetch_ram(addr,1,&b);
+  return b;
+}
+
+int slow_write_safe(int fd,char *d,int l)
+{
+  // There is a bug at the time of writing that causes problems
+  // with the CPU's correct operation if various monitor commands
+  // are run when the CPU is running.
+  // Stopping the CPU before and then resuming it after running a
+  // command solves the problem.
+  // The only problem then is if we have a breakpoint set (like when
+  // getting ready to load a program), because we might accidentally
+  // resume the CPU when it should be stopping.
+  // (We can work around this by using the fact that the new UART
+  // monitor tells us when a breakpoint has been reached.
+  if (!cpu_stopped)
+    slow_write(fd,"t1\r",3,0);
+  slow_write(fd,d,l,0);
+  if (!cpu_stopped) {
+    //    printf("Resuming CPU after writing string\n");
+    slow_write(fd,"t0\r",3,0);
+  }
+  return 0;
+}
+
 
 #define READ_SECTOR_BUFFER_ADDRESS 0xFFD6e00
 #define WRITE_SECTOR_BUFFER_ADDRESS 0xFFD6e00
@@ -636,13 +1018,228 @@ int sdhc_check(void)
   return sdhc;
 }
 
+int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
+{
+  /* Fetch a block of RAM into the provided buffer.
+     This greatly simplifies many tasks.
+  */
+
+  unsigned long addr=address;
+  unsigned long end_addr;
+  char cmd[8192];
+  unsigned char read_buff[8192];
+  char next_addr_str[8192];
+  int ofs=0;
+
+  //  fprintf(stderr,"Fetching $%x bytes @ $%x\n",count,address);
+  
+  //  monitor_sync();
+  while(addr<(address+count)) {
+    if ((address+count-addr)<17) {
+      snprintf(cmd,8192,"m%X\r",(unsigned int)addr);
+      end_addr=addr+0x10;
+    } else {
+      snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
+      end_addr=addr+0x100;
+    }
+    //    printf("Sending '%s'\n",cmd);
+    slow_write_safe(fd,cmd,strlen(cmd));
+    while(addr!=end_addr) {
+      snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
+      int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
+      if (b<0) b=0;
+      if ((ofs+b)>8191) b=8191-ofs;
+      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
+      read_buff[ofs+b]=0;
+      ofs+=b;
+      char *s=strstr((char *)read_buff,next_addr_str);
+      if (s&&(strlen(s)>=42)) {
+	char b=s[42]; s[42]=0;
+	if (0) {
+	  printf("Found data for $%08x:\n%s\n",
+		 (unsigned int)addr,
+		 s);
+	} 
+	s[42]=b;
+	for(int i=0;i<16;i++) {
+
+	  // Don't write more bytes than requested
+	  if ((addr-address+i)>=count) break;
+	  
+	  char hex[3];
+	  hex[0]=s[1+10+i*2+0];
+	  hex[1]=s[1+10+i*2+1];
+	  hex[2]=0;
+	  buffer[addr-address+i]=strtol(hex,NULL,16);
+	}
+	addr+=16;
+
+	// Shuffle buffer down
+	int s_offset=(long long)s-(long long)read_buff+42;
+	bcopy(&read_buff[s_offset],&read_buff[0],8192-(ofs-s_offset));
+	ofs-=s_offset;
+      }
+    }
+  }
+  if (addr>=(address+count)) {
+    //    fprintf(stderr,"Memory read complete at $%lx\n",addr);
+    return 0;
+  }
+  else {
+    fprintf(stderr,"ERROR: Could not read requested memory region.\n");
+    exit(-1);
+    return 1;
+  }
+}
+
+unsigned char ram_cache[512*1024+255];
+unsigned char ram_cache_valids[512*1024+255];
+int ram_cache_initialised=0;
+
+int fetch_ram_invalidate(void)
+{
+  ram_cache_initialised=0;
+  return 0;
+}
+
+int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *buffer)
+{
+  if (!ram_cache_initialised) {
+    ram_cache_initialised=1;
+    bzero(ram_cache_valids,512*1024);
+    bzero(ram_cache,512*1024);
+  }
+  if ((address+count)>=(512*1024)) {
+    return fetch_ram(address,count,buffer);
+  }
+
+  // See if we need to fetch it fresh
+  for(int i=0;i<count;i++) {
+    if (!ram_cache_valids[address+i]) {
+      // Cache not valid here -- so read some data
+      printf("."); fflush(stdout);
+      //      printf("Fetching $%08x for cache.\n",address);
+      fetch_ram(address,256,&ram_cache[address]);
+      for(int j=0;j<256;j++) ram_cache_valids[address+j]=1;
+
+      bcopy(&ram_cache[address],buffer,count);
+      return 0;
+    }
+  }
+
+  // It's valid in the cache
+  bcopy(&ram_cache[address],buffer,count);
+  return 0;
+  
+}
+
+
+int detect_mode(void)
+{
+  /*
+    Set saw_c64_mode or saw_c65_mode according to what we can discover. 
+    We can look at the C64/C65 charset bit in $D030 for a good clue.
+    But we also really want to know that the CPU is in the keyboard 
+    input loop for either of the modes, if possible. OpenROMs being
+    under development makes this tricky.
+  */
+  saw_c65_mode=0;
+  saw_c64_mode=0;
+  
+  unsigned char mem_buff[8192];
+  fetch_ram(0xffd3030,1,mem_buff);
+  while(mem_buff[0]&0x01) {
+    fprintf(stderr,"Waiting for MEGA65 KERNAL/OS to settle...\n");
+    do_usleep(200000);
+    fetch_ram(0xffd3030,1,mem_buff);    
+  }
+
+  // Wait for HYPPO to exit
+  int d054=mega65_peek(0xffd3054);
+  while(d054&7) {
+    do_usleep(50000);
+    d054=mega65_peek(0xffd3054);
+  }
+  
+  
+  //  printf("$D030 = $%02X\n",mem_buff[0]);
+  if (mem_buff[0]==0x64) {
+    // Probably C65 mode
+    int in_range=0;
+    // Allow more tries to allow more time for ROM checksum to finish
+    // or boot attempt from floppy to finish
+    for (int i=0;i<10;i++) {
+      int pc=get_pc();
+      if (pc>=0xe1ae&&pc<=0xe1b4) in_range++; else {
+	// C65 ROM does checksum, so wait a while if it is in that range
+	if (pc>=0xb000&&pc<0xc000) sleep(1);
+	// Or booting from internal drive is also slow
+	if (pc>=0x9c00&&pc<0x9d00) sleep(1);
+	// Or something else it does while booting
+	if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
+	else {
+	  //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
+	  do_usleep(100000);
+	}
+      }
+    }
+    if (in_range>3) {
+      // We are in C65 BASIC main loop, so assume it is C65 mode
+      saw_c65_mode=1;
+      timestamp_msg("");
+      fprintf(stderr,"CPU in C65 BASIC 10 main loop.\n");
+      return 0;
+    }
+  } else if (mem_buff[0]==0x00) {
+    // Probably C64 mode
+    int in_range=0;
+    for (int i=0;i<5;i++) {
+      int pc=get_pc();
+      // XXX Might not work with OpenROMs?
+      if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;
+      else {
+	//	printf("Odd PC=$%04x\n",pc);
+	usleep(100000);
+      }
+    }
+    if (in_range>3) {
+      // We are in C64 BASIC main loop, so assume it is C65 mode
+      saw_c64_mode=1;
+      timestamp_msg("");
+      fprintf(stderr,"CPU in C64 BASIC 2 main loop.\n");
+      return 0;
+    }
+  }
+  printf("Could not determine C64/C65/MEGA65 mode.\n");
+  return 1;
+}
+
+
 int load_helper(void)
 {
   int retVal=0;
   do {
-    if (!helper_installed) {
+    if (!helper_installed) {      
       // Install helper routine
       char cmd[1024];
+
+      detect_mode();
+   
+      if ((!saw_c64_mode)) {
+	printf("Trying to switch to C64 mode...\n");
+	monitor_sync();
+	stuff_keybuffer("GO64\rY\r");    
+	saw_c65_mode=0;
+	do_usleep(100000);
+	detect_mode();
+	while (!saw_c64_mode) {
+	  fprintf(stderr,"WARNING: Failed to switch to C64 mode.\n");
+	  monitor_sync();
+	  stuff_keybuffer("GO64\rY\r");    
+	  do_usleep(100000);
+	  detect_mode();
+	}
+      }
 
       snprintf(cmd,1024,"t1\r");
       slow_write(fd,cmd,strlen(cmd),500);
