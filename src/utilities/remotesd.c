@@ -49,12 +49,16 @@ void main(void)
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
+  // Cursor off
+  POKE(204,0x80);
+  
   printf("%cMEGA65 File Transfer helper.\n",0x93);
 
   last_advertise_time=0;
 
   // Clear communications area
   lfill(0xc000,0x00,0x1000);
+  lfill(0xc001,0x42,0x1000);
   
   while(1) {
     current_time=*(uint16_t *)0xDC08;
@@ -84,6 +88,9 @@ void main(void)
 	  sector_number=*(uint32_t *)job_addr;
 	  job_addr+=4;
 
+	  printf("Read sector $%08lx into mem $%07lx\n",
+		 sector_number,buffer_address);
+	  
 	  // Do read
 	  *(uint32_t *)0xD681 = sector_number;	  
 	  POKE(0xD680,0x02);
@@ -104,7 +111,10 @@ void main(void)
 	  job_addr+=4;
 	  transfer_size=*(uint32_t *)job_addr;
 	  job_addr+=4;
-	  	  
+
+	  printf("Send mem $%07lx to $%07lx\n",
+		 buffer_address,buffer_address+transfer_size-1);
+	  
 	  snprintf(msg,80,"ftjobdataFTJOBDATA:%04x:%08lx\n\r",job_addr-9,transfer_size);
 	  serial_write_string(msg,strlen(msg));
 
