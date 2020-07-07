@@ -911,10 +911,16 @@ int main(int argc,char **argv)
     fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
   }
   
-  // Set higher speed on serial interface to improve throughput
+  // Set higher speed on serial interface to improve throughput, and make sure
+  // we have reset.
   set_speed(fd,2000000);
+  //  slow_write(fd,"\r!\r",3,0); usleep(100000);
   slow_write(fd,"\r+9\r",4,5000);
   set_speed(fd,4000000);
+  //  slow_write(fd,"\r!\r",3,0); usleep(100000);
+  //  set_speed(fd,2000000);  
+  //  slow_write(fd,"\r+9\r",4,5000);
+  //  set_speed(fd,4000000);
   
   stop_cpu();
 
