@@ -1282,12 +1282,45 @@ int load_helper(void)
   return retVal;
 }
 
+int data_byte_count=0;
 uint8_t queue_jobs=0;
 uint16_t queue_addr=0xc001;
 uint8_t queue_read_data[1024*1024];
 uint32_t queue_read_len=0;
 
 uint8_t queue_cmds[0x0fff];
+
+uint8_t q_rle_count=0,q_raw_count=0;
+
+void queue_data_decode(uint8_t v)
+{
+  if (0)  fprintf(stderr,"Decoding $%02x, rle_count=%d, raw_count=%d, data_byte_count=$%04x\n",
+		  v,q_rle_count,q_raw_count,data_byte_count);
+  if (q_rle_count) {
+    //    fprintf(stderr,"$%02x x byte $%02x\n",q_rle_count,v);
+    data_byte_count-=q_rle_count;
+    for(int i=0;i<q_rle_count;i++) {
+      if (queue_read_len<1024*1024) queue_read_data[queue_read_len++]=v;
+    }
+    q_rle_count=0;
+  } else if (q_raw_count) {
+    //    fprintf(stderr,"Raw byte $%02x\n",v);
+    if (queue_read_len<1024*1024) queue_read_data[queue_read_len++]=v;
+    if (data_byte_count) data_byte_count--;
+    q_raw_count--;
+  } else {
+    //    fprintf(stderr,"Data code $%02x\n",v);
+    if (v&0x80) {
+      q_rle_count=v&0x7f;      
+      //      fprintf(stderr,"RLE of $%02x bytes\n",q_rle_count);
+    } else {
+      q_raw_count=v&0x7f;
+      //      fprintf(stderr,"$%02x raw bytes\n",q_raw_count);
+      
+    }
+  }
+}
+
 
 void queue_add_job(uint8_t *j,int len)
 {
@@ -1320,10 +1353,10 @@ void job_process_results(void)
   long long now =gettime_us();
   queue_read_len=0;
   uint8_t buff[8192];
-
-  int data_byte_count=0;
   
   uint8_t recent[32];
+
+  data_byte_count=0;
   
   while (1) {
     int b=read(fd,buff,8192);
@@ -1334,9 +1367,7 @@ void job_process_results(void)
       // results
       if (data_byte_count)
 	{
-	  data_byte_count--;
-	  if (queue_read_len<1024*1024)
-	    queue_read_data[queue_read_len++]=buff[i];
+	  queue_data_decode(buff[i]);
 	} else {
 	bcopy(&recent[1],&recent[0],30);
 	recent[30]=buff[i];
@@ -1355,19 +1386,17 @@ void job_process_results(void)
 	uint32_t transfer_size;
 	int fn=sscanf(recent,"FTJOBDATA:%x:%x:%n",&j_addr,&transfer_size,&n);
 	if (fn==2) {
-	  if (0)	  printf("Spotted job data: Reading $%x bytes of data, offset %d,"
-				 " %02x %02x\n",transfer_size,n,
-				 recent[n],recent[n+1]
-				 );
+	  if (0)
+	    printf("Spotted job data: Reading $%x bytes of data, offset %d,"
+		   " %02x %02x\n",transfer_size,n,
+		   recent[n],recent[n+1]
+		   );
+	  q_rle_count=0; q_raw_count=0;
 	  data_byte_count=transfer_size;
 	  // Don't forget to process the bytes we have already injested
 	  for(int k=n;k<=30;k++) {
 	    if (data_byte_count) {
-	      if (queue_read_len<1024*1024) {
-		//		printf("Accepting early byte %02x\n",recent[k]);
-		queue_read_data[queue_read_len++]=recent[k];
-	      }
-	      data_byte_count--;
+	      queue_data_decode(recent[k]);
 	    }
 	  }
 	}

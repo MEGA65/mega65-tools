@@ -22,6 +22,9 @@
 // Set to 1 to show debug messages
 #define DEBUG 0
 
+// Slight delay between chars for old HYPPO versions that lack ready check on serial write
+#define SERIAL_DELAY for(aa=0;aa!=40;aa++) continue;
+uint8_t aa;
 // Write a char to the serial monitor interface
 #define SERIAL_WRITE(the_char) { __asm__ ("LDA %v",the_char); __asm__ ("STA $D643"); __asm__ ("NOP"); }
 
@@ -31,6 +34,7 @@ void serial_write_string(uint8_t *m,uint16_t len)
 {
   for(i=0;i<len;i++) {
     c=*m; m++;
+    SERIAL_DELAY;
     SERIAL_WRITE(c);
   }
 }
@@ -137,30 +141,49 @@ void main(void)
 		 lpeek(buffer_address),lpeek(buffer_address+1));
 #endif	  
 
-#ifndef NO_RLE
-
+	  snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-9,transfer_size);
+	  serial_write_string(msg,strlen(msg));	    
+	  
 	  // Set up buffers
 	  olen=0; iofs=0;
 	  last_value=0xFF; rle_count=0;
 	  lcopy(buffer_address,(uint32_t)local_buffer,256);
+	  POKE(0xD610,0);
 	  while (transfer_size--) {
+#if DEBUG>1
+	    printf("olen=%d, rle_count=%d, last=$%02x, byte=$%02x\n",
+		   olen,rle_count,last_value,local_buffer[iofs]);
+	    while(!PEEK(0xD610)) continue; POKE(0xD610,0);
+#endif
 	    if (olen==127)
 	      {
 		// Write out 0x00 -- 0x7F as length of non RLE bytes,
 		// followed by the bytes
+#if DEBUG
+		printf("$%02x raw\n",olen);
+#endif
 		SERIAL_WRITE(olen);
 		for(a=0;a<0x80;a++) {
 		  c=obuf[a];
+		  SERIAL_DELAY;
 		  SERIAL_WRITE(c);
 		}
 		olen=0;
 		rle_count=0;
 	      }
+	    // XXX We have trouble with $FF RLE bytes not being received for some reason.
 	    if (rle_count==127) {
 	      // Flush a full RLE buffer
+#if DEBUG
+	      printf("$%02x x $%02x\n",rle_count,last_value);
+#endif
 	      c=0x80|rle_count;
 	      SERIAL_WRITE(c);
+	      SERIAL_DELAY;
 	      SERIAL_WRITE(last_value);
+#if DEBUG
+	      printf("Wrote $%02x, $%02x\n",c,last_value);
+#endif
 	      rle_count=0;
 	    }
 	    obuf[olen++]=local_buffer[iofs];
@@ -168,27 +191,42 @@ void main(void)
 	      rle_count++;
 	      if (rle_count==3) {
 		// Switch from raw to RLE, flushing any pending raw bytes
-		olen-=3;
-		SERIAL_WRITE(olen);
-		for(a=0;a<0x80;a++) {
-		  c=obuf[a];
-		  SERIAL_WRITE(c);
+		if (olen>3) olen-=3; else olen=0;
+#if DEBUG
+		printf("Flush $%02x raw %02x %02x %02x ...\n",olen,
+		       obuf[0],obuf[1],obuf[2]);
+#endif
+		if (olen) {
+		  SERIAL_WRITE(olen);
+		  for(a=0;a<olen;a++) {
+		    c=obuf[a];
+		    SERIAL_DELAY;
+		    SERIAL_WRITE(c);
+		  }
 		}
 		olen=0;		
 	      } else if (rle_count<3) {
 		// Don't do anything yet, as we haven't yet flipped to RLE coding
 	      } else {
-		// rle_count>3, so keep accumulating RLE data		
+		// rle_count>3, so keep accumulating RLE data
+		olen--;
 	      }
 	    } else {
 	      // Flush any accumulated RLE data
 	      if (rle_count>2) {
+#if DEBUG
+		printf("$%02x x $%02x\n",rle_count,last_value);
+#endif
 		c=0x80|rle_count;
 		SERIAL_WRITE(c);
+		SERIAL_DELAY;
 		SERIAL_WRITE(last_value);
-		rle_count=0;
 	      }
+	      // 1 of the new byte seen
+	      rle_count=1;
 	    }
+
+	    last_value=local_buffer[iofs];
 	    
 	    // Advance and keep buffer primed
 	    buffer_address++;
@@ -197,28 +235,29 @@ void main(void)
 	      iofs=0;
 	    } else iofs++;
 	  }
-	  
-#else
-	  {
-	    // Send data uncompressed
-	    
-	    snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-9,transfer_size);
-	    serial_write_string(msg,strlen(msg));
-	    
-	    j=2;
-	    while(transfer_size--) {
-	      c=lpeek(buffer_address++);
-	      if (j) {
-#if DEBUG	      
-		printf("%02x\n",c);
+
+	  // Flush any accumulated RLE data
+	  if (rle_count>2) {
+#if DEBUG
+	    printf("Terminal $%02x x $%02x\n",rle_count,last_value);
 #endif
-		j--;
-	      }
+	    c=0x80|rle_count;
+	    SERIAL_WRITE(c);
+	    SERIAL_DELAY;
+	    SERIAL_WRITE(last_value);
+	  } else if (olen) {
+#if DEBUG
+	    printf("Terminal flush $%02x raw %02x %02x %02x ...\n",olen,
+		   obuf[0],obuf[1],obuf[2]);
+#endif
+	    SERIAL_WRITE(olen);
+	    for(a=0;a<olen;a++) {
+	      c=obuf[a];
+	      SERIAL_DELAY;
 	      SERIAL_WRITE(c);
 	    }
 	  }
-#endif
-	  
+	 
 	  snprintf(msg,80,"ftjobdone:%04x:\n\r",job_addr-9);
 	  serial_write_string(msg,strlen(msg));
 
