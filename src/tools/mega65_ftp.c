@@ -622,7 +622,13 @@ int dump_bytes(int col, char *msg,unsigned char *bytes,int length)
   for(int i=0;i<length;i+=16) {
     print_spaces(stderr,col);
     fprintf(stderr,"%04X: ",i);
-    for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr," %02X",bytes[i+j]);
+    for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr," %02X",bytes[i+j]); else fprintf(stderr,"   ");
+    fprintf(stderr,"  ");
+    for(int j=0;j<16;j++) if (i+j<length) {
+	if (bytes[i+j]>=0x20&&bytes[i+j]<0x7f) {
+	  fprintf(stderr,"%c",bytes[i+j]);
+	} else fprintf(stderr,".");
+      }
     fprintf(stderr,"\n");
   }
   return 0;
@@ -1017,6 +1023,7 @@ int sdhc_check(void)
     exit(-3);
   }
   if (r1) sdhc=0; else sdhc=1;
+  if (sdhc) fprintf(stderr,"SD card is SDHC\n");
   return sdhc;
 }
 
@@ -1291,22 +1298,77 @@ void queue_add_job(uint8_t *j,int len)
   b=1;
   while(b>0) {
     b=serialport_read(fd,read_buff,8192);
-    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
+    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
   }
 
   bcopy(j,&queue_cmds[queue_addr-0xc001],len);
   queue_jobs++;
   queue_addr+=len;
-  printf("remote job queued.\n");
+  //  printf("remote job queued.\n");
 
   usleep(100000);
   b=1;
   while(b>0) {
     b=serialport_read(fd,read_buff,8192);
-    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
+    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
   }
   
   
+}
+
+void job_process_results(void)
+{
+  queue_read_len=0;
+  uint8_t buff[8192];
+
+  int data_byte_count=0;
+  
+  uint8_t recent[32];
+  
+  while (1) {
+    int b=read(fd,buff,8192);
+    if (b<1) usleep(1000);
+    //    if (b>0) dump_bytes(0,"jobresponse",buff,b);
+    for(int i=0;i<b;i++) {
+      // Keep rolling window of most recent chars for interpretting job
+      // results
+      if (data_byte_count)
+	{
+	  data_byte_count--;
+	  if (queue_read_len<1024*1024)
+	    queue_read_data[queue_read_len++]=buff[i];
+	} else {
+	bcopy(&recent[1],&recent[0],30);
+	recent[30]=buff[i];
+	recent[31]=0;
+	if (!strncmp(recent,"FTBATCHDONE",11)) {
+	  //	  printf("Saw end of batch job.\n");
+	  return;
+	}
+	if (!strncmp(recent,"FTJOBDONE:",10)) {
+	  int jn=atoi((char *)&recent[10]);
+	  //	  printf("Saw job #%d completion.\n",jn);
+	  
+	}
+	if (!strncmp(recent,"FTJOBDATA:",10)) {
+	  int j_addr,n;
+	  uint32_t transfer_size;
+	  if (sscanf(recent,"FTJOBDATA:%x:%x%n",&j_addr,&transfer_size,&n)==2) {
+	    //	    printf("Spotted job data: Reading $%x bytes of data, offset %d\n",transfer_size,n);	    
+	  data_byte_count=transfer_size;
+	  // Don't forget to process the bytes we have already injested
+	  for(int k=n+1;k<30;k++) {
+	    if (data_byte_count) {
+	      if (queue_read_len<1024*1024)
+		queue_read_data[queue_read_len++]=recent[k];
+	      data_byte_count--;
+	    }
+	  }
+	  }
+	}
+      }
+    }
+  }
 }
 
 void queue_execute(void)
@@ -1315,7 +1377,6 @@ void queue_execute(void)
 
   // Push queued jobs in on go
   sprintf(cmd,"l%x %x\r",0xc001,queue_addr);
-  printf("[%s]\n",cmd);
   slow_write(fd,cmd,strlen(cmd),0);
   // give serial uart time to get ready
   // (and make sure we end up in a different USB packet to the command)
@@ -1325,13 +1386,10 @@ void queue_execute(void)
   
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd),0);
-  printf("Executing queued jobs\n");
-  while(mega65_peek(0xc000)) {
-    usleep(1);
-  }
+  //  printf("Executing queued jobs\n");
+  job_process_results();
   queue_addr=0xc001;
   queue_jobs=0;
-  while(1) continue;
 }
 
 void queue_read_sector(uint32_t sector_number,uint32_t mega65_address)
@@ -1346,6 +1404,21 @@ void queue_read_sector(uint32_t sector_number,uint32_t mega65_address)
   job[2]=mega65_address>>8;
   job[3]=mega65_address>>16;
   job[4]=mega65_address>>24;
+  queue_add_job(job,9);
+}
+
+void queue_read_mem(uint32_t mega65_address,uint32_t len)
+{
+  uint8_t job[9];
+  job[0]=0x11;
+  job[1]=mega65_address>>0;
+  job[2]=mega65_address>>8;
+  job[3]=mega65_address>>16;
+  job[4]=mega65_address>>24;
+  job[5]=len>>0;
+  job[6]=len>>8;
+  job[7]=len>>16;
+  job[8]=len>>24;
   queue_add_job(job,9);
 }
 
@@ -1376,12 +1449,14 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
     }
 
     if (cachedRead) break;
-    
-    queue_read_sector(sector_number,0x400);
-    //    queue_push_mem(0x40000,512);
-    queue_execute();
 
+    // Do read using new remote job queue mechanism that is hopefully
+    // lower latency than the old way
+    queue_read_sector(sector_number,0x40000);
+    queue_read_mem(0x40000,512);
+    queue_execute();
     bcopy(&queue_read_data[0],buffer,512);
+    //    dump_bytes(0,"read sector",buffer,512);
     
     // Store in cache / update cache
     int i;
@@ -1519,10 +1594,16 @@ int open_file_system(void)
       // Ok, so we know where the partition starts, so now find the FATs
       if (read_sector(syspart_start,syspart_sector0,0)) {
 	printf("ERROR: Could not read system partition sector 0\n");
-	retVal=-1; break; }
+	retVal=-1;
+	// Bad system partition doesn't stop us reading FAT
+	//	break;
+      }
       if (strncmp("MEGA65SYS00",(char *)&syspart_sector0[0],10)) {
 	printf("ERROR: MEGA65 System Partition is missing MEGA65SYS00 marker.\n");
-	retVal=-1; break;
+	retVal=-1;
+	
+	// Bad system partition doesn't stop us reading FAT
+	//	break;
       }
       syspart_freeze_area=syspart_sector0[0x10]+(syspart_sector0[0x11]<<8)+(syspart_sector0[0x12]<<16)+(syspart_sector0[0x13]<<24);
       syspart_freeze_program_size=syspart_sector0[0x14]+(syspart_sector0[0x15]<<8)+(syspart_sector0[0x16]<<16)+(syspart_sector0[0x17]<<24);
