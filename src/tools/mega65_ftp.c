@@ -1358,7 +1358,7 @@ void job_process_results(void)
 
   data_byte_count=0;
 
-  int debug_rx=0;
+  int debug_rx=1;
   
   while (1) {
     int b=read(fd,buff,8192);
@@ -1420,7 +1420,7 @@ void queue_execute(void)
   // (and make sure we end up in a different USB packet to the command)
   usleep(1000); 
   serialport_write(fd,queue_cmds,queue_addr-0xc001);
-  usleep(1000);
+  usleep(3*(queue_addr-0xc001));
   
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd),0);
@@ -1437,42 +1437,80 @@ uint8_t write_data_buffer[65536];
 uint32_t write_sector_numbers[65536/512];
 uint8_t write_sector_count=0;
 
-void execute_write_queue(void)
+void queue_physical_write_sector(uint32_t sector_number,uint32_t mega65_address)
 {
+  uint8_t job[9];
+  job[0]=0x02;
+  job[5]=sector_number>>0;
+  job[6]=sector_number>>8;
+  job[7]=sector_number>>16;
+  job[8]=sector_number>>24;
+  job[1]=mega65_address>>0;
+  job[2]=mega65_address>>8;
+  job[3]=mega65_address>>16;
+  job[4]=mega65_address>>24;
+  queue_add_job(job,9);
+}
 
-  // Reset write queue
-  write_buffer_offset=0;
-  write_sector_count=0;
+
+int execute_write_queue(void)
+{
+  int retVal=0;
+  do {
+    char cmd[1024];
+    printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
+	   write_sector_count,write_buffer_offset);
+    snprintf(cmd,1024,"l%x %x\r",0x50000,(0x50000+write_buffer_offset)&0xffff);
+    printf("CMD: '%s'\n",cmd);
+    slow_write(fd,cmd,strlen(cmd),1000);
+    usleep(5000);
+    int offset=0;
+    while (offset<write_buffer_offset)
+      {
+	int written=write(fd,&write_data_buffer[offset],write_buffer_offset-offset);
+	if (written>0) offset+=written;
+	else usleep(0);
+      }
+    usleep(3*write_buffer_offset);
+
+    // XXX - Sort sector number order and merge consecutive writes into
+    // multi-sector writes would be a good idea here.
+    for(int i=0;i<write_sector_count;i++)
+      {
+	queue_physical_write_sector(write_sector_numbers[i],0x50000+(i<<9));
+      }
+    queue_execute();
+    
+    // Reset write queue
+    write_buffer_offset=0;
+    write_sector_count=0;
+  } while (0);
+  return retVal;
 }
 
 void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
 {
+  // Merge writes to same sector
+  for (int i=0;i<write_sector_count;i++) {
+    if (sector_number==write_sector_numbers[i]) {
+      printf("Updating sector $%08x while in the write queue.\n",sector_number);
+      bcopy(buffer,&write_data_buffer[i<<9],512);
+      return;
+    }
+  }
+
+
   // Purge pending jobs when they are banked up
-  if (write_buffer_offset>=65536) execute_write_queue();
+  // (only 32KB at a time, as the l command for fast pushing data
+  // can't do 64KB
+  if (write_buffer_offset>=32768) execute_write_queue();
   
   bcopy(buffer,&write_data_buffer[write_buffer_offset],512);
   write_buffer_offset+=512;
   write_sector_numbers[write_sector_count]=sector_number;
   write_sector_count++;
 
-#if 0
-  snprintf(cmd,1024,"l%x %x\r",buffer_addr,(buffer_addr+512)&0xffff);
-  printf("CMD: '%s'\n",cmd);
-  slow_write(fd,cmd,strlen(cmd),1000);
-  usleep(5000);
-  uint8_t zeroes[512];
-  for(int i=0;i<512;i++) zeroes[i]=0x40+(i&0xf);
-  int written=write(fd,buffer,512);
-  // int written=write(fd,zeroes,512);
-  if (written!=512) {
-    printf("ERROR: Failed to write 512 bytes of sector data to serial port\n");
-    retVal=-1;
-    break;
-  }
-  usleep(5000);
-#endif
 }  
-
 
 void queue_read_sector(uint32_t sector_number,uint32_t mega65_address)
 {
@@ -1573,10 +1611,6 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
 {
   int retVal=0;
   do {
-    fprintf(stderr,"write_sector($%08x)\n",sector_number);   
-
-    fprintf(stderr,"Sending data for write_sector($%08x)\n",sector_number);
-    
     // With new method, we write the data, then schedule the write to happen with a job
     char cmd[1024];
     // Clear pending input first
@@ -1587,8 +1621,6 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
     }
 
     queue_write_sector(sector_number,buffer);
-    
-    fprintf(stderr,"Sent data for write_sector($%08x)\n",sector_number);
     
     // Store in cache / update cache
     int i;

@@ -95,6 +95,19 @@ void main(void)
 	  // Terminate
 	  __asm__("jmp 58552");
 	  break;
+	case 0x02:
+	  // Write sector
+	  job_addr++;
+	  buffer_address=*(uint32_t *)job_addr;
+	  job_addr+=4;
+	  sector_number=*(uint32_t *)job_addr;
+	  job_addr+=4;
+
+#if DEBUG>=0
+	  printf("$%04x : write sector $%08lx from mem $%07lx\n",*(uint16_t *)0xDC08,
+		 sector_number,buffer_address);
+#endif	  
+	  break;
 	case 0x01:
 	  // Read sector
 	  job_addr++;
