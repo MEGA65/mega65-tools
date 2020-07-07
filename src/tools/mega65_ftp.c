@@ -1343,22 +1343,22 @@ void job_process_results(void)
 	recent[31]=0;
 	if (!strncmp(&recent[30-10],"FTBATCHDONE",11)) {
 	  long long endtime =gettime_us();
-	  printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
+	  if (0) printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
 	  //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
 	  return;
 	}
 	if (!strncmp(recent,"FTJOBDONE:",10)) {
-	  int jn=atoi((char *)&recent[10]);
-	  printf("Saw job #%d completion.\n",jn);	  
+	  int jn=atoi((char *)&recent[10]);	  
+	  if (0) printf("Saw job #%d completion.\n",jn);	  
 	}
 	int j_addr,n;
 	uint32_t transfer_size;
 	int fn=sscanf(recent,"FTJOBDATA:%x:%x:%n",&j_addr,&transfer_size,&n);
 	if (fn==2) {
-	  printf("Spotted job data: Reading $%x bytes of data, offset %d,"
-		 " %02x %02x\n",transfer_size,n,
-		 recent[n],recent[n+1]
-		 );
+	  if (0)	  printf("Spotted job data: Reading $%x bytes of data, offset %d,"
+				 " %02x %02x\n",transfer_size,n,
+				 recent[n],recent[n+1]
+				 );
 	  data_byte_count=transfer_size;
 	  // Don't forget to process the bytes we have already injested
 	  for(int k=n;k<=30;k++) {
@@ -1384,7 +1384,7 @@ void queue_execute(void)
   
   // Push queued jobs in on go
   slow_write(fd,"\r",1,0);
-  usleep(2000); 
+  usleep(1000); 
   sprintf(cmd,"l%x %x\r",0xc001,queue_addr);
   slow_write(fd,cmd,strlen(cmd),0);
   // give serial uart time to get ready
