@@ -537,11 +537,11 @@ int slow_write(int fd,char *d,int l,int preWait)
     {
       int w=write(fd,&d[i],1);
       while (w<1) {
-	usleep(500);
+	usleep(1000);
 	w=write(fd,&d[i],1);
       }
       // Only control characters can cause us whole line delays,
-      if (d[i]<' ') { usleep(1000); } else usleep(0);
+      if (d[i]<' ') { usleep(2000); } else usleep(0);
     }
     tcdrain(fd);
   return 0;
@@ -1344,6 +1344,7 @@ void job_process_results(void)
 	if (!strncmp(&recent[30-10],"FTBATCHDONE",11)) {
 	  long long endtime =gettime_us();
 	  //	  printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
+	  //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
 	  return;
 	}
 	if (!strncmp(recent,"FTJOBDONE:",10)) {
@@ -1351,20 +1352,24 @@ void job_process_results(void)
 	  //	  printf("Saw job #%d completion.\n",jn);
 	  
 	}
-	if (!strncmp(recent,"FTJOBDATA:",10)) {
-	  int j_addr,n;
-	  uint32_t transfer_size;
-	  if (sscanf(recent,"FTJOBDATA:%x:%x%n",&j_addr,&transfer_size,&n)==2) {
-	    //	    printf("Spotted job data: Reading $%x bytes of data, offset %d\n",transfer_size,n);	    
+	int j_addr,n;
+	uint32_t transfer_size;
+	int fn=sscanf(recent,"FTJOBDATA:%x:%x%n",&j_addr,&transfer_size,&n);
+	if (fn==2) {
+	  if (0) printf("Spotted job data: Reading $%x bytes of data, offset %d,"
+			" %02x %02x\n",transfer_size,n,
+			recent[n],recent[n+1]
+			);
 	  data_byte_count=transfer_size;
 	  // Don't forget to process the bytes we have already injested
-	  for(int k=n+1;k<30;k++) {
+	  for(int k=n;k<=30;k++) {
 	    if (data_byte_count) {
-	      if (queue_read_len<1024*1024)
+	      if (queue_read_len<1024*1024) {
+		//		printf("Accepting early byte %02x\n",recent[k]);
 		queue_read_data[queue_read_len++]=recent[k];
+	      }
 	      data_byte_count--;
 	    }
-	  }
 	  }
 	}
       }
@@ -1601,15 +1606,13 @@ int open_file_system(void)
       if (read_sector(syspart_start,syspart_sector0,0)) {
 	printf("ERROR: Could not read system partition sector 0\n");
 	retVal=-1;
-	// Bad system partition doesn't stop us reading FAT
-	//	break;
+	break;
       }
       if (strncmp("MEGA65SYS00",(char *)&syspart_sector0[0],10)) {
 	printf("ERROR: MEGA65 System Partition is missing MEGA65SYS00 marker.\n");
+	dump_bytes(0,"SYSPART Sector 0",syspart_sector0,512);
 	retVal=-1;
-	
-	// Bad system partition doesn't stop us reading FAT
-	//	break;
+	break;
       }
       syspart_freeze_area=syspart_sector0[0x10]+(syspart_sector0[0x11]<<8)+(syspart_sector0[0x12]<<16)+(syspart_sector0[0x13]<<24);
       syspart_freeze_program_size=syspart_sector0[0x14]+(syspart_sector0[0x15]<<8)+(syspart_sector0[0x16]<<16)+(syspart_sector0[0x17]<<24);
