@@ -2319,6 +2319,9 @@ int upload_file(char *name,char *dest_name)
       printf("ERROR: Failed to write updated directory sector after updating file length.\n");
       retVal=-1; break; }
 
+    // Flush any pending sector writes out
+    execute_write_queue();
+    
     if (time(0)==upload_start) upload_start=time(0)-1;
     printf("\rUploaded %lld bytes in %lld seconds (%.1fKB/sec)\n",
 	   (long long)st.st_size,(long long)time(0)-upload_start,st.st_size*1.0/1024/(time(0)-upload_start));

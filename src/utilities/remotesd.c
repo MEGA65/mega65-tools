@@ -106,7 +106,21 @@ void main(void)
 #if DEBUG>=0
 	  printf("$%04x : write sector $%08lx from mem $%07lx\n",*(uint16_t *)0xDC08,
 		 sector_number,buffer_address);
-#endif	  
+#endif
+
+	  lcopy(buffer_address,0x0400,512);
+	  lcopy(buffer_address,0xffd6e00,512);
+	  
+	  // For now pretend with a read
+	  *(uint32_t *)0xD681 = sector_number;	  
+	  POKE(0xD680,0x03);
+
+	  // Wait for SD to go busy
+	  while(!(PEEK(0xD680)&0x03)) continue;
+	  
+	  // Wait for SD to read and fiddle border colour to show we are alive
+	  while(PEEK(0xD680)&0x03) POKE(0xD020,PEEK(0xD020)+1);
+	  
 	  break;
 	case 0x01:
 	  // Read sector
