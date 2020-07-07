@@ -71,6 +71,7 @@ void main(void)
     if (PEEK(0xC000)) {
       // Perform one or more jobs
       job_count=PEEK(0xC000);
+      printf("Received list of %d jobs.\n",job_count);
       job_addr=0xc001;
       for(j=0;j<job_count;j++) {
 	if (job_addr>0xcfff) break;
@@ -88,13 +89,17 @@ void main(void)
 	  sector_number=*(uint32_t *)job_addr;
 	  job_addr+=4;
 
-	  printf("Read sector $%08lx into mem $%07lx\n",
+#if 1
+	  printf("$%04x : Read sector $%08lx into mem $%07lx\n",*(uint16_t *)0xDC08,
 		 sector_number,buffer_address);
-	  
+#endif	  
 	  // Do read
 	  *(uint32_t *)0xD681 = sector_number;	  
 	  POKE(0xD680,0x02);
 
+	  // Wait for SD to go busy
+	  while(!(PEEK(0xD680)&0x03)) continue;
+	  
 	  // Wait for SD to read and fiddle border colour to show we are alive
 	  while(PEEK(0xD680)&0x03) POKE(0xD020,PEEK(0xD020)+1);
 
@@ -102,6 +107,9 @@ void main(void)
 
 	  snprintf(msg,80,"ftjobdone:%04x:\n\r",job_addr-9);
 	  serial_write_string(msg,strlen(msg));
+
+	  printf("$%04x : Read sector done\n",*(uint16_t *)0xDC08);
+
 	  
 	  break;
 	case 0x11:
@@ -112,19 +120,31 @@ void main(void)
 	  transfer_size=*(uint32_t *)job_addr;
 	  job_addr+=4;
 
-	  printf("Send mem $%07lx to $%07lx\n",
-		 buffer_address,buffer_address+transfer_size-1);
+#if 1
+	  printf("$%04x : Send mem $%07lx to $%07lx: %02x %02x ...\n",*(uint16_t *)0xDC08,
+		 buffer_address,buffer_address+transfer_size-1,
+		 lpeek(buffer_address),lpeek(buffer_address+1));
+#endif
 	  
-	  snprintf(msg,80,"ftjobdataFTJOBDATA:%04x:%08lx\n\r",job_addr-9,transfer_size);
+	  snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-9,transfer_size);
 	  serial_write_string(msg,strlen(msg));
 
+	  j=2;
 	  while(transfer_size--) {
 	    c=lpeek(buffer_address++);
+	    if (j) {
+	      printf("%02x\n",c);
+	      j--;
+	    }
 	    SERIAL_WRITE(c);
 	  }
 
-	  snprintf(msg,80,"ftjobdata:%04x:\n\r",job_addr-9);
+	  snprintf(msg,80,"ftjobdone:%04x:\n\r",job_addr-9);
 	  serial_write_string(msg,strlen(msg));
+
+	  printf("$%04x : Send mem done\n",*(uint16_t *)0xDC08);
+	  
+	  break;
 	  
 	default:
 	  job_addr=0xd000;
@@ -134,8 +154,10 @@ void main(void)
 
       // Indicate when we think we are all done      
       POKE(0xC000,0);      
-      snprintf(msg,80,"FTBATCHDONE\n");
+      snprintf(msg,80,"ftbatchdone\n");
       serial_write_string(msg,strlen(msg));
+
+      printf("$%04x : Sending batch done\n",*(uint16_t *)0xDC08);
       
     }
     
