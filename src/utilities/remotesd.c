@@ -19,6 +19,9 @@
 #include <debug.h>
 #include <random.h>
 
+// Set to 1 to show debug messages
+#define DEBUG 0
+
 // Write a char to the serial monitor interface
 #define SERIAL_WRITE(the_char) { __asm__ ("LDA %v",the_char); __asm__ ("STA $D643"); __asm__ ("NOP"); }
 
@@ -39,6 +42,11 @@ uint16_t job_addr;
 char msg[80+1];
 
 uint32_t buffer_address,sector_number,transfer_size;
+
+uint8_t rle_count=0,a;
+uint8_t olen=0,iofs=0,last_value=0;
+uint8_t obuf[0x80];
+uint8_t local_buffer[0x100];
 
 void main(void)
 {
@@ -71,7 +79,9 @@ void main(void)
     if (PEEK(0xC000)) {
       // Perform one or more jobs
       job_count=PEEK(0xC000);
+#if DEBUG
       printf("Received list of %d jobs.\n",job_count);
+#endif
       job_addr=0xc001;
       for(j=0;j<job_count;j++) {
 	if (job_addr>0xcfff) break;
@@ -89,7 +99,7 @@ void main(void)
 	  sector_number=*(uint32_t *)job_addr;
 	  job_addr+=4;
 
-#if 1
+#if DEBUG
 	  printf("$%04x : Read sector $%08lx into mem $%07lx\n",*(uint16_t *)0xDC08,
 		 sector_number,buffer_address);
 #endif	  
@@ -108,8 +118,9 @@ void main(void)
 	  snprintf(msg,80,"ftjobdone:%04x:\n\r",job_addr-9);
 	  serial_write_string(msg,strlen(msg));
 
+#if DEBUG
 	  printf("$%04x : Read sector done\n",*(uint16_t *)0xDC08);
-
+#endif
 	  
 	  break;
 	case 0x11:
@@ -120,29 +131,100 @@ void main(void)
 	  transfer_size=*(uint32_t *)job_addr;
 	  job_addr+=4;
 
-#if 1
+#if DEBUG
 	  printf("$%04x : Send mem $%07lx to $%07lx: %02x %02x ...\n",*(uint16_t *)0xDC08,
 		 buffer_address,buffer_address+transfer_size-1,
 		 lpeek(buffer_address),lpeek(buffer_address+1));
+#endif	  
+
+#ifndef NO_RLE
+
+	  // Set up buffers
+	  olen=0; iofs=0;
+	  last_value=0xFF; rle_count=0;
+	  lcopy(buffer_address,(uint32_t)local_buffer,256);
+	  while (transfer_size--) {
+	    if (olen==127)
+	      {
+		// Write out 0x00 -- 0x7F as length of non RLE bytes,
+		// followed by the bytes
+		SERIAL_WRITE(olen);
+		for(a=0;a<0x80;a++) {
+		  c=obuf[a];
+		  SERIAL_WRITE(c);
+		}
+		olen=0;
+		rle_count=0;
+	      }
+	    if (rle_count==127) {
+	      // Flush a full RLE buffer
+	      c=0x80|rle_count;
+	      SERIAL_WRITE(c);
+	      SERIAL_WRITE(last_value);
+	      rle_count=0;
+	    }
+	    obuf[olen++]=local_buffer[iofs];
+	    if (local_buffer[iofs]==last_value) {
+	      rle_count++;
+	      if (rle_count==3) {
+		// Switch from raw to RLE, flushing any pending raw bytes
+		olen-=3;
+		SERIAL_WRITE(olen);
+		for(a=0;a<0x80;a++) {
+		  c=obuf[a];
+		  SERIAL_WRITE(c);
+		}
+		olen=0;		
+	      } else if (rle_count<3) {
+		// Don't do anything yet, as we haven't yet flipped to RLE coding
+	      } else {
+		// rle_count>3, so keep accumulating RLE data		
+	      }
+	    } else {
+	      // Flush any accumulated RLE data
+	      if (rle_count>2) {
+		c=0x80|rle_count;
+		SERIAL_WRITE(c);
+		SERIAL_WRITE(last_value);
+		rle_count=0;
+	      }
+	    }
+	    
+	    // Advance and keep buffer primed
+	    buffer_address++;
+	    if (iofs==0xff) {
+	      lcopy(buffer_address,local_buffer,256);
+	      iofs=0;
+	    } else iofs++;
+	  }
+	  
+#else
+	  {
+	    // Send data uncompressed
+	    
+	    snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-9,transfer_size);
+	    serial_write_string(msg,strlen(msg));
+	    
+	    j=2;
+	    while(transfer_size--) {
+	      c=lpeek(buffer_address++);
+	      if (j) {
+#if DEBUG	      
+		printf("%02x\n",c);
+#endif
+		j--;
+	      }
+	      SERIAL_WRITE(c);
+	    }
+	  }
 #endif
 	  
-	  snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-9,transfer_size);
-	  serial_write_string(msg,strlen(msg));
-
-	  j=2;
-	  while(transfer_size--) {
-	    c=lpeek(buffer_address++);
-	    if (j) {
-	      printf("%02x\n",c);
-	      j--;
-	    }
-	    SERIAL_WRITE(c);
-	  }
-
 	  snprintf(msg,80,"ftjobdone:%04x:\n\r",job_addr-9);
 	  serial_write_string(msg,strlen(msg));
 
+#if DEBUG
 	  printf("$%04x : Send mem done\n",*(uint16_t *)0xDC08);
+#endif
 	  
 	  break;
 	  
@@ -157,8 +239,9 @@ void main(void)
       snprintf(msg,80,"ftbatchdone\n");
       serial_write_string(msg,strlen(msg));
 
+#if DEBUG
       printf("$%04x : Sending batch done\n",*(uint16_t *)0xDC08);
-      
+#endif      
     }
     
   }
