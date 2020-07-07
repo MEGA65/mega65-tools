@@ -1318,6 +1318,7 @@ void queue_add_job(uint8_t *j,int len)
 
 void job_process_results(void)
 {
+  long long now =gettime_us();
   queue_read_len=0;
   uint8_t buff[8192];
 
@@ -1341,8 +1342,9 @@ void job_process_results(void)
 	bcopy(&recent[1],&recent[0],30);
 	recent[30]=buff[i];
 	recent[31]=0;
-	if (!strncmp(recent,"FTBATCHDONE",11)) {
-	  //	  printf("Saw end of batch job.\n");
+	if (!strncmp(&recent[30-11],"FTBATCHDONE",11)) {
+	  long long endtime =gettime_us();
+	  printf("Saw end of batch job after %lld usec\n",endtime-now);
 	  return;
 	}
 	if (!strncmp(recent,"FTJOBDONE:",10)) {
