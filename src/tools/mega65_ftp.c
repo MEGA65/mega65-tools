@@ -64,6 +64,7 @@ int rename_file(char *name,char *dest_name);
 int upload_file(char *name,char *dest_name);
 int sdhc_check(void);
 int read_sector(const unsigned int sector_number,unsigned char *buffer, int noCacheP);
+int load_helper(void);
 
 
 // Helper routine for faster sector writing
@@ -535,6 +536,8 @@ int main(int argc,char **argv)
   
   stop_cpu();
 
+  load_helper();
+  
   sdhc_check();
 
   if (!file_system_found) open_file_system();
@@ -633,6 +636,49 @@ int sdhc_check(void)
   return sdhc;
 }
 
+int load_helper(void)
+{
+  int retVal=0;
+  do {
+    if (!helper_installed) {
+      // Install helper routine
+      char cmd[1024];
+
+      snprintf(cmd,1024,"t1\r");
+      slow_write(fd,cmd,strlen(cmd),500);
+
+      snprintf(cmd,1024,"l0801 %x\r",0x801+helperroutine_len-2);
+      slow_write(fd,cmd,strlen(cmd),500);
+      usleep(10000); // give uart monitor time to get ready for the data
+      process_waiting(fd);
+      int offset=2;
+      while(offset<helperroutine_len) {
+	int written=write(fd,&helperroutine[offset],helperroutine_len-offset);
+	if (written!=helperroutine_len) {
+	  usleep(10000);
+	}
+	offset+=written;
+      }
+      slow_write(fd,"\r",1,500);
+      process_waiting(fd);
+      
+      // Launch helper programme
+      snprintf(cmd,1024,"g080d\r");
+      slow_write(fd,cmd,strlen(cmd),500);
+      snprintf(cmd,1024,"t0\r");
+      slow_write(fd,cmd,strlen(cmd),500);
+      
+      helper_installed=1;
+      printf("\nNOTE: Fast SD card access routine installed.\n");
+      exit(0);
+      
+    }
+  } while(0);
+  return retVal;
+}
+
+
+
 #define SECTOR_CACHE_SIZE 4096
 int sector_cache_count=0;
 unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
@@ -723,7 +769,7 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
     if (!helper_installed) {
       // Install helper routine
       char cmd[1024];
-      snprintf(cmd,1024,"lc00 %x\r",0xc00+helperroutine_len);
+      snprintf(cmd,1024,"l07ff %x\r",0x7ff+helperroutine_len);
       slow_write(fd,cmd,strlen(cmd),500);
       usleep(10000); // give uart monitor time to get ready for the data
       process_waiting(fd);
@@ -736,7 +782,13 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
       }
       slow_write(fd,"\r",1,500);
       process_waiting(fd);
+
+      // Launch helper programme
+      snprintf(cmd,1024,"g080d\r");
+      slow_write(fd,cmd,strlen(cmd),500);
+
       helper_installed=1;
+
       printf("\nNOTE: Fast sector write helper routine installed.\n");
     }
 

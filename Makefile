@@ -172,6 +172,11 @@ $(UTILDIR)/megaflash.prg:       $(UTILDIR)/megaflash.c $(CC65)
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
+$(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65)
+	git submodule init
+	git submodule update
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
 $(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(CC65)
 	git submodule init
 	git submodule update
@@ -315,8 +320,8 @@ $(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.
 $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
 	$(OPHIS) $(OPHISOPT) $(TOOLDIR)/ftphelper.a65
 
-$(TOOLDIR)/ftphelper.c:	$(LIBEXECDIR)/ftphelper.bin $(TOOLDIR)/bin2c
-	$(TOOLDIR)/bin2c $(LIBEXECDIR)/ftphelper.bin helperroutine $(TOOLDIR)/ftphelper.c
+$(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
+	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
 $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c Makefile $(TOOLDIR)/ftphelper.c
 	$(CC) $(COPT) -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c -lreadline
