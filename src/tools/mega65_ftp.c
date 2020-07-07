@@ -1432,6 +1432,48 @@ void queue_execute(void)
   queue_jobs=0;
 }
 
+uint32_t write_buffer_offset=0;
+uint8_t write_data_buffer[65536];
+uint32_t write_sector_numbers[65536/512];
+uint8_t write_sector_count=0;
+
+void execute_write_queue(void)
+{
+
+  // Reset write queue
+  write_buffer_offset=0;
+  write_sector_count=0;
+}
+
+void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
+{
+  // Purge pending jobs when they are banked up
+  if (write_buffer_offset>=65536) execute_write_queue();
+  
+  bcopy(buffer,&write_data_buffer[write_buffer_offset],512);
+  write_buffer_offset+=512;
+  write_sector_numbers[write_sector_count]=sector_number;
+  write_sector_count++;
+
+#if 0
+  snprintf(cmd,1024,"l%x %x\r",buffer_addr,(buffer_addr+512)&0xffff);
+  printf("CMD: '%s'\n",cmd);
+  slow_write(fd,cmd,strlen(cmd),1000);
+  usleep(5000);
+  uint8_t zeroes[512];
+  for(int i=0;i<512;i++) zeroes[i]=0x40+(i&0xf);
+  int written=write(fd,buffer,512);
+  // int written=write(fd,zeroes,512);
+  if (written!=512) {
+    printf("ERROR: Failed to write 512 bytes of sector data to serial port\n");
+    retVal=-1;
+    break;
+  }
+  usleep(5000);
+#endif
+}  
+
+
 void queue_read_sector(uint32_t sector_number,uint32_t mega65_address)
 {
   uint8_t job[9];
@@ -1494,13 +1536,13 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
     // Do read using new remote job queue mechanism that is hopefully
     // lower latency than the old way
     // Request multiple sectors at once to make it more efficient
-    for(int n=0;n<8;n++)
+    for(int n=0;n<16;n++)
       queue_read_sector(sector_number+n,0x40000+(n<<9));
-    queue_read_mem(0x40000,512*8);
+    queue_read_mem(0x40000,512*16);
     queue_execute();
 
 
-    for(int n=0;n<8;n++) {
+    for(int n=0;n<16;n++) {
       bcopy(&queue_read_data[n<<9],buffer,512);
       //      printf("Sector $%08x:\n",sector_number+n);
       //      dump_bytes(3,"read sector",buffer,512);
@@ -1531,71 +1573,22 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
 {
   int retVal=0;
   do {
+    fprintf(stderr,"write_sector($%08x)\n",sector_number);   
 
-    int sectorUnchanged=0;
-    // Force sector into read buffer
-    read_sector(sector_number,verify,0);
-    // See if it matches what we are writing, if so, don't write it!
-    for(int i=0;i<sector_cache_count;i++) {
-      if (sector_number==sector_cache_sectors[i]) {
-	if (!bcmp(sector_cache[i],buffer,512)) {
-	  //	  printf("Writing unchanged sector -- skipping physical write\n");
-	  sectorUnchanged=1; break;
-	}
-      }
-    }
-    if (sectorUnchanged) {
-      //      printf("Skipping physical write\n");
-      break;
-    }
-    //    else printf("Proceeding with physical write\n");
+    fprintf(stderr,"Sending data for write_sector($%08x)\n",sector_number);
     
-    // Clear backlog
-    // printf("Clearing serial backlog in preparation for reading sector 0x%x\n",sector_number);
-    process_waiting(fd);
-
-    // printf("Getting SD card ready\n");
-    wait_for_sdready();
-
-    //    printf("Writing sector data\n");
+    // With new method, we write the data, then schedule the write to happen with a job
     char cmd[1024];
-    snprintf(cmd,1024,"l%x %x\r",
-	     WRITE_SECTOR_BUFFER_ADDRESS,(WRITE_SECTOR_BUFFER_ADDRESS+512)&0xffff);
-    slow_write(fd,cmd,strlen(cmd),500);
-    usleep(10000); // give uart monitor time to get ready for the data
-    process_waiting(fd);
-    int written=write(fd,buffer,512);
-    if (written!=512) {
-      printf("ERROR: Failed to write 512 bytes of sector data to serial port\n");
-      retVal=-1;
-      break;
-    }
-    process_waiting(fd);
-    
-    //    printf("Commanding SD write to sector %d\n",sector_number);
-    unsigned int sector_address;
-    if (!sdhc) sector_address=sector_number*0x0200; else sector_address=sector_number;
-    snprintf(cmd,1024,"sffd3681 %02x %02x %02x %02x\rsffd3680 3\r",
-	     (sector_address>>0)&0xff,
-	     (sector_address>>8)&0xff,
-	     (sector_address>>16)&0xff,
-	     (sector_address>>24)&0xff);
-    slow_write(fd,cmd,strlen(cmd),2500);
-    if (wait_for_sdready_passive()) {
-      printf("wait_for_sdready_passive() failed\n");
-      retVal=-1; break;
+    // Clear pending input first
+    int b=1;
+    while(b>0){
+      b=serialport_read(fd,cmd,1024);
+      //      if (b) dump_bytes(3,"write_sector() flush data",cmd,b);
     }
 
-    if (read_sector(sector_number,verify,1)) {
-      printf("ERROR: Failed to read sector to verify after writing to sector %d\n",sector_number);
-      retVal=-1;
-      break;
-    }
-    if (bcmp(verify,buffer,512)) {
-      printf("ERROR: Verification error: Read back different data than we wrote to sector %d\n",sector_number);
-      retVal=-1;
-      break;
-    }
+    queue_write_sector(sector_number,buffer);
+    
+    fprintf(stderr,"Sent data for write_sector($%08x)\n",sector_number);
     
     // Store in cache / update cache
     int i;
@@ -1609,7 +1602,7 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
 
     
   } while(0);
-  if (retVal) printf("FAIL reading sector %d\n",sector_number);
+  if (retVal) printf("FAIL writing sector %d\n",sector_number);
   return retVal;
      
 }
