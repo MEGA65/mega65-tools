@@ -1383,15 +1383,13 @@ void queue_execute(void)
   long long start = gettime_us();
   
   // Push queued jobs in on go
-  slow_write(fd,"\r",1,0);
-  usleep(1000); 
   sprintf(cmd,"l%x %x\r",0xc001,queue_addr);
   slow_write(fd,cmd,strlen(cmd),0);
   // give serial uart time to get ready
   // (and make sure we end up in a different USB packet to the command)
-  usleep(2000); 
+  usleep(1000); 
   serialport_write(fd,queue_cmds,queue_addr-0xc001);
-  usleep(2000);
+  //  usleep(1000);
   
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd),0);
