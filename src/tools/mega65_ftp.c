@@ -1357,11 +1357,13 @@ void job_process_results(void)
   uint8_t recent[32];
 
   data_byte_count=0;
+
+  int debug_rx=0;
   
   while (1) {
     int b=read(fd,buff,8192);
     if (b<1) usleep(0);
-    //    if (b>0) dump_bytes(0,"jobresponse",buff,b);
+    if (b>0) if (debug_rx) dump_bytes(0,"jobresponse",buff,b);
     for(int i=0;i<b;i++) {
       // Keep rolling window of most recent chars for interpretting job
       // results
@@ -1374,19 +1376,19 @@ void job_process_results(void)
 	recent[31]=0;
 	if (!strncmp(&recent[30-10],"FTBATCHDONE",11)) {
 	  long long endtime =gettime_us();
-	  if (0) printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
+	  if (debug_rx) printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
 	  //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
 	  return;
 	}
 	if (!strncmp(recent,"FTJOBDONE:",10)) {
 	  int jn=atoi((char *)&recent[10]);	  
-	  if (0) printf("Saw job #%d completion.\n",jn);	  
+	  if (debug_rx) printf("Saw job #%d completion.\n",jn);	  
 	}
 	int j_addr,n;
 	uint32_t transfer_size;
 	int fn=sscanf(recent,"FTJOBDATA:%x:%x:%n",&j_addr,&transfer_size,&n);
 	if (fn==2) {
-	  if (0)
+	  if (debug_rx)
 	    printf("Spotted job data: Reading $%x bytes of data, offset %d,"
 		   " %02x %02x\n",transfer_size,n,
 		   recent[n],recent[n+1]
@@ -1418,7 +1420,7 @@ void queue_execute(void)
   // (and make sure we end up in a different USB packet to the command)
   usleep(1000); 
   serialport_write(fd,queue_cmds,queue_addr-0xc001);
-  //  usleep(1000);
+  usleep(1000);
   
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd),0);
@@ -1491,22 +1493,32 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
 
     // Do read using new remote job queue mechanism that is hopefully
     // lower latency than the old way
-    queue_read_sector(sector_number,0x40000);
-    queue_read_mem(0x40000,512);
+    // Request multiple sectors at once to make it more efficient
+    for(int n=0;n<8;n++)
+      queue_read_sector(sector_number+n,0x40000+(n<<9));
+    queue_read_mem(0x40000,512*8);
     queue_execute();
-    bcopy(&queue_read_data[0],buffer,512);
-    //    dump_bytes(0,"read sector",buffer,512);
 
+
+    for(int n=0;n<8;n++) {
+      bcopy(&queue_read_data[n<<9],buffer,512);
+      //      printf("Sector $%08x:\n",sector_number+n);
+      //      dump_bytes(3,"read sector",buffer,512);
+      
     // Store in cache / update cache
-    int i;
-    for(i=0;i<sector_cache_count;i++) 
-      if (sector_cache_sectors[i]==sector_number) break;
-    if (i<SECTOR_CACHE_SIZE) {
-      bcopy(buffer,sector_cache[i],512);
-      sector_cache_sectors[i]=sector_number;
+      int i;
+      for(i=0;i<sector_cache_count;i++) 
+	if (sector_cache_sectors[i]==sector_number+n) break;
+      if (i<SECTOR_CACHE_SIZE) {
+	bcopy(buffer,sector_cache[i],512);
+	sector_cache_sectors[i]=sector_number+n;
+      }
+      if (sector_cache_count<(i+1)) sector_cache_count=i+1;
     }
-    if (sector_cache_count<(i+1)) sector_cache_count=i+1;
 
+    // Make sure to return the actual sector that was asked for
+    bcopy(&queue_read_data[0],buffer,512);
+    
   } while(0);
   if (retVal) printf("FAIL reading sector %d\n",sector_number);
   return retVal;

@@ -23,7 +23,7 @@
 #define DEBUG 0
 
 // Slight delay between chars for old HYPPO versions that lack ready check on serial write
-#define SERIAL_DELAY for(aa=0;aa!=40;aa++) continue;
+#define SERIAL_DELAY for(aa=0;aa!=5;aa++) continue;
 uint8_t aa;
 // Write a char to the serial monitor interface
 #define SERIAL_WRITE(the_char) { __asm__ ("LDA %v",the_char); __asm__ ("STA $D643"); __asm__ ("NOP"); }
@@ -159,7 +159,7 @@ void main(void)
 	      {
 		// Write out 0x00 -- 0x7F as length of non RLE bytes,
 		// followed by the bytes
-#if DEBUG
+#if DEBUG>1
 		printf("$%02x raw\n",olen);
 #endif
 		SERIAL_WRITE(olen);
@@ -174,14 +174,14 @@ void main(void)
 	    // XXX We have trouble with $FF RLE bytes not being received for some reason.
 	    if (rle_count==127) {
 	      // Flush a full RLE buffer
-#if DEBUG
+#if DEBUG>1
 	      printf("$%02x x $%02x\n",rle_count,last_value);
 #endif
 	      c=0x80|rle_count;
 	      SERIAL_WRITE(c);
 	      SERIAL_DELAY;
 	      SERIAL_WRITE(last_value);
-#if DEBUG
+#if DEBUG>1
 	      printf("Wrote $%02x, $%02x\n",c,last_value);
 #endif
 	      rle_count=0;
@@ -192,7 +192,7 @@ void main(void)
 	      if (rle_count==3) {
 		// Switch from raw to RLE, flushing any pending raw bytes
 		if (olen>3) olen-=3; else olen=0;
-#if DEBUG
+#if DEBUG>1
 		printf("Flush $%02x raw %02x %02x %02x ...\n",olen,
 		       obuf[0],obuf[1],obuf[2]);
 #endif
@@ -214,7 +214,7 @@ void main(void)
 	    } else {
 	      // Flush any accumulated RLE data
 	      if (rle_count>2) {
-#if DEBUG
+#if DEBUG>1
 		printf("$%02x x $%02x\n",rle_count,last_value);
 #endif
 		c=0x80|rle_count;
@@ -238,7 +238,7 @@ void main(void)
 
 	  // Flush any accumulated RLE data
 	  if (rle_count>2) {
-#if DEBUG
+#if DEBUG>1
 	    printf("Terminal $%02x x $%02x\n",rle_count,last_value);
 #endif
 	    c=0x80|rle_count;
@@ -246,7 +246,7 @@ void main(void)
 	    SERIAL_DELAY;
 	    SERIAL_WRITE(last_value);
 	  } else if (olen) {
-#if DEBUG
+#if DEBUG>1
 	    printf("Terminal flush $%02x raw %02x %02x %02x ...\n",olen,
 		   obuf[0],obuf[1],obuf[2]);
 #endif
