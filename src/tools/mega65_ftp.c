@@ -537,11 +537,11 @@ int slow_write(int fd,char *d,int l,int preWait)
     {
       int w=write(fd,&d[i],1);
       while (w<1) {
-	usleep(1000);
+	usleep(500);
 	w=write(fd,&d[i],1);
       }
       // Only control characters can cause us whole line delays,
-      if (d[i]<' ') { usleep(2000); } else usleep(0);
+      if (d[i]<' ') { usleep(1000); } else usleep(0);
     }
     tcdrain(fd);
   return 0;
@@ -849,7 +849,7 @@ int execute_command(char *cmd)
 int main(int argc,char **argv)
 {
   start_time=time(0);
-  start_usec=gettime_us();
+  start_usec=gettime_us();  
   
   int opt;
   while ((opt = getopt(argc, argv, "b:s:l:c:")) != -1) {
@@ -1306,7 +1306,6 @@ void queue_add_job(uint8_t *j,int len)
   queue_addr+=len;
   //  printf("remote job queued.\n");
 
-  usleep(100000);
   b=1;
   while(b>0) {
     b=serialport_read(fd,read_buff,8192);
@@ -1328,7 +1327,7 @@ void job_process_results(void)
   
   while (1) {
     int b=read(fd,buff,8192);
-    if (b<1) usleep(1000);
+    if (b<1) usleep(0);
     //    if (b>0) dump_bytes(0,"jobresponse",buff,b);
     for(int i=0;i<b;i++) {
       // Keep rolling window of most recent chars for interpretting job
@@ -1342,9 +1341,9 @@ void job_process_results(void)
 	bcopy(&recent[1],&recent[0],30);
 	recent[30]=buff[i];
 	recent[31]=0;
-	if (!strncmp(&recent[30-11],"FTBATCHDONE",11)) {
+	if (!strncmp(&recent[30-10],"FTBATCHDONE",11)) {
 	  long long endtime =gettime_us();
-	  printf("Saw end of batch job after %lld usec\n",endtime-now);
+	  //	  printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
 	  return;
 	}
 	if (!strncmp(recent,"FTJOBDONE:",10)) {
@@ -1377,18 +1376,22 @@ void queue_execute(void)
 {
   char cmd[1024];
 
+  long long start = gettime_us();
+  
   // Push queued jobs in on go
   sprintf(cmd,"l%x %x\r",0xc001,queue_addr);
   slow_write(fd,cmd,strlen(cmd),0);
   // give serial uart time to get ready
   // (and make sure we end up in a different USB packet to the command)
-  usleep(2000); 
+  usleep(500); 
   serialport_write(fd,queue_cmds,queue_addr-0xc001);
-  usleep(1000);
+  usleep(500);
   
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd),0);
-  //  printf("Executing queued jobs\n");
+  long long end = gettime_us();
+  //  printf("%lld Executing queued jobs (took %lld us to dispatch)\n",end-start_usec,end-start);
+  
   job_process_results();
   queue_addr=0xc001;
   queue_jobs=0;
@@ -1452,6 +1455,7 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
 
     if (cachedRead) break;
 
+
     // Do read using new remote job queue mechanism that is hopefully
     // lower latency than the old way
     queue_read_sector(sector_number,0x40000);
@@ -1459,7 +1463,7 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
     queue_execute();
     bcopy(&queue_read_data[0],buffer,512);
     //    dump_bytes(0,"read sector",buffer,512);
-    
+
     // Store in cache / update cache
     int i;
     for(i=0;i<sector_cache_count;i++) 
