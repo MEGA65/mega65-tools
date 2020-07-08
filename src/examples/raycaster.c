@@ -186,9 +186,9 @@ void print_text(unsigned char x,unsigned char y,unsigned char colour,char *msg)
 
 void show_notice(char *m)
 {
+#if 0
   d++; d&=3;
   print_text(0,d,7,m);
-#if 0
   while(!PEEK(0xD610)) continue;
   POKE(0xD610,0);
 #endif
@@ -301,14 +301,26 @@ int main(int /*argc*/, char */*argv*/[])
         }
         //Check if ray has hit a wall
         if(worldMap[mapX>>8][mapY>>8] > 0) hit = 1;
-	snprintf(msg,80+1,"mapX=$%04x, mapY=$%04x, stepX=$%02x, stepY=$%02x, hit=%d",
-		 mapX,mapY,stepX,stepY,hit);	
-	show_notice(msg);
+	//	snprintf(msg,80+1,"mapX=$%04x, mapY=$%04x, stepX=$%02x, stepY=$%02x, hit=%d",
+	//		 mapX,mapY,stepX,stepY,hit);	
+	//	show_notice(msg);
       }
       //Calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
-      if(side == 0) perpWallDist = 256*(mapX - posX + (1 - stepX)*128) / rayDirX;
-      else          perpWallDist = 256*(mapY - posY + (1 - stepY)*128) / rayDirY;
+      if(side == 0) {
+	perpWallDist = 65536*(mapX - posX + (1 - stepX)*128) / (short)rayDirX;
+	snprintf(msg,80+1,"perpWallDist=$%08lx, mapX=$%04x, posX=$%04x, stepX=%d, rayDirX=$%08lx.",
+		 perpWallDist,mapX,posX,(int)stepX,rayDirX);
+	show_notice(msg);
+      } else {
+	perpWallDist = (65536*(mapY - posY)); //  + (1 - stepY)*128));
+	//	perpWallDist /= rayDirY;
+	perpWallDist >>= 16;
+	snprintf(msg,80+1,"perpWallDist=$%08lx, mapY=$%04x, posY=$%04x, stepY=%d, rayDirY=$%08lx.",
+		 perpWallDist,mapY,posY,(int)stepY,rayDirY);
+	show_notice(msg);
+      }
 
+      
       //Calculate height of line to draw on screen
       lineHeight = (int)(screenHeight / perpWallDist);
 

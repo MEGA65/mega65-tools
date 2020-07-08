@@ -1358,7 +1358,7 @@ void job_process_results(void)
 
   data_byte_count=0;
 
-  int debug_rx=1;
+  int debug_rx=0;
   
   while (1) {
     int b=read(fd,buff,8192);
@@ -1461,7 +1461,7 @@ int execute_write_queue(void)
     printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
 	   write_sector_count,write_buffer_offset);
     snprintf(cmd,1024,"l%x %x\r",0x50000,(0x50000+write_buffer_offset)&0xffff);
-    printf("CMD: '%s'\n",cmd);
+    //    printf("CMD: '%s'\n",cmd);
     slow_write(fd,cmd,strlen(cmd),1000);
     usleep(5000);
     int offset=0;
@@ -1574,13 +1574,14 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
     // Do read using new remote job queue mechanism that is hopefully
     // lower latency than the old way
     // Request multiple sectors at once to make it more efficient
-    for(int n=0;n<16;n++)
+    int batch_read_size=16;
+    
+    for(int n=0;n<batch_read_size;n++)
       queue_read_sector(sector_number+n,0x40000+(n<<9));
-    queue_read_mem(0x40000,512*16);
+    queue_read_mem(0x40000,512*batch_read_size);
     queue_execute();
 
-
-    for(int n=0;n<16;n++) {
+    for(int n=0;n<batch_read_size;n++) {
       bcopy(&queue_read_data[n<<9],buffer,512);
       //      printf("Sector $%08x:\n",sector_number+n);
       //      dump_bytes(3,"read sector",buffer,512);

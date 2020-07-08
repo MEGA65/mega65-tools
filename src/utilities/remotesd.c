@@ -103,12 +103,12 @@ void main(void)
 	  sector_number=*(uint32_t *)job_addr;
 	  job_addr+=4;
 
-#if DEBUG>=0
+#if DEBUG>0
 	  printf("$%04x : write sector $%08lx from mem $%07lx\n",*(uint16_t *)0xDC08,
 		 sector_number,buffer_address);
 #endif
 
-	  lcopy(buffer_address,0x0400,512);
+	  //	  lcopy(buffer_address,0x0400,512);
 	  lcopy(buffer_address,0xffd6e00,512);
 	  
 	  // For now pretend with a read
