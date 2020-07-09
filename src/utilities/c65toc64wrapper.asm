@@ -95,6 +95,7 @@ transfer_routine
 	jsr $fda3 ; init I/O
         jsr $fd15 ; set I/O vectors
         jsr $ff5b ; more init
+	jsr $f7a9 ; C65 DOS reinit
 
 	;; Enter programme
  	jmp 2061		
