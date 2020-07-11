@@ -499,10 +499,13 @@ void paint_screen_shot(void)
     int x_position=chargen_x;
 
     int xc=0;     
+
+    int is_foreground=0;
+    int transparent_background=0;
     
     for(int cx=0;cx<screen_width;cx++) {
 
-      //      printf("Rendering char (%d,%d) at (%d,%d)\n",cx,cy,x_position,y_position);
+      // printf("Rendering char (%d,%d) at (%d,%d)\n",cx,cy,x_position,y_position);
       int char_background_colour;
       int char_id=0;
       int char_value=screen_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
@@ -612,11 +615,17 @@ void paint_screen_shot(void)
 	}
 
 	xc=0;
+	if (glyph_goto) {
+	  x_position=chargen_x+char_value&0x3ff;
+	  transparent_background=colour_value&0x8000;
+	} else
 	for(float xx=0;xx<glyph_width;xx+=x_step) {
 	  int r=mega65_rgb(background_colour,0);
 	  int g=mega65_rgb(background_colour,1);
 	  int b=mega65_rgb(background_colour,2);
 
+	  is_foreground=0;
+	  
 	  if (glyph_4bit) {
 	    // 16-colour 4 bits per pixel
 	    int c=glyph_data[((int)xx)/2];
@@ -628,12 +637,13 @@ void paint_screen_shot(void)
 	      int a=c;
 	      r=(mega65_rgb(foreground_colour,0)*a + mega65_rgb(background_colour,0)*(15 -a))>>8;
 	      g=(mega65_rgb(foreground_colour,1)*a + mega65_rgb(background_colour,1)*(15 -a))>>8;
-	      b=(mega65_rgb(foreground_colour,2)*a + mega65_rgb(background_colour,2)*(15 -a))>>8;
+	      b=(mega65_rgb(foreground_colour,2)*a + mega65_rgb(background_colour,2)*(15 -a))>>8;	    
 	    } else {
 	      r=mega65_rgb(c,0);
 	      g=mega65_rgb(c,1);
 	      b=mega65_rgb(c,2);
 	    }
+	    if (c) is_foreground=1;
 	    
 	  } else if (glyph_full_colour) {
 	    // 256-colour 8 bits per pixel
@@ -645,6 +655,7 @@ void paint_screen_shot(void)
 	      r=(mega65_rgb(foreground_colour,0)*a + mega65_rgb(background_colour,0)*(255 -a))>>8;
 	      g=(mega65_rgb(foreground_colour,1)*a + mega65_rgb(background_colour,1)*(255 -a))>>8;
 	      b=(mega65_rgb(foreground_colour,2)*a + mega65_rgb(background_colour,2)*(255 -a))>>8;
+	      if (foreground_colour) is_foreground=1;
 	    } else {
 	      r=mega65_rgb(glyph_data[(int)xx],0);
 	      g=mega65_rgb(glyph_data[(int)xx],1);
@@ -660,16 +671,16 @@ void paint_screen_shot(void)
 	    if (!bitmap_mode) {
 	      switch(bits) {
 	      case 0: colour=vic_regs[0x21]; break; // background colour
-	      case 1: colour=vic_regs[0x22]; break; // multi colour 1
-	      case 2: colour=vic_regs[0x23]; break; // multi colour 2
-	      case 3: colour=foreground_colour&7; break; // foreground colour
+	      case 1: is_foreground=1; colour=vic_regs[0x22]; break; // multi colour 1
+	      case 2: is_foreground=1; colour=vic_regs[0x23]; break; // multi colour 2
+	      case 3: is_foreground=1; colour=foreground_colour&7; break; // foreground colour
 	      }
 	    } else {
 	      switch(bits) {
-	      case 0: colour=vic_regs[0x21]; break;
+	      case 0: is_foreground=1; colour=vic_regs[0x21]; break;
 	      case 1: colour=background_colour; break; 
-	      case 2: colour=foreground_colour; break; 
-	      case 3: colour=bitmap_multi_colour&0xf; break;
+	      case 2: is_foreground=1; colour=foreground_colour; break; 
+	      case 3: is_foreground=1; colour=bitmap_multi_colour&0xf; break;
 	      }
 	    }
 	    r=mega65_rgb(colour,0);
@@ -684,6 +695,7 @@ void paint_screen_shot(void)
 	      b=mega65_rgb(foreground_colour,2);
 	      //	      printf("Foreground pixel. colour = $%02x = #%02x%02x%02x\n",
 	      //		     foreground_colour,b,g,r);
+	      is_foreground=1;
 	    }
 	  }
 	  
@@ -694,8 +706,11 @@ void paint_screen_shot(void)
 		&& ((x_position+xc)<right_border)
 		&& ((x_position+xc)>=left_border)
 		)
-	      set_pixel(x_position+xc,y_position+yc+yy*(1+y_scale),r,g,b);
+	      if (is_foreground||(!transparent_background)) {
+		set_pixel(x_position+xc,y_position+yc+yy*(1+y_scale),r,g,b);
+	      }
 	  }
+
 	  xc++;
 	}
       }
