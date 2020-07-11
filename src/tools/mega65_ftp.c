@@ -1458,8 +1458,8 @@ int execute_write_queue(void)
   int retVal=0;
   do {
     char cmd[1024];
-    printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
-	   write_sector_count,write_buffer_offset);
+    if (0) printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
+		  write_sector_count,write_buffer_offset);
     snprintf(cmd,1024,"l%x %x\r",0x50000,(0x50000+write_buffer_offset)&0xffff);
     //    printf("CMD: '%s'\n",cmd);
     slow_write(fd,cmd,strlen(cmd),1000);
