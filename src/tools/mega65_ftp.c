@@ -1234,16 +1234,19 @@ int load_helper(void)
     if (!helper_installed) {      
       // Install helper routine
 
+      monitor_sync();
+      
       // First see if the helper is already running by looking for the
       // MEGA65FT1.0 string
       sleep(1);
       char buffer[8192];
       int bytes=read(fd,buffer,8192);
-      for(int i=0;i<bytes-strlen("MEGA65FT1.0");i++)
-	if (!strncmp("MEGA65FT1.0",&buffer[i],strlen("MEGA65FT1.0"))) {
-	  printf("Helper already running. Nothing to do.\n");
-	  return 0;
-	}
+      if (bytes>=strlen("MEGA65FT1.0"))
+	for(int i=0;i<bytes-strlen("MEGA65FT1.0");i++)
+	  if (!strncmp("MEGA65FT1.0",&buffer[i],strlen("MEGA65FT1.0"))) {
+	    printf("Helper already running. Nothing to do.\n");
+	    return 0;
+	  }
       
       detect_mode();
    
