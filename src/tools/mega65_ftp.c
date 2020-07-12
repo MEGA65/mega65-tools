@@ -934,6 +934,8 @@ int main(int argc,char **argv)
   stop_cpu();
 
   load_helper();
+
+  monitor_sync();
   
   sdhc_check();
   
