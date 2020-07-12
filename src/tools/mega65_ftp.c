@@ -60,6 +60,8 @@ long long start_usec=0;
 int fd=-1;
 int cpu_stopped=0;
 
+int slow_write_safe(int fd,char *d,int l);
+int slow_write(int fd,char *d,int l,int preWait);
 int open_file_system(void);
 int download_slot(int sllot,char *dest_name);
 int download_file(char *dest_name,char *local_name,int showClusters);
@@ -324,6 +326,7 @@ int serialport_write(int fd, uint8_t * buffer, size_t size)
       //      printf("Wrote %d bytes\n",written);
     }
   }
+  return size;
 #endif
 }
 
@@ -1230,8 +1233,18 @@ int load_helper(void)
   do {
     if (!helper_installed) {      
       // Install helper routine
-      char cmd[1024];
 
+      // First see if the helper is already running by looking for the
+      // MEGA65FT1.0 string
+      sleep(1);
+      char buffer[8192];
+      int bytes=read(fd,buffer,8192);
+      for(int i=0;i<bytes-strlen("MEGA65FT1.0");i++)
+	if (!strncmp("MEGA65FT1.0",&buffer[i],strlen("MEGA65FT1.0"))) {
+	  printf("Helper already running. Nothing to do.\n");
+	  return 0;
+	}
+      
       detect_mode();
    
       if ((!saw_c64_mode)) {
@@ -1250,6 +1263,7 @@ int load_helper(void)
 	}
       }
 
+      char cmd[1024];
       snprintf(cmd,1024,"t1\r");
       slow_write(fd,cmd,strlen(cmd),500);
 
@@ -1324,7 +1338,6 @@ void queue_data_decode(uint8_t v)
 
 void queue_add_job(uint8_t *j,int len)
 {
-  char cmd[1024];
   int b;
   uint8_t read_buff[8192];
 
@@ -1374,19 +1387,19 @@ void job_process_results(void)
 	bcopy(&recent[1],&recent[0],30);
 	recent[30]=buff[i];
 	recent[31]=0;
-	if (!strncmp(&recent[30-10],"FTBATCHDONE",11)) {
+	if (!strncmp((char *)&recent[30-10],"FTBATCHDONE",11)) {
 	  long long endtime =gettime_us();
 	  if (debug_rx) printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
 	  //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
 	  return;
 	}
-	if (!strncmp(recent,"FTJOBDONE:",10)) {
+	if (!strncmp((char *)recent,"FTJOBDONE:",10)) {
 	  int jn=atoi((char *)&recent[10]);	  
 	  if (debug_rx) printf("Saw job #%d completion.\n",jn);	  
 	}
 	int j_addr,n;
 	uint32_t transfer_size;
-	int fn=sscanf(recent,"FTJOBDATA:%x:%x:%n",&j_addr,&transfer_size,&n);
+	int fn=sscanf((char *)recent,"FTJOBDATA:%x:%x:%n",&j_addr,&transfer_size,&n);
 	if (fn==2) {
 	  if (debug_rx)
 	    printf("Spotted job data: Reading $%x bytes of data, offset %d,"
@@ -1411,7 +1424,7 @@ void queue_execute(void)
 {
   char cmd[1024];
 
-  long long start = gettime_us();
+  //  long long start = gettime_us();
   
   // Push queued jobs in on go
   sprintf(cmd,"l%x %x\r",0xc001,queue_addr);
@@ -1424,7 +1437,7 @@ void queue_execute(void)
   
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd),0);
-  long long end = gettime_us();
+  //  long long end = gettime_us();
   //  printf("%lld Executing queued jobs (took %lld us to dispatch)\n",end-start_usec,end-start);
   
   job_process_results();
@@ -1617,7 +1630,7 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
     // Clear pending input first
     int b=1;
     while(b>0){
-      b=serialport_read(fd,cmd,1024);
+      b=serialport_read(fd,(uint8_t *)cmd,1024);
       //      if (b) dump_bytes(3,"write_sector() flush data",cmd,b);
     }
 
