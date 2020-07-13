@@ -875,11 +875,11 @@ mem_data get_mem(int addr, bool useAddr28)
   if (useAddr28)
     sprintf(str, "m%07X\n", addr); // use 'm' (for 28-bit memory addresses)
   else
-    sprintf(str, "d%04X\n", addr); // use 'd' instead of 'm' (for memory in cpu context)
+    sprintf(str, "m777%04X\n", addr); // set upper 12-bis to $777xxxx (for memory in cpu context)
 
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
-  sscanf(inbuf, " :%X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+  sscanf(inbuf, ":%X:%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
   &mem.addr, &mem.b[0], &mem.b[1], &mem.b[2], &mem.b[3], &mem.b[4], &mem.b[5], &mem.b[6], &mem.b[7], &mem.b[8], &mem.b[9], &mem.b[10], &mem.b[11], &mem.b[12], &mem.b[13], &mem.b[14], &mem.b[15]); 
 
   return mem;
@@ -935,10 +935,10 @@ void cmdRawHelp(void)
   printf("! - reset machine\n"
          "f<low> <high> <byte> - Fill memory\n"
          "g<addr> - Set PC\n"
-         "m<addr28> - Dump 16-bytes of memory (28bit addresses)\n"
-         "M<addr28> - Dump 512-bytes of memory (28bit addresses)\n"
-         "d<addr> - Dump 16-bytes of memory (CPU context)\n"
-         "D<addr> - Dump 512-bytes of memory (CPU context)\n"
+         "m<addr28> - Dump 16-bytes of memory (28bit addresses - use $777xxxx for CPU context)\n"
+         "M<addr28> - Dump 512-bytes of memory (28bit addresses - use $777xxxx for CPU context)\n"
+         "d<addr> - Disassemble one instruction (28bit addresses - use $777xxxx for CPU context)\n"
+         "D<addr> - Disassemble 16 instructions (28bit addresses - use $777xxxx for CPU context)\n"
          "r - display CPU registers and last instruction executed\n"
          "s<addr28> <value> ... - Set memory (28bit addresses)\n"
          "S<addr> <value> ... - Set memory (CPU memory context)\n"
@@ -949,6 +949,12 @@ void cmdRawHelp(void)
          "w<addr> - Sets a watchpoint to trigger when specified address is modified\n"
          "w - clear 'w' watchpoint\n"
          "e - set a breakpoint to occur based on CPU flags\n"
+         "z - history command - show every memory access on the bus for the last hundred cycles\n"
+         "+ - set bitrate (+9 = 4,000,000bps,  +13 = 2,000,000bps)\n"
+         "i - irq command - (for masking interrupts)\n"
+         "# - trap command - trigger a trap?\n"
+         "E - flag break command - allows breaking on particular CPU flag settings\n"
+         "L - load mem command - ?\n"
   );
 }
 
@@ -995,7 +1001,7 @@ void dump(int addr, int total)
     for (int k = 0; k < 16; k++)
     {
       int c = mem.b[k];
-      if (isprint(c))
+      if (isprint(c) && c > 31)
         printf("%c", c);
       else
         printf(".");
@@ -1053,7 +1059,7 @@ void mdump(int addr, int total)
     for (int k = 0; k < 16; k++)
     {
       int c = mem.b[k];
-      if (isprint(c))
+      if (isprint(c) && c > 31)
         printf("%c", c);
       else
         printf(".");
