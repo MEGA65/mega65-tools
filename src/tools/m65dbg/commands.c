@@ -83,6 +83,7 @@ type_command_details command_details[] =
   { "down", cmdDownFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level down from the current frame" },
   { "se", cmdSearch, "<addr28> <len> <values>", "Searches the range you specify for the given values (either a list of hex bytes or a \"string\""},
   { "ss", cmdScreenshot, NULL, "Takes an ascii screenshot of the mega65's screen" },
+  { "ty", cmdType, NULL, "Remote keyboard mode" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -2222,6 +2223,14 @@ void cmdScreenshot(void)
   fcntl(fd,F_SETFL,orig_fcntl|O_NONBLOCK);
   get_video_state();
   do_screen_shot_ascii();
+  fcntl(fd,F_SETFL,orig_fcntl);
+}
+
+void cmdType(void)
+{
+  int orig_fcntl = fcntl(fd, F_GETFL, NULL);
+  fcntl(fd,F_SETFL,orig_fcntl|O_NONBLOCK);
+  do_type_text("-");
   fcntl(fd,F_SETFL,orig_fcntl);
 }
 

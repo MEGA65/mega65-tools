@@ -419,8 +419,8 @@ void get_video_state(void)
   multicolour_mode=vic_regs[0x16]&0x10;
   bitmap_mode=vic_regs[0x11]&0x20;
 
-  printf("bitmap_mode=%d, multicolour_mode=%d, extended_background_mode=%d\n",
-	 bitmap_mode,multicolour_mode,extended_background_mode);
+  //printf("bitmap_mode=%d, multicolour_mode=%d, extended_background_mode=%d\n",
+	// bitmap_mode,multicolour_mode,extended_background_mode);
   
   border_colour=vic_regs[0x20];
   background_colour=vic_regs[0x21];
@@ -457,7 +457,7 @@ void get_video_state(void)
   // 60 = 2 pixels wide
   x_step=x_scale_120/120.0;
   if (!h640) x_step/=2;
-  printf("x_scale_120=$%02x\n",x_scale_120);
+  //printf("x_scale_120=$%02x\n",x_scale_120);
   
   // Check if we are in 16-bit text mode, without full-colour chars for char IDs > 255
   if (sixteenbit_mode&&(!(vic_regs[0x54]&4))) {
@@ -470,16 +470,18 @@ void get_video_state(void)
     exit(-1);
   }
 
-  fprintf(stderr,"Screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes, uppercase=%d, line_step= %d\n",
-	  screen_address,screen_width,screen_rows,screen_size,upper_case,screen_line_step);
-  fprintf(stderr,"charset_address=$%x\n",charset_address);
+  //fprintf(stderr,"Screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes, uppercase=%d, line_step= %d\n",
+	  //screen_address,screen_width,screen_rows,screen_size,upper_case,screen_line_step);
+  //fprintf(stderr,"charset_address=$%x\n",charset_address);
   
-  fprintf(stderr,"Fetching screen data,"); fflush(stderr);
+  //fprintf(stderr,"Fetching screen data,"); fflush(stderr);
   fetch_ram(screen_address,screen_size,screen_data);
-  fprintf(stderr,"colour data,"); fflush(stderr);
+  //fprintf(stderr,"colour data,");
+  fflush(stderr);
   fetch_ram(0xff80000+colour_address,screen_size,colour_data);
 
-  fprintf(stderr,"charset"); fflush(stderr);
+  //fprintf(stderr,"charset");
+  fflush(stderr);
   fetch_ram(charset_address,charset_size,char_data);
   
   fprintf(stderr,"\nDone\n");

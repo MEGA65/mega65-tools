@@ -1295,7 +1295,7 @@ void do_type_text(char *type_text)
       
       c=getc(stdin);
       while(c!=25) {
-	printf("$%02x -> ",c);
+	//printf("$%02x -> ",c);
       switch(c) {
     case 0x7f: c=0x14; break; // DELETE
     case 0x0a: c=0x0d; break; // RETURN
@@ -1315,9 +1315,20 @@ void do_type_text(char *type_text)
 	} 
 	} else c=0;
       }
-      printf("$%02x\n",c);
+      //printf("$%02x\n",c);
       if (c) {
       do_type_key(c);
+
+      if (c==0x0d)
+      {
+        get_video_state();
+        //printf("\033[2J");  // clear the terminal screen first
+        do_screen_shot_ascii();
+      }
+      else
+      {
+        printf("%c", c);
+      }
     } else usleep(1000);
       c=getc(stdin);
     }
