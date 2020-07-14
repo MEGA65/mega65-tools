@@ -50,11 +50,11 @@ unsigned char bitmap_multi_colour;
 unsigned int current_physical_raster;
 unsigned int next_raster_interrupt;
 int raster_interrupt_enabled;
-extern unsigned int screen_address;
+unsigned int screen_address;
 unsigned int charset_address;
-extern unsigned int screen_line_step;
+unsigned int screen_line_step;
 unsigned int colour_address;
-extern unsigned int screen_width;
+unsigned int screen_width;
 unsigned int upper_case;
 unsigned int screen_rows;
 unsigned int sixteenbit_mode;
@@ -735,26 +735,26 @@ int do_screen_shot(void)
   }
   printf("Rendering pixel-exact version to %s...\n",filename);
   
-  png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  //png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
   if (!png_ptr) {
     fprintf(stderr,"ERROR: Could not creat PNG structure.\n");
     return -1;
   }
 
-  png_infop info_ptr = png_create_info_struct(png_ptr);
-  if (!info_ptr) {
-    fprintf(stderr,"ERROR: Could not creat PNG info structure.\n");
-    return -1;
-  }
+  //png_infop info_ptr = png_create_info_struct(png_ptr);
+  //if (!info_ptr) {
+  //  fprintf(stderr,"ERROR: Could not creat PNG info structure.\n");
+  //  return -1;
+  //}
 
-  png_init_io(png_ptr, f);
+  //png_init_io(png_ptr, f);
 
   // Set image size based on PAL or NTSC video mode
-  png_set_IHDR(png_ptr, info_ptr, 720, is_pal_mode? 576 : 480,
-	       8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
-	       PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+  //png_set_IHDR(png_ptr, info_ptr, 720, is_pal_mode? 576 : 480,
+	       //8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+	       //PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
-  png_write_info(png_ptr, info_ptr);
+  //png_write_info(png_ptr, info_ptr);
 
   // Allocate frame buffer for image, and set all pixels to the border colour by default
   printf("Allocating PNG frame buffer...\n");
@@ -842,9 +842,9 @@ int do_screen_shot(void)
   printf("Writing out PNG frame buffer...\n");
   // Write out each row of the PNG
   for(int y=0;y<(is_pal_mode?576:480);y++)
-    png_write_row(png_ptr, png_rows[y]);
+    ; //png_write_row(png_ptr, png_rows[y]);
 
-  png_write_end(png_ptr, NULL);
+  //png_write_end(png_ptr, NULL);
 
   
   fclose(f);

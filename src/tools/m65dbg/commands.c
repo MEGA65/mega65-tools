@@ -8,6 +8,8 @@
 #include "commands.h"
 #include "serial.h"
 #include "gs4510.h"
+#include "screen_shot.h"
+#include "m65.h"
 
 int get_sym_value(char* token);
 
@@ -79,6 +81,7 @@ type_command_details command_details[] =
   { "up", cmdUpFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level up from the current frame" },
   { "down", cmdDownFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level down from the current frame" },
   { "se", cmdSearch, "<addr28> <len> <values>", "Searches the range you specify for the given values (either a list of hex bytes or a \"string\""},
+  { "ss", cmdScreenshot, NULL, "Takes an ascii screenshot of the mega65's screen" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -101,7 +104,7 @@ type_fileloc* cur_file_loc = NULL;
 
 type_symmap_entry* lstSymMap = NULL;
 
-type_offsets segmentOffsets = { 0 };
+type_offsets segmentOffsets = {{ 0 }};
 
 type_offsets* lstModuleOffsets = NULL;
 
@@ -482,7 +485,7 @@ void parse_ca65_modules(FILE* f, char* line)
   int val;
   int state = 0;
   char *p;
-  type_offsets mo = { 0 };
+  type_offsets mo = {{ 0 }};
 
   while (!feof(f))
   {
@@ -2208,6 +2211,12 @@ void cmdSearch(void)
 
     search_range(addr, total, (unsigned char*)bytevals, len);
   }
+}
+
+void cmdScreenshot(void)
+{
+  get_video_state();
+  do_screen_shot_ascii();
 }
 
 int cmdGetCmdCount(void)

@@ -114,7 +114,7 @@ bool serialOpen(char* portname)
     return false;
 #endif
   } else {
-    fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
+    fd = open (portname, O_RDWR);
     if (fd < 0)
     {
           error_message ("error %d opening %s: %s\n", errno, portname, strerror (errno));
@@ -127,6 +127,9 @@ bool serialOpen(char* portname)
     set_interface_attribs (fd, B2000000, 0);  // set speed to 2,000,000 bps, 8n1 (no parity)
 #endif
     set_blocking_serial (fd, 0);	// set no blocking
+    // borrowed this line from m65.c - set_serial_speed(), as it seems to set the
+    // non-blocking behaviour properly
+    fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
   }
   
   return true;

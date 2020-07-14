@@ -36,3 +36,4 @@
 *.swp
 tags
 m65dbg
+*.*~
