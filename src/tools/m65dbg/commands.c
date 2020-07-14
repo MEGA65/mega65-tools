@@ -4,6 +4,7 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <fcntl.h> 
 #include <unistd.h>
 #include "commands.h"
 #include "serial.h"
@@ -2213,10 +2214,15 @@ void cmdSearch(void)
   }
 }
 
+extern int fd;
+
 void cmdScreenshot(void)
 {
+  int orig_fcntl = fcntl(fd, F_GETFL, NULL);
+  fcntl(fd,F_SETFL,orig_fcntl|O_NONBLOCK);
   get_video_state();
   do_screen_shot_ascii();
+  fcntl(fd,F_SETFL,orig_fcntl);
 }
 
 int cmdGetCmdCount(void)
