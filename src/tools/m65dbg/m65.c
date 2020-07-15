@@ -1291,11 +1291,14 @@ void do_type_text(char *type_text)
       tcsetattr(STDIN_FILENO,TCSANOW,&new_tio);
 
       fprintf(stderr,"Reading input from terminal in character mode.\n"
-	"Type CONTROL-Y to end.\n");
+	"- CONTROL-Y = end session.\n"
+  "- CONTROL-L = refresh ascii screenshot.\n"
+  "- CONTROL-R = reset mega65\n"
+  "- CONTROL-F = trigger freeze menu.\n");
       
       c=getc(stdin);
       while(c!=25) {
-	//printf("$%02x -> ",c);
+	// printf("$%02x -> ",c);
       switch(c) {
     case 0x7f: c=0x14; break; // DELETE
     case 0x0a: c=0x0d; break; // RETURN
@@ -1317,12 +1320,49 @@ void do_type_text(char *type_text)
       }
       //printf("$%02x\n",c);
       if (c) {
-      do_type_key(c);
+        switch(c)
+        {
+          case 0x0c:  // CTRL-L = trigger another screenshot
+            printf("\nrefresh!\n");
+            get_video_state();
+            do_screen_shot_ascii();
+            break;
+
+          case 0x06:  // CTRL-F = trigger freeze menu
+            printf("\nfreezing...\n");
+            char scmd[10];
+            snprintf(scmd, 10, "\rk%c%c\r", 0x24, 0x00); // scan-code for 'E' key
+            slow_write(fd,scmd,strlen(scmd));
+            sleep(2);
+            snprintf(scmd, 10, "\rk%c%c\r", 0x7d, 0x01); // scan-code for RESTORE key
+            slow_write(fd,scmd,strlen(scmd));
+            sleep(2);
+            snprintf(scmd, 10, "\rk%c%c\r", 0x0d, 0x01); // turn off key?
+            slow_write(fd,scmd,strlen(scmd));
+            monitor_sync();
+            sleep(2);
+            get_video_state();
+            do_screen_shot_ascii();
+            printf("freeze completed!\n");
+            break;
+
+          case 0x12:  // CTRL-R = reset mega65
+            printf("\nresetting...\n");
+            
+            start_cpu(); slow_write(fd,"\r!\r",3); monitor_sync(); sleep(2);
+            get_video_state();
+            do_screen_shot_ascii();
+            printf("reset completed!\n");
+            break;
+
+          default:
+            do_type_key(c);
+            break;
+        }
 
       if (c==0x0d)
       {
         get_video_state();
-        //printf("\033[2J");  // clear the terminal screen first
         do_screen_shot_ascii();
       }
       else
