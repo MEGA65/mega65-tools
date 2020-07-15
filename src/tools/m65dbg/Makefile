@@ -11,7 +11,7 @@ endif
 
 CC=gcc
 CFLAGS=-c -Wall -g -std=c99
-SOURCES=main.c serial.c commands.c gs4510.c screen_shot.c m65.c
+SOURCES=main.c serial.c commands.c gs4510.c screen_shot.c m65.c mega65_ftp.c ftphelper.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=m65dbg
 

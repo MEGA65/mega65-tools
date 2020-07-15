@@ -45,6 +45,8 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include "m65.h"
+#include "screen_shot.h"
 
 #define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
@@ -82,15 +84,6 @@ void do_usleep(__int64 usec)
 #include <IOKit/IOBSD.h>
 #endif
 
-#ifdef WINDOWS
-#define PORT_TYPE HANDLE
-SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
-int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
-#else
-#define PORT_TYPE int
-size_t serialport_read(int fd, uint8_t * buffer, size_t size);
-int serialport_write(int fd, uint8_t * buffer, size_t size);
-#endif
 
 #ifdef WINDOWS
 
@@ -114,7 +107,7 @@ static const int B1500000 = 1500000;
 static const int B2000000 = 2000000;
 static const int B4000000 = 4000000;
 #endif
-time_t start_time=0;
+static time_t start_time=0;
 
 int osk_enable=0;
 
@@ -203,9 +196,9 @@ unsigned char hyppo_buffer[1024];
 
 int counter  =0;
 #ifdef WINDOWS
-extern PORT_TYPE fd=INVALID_HANDLE_VALUE;
+extern PORT_TYPE fd;
 #else
-extern PORT_TYPE fd=-1;
+extern PORT_TYPE fd;
 #endif
 
 int state=99;
@@ -523,11 +516,15 @@ int dump_bytes(int col, char *msg,unsigned char *bytes,int length)
     print_spaces(stderr,col);
     fprintf(stderr,"%04X: ",i);
     for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr," %02X",bytes[i+j]); else fprintf(stderr,"   ");
-    fprintf(stderr,"  ");
-    for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr,"%c",(bytes[i+j]>=' '&&bytes[i+j]<0x7c)? bytes[i+j]:'.');
-    
+    fprintf(stderr," | ");
+    for(int j=0;j<16;j++) if (i+j<length) {
+      if (bytes[i+j]>=0x20&&bytes[i+j]<0x7f) {
+        fprintf(stderr,"%c",bytes[i+j]);
+      } else fprintf(stderr,".");
+    }
     fprintf(stderr,"\n");
   }
+
   return 0;
 }
 
@@ -987,7 +984,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	addr+=16;
 
 	// Shuffle buffer down
-	int s_offset=(long long)s-(long long)read_buff+42;
+	int s_offset=(long)s-(long)read_buff+42;
 	bcopy(&read_buff[s_offset],&read_buff[0],8192-(ofs-s_offset));
 	ofs-=s_offset;
       }
@@ -1048,20 +1045,24 @@ int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *
 
 int detect_mode(void)
 {
+  uint8_t read_buff[8192];
   /*
-    Set saw_c64_mode or saw_c65_mode according to what we can discover. 
-    We can look at the C64/C65 charset bit in $D030 for a good clue.
-    But we also really want to know that the CPU is in the keyboard 
-    input loop for either of the modes, if possible. OpenROMs being
-    under development makes this tricky.
-  */
+     Set saw_c64_mode or saw_c65_mode according to what we can discover. 
+     We can look at the C64/C65 charset bit in $D030 for a good clue.
+     But we also really want to know that the CPU is in the keyboard 
+     input loop for either of the modes, if possible. OpenROMs being
+     under development makes this tricky.
+     */
   saw_c65_mode=0;
   saw_c64_mode=0;
-  
+
+  // flush out any serial data that occurred after the restart.
+  serialport_read(fd,read_buff,8192);
+
   unsigned char mem_buff[8192];
   fetch_ram(0xffd3030,1,mem_buff);
   while(mem_buff[0]&0x01) {
-    timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
+    fprintf(stderr,"Waiting for MEGA65 KERNAL/OS to settle...\n");
     do_usleep(200000);
     fetch_ram(0xffd3030,1,mem_buff);    
   }
@@ -1072,8 +1073,8 @@ int detect_mode(void)
     do_usleep(50000);
     d054=mega65_peek(0xffd3054);
   }
-  
-  
+
+
   //  printf("$D030 = $%02X\n",mem_buff[0]);
   if (mem_buff[0]==0x64) {
     // Probably C65 mode
@@ -1082,17 +1083,17 @@ int detect_mode(void)
     // or boot attempt from floppy to finish
     for (int i=0;i<10;i++) {
       int pc=get_pc();
-      if (pc>=0xe1ae&&pc<=0xe1b4) in_range++; else {
-	// C65 ROM does checksum, so wait a while if it is in that range
-	if (pc>=0xb000&&pc<0xc000) sleep(1);
-	// Or booting from internal drive is also slow
-	if (pc>=0x9c00&&pc<0x9d00) sleep(1);
-	// Or something else it does while booting
-	if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
-	else {
-	  //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
-	  do_usleep(100000);
-	}
+      if (pc>=0xe1a0&&pc<=0xe1b4) in_range++; else {
+        // C65 ROM does checksum, so wait a while if it is in that range
+        if (pc>=0xb000&&pc<0xc000) sleep(1);
+        // Or booting from internal drive is also slow
+        if (pc>=0x9c00&&pc<0x9d00) sleep(1);
+        // Or something else it does while booting
+        if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
+        else {
+          //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
+          do_usleep(100000);
+        }
       }
     }
     if (in_range>3) {
@@ -1110,8 +1111,8 @@ int detect_mode(void)
       // XXX Might not work with OpenROMs?
       if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;
       else {
-	//	printf("Odd PC=$%04x\n",pc);
-	usleep(100000);
+        //	printf("Odd PC=$%04x\n",pc);
+        usleep(100000);
       }
     }
     if (in_range>3) {
@@ -1122,7 +1123,7 @@ int detect_mode(void)
       return 0;
     }
   }
-  timestamp_msg("Could not determine C64/C65/MEGA65 mode.\n");
+  printf("Could not determine C64/C65/MEGA65 mode.\n");
   return 1;
 }
 

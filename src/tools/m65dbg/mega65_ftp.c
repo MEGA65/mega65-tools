@@ -56,11 +56,14 @@ static const int B4000000 = 4000000;
 #include <linux/serial.h>
 
 #endif
-time_t start_time=0;
+
+#include "m65.h"
+
+static time_t start_time=0;
 long long start_usec=0;
 
-int fd=-1;
-int cpu_stopped=0;
+extern int fd;
+static int cpu_stopped=0;
 
 int open_file_system(void);
 int download_slot(int sllot,char *dest_name);
@@ -81,6 +84,8 @@ int stuff_keybuffer(char *s);
 int get_pc(void);
 unsigned char mega65_peek(unsigned int addr);
 int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer);
+int slow_write_safe_ftp(int fd,char *d,int l);
+int slow_write_ftp(int fd,char *d,int l,int preWait);
 
 
 // Helper routine for faster sector writing
@@ -91,27 +96,25 @@ int job_done;
 int sectors_written;
 int job_status_fresh=0;
 
-int osk_enable=0;
+static int osk_enable=0;
 
-int not_already_loaded=1;
+static int not_already_loaded=1;
 
-int halt=0;
+static int halt=0;
 
 // 0 = old hard coded monitor, 1= Kenneth's 65C02 based fancy monitor
-int new_monitor=0;
+static int new_monitor=0;
 
-int saw_c64_mode=0;
-int saw_c65_mode=0;
+static int saw_c64_mode=0;
+static int saw_c65_mode=0;
 
-int first_load=1;
-int first_go64=1;
 
 unsigned char viciv_regs[0x100];
-int mode_report=0;
+static int mode_report=0;
 
-int serial_speed=2000000;
-char *serial_port="/dev/ttyUSB1";
-char *bitstream=NULL;
+extern int serial_speed;
+extern char *serial_port;
+extern char *bitstream;
 
 unsigned char *sd_read_buffer=NULL;
 int sd_read_offset=0;
@@ -182,213 +185,13 @@ void do_usleep(__int64 usec)
 #define do_usleep usleep
 #endif
 
-void timestamp_msg(char *msg)
-{
-  if (!start_time) start_time=time(0);
-#ifdef WINDOWS
-  fprintf(stderr,"[T+%I64dsec] %s",(long long)time(0)-start_time,msg);
-#else
-  fprintf(stderr,"[T+%lldsec] %s",(long long)time(0)-start_time,msg);
-#endif
-
-  return;
-}
-
-#ifdef WINDOWS
-
-void print_error(const char * context)
-{
-  DWORD error_code = GetLastError();
-  char buffer[256];
-  DWORD size = FormatMessageA(
-      FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_MAX_WIDTH_MASK,
-      NULL, error_code, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
-      buffer, sizeof(buffer), NULL);
-  if (size == 0) { buffer[0] = 0; }
-  fprintf(stderr, "%s: %s\n", context, buffer);
-}
-
-
-// Opens the specified serial port, configures its timeouts, and sets its
-// baud rate.  Returns a handle on success, or INVALID_HANDLE_VALUE on failure.
-HANDLE open_serial_port(const char * device, uint32_t baud_rate)
-{
-  HANDLE port = CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0, NULL,
-      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (port == INVALID_HANDLE_VALUE)
-  {
-    print_error(device);
-    return INVALID_HANDLE_VALUE;
-  }
-
-  // Flush away any bytes previously read or written.
-  BOOL success = FlushFileBuffers(port);
-  if (!success)
-  {
-    print_error("Failed to flush serial port");
-    CloseHandle(port);
-    return INVALID_HANDLE_VALUE;
-  }
-
-  // Configure read and write operations to time out after 1 ms and 100 ms, respectively.
-  COMMTIMEOUTS timeouts = { 0 };
-  timeouts.ReadIntervalTimeout = 0;
-  timeouts.ReadTotalTimeoutConstant = 1;
-  timeouts.ReadTotalTimeoutMultiplier = 0;
-  timeouts.WriteTotalTimeoutConstant = 100;
-  timeouts.WriteTotalTimeoutMultiplier = 0;
-
-  success = SetCommTimeouts(port, &timeouts);
-  if (!success)
-  {
-    print_error("Failed to set serial timeouts");
-    CloseHandle(port);
-    return INVALID_HANDLE_VALUE;
-  }
-
-  DCB state;
-  state.DCBlength = sizeof(DCB);
-  success = GetCommState(port, &state);
-  if (!success)
-  {
-    print_error("Failed to get serial settings");
-    CloseHandle(port);
-    return INVALID_HANDLE_VALUE;
-  }
-
-  state.fBinary = TRUE;
-  state.fDtrControl = DTR_CONTROL_ENABLE;
-  state.fDsrSensitivity = FALSE;
-  state.fTXContinueOnXoff = FALSE;
-  state.fOutX = FALSE;
-  state.fInX = FALSE;
-  state.fErrorChar = FALSE;
-  state.fNull = FALSE;
-  state.fRtsControl = RTS_CONTROL_ENABLE;
-  state.fAbortOnError = FALSE;
-  state.fOutxCtsFlow = FALSE;
-  state.fOutxDsrFlow = FALSE;
-  state.ByteSize = 8;
-  state.StopBits = ONESTOPBIT;
-  state.Parity = NOPARITY;
-
-  state.BaudRate = baud_rate;
-
-  success = SetCommState(port, &state);
-  if (!success)
-  {
-    print_error("Failed to set serial settings");
-    CloseHandle(port);
-    return INVALID_HANDLE_VALUE;
-  }
-
-  return port;
-}
-
-// Writes bytes to the serial port, returning 0 on success and -1 on failure.
-int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
-{
-  DWORD offset=0;
-  DWORD written;
-  BOOL success;
-  //  printf("Calling WriteFile(%d)\n",size);
-
-  while(offset<size) {  
-    success = WriteFile(port, &buffer[offset], size - offset, &written, NULL);
-    //  printf("  WriteFile() returned.\n");
-    if (!success)
-    {
-      print_error("Failed to write to port");
-      return -1;
-    }
-    if (written>0) offset+=written;
-    if (offset<size) {
-      // Assume buffer is full, so wait a little while
-      usleep(1000);
-    }
-  }
-  success = FlushFileBuffers(port);
-  if (!success) print_error("Failed to flush buffers"); 
-  return size;
-}
-
-// Reads bytes from the serial port.
-// Returns after all the desired bytes have been read, or if there is a
-// timeout or other error.
-// Returns the number of bytes successfully read into the buffer, or -1 if
-// there was an error reading.
-SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
-{
-  DWORD received=0;
-  //  printf("Calling ReadFile(%I64d)\n",size);
-  BOOL success = ReadFile(port, buffer, size, &received, NULL);
-  if (!success)
-  {
-    print_error("Failed to read from port");
-    return -1;
-  }
-  //  printf("  ReadFile() returned. Received %ld bytes\n",received);
-  return received;
-}
-
-#else
-int serialport_write(int fd, uint8_t * buffer, size_t size)
-{
-#ifdef __APPLE__
-  return write(fd,buffer,size);
-#else
-  size_t offset=0;
-  while(offset<size) {
-    int written=write(fd,&buffer[offset],size-offset);
-    if (written>0) offset+=written;
-    if (offset<size) { usleep(1000);
-      //      printf("Wrote %d bytes\n",written);
-    }
-  }
-#endif
-}
-
-size_t serialport_read(int fd, uint8_t * buffer, size_t size)
-{
-  return read(fd,buffer,size);
-}
-
-#endif
-
-// From os.c in serval-dna
-long long gettime_us()
-{
-  long long retVal = -1;
-
-  do 
-  {
-    struct timeval nowtv;
-
-    // If gettimeofday() fails or returns an invalid value, all else is lost!
-    if (gettimeofday(&nowtv, NULL) == -1)
-    {
-      break;
-    }
-
-    if (nowtv.tv_sec < 0 || nowtv.tv_usec < 0 || nowtv.tv_usec >= 1000000)
-    {
-      break;
-    }
-
-    retVal = nowtv.tv_sec * 1000000LL + nowtv.tv_usec;
-  }
-  while (0);
-
-  return retVal;
-}
-
 int sd_status_fresh=0;
 unsigned char sd_status[16];
 
 int process_char(unsigned char c,int live);
 
 
-void usage(void)
+void usage_ftp(void)
 {
   fprintf(stderr,"MEGA65 cross-development tool for remote access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr,"usage: mega65_ftp [-l <serial port>] [-s <230400|2000000|4000000>]  [-b bitstream] [[-c command] ...]\n");
@@ -400,105 +203,8 @@ void usage(void)
   exit(-3);
 }
 
-int monitor_sync(void)
-{
-  /* Synchronise with the monitor interface.
-     Send #<token> until we see the token returned to us.
-     */
 
-  unsigned char read_buff[8192];
-
-  // Begin by sending a null command and purging input
-  char cmd[8192];
-  cmd[0]=0x15; // ^U
-  cmd[1]='#'; // prevent instruction stepping
-  cmd[2]=0x0d; // Carriage return
-  do_usleep(20000); // Give plenty of time for things to settle
-  slow_write_safe(fd,cmd,3);
-  //  printf("Wrote empty command.\n");
-  do_usleep(20000); // Give plenty of time for things to settle
-  int b=1;
-  // Purge input  
-  //  printf("Purging input.\n");
-  while(b>0) {
-    b=serialport_read(fd,read_buff,8192);
-    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
-  }
-
-  for(int tries=0;tries<10;tries++) {
-#ifdef WINDOWS
-    snprintf(cmd,1024,"#%08x\r",rand());
-#else
-    snprintf(cmd,1024,"#%08lx\r",random());
-#endif
-    //    printf("Writing token: '%s'\n",cmd);
-    slow_write_safe(fd,cmd,strlen(cmd));
-
-    for(int i=0;i<10;i++) {
-      usleep(10000);
-      b=serialport_read(fd,read_buff,8192);
-      if (b<0) b=0;
-      if (b>8191) b=8191;
-      read_buff[b]=0;
-      //      if (b>0) dump_bytes(2,"Sync input",read_buff,b);
-
-      //      if (b>0) dump_bytes(0,"read_data",read_buff,b);
-      if (strstr((char *)read_buff,cmd)) {
-        //	printf("Found token. Synchronised with monitor.\n");
-        return 0;      
-      }
-    }
-    usleep(10000);
-  }
-  printf("Failed to synchronise with the monitor.\n");
-  return 1;
-}
-
-int get_pc(void)
-{
-  /*
-     Get current programme counter value of CPU
-     */
-  slow_write_safe(fd,"r\r",2);
-  do_usleep(50000);
-  unsigned char buff[8192];
-  int b=serialport_read(fd,buff,8192);
-  if (b<0) b=0;
-  if (b>8191) b=8191;
-  buff[b]=0;
-  //  if (b>0) dump_bytes(2,"PC read input",buff,b);
-  char *s=strstr((char *)buff,"\n,");
-  if (s) return strtoll(&s[6],NULL,16);
-  else return -1;
-}
-
-
-int stuff_keybuffer(char *s)
-{
-  int buffer_addr=0x277;
-  int buffer_len_addr=0xc6;
-
-  if (saw_c65_mode) {
-    buffer_addr=0x2b0;
-    buffer_len_addr=0xd0;
-  }
-
-  timestamp_msg("Injecting string into key buffer at ");
-  fprintf(stderr,"$%04X : ",buffer_addr);
-  for(int i=0;s[i];i++) {
-    if (s[i]>=' '&&s[i]<0x7c) fprintf(stderr,"%c",s[i]); else fprintf(stderr,"[$%02x]",s[i]);    
-  }
-  fprintf(stderr,"\n");
-
-  char cmd[1024];
-  snprintf(cmd,1024,"s%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\rs%x %d\r",
-      buffer_addr,s[0],s[1],s[2],s[3],s[4],s[5],s[6],s[7],s[8],s[9],
-      buffer_len_addr,(int)strlen(s));
-  return slow_write(fd,cmd,strlen(cmd),0);
-}
-
-
-int slow_write(int fd,char *d,int l,int preWait)
+int slow_write_ftp(int fd,char *d,int l,int preWait)
 {
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
@@ -519,14 +225,7 @@ int slow_write(int fd,char *d,int l,int preWait)
   return 0;
 }
 
-unsigned char mega65_peek(unsigned int addr)
-{
-  unsigned char b;
-  fetch_ram(addr,1,&b);
-  return b;
-}
-
-int slow_write_safe(int fd,char *d,int l)
+int slow_write_safe_ftp(int fd,char *d,int l)
 {
   // There is a bug at the time of writing that causes problems
   // with the CPU's correct operation if various monitor commands
@@ -539,11 +238,11 @@ int slow_write_safe(int fd,char *d,int l)
   // (We can work around this by using the fact that the new UART
   // monitor tells us when a breakpoint has been reached.
   if (!cpu_stopped)
-    slow_write(fd,"t1\r",3,0);
-  slow_write(fd,d,l,0);
+    slow_write_ftp(fd,"t1\r",3,0);
+  slow_write_ftp(fd,d,l,0);
   if (!cpu_stopped) {
     //    printf("Resuming CPU after writing string\n");
-    slow_write(fd,"t0\r",3,0);
+    slow_write_ftp(fd,"t0\r",3,0);
   }
   return 0;
 }
@@ -551,61 +250,6 @@ int slow_write_safe(int fd,char *d,int l)
 
 #define READ_SECTOR_BUFFER_ADDRESS 0xFFD6e00
 #define WRITE_SECTOR_BUFFER_ADDRESS 0xFFD6e00
-
-unsigned long long gettime_ms()
-{
-  struct timeval nowtv;
-  // If gettimeofday() fails or returns an invalid value, all else is lost!
-  if (gettimeofday(&nowtv, NULL) == -1)
-    perror("gettimeofday");
-  return nowtv.tv_sec * 1000LL + nowtv.tv_usec / 1000;
-}
-
-int stop_cpu(void)
-{
-  // Stop CPU
-  usleep(50000);
-  slow_write(fd,"t1\r",3,2500);
-  return 0;
-}
-
-int restart_hyppo(void)
-{
-  // Start executing in new hyppo
-  if (!halt) {
-    usleep(50000);
-    slow_write(fd,"g8100\r",6,2500);
-    usleep(10000);
-    slow_write(fd,"t0\r",3,2500);
-  }
-  return 0;
-}
-
-void print_spaces(FILE *f,int col)
-{
-  for(int i=0;i<col;i++)
-    fprintf(f," ");  
-}
-
-int dump_bytes(int col, char *msg,unsigned char *bytes,int length)
-{
-  print_spaces(stderr,col);
-  fprintf(stderr,"%s:\n",msg);
-  for(int i=0;i<length;i+=16) {
-    print_spaces(stderr,col);
-    fprintf(stderr,"%04X: ",i);
-    for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr," %02X",bytes[i+j]); else fprintf(stderr,"   ");
-    fprintf(stderr," | ");
-    for(int j=0;j<16;j++) if (i+j<length) {
-      if (bytes[i+j]>=0x20&&bytes[i+j]<0x7f) {
-        fprintf(stderr,"%c",bytes[i+j]);
-      } else fprintf(stderr,".");
-    }
-    fprintf(stderr,"\n");
-  }
-
-  return 0;
-}
 
 int process_line(char *line,int live)
 {
@@ -665,8 +309,8 @@ int process_line(char *line,int live)
 }
 
 
-char line[1024];
-int line_len=0;
+static char line[1024];
+static int line_len=0;
 
 int process_char(unsigned char c, int live)
 {
@@ -844,111 +488,111 @@ int execute_command(char *cmd)
   return 0;
 }
 
-int main(int argc,char **argv)
-{
-  start_time=time(0);
-  start_usec=gettime_us();
-
-  int opt;
-  while ((opt = getopt(argc, argv, "b:s:l:c:")) != -1) {
-    switch (opt) {
-      case 'l': strcpy(serial_port,optarg); break;
-      case 's':
-                serial_speed=atoi(optarg);
-                switch(serial_speed) {
-                  case 1000000:
-                  case 1500000:
-                  case 4000000:
-                  case 230400: case 2000000: break;
-                  default: usage();
-                }
-                break;
-      case 'b':
-                bitstream=strdup(optarg); break;
-      case 'c':
-                queue_command(optarg); break;
-      default: /* '?' */
-                usage();
-    }
-  }  
-
-  if (argc-optind==1) usage();
-
-  errno=0;
-  fd=open(serial_port,O_RDWR);
-  if (fd==-1) {
-    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
-    perror("open");
-    exit(-1);
-  }
-  fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
-
-#ifndef APPLE
-
-  // And also another way
-  struct serial_struct serial;
-  ioctl(fd, TIOCGSERIAL, &serial); 
-  serial.flags |= ASYNC_LOW_LATENCY;
-  ioctl(fd, TIOCSSERIAL, &serial);
-
-  {
-    char latency_timer[1024];
-    int offset=strlen(serial_port);
-    while(offset&&serial_port[offset-1]!='/') offset--;
-    snprintf(latency_timer,1024,"/sys/bus/usb-serial/devices/%s/latency_timer",
-        &serial_port[offset]);
-    int new_latency=999;
-    FILE *f=fopen(latency_timer,"r");
-    if (f) { fscanf(f,"%d",&new_latency); fclose(f); }
-    if (new_latency==1) printf("Successfully set USB serial port to low-latency\n");
-    else printf("WARNING: Could not set USB serial port to low latency.  Transfers will be (even) slower.\n");
-  }
-
-#endif
-
-  // Load bitstream if file provided
-  if (bitstream) {
-    char cmd[1024];
-    snprintf(cmd,1024,"fpgajtag -a %s",bitstream);
-    fprintf(stderr,"%s\n",cmd);
-    system(cmd);
-    fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
-  }
-
-  // Set higher speed on serial interface to improve throughput, and make sure
-  // we have reset.
-  set_speed(fd,2000000);
-  //  slow_write(fd,"\r!\r",3,0); usleep(100000);
-  slow_write(fd,"\r+9\r",4,5000);
-  set_speed(fd,4000000);
-  //  slow_write(fd,"\r!\r",3,0); usleep(100000);
-  //  set_speed(fd,2000000);  
-  //  slow_write(fd,"\r+9\r",4,5000);
-  //  set_speed(fd,4000000);
-
-  stop_cpu();
-
-  load_helper();
-
-  sdhc_check();
-
-  if (!file_system_found) open_file_system();
-
-  if (queued_command_count) {
-    for(int i=0;i<queued_command_count;i++) execute_command(queued_commands[i]);
-    return 0;
-  } else {
-    char *cmd=NULL;
-    using_history();
-    while((cmd=readline("MEGA65 SD-card> "))!=NULL) {
-      execute_command(cmd);
-      add_history(cmd);
-      free(cmd);
-    }
-  }
-
-  return 0;
-}
+// int main(int argc,char **argv)
+// {
+//   start_time=time(0);
+//   start_usec=gettime_us();
+// 
+//   int opt;
+//   while ((opt = getopt(argc, argv, "b:s:l:c:")) != -1) {
+//     switch (opt) {
+//       case 'l': strcpy(serial_port,optarg); break;
+//       case 's':
+//                 serial_speed=atoi(optarg);
+//                 switch(serial_speed) {
+//                   case 1000000:
+//                   case 1500000:
+//                   case 4000000:
+//                   case 230400: case 2000000: break;
+//                   default: usage_ftp();
+//                 }
+//                 break;
+//       case 'b':
+//                 bitstream=strdup(optarg); break;
+//       case 'c':
+//                 queue_command(optarg); break;
+//       default: /* '?' */
+//                 usage_ftp();
+//     }
+//   }  
+// 
+//   if (argc-optind==1) usage_ftp();
+// 
+//   errno=0;
+//   fd=open(serial_port,O_RDWR);
+//   if (fd==-1) {
+//     fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
+//     perror("open");
+//     exit(-1);
+//   }
+//   fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
+// 
+// #ifndef APPLE
+// 
+//   // And also another way
+//   struct serial_struct serial;
+//   ioctl(fd, TIOCGSERIAL, &serial); 
+//   serial.flags |= ASYNC_LOW_LATENCY;
+//   ioctl(fd, TIOCSSERIAL, &serial);
+// 
+//   {
+//     char latency_timer[1024];
+//     int offset=strlen(serial_port);
+//     while(offset&&serial_port[offset-1]!='/') offset--;
+//     snprintf(latency_timer,1024,"/sys/bus/usb-serial/devices/%s/latency_timer",
+//         &serial_port[offset]);
+//     int new_latency=999;
+//     FILE *f=fopen(latency_timer,"r");
+//     if (f) { fscanf(f,"%d",&new_latency); fclose(f); }
+//     if (new_latency==1) printf("Successfully set USB serial port to low-latency\n");
+//     else printf("WARNING: Could not set USB serial port to low latency.  Transfers will be (even) slower.\n");
+//   }
+// 
+// #endif
+// 
+//   // Load bitstream if file provided
+//   if (bitstream) {
+//     char cmd[1024];
+//     snprintf(cmd,1024,"fpgajtag -a %s",bitstream);
+//     fprintf(stderr,"%s\n",cmd);
+//     system(cmd);
+//     fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
+//   }
+// 
+//   // Set higher speed on serial interface to improve throughput, and make sure
+//   // we have reset.
+//   set_speed(fd,2000000);
+//   //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
+//   slow_write_ftp(fd,"\r+9\r",4,5000);
+//   set_speed(fd,4000000);
+//   //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
+//   //  set_speed(fd,2000000);  
+//   //  slow_write_ftp(fd,"\r+9\r",4,5000);
+//   //  set_speed(fd,4000000);
+// 
+//   stop_cpu();
+// 
+//   load_helper();
+// 
+//   sdhc_check();
+// 
+//   if (!file_system_found) open_file_system();
+// 
+//   if (queued_command_count) {
+//     for(int i=0;i<queued_command_count;i++) execute_command(queued_commands[i]);
+//     return 0;
+//   } else {
+//     char *cmd=NULL;
+//     using_history();
+//     while((cmd=readline("MEGA65 SD-card> "))!=NULL) {
+//       execute_command(cmd);
+//       add_history(cmd);
+//       free(cmd);
+//     }
+//   }
+// 
+//   return 0;
+// }
 
 void wait_for_sdready(void)
 {
@@ -959,12 +603,12 @@ void wait_for_sdready(void)
     sd_status[0]=0xff;
     while(sd_status[0]&3) {
       sd_status_fresh=0;
-      slow_write(fd,"mffd3680\r",strlen("mffd3680\r"),0);
+      slow_write_ftp(fd,"mffd3680\r",strlen("mffd3680\r"),0);
       while(!sd_status_fresh) process_waiting(fd);
       if (sd_status[0]&3) {
         // Send reset sequence
         printf("SD card not yet ready, so reset it.\n");
-        slow_write(fd,"sffd3680 0\rsffd3680 1\r",strlen("sffd3680 0\rsffd3680 1\r"),2000);
+        slow_write_ftp(fd,"sffd3680 0\rsffd3680 1\r",strlen("sffd3680 0\rsffd3680 1\r"),2000);
         sleep(1);
       }
     }
@@ -988,7 +632,7 @@ int wait_for_sdready_passive(void)
     process_waiting(fd);
     while(sd_status[0]&3) {
       sd_status_fresh=0;
-      slow_write(fd,"mffd3680\r",strlen("mffd3680\r"),0);
+      slow_write_ftp(fd,"mffd3680\r",strlen("mffd3680\r"),0);
       while(!sd_status_fresh) process_waiting(fd);
       if ((sd_status[0]&3)==0x03)
       { // printf("SD card error 0x3 - failing\n");
@@ -1030,206 +674,9 @@ int sdhc_check(void)
   return sdhc;
 }
 
-int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
-{
-  /* Fetch a block of RAM into the provided buffer.
-     This greatly simplifies many tasks.
-     */
-
-  unsigned long addr=address;
-  unsigned long end_addr;
-  char cmd[8192];
-  unsigned char read_buff[8192];
-  char next_addr_str[8192];
-  int ofs=0;
-
-  //  fprintf(stderr,"Fetching $%x bytes @ $%x\n",count,address);
-
-  //  monitor_sync();
-  while(addr<(address+count)) {
-    if ((address+count-addr)<17) {
-      snprintf(cmd,8192,"m%X\r",(unsigned int)addr);
-      end_addr=addr+0x10;
-    } else {
-      snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
-      end_addr=addr+0x100;
-    }
-    //    printf("Sending '%s'\n",cmd);
-    slow_write_safe(fd,cmd,strlen(cmd));
-    while(addr!=end_addr) {
-      snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
-      int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
-      if (b<0) b=0;
-      if ((ofs+b)>8191) b=8191-ofs;
-      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
-      read_buff[ofs+b]=0;
-      ofs+=b;
-      char *s=strstr((char *)read_buff,next_addr_str);
-      if (s&&(strlen(s)>=42)) {
-        char b=s[42]; s[42]=0;
-        if (0) {
-          printf("Found data for $%08x:\n%s\n",
-              (unsigned int)addr,
-              s);
-        } 
-        s[42]=b;
-        for(int i=0;i<16;i++) {
-
-          // Don't write more bytes than requested
-          if ((addr-address+i)>=count) break;
-
-          char hex[3];
-          hex[0]=s[1+10+i*2+0];
-          hex[1]=s[1+10+i*2+1];
-          hex[2]=0;
-          buffer[addr-address+i]=strtol(hex,NULL,16);
-        }
-        addr+=16;
-
-        // Shuffle buffer down
-        int s_offset=(long long)s-(long long)read_buff+42;
-        bcopy(&read_buff[s_offset],&read_buff[0],8192-(ofs-s_offset));
-        ofs-=s_offset;
-      }
-    }
-  }
-  if (addr>=(address+count)) {
-    //    fprintf(stderr,"Memory read complete at $%lx\n",addr);
-    return 0;
-  }
-  else {
-    fprintf(stderr,"ERROR: Could not read requested memory region.\n");
-    exit(-1);
-    return 1;
-  }
-}
-
 unsigned char ram_cache[512*1024+255];
 unsigned char ram_cache_valids[512*1024+255];
-int ram_cache_initialised=0;
-
-int fetch_ram_invalidate(void)
-{
-  ram_cache_initialised=0;
-  return 0;
-}
-
-int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *buffer)
-{
-  if (!ram_cache_initialised) {
-    ram_cache_initialised=1;
-    bzero(ram_cache_valids,512*1024);
-    bzero(ram_cache,512*1024);
-  }
-  if ((address+count)>=(512*1024)) {
-    return fetch_ram(address,count,buffer);
-  }
-
-  // See if we need to fetch it fresh
-  for(int i=0;i<count;i++) {
-    if (!ram_cache_valids[address+i]) {
-      // Cache not valid here -- so read some data
-      printf("."); fflush(stdout);
-      //      printf("Fetching $%08x for cache.\n",address);
-      fetch_ram(address,256,&ram_cache[address]);
-      for(int j=0;j<256;j++) ram_cache_valids[address+j]=1;
-
-      bcopy(&ram_cache[address],buffer,count);
-      return 0;
-    }
-  }
-
-  // It's valid in the cache
-  bcopy(&ram_cache[address],buffer,count);
-  return 0;
-
-}
-
-
-int detect_mode(void)
-{
-  uint8_t read_buff[8192];
-  /*
-     Set saw_c64_mode or saw_c65_mode according to what we can discover. 
-     We can look at the C64/C65 charset bit in $D030 for a good clue.
-     But we also really want to know that the CPU is in the keyboard 
-     input loop for either of the modes, if possible. OpenROMs being
-     under development makes this tricky.
-     */
-  saw_c65_mode=0;
-  saw_c64_mode=0;
-
-  // flush out any serial data that occurred after the restart.
-  serialport_read(fd,read_buff,8192);
-
-  unsigned char mem_buff[8192];
-  fetch_ram(0xffd3030,1,mem_buff);
-  while(mem_buff[0]&0x01) {
-    fprintf(stderr,"Waiting for MEGA65 KERNAL/OS to settle...\n");
-    do_usleep(200000);
-    fetch_ram(0xffd3030,1,mem_buff);    
-  }
-
-  // Wait for HYPPO to exit
-  int d054=mega65_peek(0xffd3054);
-  while(d054&7) {
-    do_usleep(50000);
-    d054=mega65_peek(0xffd3054);
-  }
-
-
-  //  printf("$D030 = $%02X\n",mem_buff[0]);
-  if (mem_buff[0]==0x64) {
-    // Probably C65 mode
-    int in_range=0;
-    // Allow more tries to allow more time for ROM checksum to finish
-    // or boot attempt from floppy to finish
-    for (int i=0;i<10;i++) {
-      int pc=get_pc();
-      if (pc>=0xe1a0&&pc<=0xe1b4) in_range++; else {
-        // C65 ROM does checksum, so wait a while if it is in that range
-        if (pc>=0xb000&&pc<0xc000) sleep(1);
-        // Or booting from internal drive is also slow
-        if (pc>=0x9c00&&pc<0x9d00) sleep(1);
-        // Or something else it does while booting
-        if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
-        else {
-          //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
-          do_usleep(100000);
-        }
-      }
-    }
-    if (in_range>3) {
-      // We are in C65 BASIC main loop, so assume it is C65 mode
-      saw_c65_mode=1;
-      timestamp_msg("");
-      fprintf(stderr,"CPU in C65 BASIC 10 main loop.\n");
-      return 0;
-    }
-  } else if (mem_buff[0]==0x00) {
-    // Probably C64 mode
-    int in_range=0;
-    for (int i=0;i<5;i++) {
-      int pc=get_pc();
-      // XXX Might not work with OpenROMs?
-      if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;
-      else {
-        //	printf("Odd PC=$%04x\n",pc);
-        usleep(100000);
-      }
-    }
-    if (in_range>3) {
-      // We are in C64 BASIC main loop, so assume it is C65 mode
-      saw_c64_mode=1;
-      timestamp_msg("");
-      fprintf(stderr,"CPU in C64 BASIC 2 main loop.\n");
-      return 0;
-    }
-  }
-  printf("Could not determine C64/C65/MEGA65 mode.\n");
-  return 1;
-}
-
+extern int ram_cache_initialised;
 
 int load_helper(void)
 {
@@ -1258,10 +705,10 @@ int load_helper(void)
       }
 
       snprintf(cmd,1024,"t1\r");
-      slow_write(fd,cmd,strlen(cmd),500);
+      slow_write_ftp(fd,cmd,strlen(cmd),500);
 
       snprintf(cmd,1024,"l0801 %x\r",0x801+helperroutine_len-2);
-      slow_write(fd,cmd,strlen(cmd),500);
+      slow_write_ftp(fd,cmd,strlen(cmd),500);
       usleep(10000); // give uart monitor time to get ready for the data
       process_waiting(fd);
       int offset=2;
@@ -1272,15 +719,15 @@ int load_helper(void)
         }
         offset+=written;
       }
-      slow_write(fd,"\r",1,500);
+      slow_write_ftp(fd,"\r",1,500);
       process_waiting(fd);
 
       // Launch helper programme
       sleep(1);
       snprintf(cmd,1024,"g080d\r");
-      slow_write(fd,cmd,strlen(cmd),500);
+      slow_write_ftp(fd,cmd,strlen(cmd),500);
       snprintf(cmd,1024,"t0\r");
-      slow_write(fd,cmd,strlen(cmd),500);
+      slow_write_ftp(fd,cmd,strlen(cmd),500);
 
       helper_installed=1;
       printf("\nNOTE: Fast SD card access routine installed.\n");
@@ -1332,7 +779,6 @@ void queue_data_decode(uint8_t v)
 
 void queue_add_job(uint8_t *j,int len)
 {
-  char cmd[1024];
   int b;
   uint8_t read_buff[8192];
 
@@ -1382,19 +828,19 @@ void job_process_results(void)
         bcopy(&recent[1],&recent[0],30);
         recent[30]=buff[i];
         recent[31]=0;
-        if (!strncmp(&recent[30-10],"FTBATCHDONE",11)) {
+        if (!strncmp((char*)&recent[30-10],"FTBATCHDONE",11)) {
           long long endtime =gettime_us();
           if (debug_rx) printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
           //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
           return;
         }
-        if (!strncmp(recent,"FTJOBDONE:",10)) {
+        if (!strncmp((char*)recent,"FTJOBDONE:",10)) {
           int jn=atoi((char *)&recent[10]);	  
           if (debug_rx) printf("Saw job #%d completion.\n",jn);	  
         }
         int j_addr,n;
         uint32_t transfer_size;
-        int fn=sscanf(recent,"FTJOBDATA:%x:%x:%n",&j_addr,&transfer_size,&n);
+        int fn=sscanf((char*)recent,"FTJOBDATA:%x:%x:%n",&j_addr,&transfer_size,&n);
         if (fn==2) {
           if (debug_rx)
             printf("Spotted job data: Reading $%x bytes of data, offset %d,"
@@ -1423,7 +869,7 @@ void queue_execute(void)
 
   // Push queued jobs in on go
   sprintf(cmd,"l%x %x\r",0xc001,queue_addr);
-  slow_write(fd,cmd,strlen(cmd),0);
+  slow_write_ftp(fd,cmd,strlen(cmd),0);
   // give serial uart time to get ready
   // (and make sure we end up in a different USB packet to the command)
   usleep(1000); 
@@ -1431,7 +877,7 @@ void queue_execute(void)
   usleep(3*(queue_addr-0xc001));
 
   sprintf(cmd,"sc000 %x\r",queue_jobs);
-  slow_write(fd,cmd,strlen(cmd),0);
+  slow_write_ftp(fd,cmd,strlen(cmd),0);
   long long end = gettime_us();
   //  printf("%lld Executing queued jobs (took %lld us to dispatch)\n",end-start_usec,end-start);
 
@@ -1470,7 +916,7 @@ int execute_write_queue(void)
         write_sector_count,write_buffer_offset);
     snprintf(cmd,1024,"l%x %x\r",0x50000,(0x50000+write_buffer_offset)&0xffff);
     //    printf("CMD: '%s'\n",cmd);
-    slow_write(fd,cmd,strlen(cmd),1000);
+    slow_write_ftp(fd,cmd,strlen(cmd),1000);
     usleep(5000);
     int offset=0;
     while (offset<write_buffer_offset)
@@ -1629,7 +1075,7 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
     // Clear pending input first
     int b=1;
     while(b>0){
-      b=serialport_read(fd,cmd,1024);
+      b=serialport_read(fd,(uint8_t*)cmd,1024);
       //      if (b) dump_bytes(3,"write_sector() flush data",cmd,b);
     }
 
