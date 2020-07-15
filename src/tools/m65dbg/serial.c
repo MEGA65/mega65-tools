@@ -148,6 +148,7 @@ bool serialClose(void)
   if (fd >= 0)
   {
     close(fd);
+    fd = 0;
     return true;
   }
 

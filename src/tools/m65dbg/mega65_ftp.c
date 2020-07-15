@@ -63,7 +63,6 @@ static time_t start_time=0;
 long long start_usec=0;
 
 extern int fd;
-static int cpu_stopped=0;
 
 int open_file_system(void);
 int download_slot(int sllot,char *dest_name);
@@ -84,14 +83,12 @@ int stuff_keybuffer(char *s);
 int get_pc(void);
 unsigned char mega65_peek(unsigned int addr);
 int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer);
-int slow_write_safe_ftp(int fd,char *d,int l);
 int slow_write_ftp(int fd,char *d,int l,int preWait);
 
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
 extern unsigned char helperroutine[];
-int helper_installed=0;
 int job_done;
 int sectors_written;
 int job_status_fresh=0;
@@ -105,15 +102,15 @@ static int halt=0;
 // 0 = old hard coded monitor, 1= Kenneth's 65C02 based fancy monitor
 static int new_monitor=0;
 
-static int saw_c64_mode=0;
-static int saw_c65_mode=0;
+extern int saw_c64_mode;
+extern int saw_c65_mode;
 
 
 unsigned char viciv_regs[0x100];
 static int mode_report=0;
 
 extern int serial_speed;
-extern char *serial_port;
+extern char devSerial[];
 extern char *bitstream;
 
 unsigned char *sd_read_buffer=NULL;
@@ -224,29 +221,6 @@ int slow_write_ftp(int fd,char *d,int l,int preWait)
   tcdrain(fd);
   return 0;
 }
-
-int slow_write_safe_ftp(int fd,char *d,int l)
-{
-  // There is a bug at the time of writing that causes problems
-  // with the CPU's correct operation if various monitor commands
-  // are run when the CPU is running.
-  // Stopping the CPU before and then resuming it after running a
-  // command solves the problem.
-  // The only problem then is if we have a breakpoint set (like when
-  // getting ready to load a program), because we might accidentally
-  // resume the CPU when it should be stopping.
-  // (We can work around this by using the fact that the new UART
-  // monitor tells us when a breakpoint has been reached.
-  if (!cpu_stopped)
-    slow_write_ftp(fd,"t1\r",3,0);
-  slow_write_ftp(fd,d,l,0);
-  if (!cpu_stopped) {
-    //    printf("Resuming CPU after writing string\n");
-    slow_write_ftp(fd,"t0\r",3,0);
-  }
-  return 0;
-}
-
 
 #define READ_SECTOR_BUFFER_ADDRESS 0xFFD6e00
 #define WRITE_SECTOR_BUFFER_ADDRESS 0xFFD6e00
@@ -410,7 +384,7 @@ int execute_command(char *cmd)
   if ((!strcmp(cmd,"exit"))||(!strcmp(cmd,"quit"))) {
     printf("Reseting MEGA65 and exiting.\n");
     restart_hyppo();
-    exit(0);
+    return -1;
   }
 
   if (sscanf(cmd,"getslot %d %s",&slot,dst)==2) {
@@ -488,111 +462,91 @@ int execute_command(char *cmd)
   return 0;
 }
 
-// int main(int argc,char **argv)
-// {
-//   start_time=time(0);
-//   start_usec=gettime_us();
-// 
-//   int opt;
-//   while ((opt = getopt(argc, argv, "b:s:l:c:")) != -1) {
-//     switch (opt) {
-//       case 'l': strcpy(serial_port,optarg); break;
-//       case 's':
-//                 serial_speed=atoi(optarg);
-//                 switch(serial_speed) {
-//                   case 1000000:
-//                   case 1500000:
-//                   case 4000000:
-//                   case 230400: case 2000000: break;
-//                   default: usage_ftp();
-//                 }
-//                 break;
-//       case 'b':
-//                 bitstream=strdup(optarg); break;
-//       case 'c':
-//                 queue_command(optarg); break;
-//       default: /* '?' */
-//                 usage_ftp();
-//     }
-//   }  
-// 
-//   if (argc-optind==1) usage_ftp();
-// 
-//   errno=0;
-//   fd=open(serial_port,O_RDWR);
-//   if (fd==-1) {
-//     fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
-//     perror("open");
-//     exit(-1);
-//   }
-//   fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
-// 
-// #ifndef APPLE
-// 
-//   // And also another way
-//   struct serial_struct serial;
-//   ioctl(fd, TIOCGSERIAL, &serial); 
-//   serial.flags |= ASYNC_LOW_LATENCY;
-//   ioctl(fd, TIOCSSERIAL, &serial);
-// 
-//   {
-//     char latency_timer[1024];
-//     int offset=strlen(serial_port);
-//     while(offset&&serial_port[offset-1]!='/') offset--;
-//     snprintf(latency_timer,1024,"/sys/bus/usb-serial/devices/%s/latency_timer",
-//         &serial_port[offset]);
-//     int new_latency=999;
-//     FILE *f=fopen(latency_timer,"r");
-//     if (f) { fscanf(f,"%d",&new_latency); fclose(f); }
-//     if (new_latency==1) printf("Successfully set USB serial port to low-latency\n");
-//     else printf("WARNING: Could not set USB serial port to low latency.  Transfers will be (even) slower.\n");
-//   }
-// 
-// #endif
-// 
-//   // Load bitstream if file provided
-//   if (bitstream) {
-//     char cmd[1024];
-//     snprintf(cmd,1024,"fpgajtag -a %s",bitstream);
-//     fprintf(stderr,"%s\n",cmd);
-//     system(cmd);
-//     fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
-//   }
-// 
-//   // Set higher speed on serial interface to improve throughput, and make sure
-//   // we have reset.
-//   set_speed(fd,2000000);
-//   //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
-//   slow_write_ftp(fd,"\r+9\r",4,5000);
-//   set_speed(fd,4000000);
-//   //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
-//   //  set_speed(fd,2000000);  
-//   //  slow_write_ftp(fd,"\r+9\r",4,5000);
-//   //  set_speed(fd,4000000);
-// 
-//   stop_cpu();
-// 
-//   load_helper();
-// 
-//   sdhc_check();
-// 
-//   if (!file_system_found) open_file_system();
-// 
-//   if (queued_command_count) {
-//     for(int i=0;i<queued_command_count;i++) execute_command(queued_commands[i]);
-//     return 0;
-//   } else {
-//     char *cmd=NULL;
-//     using_history();
-//     while((cmd=readline("MEGA65 SD-card> "))!=NULL) {
-//       execute_command(cmd);
-//       add_history(cmd);
-//       free(cmd);
-//     }
-//   }
-// 
-//   return 0;
-// }
+int do_ftp(char* bitstream)
+{
+  if (strlen(bitstream)==0)
+  {
+    printf("In order to use ftp, please provide '-b bitstream.bit' argument when running m65dbg.\n");
+    return;
+  }
+  start_time=time(0);
+  start_usec=gettime_us();
+
+#ifndef APPLE
+
+  // And also another way
+  struct serial_struct serial;
+  ioctl(fd, TIOCGSERIAL, &serial); 
+  serial.flags |= ASYNC_LOW_LATENCY;
+  ioctl(fd, TIOCSSERIAL, &serial);
+
+  {
+    char latency_timer[1024];
+    int offset=strlen(devSerial);
+    while(offset&&devSerial[offset-1]!='/') offset--;
+    snprintf(latency_timer,1024,"/sys/bus/usb-serial/devices/%s/latency_timer",
+        &devSerial[offset]);
+    int new_latency=999;
+    FILE *f=fopen(latency_timer,"r");
+    if (f) { fscanf(f,"%d",&new_latency); fclose(f); }
+    if (new_latency==1) printf("Successfully set USB serial port to low-latency\n");
+    else printf("WARNING: Could not set USB serial port to low latency.  Transfers will be (even) slower.\n");
+  }
+
+#endif
+
+  // Load bitstream if file provided
+  if (bitstream) {
+    char cmd[1024];
+    snprintf(cmd,1024,"fpgajtag -a %s",bitstream);
+    fprintf(stderr,"%s\n",cmd);
+    system(cmd);
+    fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
+  }
+
+  // Set higher speed on serial interface to improve throughput, and make sure
+  // we have reset.
+  set_speed(fd,2000000);
+  //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
+  slow_write_ftp(fd,"\r+9\r",4,5000);
+  set_speed(fd,4000000);
+  //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
+  //  set_speed(fd,2000000);  
+  //  slow_write_ftp(fd,"\r+9\r",4,5000);
+  //  set_speed(fd,4000000);
+
+  //stop_cpu();
+
+  load_helper();
+
+  sdhc_check();
+
+  if (!file_system_found) open_file_system();
+
+  char *cmd=NULL;
+  using_history();
+  while((cmd=readline("MEGA65 SD-card> "))!=NULL) {
+    int ret = execute_command(cmd);
+    if (ret == -1) // user quit ftp?
+      break;
+    
+    add_history(cmd);
+    free(cmd);
+  }
+
+  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
+  set_speed(fd,2000000);
+  serial.flags -= ASYNC_LOW_LATENCY;
+  ioctl(fd, TIOCSSERIAL, &serial);
+
+  printf("\n");
+
+  unsigned char read_buff[8192];
+  // flush out any serial data that occurred after the restart.
+  serialport_read(fd,read_buff,8192);
+
+  return 0;
+}
 
 void wait_for_sdready(void)
 {
@@ -682,7 +636,6 @@ int load_helper(void)
 {
   int retVal=0;
   do {
-    if (!helper_installed) {      
       // Install helper routine
       char cmd[1024];
 
@@ -729,10 +682,7 @@ int load_helper(void)
       snprintf(cmd,1024,"t0\r");
       slow_write_ftp(fd,cmd,strlen(cmd),500);
 
-      helper_installed=1;
       printf("\nNOTE: Fast SD card access routine installed.\n");
-
-    }
   } while(0);
   return retVal;
 }

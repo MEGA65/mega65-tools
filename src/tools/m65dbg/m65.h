@@ -1,6 +1,7 @@
 #ifndef M65_H
 #define M65_H
 
+#include <inttypes.h>
 #include "serial.h"
 
 size_t serialport_read(int fd, uint8_t * buffer, size_t size);

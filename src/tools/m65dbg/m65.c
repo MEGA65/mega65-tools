@@ -951,7 +951,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
       end_addr=addr+0x100;
     }
-    //    printf("Sending '%s'\n",cmd);
+        //printf("Sending '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
     while(addr!=end_addr) {
       snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);

@@ -84,6 +84,7 @@ type_command_details command_details[] =
   { "se", cmdSearch, "<addr28> <len> <values>", "Searches the range you specify for the given values (either a list of hex bytes or a \"string\""},
   { "ss", cmdScreenshot, NULL, "Takes an ascii screenshot of the mega65's screen" },
   { "ty", cmdType, NULL, "Remote keyboard mode" },
+  { "ftp", cmdFtp, NULL, "FTP access to SD-card" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -2232,6 +2233,20 @@ void cmdType(void)
   fcntl(fd,F_SETFL,orig_fcntl|O_NONBLOCK);
   do_type_text("-");
   fcntl(fd,F_SETFL,orig_fcntl);
+}
+
+extern char pathBitstream[];
+int do_ftp(char* bitstream);
+extern char devSerial[];
+
+void cmdFtp(void)
+{
+  int orig_fcntl = fcntl(fd, F_GETFL, NULL);
+  fcntl(fd,F_SETFL,orig_fcntl|O_NONBLOCK);
+  do_ftp(pathBitstream);
+  fcntl(fd,F_SETFL,orig_fcntl);
+  serialClose();
+  serialOpen(devSerial);
 }
 
 int cmdGetCmdCount(void)

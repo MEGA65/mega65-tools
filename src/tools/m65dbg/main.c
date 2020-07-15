@@ -16,6 +16,8 @@
 #define VERSION "v1.00"
 
 char *strInput = NULL;
+char pathBitstream[256] = "";
+char devSerial[100] = "/dev/ttyUSB1";
 
 /**
  * retrieves a command via user input and places it in global strInput
@@ -197,8 +199,6 @@ void run_m65dbg_init_file_commands()
  */
 int main(int argc, char** argv)
 {
-  char devSerial[100] = "/dev/ttyUSB1";
-
   signal(SIGINT, ctrlc_handler);
   rl_initialize();
 
@@ -212,7 +212,8 @@ int main(int argc, char** argv)
         strcmp(argv[k], "-h") == 0)
     {
       printf("--help/-h = display this help\n"
-             "--device/-l </dev/tty*> = select a tty device-name to use as the serial port to communicate with the Nexys hardware\n");
+             "--device/-l </dev/tty*> = select a tty device-name to use as the serial port to communicate with the Nexys hardware\n"
+             "-b <bistream.bit> = Name of bitstream file to load (needed for ftp support)\n");
       exit(0);
     }
     if (strcmp(argv[k], "--device") == 0 ||
@@ -225,6 +226,17 @@ int main(int argc, char** argv)
       }
       k++;
       strcpy(devSerial, argv[k]);
+    }
+
+    if (strcmp(argv[k], "-b") == 0)
+    {
+      if (k+1 >= argc)
+      {
+        printf("Please provide path to bitstream file\n");
+        exit(0);
+      }
+      k++;
+      strcpy(pathBitstream, argv[k]);
     }
   }
 

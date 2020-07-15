@@ -40,6 +40,7 @@ void cmdDownFrame(void);
 void cmdSearch(void);
 void cmdScreenshot(void);
 void cmdType(void);
+void cmdFtp(void);
 int  cmdGetCmdCount(void);
 char* cmdGetCmdName(int idx);
 
