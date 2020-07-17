@@ -105,8 +105,19 @@ irq_00:
 	 lda #$00
 	 sta $d054
 
+	 lda $d06f
+	 bmi is_ntsc
+
+       ; PAL position for raster split
 	 lda #$c2
 	 sta $d012
+	 jmp resume
+is_ntsc:
+	; NTSC position for raster split
+	 lda #$aa
+	 sta $d012
+
+resume:
 	 lda #$1b
 	 sta $d011
 
