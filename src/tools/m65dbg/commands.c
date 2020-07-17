@@ -800,6 +800,97 @@ void load_list(char* fname)
   load_map(fname);
 }
 
+void load_acme_map(const char* fname)
+{
+  char strMapFile[200];
+  strcpy(strMapFile, fname);
+  char* sdot = strrchr(strMapFile, '.');
+  *sdot = '\0';
+  strcat(strMapFile, ".sym");
+
+  // check if file exists
+  if (access(strMapFile, F_OK) != -1)
+  {
+    printf("Loading \"%s\"...\n", strMapFile);
+
+    // load the map file
+    FILE* f = fopen(strMapFile, "rt");
+
+    while (!feof(f))
+    {
+      char line[1024];
+      char sval[256];
+      int addr;
+      char sym[1024];
+      fgets(line, 1024, f);
+      sscanf(line, "%s = %s", sym, sval);
+      sscanf(sval, "$%04X", &addr);
+
+      //printf("%s : %04X\n", sym, addr);
+      type_symmap_entry sme;
+      sme.addr = addr;
+      sme.sval = sval; 
+      sme.symbol = sym;
+      add_to_symmap(sme);
+    }
+    fclose(f);
+  }
+}
+
+bool is_hex(const char* str)
+{
+  char c;
+  for (int k = 0; k < strlen(str); k++)
+  {
+    c = str[k];
+    if ((c >= 'a' && c <= 'f') || (c >= '0' && c <= '9'))
+      continue;
+    else
+      return false;
+  }
+
+  return true;
+}
+
+void load_acme_list(char* fname)
+{
+  FILE* f = fopen(fname, "rt");
+  char line[1024];
+  char curfile[256] = "";
+  int lineno, memaddr;
+  char val1[256];
+  char val2[256];
+
+  while (!feof(f))
+  {
+    fgets(line, 1024, f);
+
+    if (starts_with(line, "; ****") && strstr(line, "Source:"))
+    {
+      char* asmname = strstr(line, "Source: ") + strlen("Source: ");
+      sscanf(asmname, "%s", curfile);
+    }
+    else
+    {
+      if (sscanf(line, "%d %s %s", &lineno, val1, val2) == 3)
+      {
+        if (is_hex(val1) && is_hex(val2))
+        {
+          sscanf(val1, "%04X", &memaddr);
+          type_fileloc fl;
+          fl.addr = memaddr;
+          fl.file = curfile;
+          fl.lineno = lineno;
+          add_to_list(fl);
+        }
+      }
+    }
+  }
+  fclose(f);
+
+  load_acme_map(fname);
+}
+
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KGRN  "\x1B[32m"
@@ -849,10 +940,17 @@ void listSearch(void)
     while ((dir = readdir(d)) != NULL)
     {
       char* ext = get_extension(dir->d_name);
+      // .list = Ophis or CA65?
       if (ext != NULL && strcmp(ext, ".list") == 0)
       {
         printf("Loading \"%s\"...\n", dir->d_name);
         load_list(dir->d_name);
+      }
+      // .rep = ACME (report file, equivalent to .list)
+      else if (ext != NULL && strcmp(ext, ".rep") == 0)
+      {
+        printf("Loading \"%s\"...\n", dir->d_name);
+        load_acme_list(dir->d_name);
       }
     }
 
