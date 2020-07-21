@@ -865,4 +865,3 @@ int do_screen_shot(void)
   return 0;
 }
 
-

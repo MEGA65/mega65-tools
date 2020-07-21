@@ -505,24 +505,24 @@ int restart_hyppo(void)
 void print_spaces(FILE *f,int col)
 {
   for(int i=0;i<col;i++)
-    fprintf(f," ");  
+    printf(" ");  
 }
 
 int dump_bytes(int col, char *msg,unsigned char *bytes,int length)
 {
   print_spaces(stderr,col);
-  fprintf(stderr,"%s:\n",msg);
+  printf("%s:\n",msg);
   for(int i=0;i<length;i+=16) {
     print_spaces(stderr,col);
-    fprintf(stderr,"%04X: ",i);
-    for(int j=0;j<16;j++) if (i+j<length) fprintf(stderr," %02X",bytes[i+j]); else fprintf(stderr,"   ");
-    fprintf(stderr," | ");
+    printf("%04X: ",i);
+    for(int j=0;j<16;j++) if (i+j<length) printf(" %02X",bytes[i+j]); else printf("   ");
+    printf(" | ");
     for(int j=0;j<16;j++) if (i+j<length) {
       if (bytes[i+j]>=0x20&&bytes[i+j]<0x7f) {
-        fprintf(stderr,"%c",bytes[i+j]);
-      } else fprintf(stderr,".");
+        printf("%c",bytes[i+j]);
+      } else printf(".");
     }
-    fprintf(stderr,"\n");
+    printf("\n");
   }
 
   return 0;
@@ -942,7 +942,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 
   //  fprintf(stderr,"Fetching $%x bytes @ $%x\n",count,address);
 
-  //  monitor_sync();
+  monitor_sync();
   while(addr<(address+count)) {
     if ((address+count-addr)<17) {
       snprintf(cmd,8192,"m%X\r",(unsigned int)addr);
@@ -1299,27 +1299,27 @@ void do_type_text(char *type_text)
 
       c=getc(stdin);
       while(c!=25) {
-        printf("$%02x -> ",c);
+        //printf("$%02x -> ",c);
         switch(c) {
           case 0x7f: c=0x14; break; // DELETE
           case 0x0a: c=0x0d; break; // RETURN
           case 0x1b:  // 1st ESCPE
             c=getc(stdin);
-            printf("($%02x - %c) ",c, c);
+            //printf("($%02x - %c) ",c, c);
 
             if (c==0x1b) { // RUN/STOP (Two escapes)
               c=0x03;
             }
             else if (c==0x4f) { // F1 or F3?
               c = getc(stdin);
-              printf("($%02x - %c) ",c, c);
+              //printf("($%02x - %c) ",c, c);
               if (c == 0x50) c = 0xF1;
               else if (c == 0x52) c = 0xF3;
               else c = 0;
             }
             else if (c==0x5b) {
               c=getc(stdin);
-              printf("($%02x - %c) ",c, c);
+              //printf("($%02x - %c) ",c, c);
               switch(c) {
                 case 0x42: c=0x11; break; // down
                 case 0x41: c=0x91; break; // up
@@ -1330,12 +1330,12 @@ void do_type_text(char *type_text)
                 case 'T': c=0x14; break; // INST/DEL
                 case '1':
                   c=getc(stdin);
-                  printf("($%02x - %c) ",c, c);
+                  //printf("($%02x - %c) ",c, c);
                   switch(c) {
                   case 'P': c=0xF1; break; // F1
                   case 'R': c=0xF3; break; // F3
                   case '5': c=0xF5; break; // F5
-                  case '8': c=0xF7; printf("F7!\n"); break; // F7
+                  case '8': c=0xF7; break; // F7
                   default: c = 0; break;
                   }
                   break;
@@ -1346,7 +1346,7 @@ void do_type_text(char *type_text)
             else
               c = 0;
       }
-      printf("$%02x\n",c);
+      //printf("$%02x\n",c);
       if (c) {
         switch(c)
         {
