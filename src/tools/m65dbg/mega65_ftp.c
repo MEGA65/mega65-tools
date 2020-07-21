@@ -2191,7 +2191,10 @@ int download_file(char *dest_name,char *local_name,int showClusters)
         if (remaining_bytes>=512)
           fwrite(download_buffer,512,1,f);
         else
+        {
           fwrite(download_buffer,remaining_bytes,1,f);
+          break;
+        }
       }
 
       if (0) printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
