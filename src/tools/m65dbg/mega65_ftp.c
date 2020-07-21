@@ -77,6 +77,12 @@ static const int B4000000 = 4000000;
 
 #endif
 
+#ifdef __CYGWIN__
+#define USLEEP_LCMD 8
+#else
+#define USLEEP_LCMD 4
+#endif
+
 #include "m65.h"
 
 static time_t start_time=0;
@@ -855,7 +861,7 @@ void queue_execute(void)
   usleep(1000); 
   serialport_write(fd,queue_cmds,queue_addr-0xc001);
   // changing this from 3 to 6 seemed to help cygwin...
-  usleep(8*(queue_addr-0xc001));
+  usleep(USLEEP_LCMD*(queue_addr-0xc001));
 
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write_ftp(fd,cmd,strlen(cmd),0);
@@ -906,7 +912,7 @@ int execute_write_queue(void)
       if (written>0) offset+=written;
       else usleep(0);
     }
-    usleep(3*write_buffer_offset);
+    usleep(USLEEP_LCMD*write_buffer_offset);
 
     // XXX - Sort sector number order and merge consecutive writes into
     // multi-sector writes would be a good idea here.
