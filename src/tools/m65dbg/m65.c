@@ -1604,6 +1604,7 @@ int serialport_write(int fd, uint8_t * buffer, size_t size)
     }
   }
 #endif
+  return size;
 }
 
 size_t serialport_read(int fd, uint8_t * buffer, size_t size)
@@ -1642,10 +1643,13 @@ void set_serial_speed(int fd,int serial_speed)
   } else if (serial_speed==1500000) {
     if (cfsetospeed(&t, B1500000)) perror("Failed to set output baud rate");
     if (cfsetispeed(&t, B1500000)) perror("Failed to set input baud rate");
-  } else {
-    if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
-    if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
   }
+#ifndef __CYGWIN__
+  // else {
+  //  if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
+  //  if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
+  //}
+#endif
 
   t.c_cflag &= ~PARENB;
   t.c_cflag &= ~CSTOPB;

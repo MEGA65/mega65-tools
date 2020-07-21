@@ -39,7 +39,25 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifndef __CYGWIN__
 #include <dirent.h>
+#else
+#define NAME_MAX  260
+#define DT_DIR    0
+#define DT_REG 2
+#define DT_UNKNOWN 0xffff
+struct dirent
+{
+  uint32_t __d_version;			/* Used internally */
+  ino_t d_ino;
+  unsigned char d_type;
+  unsigned char __d_unused1[3];
+  __uint32_t d_off; // needed to add this
+  __uint32_t d_reclen; // needed to add this
+  __uint32_t __d_internal1;
+  char d_name[NAME_MAX + 1];
+};
+#endif
 #include <stdio.h>
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -52,8 +70,10 @@ static const int B1500000 = 1500000;
 static const int B2000000 = 2000000;
 static const int B4000000 = 4000000;
 #else
+#ifndef __CYGWIN__
 #include <sys/ioctl.h>
 #include <linux/serial.h>
+#endif
 
 #endif
 
@@ -328,10 +348,13 @@ void set_speed(int fd,int serial_speed)
   } else if (serial_speed==1500000) {
     if (cfsetospeed(&t, B1500000)) perror("Failed to set output baud rate");
     if (cfsetispeed(&t, B1500000)) perror("Failed to set input baud rate");
-  } else {
-    if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
-    if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
   }
+#ifndef __CYGWIN__
+  // else {
+  //  if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
+  //  if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
+  //}
+#endif
   t.c_cflag &= ~PARENB;
   t.c_cflag &= ~CSTOPB;
   t.c_cflag &= ~CSIZE;
@@ -467,13 +490,13 @@ int do_ftp(char* bitstream)
   if (strlen(bitstream)==0)
   {
     printf("In order to use ftp, please provide '-b bitstream.bit' argument when running m65dbg.\n");
-    return;
+    return 0;
   }
   start_time=time(0);
   start_usec=gettime_us();
 
 #ifndef APPLE
-
+#ifndef __CYGWIN__
   // And also another way
   struct serial_struct serial;
   ioctl(fd, TIOCGSERIAL, &serial); 
@@ -494,8 +517,10 @@ int do_ftp(char* bitstream)
   }
 
 #endif
+#endif
 
   // Load bitstream if file provided
+#ifndef __CYGWIN__
   if (bitstream) {
     char cmd[1024];
     snprintf(cmd,1024,"fpgajtag -a %s",bitstream);
@@ -503,13 +528,16 @@ int do_ftp(char* bitstream)
     system(cmd);
     fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
   }
+#endif
 
   // Set higher speed on serial interface to improve throughput, and make sure
   // we have reset.
   set_speed(fd,2000000);
   //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
+#ifndef __CYGWIN__
   slow_write_ftp(fd,"\r+9\r",4,5000);
   set_speed(fd,4000000);
+#endif
   //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
   //  set_speed(fd,2000000);  
   //  slow_write_ftp(fd,"\r+9\r",4,5000);
@@ -536,8 +564,10 @@ int do_ftp(char* bitstream)
 
   slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
   set_speed(fd,2000000);
+#ifndef __CYGWIN__
   serial.flags -= ASYNC_LOW_LATENCY;
   ioctl(fd, TIOCSSERIAL, &serial);
+#endif
 
   printf("\n");
 
@@ -824,7 +854,8 @@ void queue_execute(void)
   // (and make sure we end up in a different USB packet to the command)
   usleep(1000); 
   serialport_write(fd,queue_cmds,queue_addr-0xc001);
-  usleep(3*(queue_addr-0xc001));
+  // changing this from 3 to 6 seemed to help cygwin...
+  usleep(8*(queue_addr-0xc001));
 
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write_ftp(fd,cmd,strlen(cmd),0);

@@ -27,9 +27,9 @@
 #define error_message printf
 
 #ifdef WINDOWS
-extern PORT_TYPE fd=INVALID_HANDLE_VALUE;
+PORT_TYPE fd=INVALID_HANDLE_VALUE;
 #else
-extern PORT_TYPE fd=-1;
+PORT_TYPE fd=-1;
 #endif
 
 int set_interface_attribs (int fd, int speed, int parity)
