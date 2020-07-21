@@ -22,5 +22,6 @@ int fetch_ram_invalidate(void);
 int start_cpu(void);
 void timestamp_msg(char *msg);
 int detect_mode(void);
+void do_type_text(char *type_text);
 
 #endif // M65_H

@@ -43,6 +43,7 @@ char* type_names[] = { "BYTE  ", "WORD  ", "DWORD ", "STRING", "DUMP  ", "MDUMP 
 
 bool autocls = false; // auto-clearscreen flag
 bool autowatch = false; // auto-watch flag
+bool petscii = false; // show chars in dumps based on petscii
 bool ctrlcflag = false; // a flag to keep track of whether ctrl-c was caught
 int  traceframe = 0;  // tracks which frame within the backtrace
 
@@ -85,6 +86,7 @@ type_command_details command_details[] =
   { "ss", cmdScreenshot, NULL, "Takes an ascii screenshot of the mega65's screen" },
   { "ty", cmdType, NULL, "Remote keyboard mode" },
   { "ftp", cmdFtp, NULL, "FTP access to SD-card" },
+  { "petscii", cmdPetscii, "0/1", "In dump commands, respect petscii screen codes" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -1083,6 +1085,21 @@ void cmdHelp(void)
    );
 }
 
+void print_char(int c)
+{
+  if (petscii)
+  {
+    print_screencode(c, 1);
+  }
+  else
+  {
+    if (isprint(c) && c > 31)
+      printf("%c", c);
+    else
+      printf(".");
+  }
+}
+
 void dump(int addr, int total)
 {
   int cnt = 0;
@@ -1105,10 +1122,7 @@ void dump(int addr, int total)
     for (int k = 0; k < 16; k++)
     {
       int c = mem.b[k];
-      if (isprint(c) && c > 31)
-        printf("%c", c);
-      else
-        printf(".");
+      print_char(c);
     }
     printf("\n");
     cnt+=16;
@@ -1163,10 +1177,7 @@ void mdump(int addr, int total)
     for (int k = 0; k < 16; k++)
     {
       int c = mem.b[k];
-      if (isprint(c) && c > 31)
-        printf("%c", c);
-      else
-        printf(".");
+      print_char(c);
     }
     printf("\n");
     cnt+=16;
@@ -2017,6 +2028,21 @@ void cmdAutoWatch(void)
     autowatch = false;
   
   printf(" - autowatch is turned %s.\n", autowatch ? "on" : "off");
+}
+
+void cmdPetscii(void)
+{
+  char* token = strtok(NULL, " ");
+
+  // if no parameter, then just toggle it
+  if (token == NULL)
+    petscii = !petscii;
+  else if (strcmp(token, "1") == 0)
+    petscii = true;
+  else if (strcmp(token, "0") == 0)
+    petscii = false;
+  
+  printf(" - petscii is turned %s.\n", petscii ? "on" : "off");
 }
 
 void cmdSymbolValue(void)

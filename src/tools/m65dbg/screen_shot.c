@@ -230,7 +230,7 @@ void print_screencode(unsigned char c, int upper_case)
   else if (c==0x6E) printf("%s",to_utf8(0x2513));
   else if (c==0x6F) printf("%s",to_utf8(0x2582));
 
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
+  else if (c==0x43) printf("%s",to_utf8(0x2500));
   else if (c==0x60) printf("%s",to_utf8(0xA0));
   else if (c==0x60) printf("%s",to_utf8(0xA0));
   else if (c==0x60) printf("%s",to_utf8(0xA0));
@@ -305,6 +305,9 @@ int do_screen_shot_ascii(void)
       else {
 	char_id=char_value&0x1fff;
 	char_background_colour=background_colour;
+        if (sixteenbit_mode) {
+          char_background_colour=colour_data[y*screen_line_step+x*(1+sixteenbit_mode)+1];
+        }
       }
       int glyph_width_deduct=char_value>>13;
 
@@ -356,11 +359,15 @@ int do_screen_shot_ascii(void)
 	     );
 
       // Xterm can't display arbitrary graphics, so just mark full-colour chars
-      if (glyph_full_colour) {
+
+      // These glyph '?'s seem to screw up some text in the freeze menu,
+      // so will comment it out for now.
+      /*if (glyph_full_colour) {
 	printf("?");
-	if (glyph_4bit) printf("?");
+	if (glyph_4bit) printf("?"); 
       }
-      else print_screencode(char_id&0xff,upper_case);
+      else */
+        print_screencode(char_id&0xff,upper_case);
     }
 
     printf("%c[48;2;%d;%d;%dm ",

@@ -41,6 +41,7 @@ void cmdSearch(void);
 void cmdScreenshot(void);
 void cmdType(void);
 void cmdFtp(void);
+void cmdPetscii(void);
 int  cmdGetCmdCount(void);
 char* cmdGetCmdName(int idx);
 
