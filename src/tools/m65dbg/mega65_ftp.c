@@ -486,7 +486,6 @@ int execute_command(char *cmd)
     printf("quit - leave this programme.\n");
   } else {
     fprintf(stderr,"ERROR: Unknown command or invalid syntax. Type help for help.\n");
-    return -1;
   }
   return 0;
 }
