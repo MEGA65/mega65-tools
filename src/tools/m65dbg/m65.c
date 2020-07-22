@@ -942,7 +942,9 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 
   //  fprintf(stderr,"Fetching $%x bytes @ $%x\n",count,address);
 
+#ifdef __CYGWIN__
   monitor_sync();
+#endif
   while(addr<(address+count)) {
     if ((address+count-addr)<17) {
       snprintf(cmd,8192,"m%X\r",(unsigned int)addr);
@@ -1649,10 +1651,10 @@ void set_serial_speed(int fd,int serial_speed)
     if (cfsetispeed(&t, B1500000)) perror("Failed to set input baud rate");
   }
 #ifndef __CYGWIN__
-  // else {
-  //  if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
-  //  if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
-  //}
+  else {
+    if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
+    if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
+  }
 #endif
 
   t.c_cflag &= ~PARENB;

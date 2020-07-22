@@ -356,10 +356,10 @@ void set_speed(int fd,int serial_speed)
     if (cfsetispeed(&t, B1500000)) perror("Failed to set input baud rate");
   }
 #ifndef __CYGWIN__
-  // else {
-  //  if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
-  //  if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
-  //}
+  else {
+    if (cfsetospeed(&t, B4000000)) perror("Failed to set output baud rate");
+    if (cfsetispeed(&t, B4000000)) perror("Failed to set input baud rate");
+  }
 #endif
   t.c_cflag &= ~PARENB;
   t.c_cflag &= ~CSTOPB;
