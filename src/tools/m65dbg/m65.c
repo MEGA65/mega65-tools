@@ -1128,13 +1128,18 @@ int detect_mode(void)
 }
 
 
+// screen-code to scan-code conversion?
 void do_type_key(unsigned char key)
 {  
   int c1=0x7f;
   int c2=0x7f;
 
   // left shift for upper case letters
-  if (key>=0x41&&key<=0x5A) c2=0x0f;
+  if (key>=0x41&&key<=0x5A)
+  {
+    key += 0x20;  // convert to ascii's lowercase, so the c2 will shift it to upper-case
+    c2=0x0f;
+  }
 
   switch (key)
   {
