@@ -44,6 +44,7 @@ char* type_names[] = { "BYTE  ", "WORD  ", "DWORD ", "STRING", "DUMP  ", "MDUMP 
 bool autocls = false; // auto-clearscreen flag
 bool autowatch = false; // auto-watch flag
 bool petscii = false; // show chars in dumps based on petscii
+bool fastmode = false; // switch for slow (2,000,000bps) and fast (4,000,000bps) modes
 bool ctrlcflag = false; // a flag to keep track of whether ctrl-c was caught
 int  traceframe = 0;  // tracks which frame within the backtrace
 
@@ -87,6 +88,7 @@ type_command_details command_details[] =
   { "ty", cmdType, "[<string>]", "Remote keyboard mode (if optional string provided, acts as one-shot message with carriage-return)" },
   { "ftp", cmdFtp, NULL, "FTP access to SD-card" },
   { "petscii", cmdPetscii, "0/1", "In dump commands, respect petscii screen codes" },
+  { "fastmode", cmdFastMode, "0/1", "Used to quickly switch between 2,000,000bps (slow-mode: default) or 4,000,000bps (fast-mode: used in ftp-mode)" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -2043,6 +2045,27 @@ void cmdPetscii(void)
     petscii = false;
   
   printf(" - petscii is turned %s.\n", petscii ? "on" : "off");
+}
+
+void cmdFastMode(void)
+{
+#ifdef __CYGWIN__
+  printf("Command not available under Cygwin (only capable of 2,000,000bps)\n");
+#else
+  char* token = strtok(NULL, " ");
+
+  // if no parameter, then just toggle it
+  if (token == NULL)
+    fastmode = !fastmode;
+  else if (strcmp(token, "1") == 0)
+    fastmode = true;
+  else if (strcmp(token, "0") == 0)
+    fastmode = false;
+  
+  serialBaud(fastmode);
+
+  printf(" - fastmode is turned %s.\n", fastmode ? "on" : "off");
+#endif
 }
 
 void cmdSymbolValue(void)

@@ -28,6 +28,8 @@ void get_command(void)
 }
 
 
+extern bool fastmode;
+
 void parse_command(void)
 {
   char* token;
@@ -66,6 +68,13 @@ void parse_command(void)
   if (!handled)
   {
     serialWrite(outbuf);
+    if (strncmp(outbuf, "!", 1) == 0)
+    {
+#ifndef __CYGWIN__
+      fastmode = false;
+      serialBaud(fastmode);
+#endif
+    }
     serialRead(inbuf, BUFSIZE);
     printf("%s", inbuf);
   }

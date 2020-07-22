@@ -139,6 +139,16 @@ bool serialOpen(char* portname)
   return true;
 }
 
+bool serialBaud(bool fastmode)
+{
+#ifndef __CYGWIN__
+  if (fastmode)
+    set_interface_attribs(fd, B4000000, 0);
+  else
+    set_interface_attribs(fd, B2000000, 0);
+#endif
+}
+
 
 /**
  * closes the opened serial port

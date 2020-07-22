@@ -14,3 +14,4 @@ bool serialOpen(char* portName);
 bool serialClose(void);
 void serialWrite(char* string);
 bool serialRead(char* buf, int bufsize);
+bool serialBaud(bool fastmode);

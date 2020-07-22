@@ -492,11 +492,6 @@ int execute_command(char *cmd)
 
 int do_ftp(char* bitstream)
 {
-  if (strlen(bitstream)==0)
-  {
-    printf("In order to use ftp, please provide '-b bitstream.bit' argument when running m65dbg.\n");
-    return 0;
-  }
   start_time=time(0);
   start_usec=gettime_us();
 
@@ -526,7 +521,7 @@ int do_ftp(char* bitstream)
 
   // Load bitstream if file provided
 #ifndef __CYGWIN__
-  if (bitstream) {
+  if (bitstream && strlen(bitstream)) {
     char cmd[1024];
     snprintf(cmd,1024,"fpgajtag -a %s",bitstream);
     fprintf(stderr,"%s\n",cmd);
