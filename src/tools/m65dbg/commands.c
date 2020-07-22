@@ -1002,10 +1002,10 @@ mem_data* get_mem28array(int addr)
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
   char* strLine = strtok(inbuf, "\n");
-  for (int k = 0; k < 32; k++)
+  for (int k = 0; k < 16; k++)
   {
     mem = &multimem[k];
-    sscanf(strLine, " :%X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+    sscanf(strLine, ":%X:%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
     &mem->addr, &mem->b[0], &mem->b[1], &mem->b[2], &mem->b[3], &mem->b[4], &mem->b[5], &mem->b[6], &mem->b[7], &mem->b[8], &mem->b[9], &mem->b[10], &mem->b[11], &mem->b[12], &mem->b[13], &mem->b[14], &mem->b[15]); 
     strLine = strtok(NULL, "\n");
   }
@@ -2093,7 +2093,7 @@ void cmdSave(void)
     // get memory at current pc
     mem_data* multimem = get_mem28array(addr + cnt);
 
-    for (int line = 0; line < 32; line++)
+    for (int line = 0; line < 16; line++)
     {
       mem_data* mem = &multimem[line];
 
