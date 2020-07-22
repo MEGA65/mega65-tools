@@ -199,6 +199,28 @@ char *to_utf8(const uint32_t cp)
 
 void print_screencode(unsigned char c, int upper_case)
 {
+  // A nice reference for these mappings can be found here:
+  // https://style64.org/petscii/
+  static int map_screencode_to_utf8[][2] = {
+    { 0x43, 0x2501 },   // box drawings heavy horizontal
+    { 0x60, 0xA0 },     // no-break space?
+    { 0x61, 0x258c },   // left half block
+    { 0x62, 0x2584 },   // lower half block
+    { 0x63, 0x2594 },   // upper one eigth block
+    { 0x64, 0x2581 },   // lower one eigth block
+    { 0x65, 0x258e },   // left one quarter block
+    { 0x66, 0x2592 },   // medium shade
+    { 0x67, 0x258a },   // left three quarter block (but it really should be right one quarter block)
+    { 0x68, 0x25db },   // no equivalant to lower half medium shade, so got an approximation
+    { 0x69, 0x25e4 },   // black upper left triangle
+    { 0x6a, 0x258a },   // left three quarter block (but it really should be right one quarter block)
+    { 0x6b, 0x2523 },   // box drawings heavy vertical and right
+    { 0x6c, 0x2597 },   // quadrant lower right
+    { 0x6d, 0x2517 },   // box drawings heavy up and right
+    { 0x6e, 0x2513 },   // box drawings heavy down and left
+    { 0x6f, 0x2582 },   // lower one quarter block
+    { -1, -1 }
+  };
   int rev=0;
   if (c&0x80) {
     rev=1; c&=0x7f;
@@ -212,42 +234,25 @@ void print_screencode(unsigned char c, int upper_case)
   }
   else if (c>=0x20&&c<0x40) printf("%c",c);
   else if ((c>=0x40&&c<=0x5f)&&(!upper_case)) printf("%c",c);
-  
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x61) printf("%s",to_utf8(0x258c));
-  else if (c==0x62) printf("%s",to_utf8(0x2584));
-  else if (c==0x63) printf("%s",to_utf8(0x2594));
-  else if (c==0x64) printf("%s",to_utf8(0x2581));
-  else if (c==0x65) printf("%s",to_utf8(0x258e));
-  else if (c==0x66) printf("%s",to_utf8(0x2592));
-  else if (c==0x67) printf("%s",to_utf8(0x258a));
-  else if (c==0x68) printf("%s",to_utf8(0x7f));     // No Unicode equivalent
-  else if (c==0x69) printf("%s",to_utf8(0x25e4));
-  else if (c==0x6A) printf("%s",to_utf8(0x258a));
-  else if (c==0x6B) printf("%s",to_utf8(0x2523));
-  else if (c==0x6C) printf("%s",to_utf8(0x2597));
-  else if (c==0x6D) printf("%s",to_utf8(0x2517));
-  else if (c==0x6E) printf("%s",to_utf8(0x2513));
-  else if (c==0x6F) printf("%s",to_utf8(0x2582));
-
-  else if (c==0x43) printf("%s",to_utf8(0x2500));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-  else if (c==0x60) printf("%s",to_utf8(0xA0));
-
-  else printf("?");
+  else
+  {
+    int k = 0;
+    int found = 0;
+    while(map_screencode_to_utf8[k][0] != -1)
+    {
+      if (c == map_screencode_to_utf8[k][0])
+      {
+        printf("%s", to_utf8(map_screencode_to_utf8[k][1]));
+        found = 1;
+        break;
+      }
+      k++;
+    }
+    if (!found)
+    {
+      printf("?");
+    }
+  }
 
   if (rev) {
     // Reverse off again
