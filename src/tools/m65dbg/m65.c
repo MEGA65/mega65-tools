@@ -1436,7 +1436,6 @@ void do_type_text(char *type_text)
       }
       do_type_key(c1);
       i++;
-      break;
     }
     else
       do_type_key(type_text[i]);

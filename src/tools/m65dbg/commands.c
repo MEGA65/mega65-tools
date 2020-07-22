@@ -84,7 +84,7 @@ type_command_details command_details[] =
   { "down", cmdDownFrame, NULL, "The 'dis' disassembly command will disassemble one stack-level down from the current frame" },
   { "se", cmdSearch, "<addr28> <len> <values>", "Searches the range you specify for the given values (either a list of hex bytes or a \"string\""},
   { "ss", cmdScreenshot, NULL, "Takes an ascii screenshot of the mega65's screen" },
-  { "ty", cmdType, NULL, "Remote keyboard mode" },
+  { "ty", cmdType, "[<string>]", "Remote keyboard mode (if optional string provided, acts as one-shot message with carriage-return)" },
   { "ftp", cmdFtp, NULL, "FTP access to SD-card" },
   { "petscii", cmdPetscii, "0/1", "In dump commands, respect petscii screen codes" },
   { NULL, NULL, NULL, NULL }
@@ -2351,11 +2351,22 @@ void cmdScreenshot(void)
   fcntl(fd,F_SETFL,orig_fcntl);
 }
 
+extern int type_text_cr;
 void cmdType(void)
 {
+  char* tok = strtok(NULL, "\0");
   int orig_fcntl = fcntl(fd, F_GETFL, NULL);
   fcntl(fd,F_SETFL,orig_fcntl|O_NONBLOCK);
-  do_type_text("-");
+
+  if (tok != NULL)
+  {
+    type_text_cr=1;
+    do_type_text(tok);
+  }
+  else
+  {
+    do_type_text("-");
+  }
   fcntl(fd,F_SETFL,orig_fcntl);
 }
 
