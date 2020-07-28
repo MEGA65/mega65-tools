@@ -1366,16 +1366,11 @@ void do_type_text(char *type_text)
           case 0x06:  // CTRL-F = trigger freeze menu
             printf("\nfreezing...\n");
             char scmd[10];
-            snprintf(scmd, 10, "\rk%c%c\r", 0x24, 0x00); // scan-code for 'E' key
-            slow_write(fd,scmd,strlen(scmd));
-            sleep(2);
-            snprintf(scmd, 10, "\rk%c%c\r", 0x7d, 0x01); // scan-code for RESTORE key
-            slow_write(fd,scmd,strlen(scmd));
-            sleep(2);
-            snprintf(scmd, 10, "\rk%c%c\r", 0x0d, 0x01); // turn off key?
-            slow_write(fd,scmd,strlen(scmd));
+            slow_write(fd,"sffd3615 52 7f 7f \n",19);   // hold down restore
+            sleep(1);
+            slow_write(fd,"sffd3615 7f 7f 7f \n",19);   // release down restore
             monitor_sync();
-            sleep(2);
+            sleep(1);
             get_video_state();
             do_screen_shot_ascii();
             printf("freeze completed!\n");
