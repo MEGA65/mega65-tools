@@ -33,7 +33,8 @@ The source for the m65dbg app is available here:
 # Building
 
 * You will need to install a few pre-requisite libraries (via apt-get/yum/zypper, or cygwin's setup.exe)
-  * **libreadline-devel**
+  * **libreadline-dev**
+  * **libpng-dev**
 * **git clone https://github.com/MEGA65/m65dbg**
 * **cd m65dbg**
 * **make**
