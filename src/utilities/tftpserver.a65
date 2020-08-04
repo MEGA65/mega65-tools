@@ -1023,6 +1023,11 @@ ether_tx_packet:
 
 ether_tx_prepreared_packet:
 
+	; We send each packet twice to mask packet loss, until
+	; we solve the source of the packet loss.
+	jsr txready
+	; FALL THROUGH
+	
 txwaitloop:
 	lda $D6E4	
 	and #$06
@@ -1032,7 +1037,7 @@ txwaitloop:
 	jmp txwaitloop
 
 txready:
-	; TX packet
+	; TX packet 
 
 	lda #$01     ; unjam TX FSM before each packet
 	sta $d6e0
