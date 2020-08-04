@@ -222,6 +222,7 @@ arploop0:
 	; now we need to build the ARP reply and send it.
 	; We should copy the sender's 
 
+	; First say where the ARP request has come from
 	lda #<msg_saw_arp
 	ldy #>msg_saw_arp
 	jsr $ab1e
@@ -1032,10 +1033,10 @@ txwaitloop:
 	jmp txwaitloop
 
 txready:
-	; send packet 2nd time
-	; to help deal with any packet loss without big delays
-	lda #$01
-	sta $d6e4
+;	; send packet 2nd time
+;	; to help deal with any packet loss without big delays
+;	lda #$01
+;	sta $d6e4
 
 	rts
 
