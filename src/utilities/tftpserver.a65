@@ -29,15 +29,17 @@ programentrypoint:
 	lda #65
 	sta 0
 
-	; Set TX phase correctly
-	
-
 	; Reset ethernet
-	lda #$0
+	lda #$00
 	sta $d6e0
-	lda #1
+	lda #$03
 	sta $d6e0
-	
+
+	; Enable RX of corrupt packets
+	lda $d6e5
+	ora #$02
+	sta $d6e5
+
 	lda #<msg_startup
 	ldy #>msg_startup
 	jsr $ab1e
@@ -86,7 +88,7 @@ fliptest:
 	lda $d6e1
 	lsr
 	and #$02
-	ora #$01
+	ora #$01	
 	sta $d6e1
 	jmp fliptest
 
@@ -169,12 +171,12 @@ isicmpping:
 	; It's a ping packet.
 
 	jsr send_icmp_reply
-	lda seq_hi
-	ldx seq_lo
-	jsr $bdcd
-	lda #<msg_ping
-	ldy #>msg_ping
-	jsr $ab1e
+;	lda seq_hi
+;	ldx seq_lo
+;	jsr $bdcd
+;	lda #<msg_ping
+;	ldy #>msg_ping
+;	jsr $ab1e
 	jmp packetloop
 
 isudp:
@@ -222,30 +224,30 @@ arploop0:
 	; now we need to build the ARP reply and send it.
 	; We should copy the sender's 
 
-	; First say where the ARP request has come from
-	lda #<msg_saw_arp
-	ldy #>msg_saw_arp
-	jsr $ab1e
-	lda #$00
-	ldx $681E
-	jsr $bdcd
-	lda #$2e
-	jsr $ffd2
-	lda #$00
-	ldx $681F
-	jsr $bdcd
-	lda #$2e
-	jsr $ffd2
-	lda #$00
-	ldx $6820
-	jsr $bdcd
-	lda #$2e
-	jsr $ffd2
-	lda #$00
-	ldx $6821
-	jsr $bdcd
-	lda #$0d
-	jsr $ffd2
+;	; First say where the ARP request has come from
+;	lda #<msg_saw_arp
+;	ldy #>msg_saw_arp
+;	jsr $ab1e
+;	lda #$00
+;	ldx $681E
+;	jsr $bdcd
+;	lda #$2e
+;	jsr $ffd2
+;	lda #$00
+;	ldx $681F
+;	jsr $bdcd
+;	lda #$2e
+;	jsr $ffd2
+;	lda #$00
+;	ldx $6820
+;	jsr $bdcd
+;	lda #$2e
+;	jsr $ffd2
+;	lda #$00
+;	ldx $6821
+;	jsr $bdcd
+;	lda #$0d
+;	jsr $ffd2
 
 
 	inc $0426 ; XXX for debug
@@ -296,8 +298,7 @@ arploop4:
 	bpl arploop4
 	
 	; packet should now all be ready - hit TX button
-	lda #$01
-	sta $d6e4	
+	jsr ether_tx_prepreared_packet
 
 	; Fall through to rest of packet parser (even though it won't pass
 	; these tests -- it just saves a few bytes of code).
@@ -862,7 +863,7 @@ msg_write_file_exists:
 	.byte "fILE FOR WRITING PRESENT OR CREATED.",$0d,0
 
 msg_ping:
-	.byte " PING!",$0d,0
+	.byte " PING! ",0
 
 msg_tftp_ack:
 	.byte " TFTP ACK PACKET ",0
@@ -1020,9 +1021,7 @@ ether_tx_packet:
 	and #$06
 	sta $0418
 
-	; TX packet
-	lda #$01
-	sta $d6e4
+ether_tx_prepreared_packet:
 
 txwaitloop:
 	lda $D6E4	
@@ -1033,10 +1032,15 @@ txwaitloop:
 	jmp txwaitloop
 
 txready:
-;	; send packet 2nd time
-;	; to help deal with any packet loss without big delays
-;	lda #$01
-;	sta $d6e4
+	; TX packet
+
+	lda #$01     ; unjam TX FSM before each packet
+	sta $d6e0
+	lda #$03
+	sta $d6e0
+	
+	lda #$01
+	sta $d6e4
 
 	rts
 
@@ -1069,9 +1073,9 @@ send_icmp_reply:
 	sta $3822
 
 	; Store sequence #
-	lda $382a
+	lda $3829
 	sta seq_lo
-	lda $382b
+	lda $3828
 	sta seq_hi
 
 	jsr ip_swap_addresses
