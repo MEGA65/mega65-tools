@@ -111,8 +111,9 @@ void main(void)
 	  //	  lcopy(buffer_address,0x0400,512);
 	  lcopy(buffer_address,0xffd6e00,512);
 	  
-	  // For now pretend with a read
+	  // Write sector
 	  *(uint32_t *)0xD681 = sector_number;	  
+	  POKE(0xD680,0x52); // Open write gate
 	  POKE(0xD680,0x03);
 
 	  // Wait for SD to go busy
