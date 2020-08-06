@@ -94,15 +94,14 @@ transfer_routine
 	;; Reset C64 mode KERNAL stuff
 	jsr $fda3 ; init I/O
         jsr $fd15 ; set I/O vectors
+	lda #>$0400 		; Make sure screen memory set to sensible location
+	sta $0288		; before we call screen init $FF5B
         jsr $ff5b ; more init
 	jsr $f7a9 ; C65 DOS reinit
 
 	;; Enter programme
  	jmp 2061		
 	
--	inc $d020
-	jmp -
-
 dmalist
 	;; F011A job, source and dest in 1st MB
 	!byte $0A,$80,$00,$81,$00,$00
