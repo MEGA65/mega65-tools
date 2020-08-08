@@ -1710,9 +1710,34 @@ void download_hyppo(void)
 
 void load_bitstream(char *bitstream)
 {
-  if (vivado_bat!=NULL)	{
+  if (vivado_bat!=NULL)	{    
     /*  For Windows we just call Vivado to do the FPGA programming,
 	while we are having horrible USB problems otherwise. */
+    unsigned int fpga_id=0x3631093;
+    
+    FILE *f=fopen(bitstream,"r");
+    if (f) {
+      unsigned char buff[8192];
+      int len=fread(buff,1,8192,f);
+      for(int i=0;i<len;i+=4) {
+	if ((buff[i+0]==0x30)&&(buff[i+1]==0x01)&&(buff[i+2]==0x80)&&(buff[i+3]==0x01))
+	  {
+	    i+=4;
+	    fpga_id=buff[i+0]<<24;
+	    fpga_id|=buff[i+1]<<16;
+	    fpga_id|=buff[i+2]<<8;
+	    fpga_id|=buff[i+3]<<0;
+	    
+	    timestamp_msg("");
+	    fprintf(stderr,"Detected FPGA ID %x from bitstream file.\n",fpga_id);
+	  }
+      }
+      fclose(f);
+    }
+
+    char *part_name="xc7a100t_0";
+    if (fpga_id==0x3636093) part_name="xc7a200t_0";    
+    
     FILE *tclfile=fopen("temp.tcl","w");
     if (!tclfile) {
       fprintf(stderr,"ERROR: Could not create temp.tcl");
@@ -1722,17 +1747,20 @@ void load_bitstream(char *bitstream)
 	    "open_hw\n" // "open_hw_manager\n"
 	    "connect_hw_server\n" // -allow_non_jtag\n"
 	    "open_hw_target\n"
-	    "current_hw_device [get_hw_devices xc7a100t_0]\n"
-	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
-	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
+	    "current_hw_device [get_hw_devices %s]\n"
+	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices %s] 0]\n"
+	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices %s] 0]\n"
 	    "\n"
-	    "set_property PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
-	    "set_property FULL_PROBES.FILE {} [get_hw_devices xc7a100t_0]\n"
-	    "set_property PROGRAM.FILE {%s} [get_hw_devices xc7a100t_0]\n"
-	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices xc7a100t_0] 0]\n"
-	    "program_hw_devices [get_hw_devices xc7a100t_0]\n"
-	    "refresh_hw_device [lindex [get_hw_devices xc7a100t_0] 0]\n"
-	    "quit\n",bitstream);
+	    "set_property PROBES.FILE {} [get_hw_devices %s]\n"
+	    "set_property FULL_PROBES.FILE {} [get_hw_devices %s]\n"
+	    "set_property PROGRAM.FILE {%s} [get_hw_devices %s]\n"
+	    "refresh_hw_device -update_hw_probes false [lindex [get_hw_devices %s] 0]\n"
+	    "program_hw_devices [get_hw_devices %s]\n"
+	    "refresh_hw_device [lindex [get_hw_devices %s] 0]\n"
+	    "quit\n",
+	    part_name,part_name,part_name,part_name,part_name,
+	    bitstream,
+	    part_name,part_name,part_name,part_name);
     fclose(tclfile);
     char cmd[8192];
     snprintf(cmd,8192,"%s -mode batch -nojournal -nolog -notrace -source temp.tcl",
