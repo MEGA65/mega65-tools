@@ -1906,7 +1906,30 @@ int main(int argc,char **argv)
 #ifdef __APPLE__
   if (bitstream)
 #endif
-    init_fpgajtag(NULL, bitstream, 0x3631093); // 0xffffffff);
+    {
+      unsigned int fpga_id=0x3631093;
+      FILE *f=fopen(bitstream,"r");
+      if (f) {
+	unsigned char buff[8192];
+	int len=fread(buff,1,8192,f);
+	for(int i=0;i<len;i+=4) {
+	  if ((buff[i+0]==0x30)&&(buff[i+1]==0x01)&&(buff[i+2]==0x80)&&(buff[i+3]==0x01))
+	    {
+	      i+=4;
+	      fpga_id=buff[i+0]<<24;
+	      fpga_id|=buff[i+1]<<16;
+	      fpga_id|=buff[i+2]<<8;
+	      fpga_id|=buff[i+3]<<0;
+
+	      timestamp_msg("");
+	      fprintf(stderr,"Detected FPGA ID %x from bitstream file.\n",fpga_id);
+	    }
+	}
+	fclose(f);
+      }
+      
+      init_fpgajtag(NULL, bitstream, fpga_id);
+    }
 #endif
   
 #ifdef WINDOWS
