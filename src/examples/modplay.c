@@ -424,9 +424,9 @@ void play_sample(unsigned char channel,
   POKE(0xD728+ch_ofs,(top_addr>>8)&0xff);
 
   // Volume
-  POKE(0xD729+ch_ofs,instrument_vol[instrument]>>1);
+  POKE(0xD729+ch_ofs,instrument_vol[instrument]>>2);
   // Mirror channel quietly on other side for nicer stereo imaging
-  POKE(0xD71C+channel,instrument_vol[instrument]>>3);
+  POKE(0xD71C+channel,instrument_vol[instrument]>>4);
   
   // XXX - We should set base addr and top addr to the looping range, if the
   // sample has one.
