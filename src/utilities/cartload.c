@@ -5,6 +5,7 @@
 */ 
 
 #include <stdio.h>
+#include <cbm.h>
 #include "memory.h"
 
 unsigned char header[64];
@@ -22,20 +23,45 @@ int b;
 
 char filename[64]="luftrauserz.crt";
 
+// From: https://retrocomputing.stackexchange.com/questions/8253/how-to-read-disk-files-using-cbm-specific-functions-in-cc65-with-proper-error-ch
+unsigned char kernel_getin(void *ptr, unsigned char size)
+{
+  unsigned char * data = (unsigned char *)ptr;
+  unsigned char i;
+  unsigned char st=0;
+  
+  for(i=0; i<size; ++i)
+    {
+      st = cbm_k_readst();
+      if (st) {
+	break;
+      }
+      data[i] = cbm_k_getin();
+    }
+  data[i] = '\0';
+  size = i;
+  return st;
+}
+
 int main(void)
 {
   
   
   // Open file for reading
-  FILE *f=fopen(filename,"r");
-  if (!f) {
+
+  cbm_k_clall();
+  cbm_k_setlfs(3,8,0);
+  cbm_k_setnam(filename);
+  cbm_k_open();
+  if(cbm_k_readst()) {
     printf("ERROR: Could not read file '%s'\n",filename);
     return 0;
   }
 
   // Read and check the header
-  b=fread(header,64,1,f);
-  if (b!=1) {
+  cbm_k_chkin(3);
+  kernel_getin(header,64);
+  if(cbm_k_readst()) {
     printf("ERROR: Could not read header.\n");
     return 0;
   }
@@ -84,13 +110,21 @@ int main(void)
   
   // Skip any extra header bytes
   while(offset) {
-    fgetc(f);
-    offset--;
+    cbm_k_chkin(3);
+    if (offset>16384) {
+      kernel_getin(buffer,16384);
+      offset-=16384;
+    } else {
+      kernel_getin(buffer,offset);
+      offset=0;
+    }
+      
   }
 
-  while(1) {
+  while(!cbm_k_readst()) {
     // Look for next CHIP block
-    b=fread(header,16,1,f);
+    cbm_k_chkin(3);
+    kernel_getin(header,16);
     if (b!=1) break;
     // Check for CHIP magic string
     if (header[0]!=0x43||header[1]!=0x48||header[2]!=0x49||header[3]!=0x50) break;
@@ -110,10 +144,9 @@ int main(void)
       return 0;
     }
     // Load ROM data into buffer
-    j=0;
-    while(section_len) {
-      buffer[j++]=fgetc(f); section_len--;
-    }
+    cbm_k_chkin(3);
+    kernel_getin(buffer,section_len);
+
     // Then DMA into place
     lcopy((unsigned long)&buffer,0x40000L+(bank_num*8192),rom_size);
     
