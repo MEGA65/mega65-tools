@@ -48,7 +48,8 @@ SDCARD_DIR=	sdcard-files
 # NOTE: that all files listed below will be embedded within the "MEGA65.D81".
 #
 UTILITIES=	$(B65DIR)/ethertest.prg \
-		$(B65DIR)/etherload.prg
+		$(B65DIR)/etherload.prg \
+		$(B65DIR)/cartload.prg
 
 TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/vicii.prg
@@ -191,6 +192,11 @@ $(UTILDIR)/fastload.prg:       $(UTILDIR)/fastload.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(EXAMPLEDIR)/modplay.prg:       $(EXAMPLEDIR)/modplay.c $(CC65)
+	git submodule init
+	git submodule update
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
+$(B65DIR)/cartload.prg:       $(UTILDIR)/cartload.c $(CC65)
 	git submodule init
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
