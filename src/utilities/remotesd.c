@@ -113,7 +113,7 @@ void main(void)
 	  
 	  // Write sector
 	  *(uint32_t *)0xD681 = sector_number;	  
-	  POKE(0xD680,0x52); // Open write gate
+	  POKE(0xD680,0x57); // Open write gate
 	  POKE(0xD680,0x03);
 
 	  // Wait for SD to go busy
