@@ -196,6 +196,11 @@ $(EXAMPLEDIR)/modplay.prg:       $(EXAMPLEDIR)/modplay.c $(CC65)
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
+$(EXAMPLEDIR)/wirekrill.prg:       $(EXAMPLEDIR)/wirekrill.c $(CC65)
+	git submodule init
+	git submodule update
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
 $(B65DIR)/cartload.prg:       $(UTILDIR)/cartload.c $(CC65)
 	git submodule init
 	git submodule update
