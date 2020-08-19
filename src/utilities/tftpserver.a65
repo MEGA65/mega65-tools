@@ -78,35 +78,133 @@ mac1:	sta $d6e9,x
 	; (we will poll it).
 	; also make sure that we acknowledge the last received packet so that the
 	; ethernet controller knows it can receive.
-	lda #$03
+	ldy #$01
+	lda #$03	
 	tax
-*	sta $d6e1
+*	sty $d6e1
+	sta $d6e1
 	dex
 	bpl -
-	
+
+	lda #$03
+	sta $d6e0
 
 	lda #$17
 	sta $d018
 
+	; Deal with any packet queue
+	lda $d6e3
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $0410
+	jsr processpacket
+	lda $d6e3
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $0411
+	jsr processpacket
+	lda $d6e3
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $0412
+	jsr processpacket
+	lda $d6e3
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $0413
+	jsr processpacket
+	lda $d6e3
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $0414
+
 packetloop:
+	sei
 
 	lda $d610
 	beq nokey
 	sta $d610
 	cmp #$20
 	beq sendapacket
+	cmp #$0d
+	bne nokey
+	jsr processpacket
 nokey:
+
+	; Check for all RX buffers full, if so, we have a packet
+	lda $d6e0
+	and #$40
+	bne packetreceived
+
+	; Now check if all RX buffers free, if so, we have no packet
+	; But if not, we have a packet.
 	lda $d6e1
 	and #$20
+	bne packetreceived
+;	lda $d6e1
+;	and #$06
+;	cmp #$06
 	beq packetloop
-	; Advance to the next packet RX buffer
+
+packetreceived:
+	jsr processpacket
+	jmp packetloop
+
+processpacket:
+
+	; Make a received packet visible to CPU in RX buffer,
+	; freeing that buffer to receive next packet
+
+	lda $d6ef
+	and #$03
+	sta $0400+990
+	lda $d6ef
+	lsr
+	lsr
+	and #$03
+	sta $0400+991
+	
+	lda $d6ef
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $0400+996
+
+	lda #$01
+	sta $d6e1
 	lda #$03
 	sta $d6e1
 
+	lda $d6ef
+	and #$03
+	sta $0400+993
+	lda $d6ef
+	lsr
+	lsr
+	and #$03
+	sta $0400+994
+	lda $d6ef
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $0400+997
+
 	jmp noshowpacket
 
-	; to clear the screen
-	lda #$93
+	; home cursor for printing packet size
+	lda #$13
 	jsr $ffd2
 
 	; Show contents of latest packet
@@ -157,13 +255,33 @@ isicmpping:
 	; It's a ping packet.
 
 	jsr send_icmp_reply
-;	lda seq_hi
-;	ldx seq_lo
-;	jsr $bdcd
-;	lda #<msg_ping
-;	ldy #>msg_ping
-;	jsr $ab1e
-	jmp packetloop
+
+
+	lda $d6ef
+	and #$03
+	tax
+	lda #0
+	jsr $bdcd
+	lda #$2c
+	jsr $ffd2
+
+	lda $d6ef
+	lsr
+	lsr
+	and #$03
+	tax
+	lda #0
+	jsr $bdcd
+	lda #$2c
+	jsr $ffd2
+
+	lda seq_hi
+	ldx seq_lo
+	jsr $bdcd
+	lda #<msg_ping
+	ldy #>msg_ping
+	jsr $ab1e
+	rts
 
 isudp:
 	; Is the packet for us (last octet of IP == 65)?
@@ -292,7 +410,7 @@ arploop4:
 notarp:
 
 
-	jmp packetloop
+	rts
 
 ; ----------------------------------------------------------------------------------------
 
@@ -849,7 +967,7 @@ msg_write_file_exists:
 	.byte "fILE FOR WRITING PRESENT OR CREATED.",$0d,0
 
 msg_ping:
-	.byte " PING! ",0
+	.byte " PING! ",$0d,0
 
 msg_tftp_ack:
 	.byte " TFTP ACK PACKET ",0
@@ -1010,31 +1128,26 @@ ether_tx_packet:
 ether_tx_prepreared_packet:
 	
 txwaitloop:
+	inc $0427
 	lda $D6E4	
 	and #$06
-	sta $0402
 	beq txready
-	inc $0401
 	jmp txwaitloop
 
 txready:
 	; TX packet 
 
-	lda #$01     ; unjam TX FSM before each packet
-	sta $d6e0
-	lda #$03
-	sta $d6e0
-	
 	lda #$01
 	sta $d6e4
 
 	rts
 
 ether_setup_addresses:
-	; Set our MAC address (hardwired to 40:40:40:40:40:40 for now)
+	; Set our MAC address (copy from ethernet MAC address field)
 	lda #$40
 	ldx #5
-ml1:	sta $3806,x
+ml1:    lda $d6e9,x
+	sta $3806,x
 	dex
 	bpl ml1
 	
@@ -1048,9 +1161,39 @@ ml2:	lda $6808,x ; skip 2 bytes for len etc, then 6 bytes of dest mac addr (broa
 	rts
 
 send_icmp_reply:
+	; Wait one frame
+;	lda $d7fa
+;zzzz:	inc $d020
+;	cmp $d7fa
+;	beq zzzz
+
+
 	; Copy packet body etc, which we will patch in a moment
 	; Use DMA to decrease latency
 	jsr ether_copy_packet
+
+	lda $d6ef
+	and #$03
+	ora #$30
+	sta $05e0
+	lda $d6ef
+	lsr
+	lsr
+	and #$03
+	ora #$30
+	sta $05e1
+
+	; XXX DEBUG: Show packet
+;	ldx #$00
+;z32:	lda $3800,x
+;	sta $0600,x
+;	dex
+;	bne z32
+
+	; XXX DEBUG: Wait for key
+;z98:	lda $d610
+;	beq z98
+;	sta $d610
 
 	jsr ether_setup_addresses
 
@@ -1120,7 +1263,7 @@ l1:	lda sample_packet,x
 
 	inc $d020
 
-	jmp packetloop
+	rts
 
 	.alias packet_length 68
 
