@@ -92,41 +92,16 @@ mac1:	sta $d6e9,x
 	lda #$17
 	sta $d018
 
-	; Deal with any packet queue
-	lda $d6e3
-	lsr
-	lsr
-	lsr
-	lsr
-	sta $0410
-	jsr processpacket
-	lda $d6e3
-	lsr
-	lsr
-	lsr
-	lsr
-	sta $0411
-	jsr processpacket
-	lda $d6e3
-	lsr
-	lsr
-	lsr
-	lsr
-	sta $0412
-	jsr processpacket
-	lda $d6e3
-	lsr
-	lsr
-	lsr
-	lsr
-	sta $0413
-	jsr processpacket
-	lda $d6e3
-	lsr
-	lsr
-	lsr
-	lsr
-	sta $0414
+	jmp packetloop
+
+txfsmwatch:
+	; display TX FSM state until another key pressed
+	ldx $d6ef
+	inc $0400,x
+	lda $d610
+	beq txfsmwatch
+	sta $d610
+	jmp packetloop
 
 packetloop:
 	sei
@@ -134,6 +109,8 @@ packetloop:
 	lda $d610
 	beq nokey
 	sta $d610
+	cmp #$31
+	beq txfsmwatch
 	cmp #$20
 	beq sendapacket
 	cmp #$0d
@@ -339,30 +316,30 @@ arploop0:
 	; now we need to build the ARP reply and send it.
 	; We should copy the sender's 
 
-;	; First say where the ARP request has come from
-;	lda #<msg_saw_arp
-;	ldy #>msg_saw_arp
-;	jsr $ab1e
-;	lda #$00
-;	ldx $681E
-;	jsr $bdcd
-;	lda #$2e
-;	jsr $ffd2
-;	lda #$00
-;	ldx $681F
-;	jsr $bdcd
-;	lda #$2e
-;	jsr $ffd2
-;	lda #$00
-;	ldx $6820
-;	jsr $bdcd
-;	lda #$2e
-;	jsr $ffd2
-;	lda #$00
-;	ldx $6821
-;	jsr $bdcd
-;	lda #$0d
-;	jsr $ffd2
+	; First say where the ARP request has come from
+	lda #<msg_saw_arp
+	ldy #>msg_saw_arp
+	jsr $ab1e
+	lda #$00
+	ldx $681E
+	jsr $bdcd
+	lda #$2e
+	jsr $ffd2
+	lda #$00
+	ldx $681F
+	jsr $bdcd
+	lda #$2e
+	jsr $ffd2
+	lda #$00
+	ldx $6820
+	jsr $bdcd
+	lda #$2e
+	jsr $ffd2
+	lda #$00
+	ldx $6821
+	jsr $bdcd
+	lda #$0d
+	jsr $ffd2
 
 
 	inc $0426 ; XXX for debug
@@ -413,6 +390,7 @@ arploop4:
 	bpl arploop4
 	
 	; packet should now all be ready - hit TX button
+	inc $0425
 	jsr ether_tx_prepreared_packet
 
 	; Fall through to rest of packet parser (even though it won't pass
@@ -1329,7 +1307,7 @@ l1:	lda sample_packet,x
 
 	inc $d020
 
-	rts
+	jmp packetloop
 
 	.alias packet_length 68
 
