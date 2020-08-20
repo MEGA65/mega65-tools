@@ -35,9 +35,9 @@ programentrypoint:
 	lda #$03
 	sta $d6e0
 
-	; Enable RX of corrupt packets
+	; Disable RX of corrupt packets
 	lda $d6e5
-	ora #$02
+	and #$fe
 	sta $d6e5
 
 	lda #<msg_startup
@@ -181,6 +181,7 @@ processpacket:
 	lsr
 	sta $0400+996
 
+	; Get next RX buffer
 	lda #$01
 	sta $d6e1
 	lda #$03
@@ -254,6 +255,8 @@ noshowpacket:
 isicmpping:
 	; It's a ping packet.
 
+	; XXX do it twice to help work out source of problems
+	jsr send_icmp_reply
 	jsr send_icmp_reply
 
 
@@ -841,6 +844,60 @@ udp_calc_checksum:
 
 	rts
 
+icmp_calc_checksum:
+	; clear checksum field
+	lda #$00
+	sta $3824
+	sta $3825
+	sta checksum+0
+	sta checksum+1
+
+	lda #<$3822
+	sta $fd
+	lda #>$3822
+	sta $fe
+
+	; Get LSB of payload length into X
+	lda $3811
+	sec
+	sbc #20
+	tax
+	stx $0440
+	; Get MSB of payload length into $fc
+	lda $3810
+	sbc #0
+	sta $fc
+	sta $0441
+
+	ldy #0
+	clc
+icl1:
+	lda ($fd),y
+	jsr checksum_add_left
+	iny
+	lda ($fd),y
+	jsr checksum_add_right
+	iny
+	bne icl2
+	inc $fe
+icl2:
+	dex
+	dex
+	bne icl1
+	dec $fc
+	bpl icl1
+	
+
+	lda checksum+0
+	eor #$FF
+	sta $3824
+	lda checksum+1
+	eor #$FF
+	sta $3825
+
+	rts
+
+
 ip_calc_checksum:
 	; clear checksum field
 	lda #$00
@@ -1133,14 +1190,18 @@ ether_tx_packet:
 	and #$06
 	sta $0418
 
+	; Send twice while debugging
+	jsr ether_tx_prepreared_packet
+	
 ether_tx_prepreared_packet:
 	
 txwaitloop:
-	inc $0427
-	lda $D6E4	
-	and #$06
-	beq txready
-	jmp txwaitloop
+	sei
+
+txw1:	inc $0427
+	; Wait for TX commenced bit to clear
+	lda $D6E0
+	bpl txw1
 
 txready:
 	; TX packet 
@@ -1210,12 +1271,7 @@ send_icmp_reply:
 
 	jsr ip_swap_addresses
 
-	; XXX Update ICMP check sum
-	lda $3824
-	clc
-	adc #$08
-	sta $3824
-	
+	jsr icmp_calc_checksum
 
 ;	; XXX DEBUG: Show packet
 ;	ldx #$00
