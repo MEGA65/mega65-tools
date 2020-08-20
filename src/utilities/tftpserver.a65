@@ -275,6 +275,14 @@ isicmpping:
 	lda #$2c
 	jsr $ffd2
 
+	; Print length of packet and flags
+	lda $6801
+	ldx $6800
+	jsr $BDCD   
+	lda #$20
+	jsr $FFD2   
+
+	; Print ping!
 	lda seq_hi
 	ldx seq_lo
 	jsr $bdcd
@@ -1183,13 +1191,6 @@ send_icmp_reply:
 	ora #$30
 	sta $05e1
 
-	; XXX DEBUG: Show packet
-;	ldx #$00
-;z32:	lda $3800,x
-;	sta $0600,x
-;	dex
-;	bne z32
-
 	; XXX DEBUG: Wait for key
 ;z98:	lda $d610
 ;	beq z98
@@ -1210,10 +1211,19 @@ send_icmp_reply:
 	jsr ip_swap_addresses
 
 	; XXX Update ICMP check sum
-	lda $3832
+	lda $3824
 	clc
 	adc #$08
-	sta $3832
+	sta $3824
+	
+
+;	; XXX DEBUG: Show packet
+;	ldx #$00
+;z32:	lda $3800,x
+;	sta $0428,x
+;	dex
+;	bne z32
+
 	; XXX Update IP checksum
 	lda $6823 ; last octet of dest address
 	sec
