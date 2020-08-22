@@ -55,7 +55,7 @@ int set_interface_attribs (int fd, int speed, int parity)
         tty.c_cc[VMIN]  = 0;            // read doesn't block
         tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
-        tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
+        tty.c_iflag &= ~(IXON | IXOFF | IXANY | ICRNL); // shut off xon/xoff ctrl
 
         tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
                                         // enable reading
