@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <fileio.h>
 #include <time.h>
+#include <targets.h>
 
 unsigned short i;
 unsigned char a,b,c,d;
@@ -183,6 +184,99 @@ void audioxbar_setcoefficient(uint8_t n,uint8_t value)
   POKE(0xD6F5U,value); 
 }
 
+unsigned char fast_flags=0x70; // 0xb0; 
+unsigned char slow_flags=0x00;
+unsigned char cache_bit=0x80; // =0x80;
+unsigned long addr,upper_addr,time,speed;
+
+unsigned char joya_up=0,joyb_up=0,joya_down=0,joyb_down=0;
+
+void bust_cache(void) {
+  lpoke(0xbfffff2,fast_flags&(0xff-cache_bit));
+  lpoke(0xbfffff2,fast_flags|cache_bit);
+}
+
+unsigned char setup_hyperram(void)
+{
+  /*
+    Test complete HyperRAM, including working out the size.
+  */
+
+  unsigned char retries=255;
+  
+  lpoke(0x8000000,0xbd);
+  while(lpeek(0x8000000)!=0xBD) {
+    lpoke(0x8000000,0xbd);
+    retries--; if (!retries) return 1;
+  }
+  for(addr=0x8001000;(addr!=0x8800000);addr+=0x1000)
+    {
+
+      // XXX There is still some cache consistency bugs,
+      // so we bust the cache before checking various things
+      bust_cache();
+      
+      if (lpeek(0x8000000)!=0xbd) {
+	// Memory location didn't hold value
+	return 1;
+      }
+      
+      //      if (!(addr&0xfffff)) printf(".");
+      //      POKE(0xD020,PEEK(0xD020)+1);
+
+      bust_cache();
+      
+      lpoke(addr,0x55);
+
+      bust_cache();
+      
+      i=lpeek(addr);
+      if (i!=0x55) {
+	if ((addr!=0x8800000)&&(addr!=0x9000000)) {
+	  // printf("\n$%08lx corrupted != $55\n (saw $%02x, re-read yields $%02x)",addr,i,lpeek(addr));
+	  return 1;
+	}
+	break;
+      }
+
+      bust_cache();
+
+      lpoke(addr,0xAA);
+
+      bust_cache();
+
+      i=lpeek(addr);
+      if (i!=0xaa) {
+	if ((addr!=0x8800000)&&(addr!=0x9000000)) {
+	  // printf("\n$%08lx corrupted != $AA\n  (saw $%02x, re-read yields $%02x)",addr,i,lpeek(addr));
+	  return 1;
+	}
+	break;
+      }
+
+      bust_cache();
+
+      i=lpeek(0x8000000);
+      if (i!=0xbd) {
+	// printf("\n$8000000 corrupted != $BD\n  (saw $%02x, re-read yields $%02x)",i,lpeek(0x8000000));
+	return 1;
+	break;
+      }
+    }
+
+
+  upper_addr=addr;
+
+  if ((addr!=0x8800000)&&(addr!=0x9000000)) {
+    return 1;
+  }
+
+  lpoke(0xbfffff2,fast_flags|cache_bit);
+
+  return 0;
+}
+
+
 
 void main(void)
 {
@@ -211,6 +305,8 @@ void main(void)
   graphics_clear_double_buffer();
 
   print_text(0,0,1,"MEGA65 R3 PCB Production Test programme");
+  snprintf(msg,80,"Hardware model = %d",detect_target());
+  print_text(0,15,1,msg);
 
   floppy_interval_first=PEEK(0xD6A9);
 
@@ -224,16 +320,26 @@ void main(void)
   
   while(1) {    
 
+    POKE(0xD020,1);
+    if (setup_hyperram()) 
+      print_text(0,6,2,"FAIL HyperRAM Probe");
+    else
+      print_text(0,6,5,"PASS HyperRAM Probe");
+    
     // Play two different tones out of the left and right speakers alternately
+    POKE(0xD020,2);
     if (PEEK(0xD7FA)&0x40) {
+      print_text(0,7,7,"TEST Low tone from left speaker  ");         
       play_sine(0,2000);
       play_sine(3,1);     
     } else {
+      print_text(0,7,7,"TEST High tone from right speaker");         
       play_sine(0,1);
       play_sine(3,3000);     
     }
     
     // Internal floppy connector
+    POKE(0xD020,3);
     if (PEEK(0xD6A9)!=floppy_interval_first) floppy_active=1;
     if (!floppy_active) 
       print_text(0,2,2,"FAIL Floppy (is a disk inserted?)");
@@ -242,6 +348,7 @@ void main(void)
 
     // Try toggling the IEC lines to make sure we can pull CLK and DATA low.
     // (ATN can't be read.)
+    POKE(0xD020,4);
     POKE(0xDD00,0xC3); // let the lines float high
     v=PEEK(0xDD00);
     usleep(1000);
@@ -271,23 +378,28 @@ void main(void)
     }
     if (iec_pass)
       print_text(0,3,5,"PASS IEC CLK+DATA                     ");
-   
+
     // Real-time clock
+    POKE(0xD020,5);
     getrtc(&tm);
     if (tm.tm_sec||tm.tm_hour||tm.tm_min) {
       snprintf(msg,80,"PASS RTC Ticks (%02d:%02d.%02d)   ",
 	       tm.tm_hour,tm.tm_min,tm.tm_sec);
       print_text(0,4,5,msg);
     } else {
-      print_text(0,4,2,"FAIL RTC Not running");
-      // But try to set it running
-      tm.tm_year=2020-1900;
-      tm.tm_mon=10;
-      tm.tm_mday=1;
-      setrtc(&tm);
+      print_text(0,4,2,"FAIL RTC Not running             ");
+
+      // But try to set it running if it isn't running
+      lpoke(0xffd7118,0x41);
+      usleep(30000);
+      lpoke(0xffd7110,0x01);
+      usleep(30000);
+      lpoke(0xffd7118,0x01);
+
     }
 
     // Ethernet controller
+    POKE(0xD020,6);
     if (eth_pass) 
       print_text(0,5,5,"PASS Ethernet frame RX");
     else
