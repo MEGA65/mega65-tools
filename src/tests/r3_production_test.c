@@ -125,11 +125,64 @@ void activate_double_buffer(void)
 
 unsigned char floppy_interval_first=0;
 unsigned char floppy_active=0;
+unsigned char eth_pass=0;
 unsigned char iec_pass=0,v,y;
 unsigned int x;
 unsigned char colours[10]={0,2,5,6,0,11,12,15,1,0};
 struct m65_tm tm;
 char msg[80];
+
+unsigned char sin_table[32]={
+  //  128,177,218,246,255,246,218,177,
+  //  128,79,38,10,0,10,38,79
+  128,152,176,198,217,233,245,252,255,252,245,233,217,198,176,152,128,103,79,57,38,22,10,3,1,3,10,22,38,57,79,103
+};
+
+
+
+void play_sine(unsigned char ch, unsigned long time_base)
+{
+  unsigned ch_ofs=ch<<4;
+
+  if (ch>3) return;
+  
+  // Play sine wave for frequency matching
+  POKE(0xD721+ch_ofs,((unsigned short)&sin_table)&0xff);
+  POKE(0xD722+ch_ofs,((unsigned short)&sin_table)>>8);
+  POKE(0xD723+ch_ofs,0);
+  POKE(0xD72A+ch_ofs,((unsigned short)&sin_table)&0xff);
+  POKE(0xD72B+ch_ofs,((unsigned short)&sin_table)>>8);
+  POKE(0xD72C+ch_ofs,0);
+  // 16 bytes long
+  POKE(0xD727+ch_ofs,((unsigned short)&sin_table+32)&0xff);
+  POKE(0xD728+ch_ofs,((unsigned short)&sin_table+32)>>8);
+  // 1/4 Full volume
+  POKE(0xD729+ch_ofs,0x3F);
+  // Enable playback+looping of channel 0, 8-bit samples, signed
+  POKE(0xD720+ch_ofs,0xE2);
+  // Enable audio dma
+  POKE(0xD711+ch_ofs,0x80);
+
+  // time base = $001000
+  POKE(0xD724+ch_ofs,time_base&0xff);
+  POKE(0xD725+ch_ofs,time_base>>8);
+  POKE(0xD726+ch_ofs,time_base>>16);
+  
+  
+}
+
+void audioxbar_setcoefficient(uint8_t n,uint8_t value)
+{
+  // Select the coefficient
+  POKE(0xD6F4,n);
+
+  // Now wait at least 16 cycles for it to settle
+  POKE(0xD020U,PEEK(0xD020U));
+  POKE(0xD020U,PEEK(0xD020U));
+
+  POKE(0xD6F5U,value); 
+}
+
 
 void main(void)
 {
@@ -140,7 +193,20 @@ void main(void)
 
   // Floppy motor on
   POKE(0xD080,0x60);  
-  
+
+  // Reset ethernet controller
+  POKE(0xD6E0,0);
+  POKE(0xD6E0,3);
+
+  // Stop all DMA audio first
+  POKE(0xD720,0);
+  POKE(0xD730,0);
+  POKE(0xD740,0);
+  POKE(0xD750,0);
+
+  // Audio cross-bar full volume
+  for(i=0;i<256;i++) audioxbar_setcoefficient(i,0xff);
+
   graphics_mode();
   graphics_clear_double_buffer();
 
@@ -157,6 +223,15 @@ void main(void)
   activate_double_buffer();
   
   while(1) {    
+
+    // Play two different tones out of the left and right speakers alternately
+    if (PEEK(0xD7FA)&0x40) {
+      play_sine(0,2000);
+      play_sine(3,1);     
+    } else {
+      play_sine(0,1);
+      play_sine(3,3000);     
+    }
     
     // Internal floppy connector
     if (PEEK(0xD6A9)!=floppy_interval_first) floppy_active=1;
@@ -212,6 +287,13 @@ void main(void)
       setrtc(&tm);
     }
 
+    // Ethernet controller
+    if (eth_pass) 
+      print_text(0,5,5,"PASS Ethernet frame RX");
+    else
+      print_text(0,5,2,"FAIL Ethernet frame RX");
+
+    if (PEEK(0xD6E1)&0x20) eth_pass=1;
     
   }
   
