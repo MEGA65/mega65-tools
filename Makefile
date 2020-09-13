@@ -159,6 +159,9 @@ $(TESTDIR)/qspitest.prg:       $(TESTDIR)/qspitest.c $(CC65)
 $(EXAMPLES)/unicorns.prg:       $(EXAMPLES)/unicorns.c $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
+$(EXAMPLEDIR)/bmpview.prg:       $(EXAMPLEDIR)/bmpview.c $(CC65)
+	$(CL65)  -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
 $(TESTDIR)/eth_mdio.prg:       $(TESTDIR)/eth_mdio.c $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $< 
 
