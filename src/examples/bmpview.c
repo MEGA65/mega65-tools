@@ -56,8 +56,8 @@ void graphics_mode(void)
   */
 
   // Layout screen so that graphics data comes from $40000 -- $5FFFF
-  // for the first half, and then 
-
+  // for the first half, and then   
+  
   i=0x40000/0x40;
   for(b=0;b<50;b++) {
     for(a=0;a<80;a++) {
@@ -182,8 +182,8 @@ void load_bmpfile(void)
   height=buffer[0x17]; height=height<<8; height+=buffer[0x16];
   if (width>640||height>400) return;
   pixel_data=buffer[0x0B]; pixel_data=pixel_data<<8; pixel_data+=buffer[0x0A];
-  snprintf(msg,80,"Size=%dx%d. pixel_data @ $%x",width,height,pixel_data);
-  print_text80(0,1,7,msg);
+  //  snprintf(msg,80,"Size=%dx%d. pixel_data @ $%x",width,height,pixel_data);
+  //  print_text80(0,1,7,msg);
 
   data_format=buffer[0x1e];
   
@@ -330,6 +330,12 @@ void main(void)
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
+  // Make sure ROM area is writeable
+  ch=lpeek(0x30000);
+  lpoke(0x30000,ch+1);
+  if (lpeek(0x30000)==ch) toggle_rom_write_protect();
+  lpoke(0x30000,ch);
+  
   while(PEEK(0xD610)) POKE(0xD610,0);
   
   POKE(0xD020,0);
@@ -337,7 +343,7 @@ void main(void)
 
   graphics_clear_screen();
   graphics_mode();
-  //  read_filename();
+  read_filename();
   load_bmpfile();
   
   while(1) {
