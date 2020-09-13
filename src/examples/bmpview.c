@@ -219,14 +219,22 @@ void load_bmpfile(void)
 	  rle_val=next_byte_from_file();
 	  if (!rle_count) {
 	    // End of row
-	    if (!rle_val) x=row_size;
+	    switch (rle_val) {
+	    case 1: y=-1; break; // end of image
+	    case 0: x=row_size; break; // end of line
+	    default:
+	      // delta position
+	      while(1) {
+		POKE(0xD020,PEEK(0xD012));
+	      }
+	    }
 	  }
 	}
-	p=rle_val; rle_count--;
+	p=rle_val; if (rle_count) rle_count--;
 	break;
       }
-	
-      if (x<width) plot_pixel(x,y,p);
+
+      if (x<width&&y>=0) plot_pixel(x,y,p);
     }
   }
   
