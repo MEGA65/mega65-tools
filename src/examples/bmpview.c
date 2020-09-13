@@ -148,6 +148,8 @@ unsigned long file_ofs;
 unsigned int row_size;
 unsigned char data_format,rle_count,rle_val;
 
+unsigned char px[8];
+
 unsigned char next_byte_from_file(void)
 {
   if (buf_ofs>=512) { 
@@ -224,7 +226,21 @@ void load_bmpfile(void)
 	    // End of row
 	    switch (rle_val) {
 	    case 1: y=-1; break; // end of image
-	    case 0: x=row_size; break; // end of line
+	    case 0:
+	      // Flush any remaining pixels
+	      if (x&7) {
+		pixel_addr=0+(x>>3)*0x40L+((y&7)<<3)+(y>>3)*80*0x40L;
+		
+		if (pixel_addr<0x20000) final_addr=0x40000L+pixel_addr;
+		else if (pixel_addr<0x30000) final_addr=0x30000L-0x20000L+pixel_addr;
+		else if (pixel_addr<0x3D800) final_addr=0x12000L-0x30000L+pixel_addr;
+		else if (pixel_addr<0x40000) final_addr=0x0A000L-0x3D800L+pixel_addr;
+		else final_addr=0x60000;
+		
+		lcopy((unsigned long)px,final_addr,x&7);
+	      }
+
+	      x=row_size; break; // end of line
 	    default:
 	      // delta position
 	      while(1) {
@@ -238,12 +254,27 @@ void load_bmpfile(void)
       }
 
       if (x<width&&y>=0) {
+	px[x&7]=p;
+	if ((x&7)==7) {
+	  pixel_addr=0+(x>>3)*0x40L+((y&7)<<3)+(y>>3)*80*0x40L;
+	  
+	  if (pixel_addr<0x20000) final_addr=0x40000L+pixel_addr;
+	  else if (pixel_addr<0x30000) final_addr=0x30000L-0x20000L+pixel_addr;
+	  else if (pixel_addr<0x3D800) final_addr=0x12000L-0x30000L+pixel_addr;
+	  else if (pixel_addr<0x40000) final_addr=0x0A000L-0x3D800L+pixel_addr;
+	  else final_addr=0x60000;
+
+	  lcopy((unsigned long)px,final_addr,8);
+	}
+#if 0
 	if (!(x&7)) plot_pixel(x,y,p);
 	else {
 	  final_addr++; lpoke(final_addr,p);
 	}
+#endif
       }
     }
+
     y--;
   }
   

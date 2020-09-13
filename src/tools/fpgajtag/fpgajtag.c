@@ -854,7 +854,7 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
         }
     if (jtag_index == -1) {
         printf("[%s] id %x from file does not match actual id %x\n", __FUNCTION__, file_idcode, idcode_array[0]);
-        exit(-1);
+//        exit(-1);
     }
     EXIT();
 }

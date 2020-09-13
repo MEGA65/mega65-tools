@@ -761,11 +761,15 @@ void main(void)
   
 #ifdef MOD_TEST
 
+  h640_text_mode();
+  
   // Audio cross-bar full volume
   for(i=0;i<256;i++) audioxbar_setcoefficient(i,0xff);
 
   load_modfile();
 
+  POKE(0xD020,1);
+  
   while(1) {
     if (PEEK(0xD610)) {
       switch(PEEK(0xD610)) {
