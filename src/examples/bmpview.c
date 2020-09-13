@@ -140,7 +140,7 @@ void wait_frames(unsigned char n)
 }
 
 unsigned char fd;
-char filename[80+1];
+char filename[80+1]="r3.bmp";
 unsigned int width,height,pixel_data;
 unsigned char buffer[512];
 unsigned int buf_ofs;
@@ -190,6 +190,8 @@ void load_bmpfile(void)
     // BMP pixel rows are multiples of 4 bytes if not using RLE
     while(row_size&3) row_size++;
   }
+  // No set row size for RLE8
+  if (data_format==1) row_size=9999;
 
   // Load colour table
   buf_ofs=0x8a;
@@ -206,7 +208,8 @@ void load_bmpfile(void)
 
   while(file_ofs<pixel_data) next_byte_from_file();
 
-  for(y=height-1;y>=0;y--) {
+  y=height-1;
+  while(y>=0) {
     for(x=0;x<row_size;x++) {
       switch(data_format) {
       case 0:
@@ -234,8 +237,14 @@ void load_bmpfile(void)
 	break;
       }
 
-      if (x<width&&y>=0) plot_pixel(x,y,p);
+      if (x<width&&y>=0) {
+	if (!(x&7)) plot_pixel(x,y,p);
+	else {
+	  final_addr++; lpoke(final_addr,p);
+	}
+      }
     }
+    y--;
   }
   
   //  while((count=read512(buffer))>0) {
@@ -297,7 +306,7 @@ void main(void)
 
   graphics_clear_screen();
   graphics_mode();
-  read_filename();
+  //  read_filename();
   load_bmpfile();
   
   while(1) {
