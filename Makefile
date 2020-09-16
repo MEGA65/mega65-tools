@@ -189,6 +189,9 @@ $(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(CC65)
 $(UTILDIR)/c65toc64wrapper.prg:	$(UTILDIR)/c65toc64wrapper.asm $(ACME)
 	$(ACME) --setpc 0x2001 --cpu m65 --format cbm --outfile $(UTILDIR)/c65toc64wrapper.prg $(UTILDIR)/c65toc64wrapper.asm
 
+$(EXAMPLEDIR)/verticalrasters.prg:	$(EXAMPLEDIR)/verticalrasters.asm $(ACME)
+	$(ACME) --setpc 0x0801 --cpu m65 --format cbm --outfile $(EXAMPLEDIR)/verticalrasters.prg $(EXAMPLEDIR)/verticalrasters.asm
+
 $(UTILDIR)/fastload.prg:       $(UTILDIR)/fastload.c $(CC65)
 	git submodule init
 	git submodule update
