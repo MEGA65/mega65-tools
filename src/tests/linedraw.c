@@ -178,11 +178,155 @@ unsigned long load_addr;
 
 unsigned char line_dmalist[256];
 
+unsigned char ofs;
+unsigned char slope_ofs,line_mode_ofs,cmd_ofs,count_ofs;
+unsigned char src_ofs,dst_ofs;
+
+void draw_line(int x1,int y1,int x2,int y2,unsigned char colour)
+{
+  long addr;
+  int temp,slope,dx,dy;
+  
+  // Ignore if we choose to draw a point
+  if (x2==x1&&y2==y1) return;
+  
+  dx=x2-x1;
+  dy=y2-y1;
+  if (dx<0) dx=-dx;
+  if (dy<0) dy=-dy;
+  
+  snprintf(msg,41,"(%d,%d) - (%d,%d)    ",x1,y1,x2,y2);
+  print_text(0,1,1,msg);
+  
+  
+  // Draw line from x1,y1 to x2,y2
+  if (dx<dy) {
+    // Y is major axis
+
+    if (y2<y1) {
+      temp=x1; x1=x2; x2=temp;
+      temp=y1; y1=y2; y2=temp;      
+    }    
+    
+    // Use hardware divider to get the slope
+    POKE(0xD770,dx&0xff);
+    POKE(0xD771,dx>>8);
+    POKE(0xD772,0);
+    POKE(0xD773,0);
+    POKE(0xD774,dy&0xff);
+    POKE(0xD775,dy>>8);
+    POKE(0xD776,0);
+    POKE(0xD777,0);
+    
+    // Wait 16 cycles
+    POKE(0xD020,0);
+    POKE(0xD020,0);
+    POKE(0xD020,0);
+    POKE(0xD020,0);
+    
+    // Slope is the most significant bytes of the fractional part
+    // of the division result
+    slope=PEEK(0xD76A)+(PEEK(0xD76B)<<8);
+
+    // Put slope into DMA options
+    line_dmalist[slope_ofs]=slope&0xff;
+    line_dmalist[slope_ofs+2]=slope>>8;
+    
+    // Load DMA dest address with the address of the first pixel
+    addr=0x40000+(y1<<3)+(x1&7)+(x1>>3)*64*25L;
+    line_dmalist[dst_ofs+0]=addr&0xff;
+    line_dmalist[dst_ofs+1]=addr>>8;
+    line_dmalist[dst_ofs+2]=(addr>>16)&0xf;
+    
+    // Source is the colour
+    line_dmalist[src_ofs]=colour&0xf;
+    
+    // Count is number of pixels, i.e., dy.
+    line_dmalist[count_ofs]=dy&0xff;
+    line_dmalist[count_ofs+1]=dy>>8;
+    
+    // Command is FILL
+    line_dmalist[cmd_ofs]=0x03;
+    
+    // Line mode active, major axis is Y
+    line_dmalist[line_mode_ofs]=0x80+0x40+(((x2-x1)<0)?0x20:0x00);
+
+    snprintf(msg,41,"Y: (%d,%d) - (%d,%d) m=%04x",x1,y1,x2,y2,slope);
+    print_text(0,2,1,msg);
+    
+    POKE(0xD020,1);
+    
+    POKE(0xD701,((unsigned int)(&line_dmalist))>>8);
+    POKE(0xD705,((unsigned int)(&line_dmalist))>>0);
+    
+    POKE(0xD020,0);
+    
+  } else {
+    // X is major axis
+
+    if (x2<x1) {
+      temp=x1; x1=x2; x2=temp;
+      temp=y1; y1=y2; y2=temp;      
+    }
+
+    // Use hardware divider to get the slope
+    POKE(0xD770,dy&0xff);
+    POKE(0xD771,dy>>8);
+    POKE(0xD772,0);
+    POKE(0xD773,0);
+    POKE(0xD774,dx&0xff);
+    POKE(0xD775,dx>>8);
+    POKE(0xD776,0);
+    POKE(0xD777,0);
+    
+    // Wait 16 cycles
+    POKE(0xD020,0);
+    POKE(0xD020,0);
+    POKE(0xD020,0);
+    POKE(0xD020,0);
+    
+    // Slope is the most significant bytes of the fractional part
+    // of the division result
+    slope=PEEK(0xD76A)+(PEEK(0xD76B)<<8);
+
+    // Put slope into DMA options
+    line_dmalist[slope_ofs]=slope&0xff;
+    line_dmalist[slope_ofs+2]=slope>>8;
+    
+    // Load DMA dest address with the address of the first pixel
+    addr=0x40000+(y1<<3)+(x1&7)+(x1>>3)*64*25;
+    line_dmalist[dst_ofs+0]=addr&0xff;
+    line_dmalist[dst_ofs+1]=addr>>8;
+    line_dmalist[dst_ofs+2]=(addr>>16)&0xf;
+    
+    // Source is the colour
+    line_dmalist[src_ofs]=colour&0xf;
+    
+    // Count is number of pixels, i.e., dy.
+    line_dmalist[count_ofs]=dx&0xff;
+    line_dmalist[count_ofs+1]=dx>>8;
+    
+    // Command is FILL
+    line_dmalist[cmd_ofs]=0x03;
+    
+    // Line mode active, major axis is X
+    line_dmalist[line_mode_ofs]=0x80+0x00+(((y2-y1)<0)?0x20:0x00);
+
+    snprintf(msg,41,"X: (%d,%d) - (%d,%d) m=%04x",x1,y1,x2,y2,slope);
+    print_text(0,2,1,msg);
+        
+    POKE(0xD020,1);
+    
+    POKE(0xD701,((unsigned int)(&line_dmalist))>>8);
+    POKE(0xD705,((unsigned int)(&line_dmalist))>>0);
+    
+    POKE(0xD020,0);
+    
+  }  
+}
+
 void main(void)
 {
-  unsigned char ch,ofs;
-  unsigned char slope_ofs,line_mode_ofs,cmd_ofs,count_ofs;
-  unsigned char src_ofs,dst_ofs;
   unsigned char playing=0;
 
   asm ( "sei" );
@@ -209,7 +353,7 @@ void main(void)
   graphics_clear_double_buffer();
   activate_double_buffer();
 
-  print_text(0,0,1,"Line Draw Test");
+  //  print_text(0,0,1,"Line Draw Test");
 
   // Set up common structure of the DMA list
   ofs=0;
@@ -233,139 +377,32 @@ void main(void)
   dst_ofs=ofs; ofs+=3;
   line_dmalist[ofs++]=0x00; // modulo
   line_dmalist[ofs++]=0x00;
+
+  draw_line(160,100,319,100,1);
+  while(!PEEK(0xD610)) continue;  POKE(0xD610,0);
+  draw_line(160,100,319,199,2);
+  while(!PEEK(0xD610)) continue;  POKE(0xD610,0);
+  draw_line(160,100,160,199,3);
+  while(!PEEK(0xD610)) continue;  POKE(0xD610,0);
+  draw_line(160,100,0,199,4);
+  while(!PEEK(0xD610)) continue;  POKE(0xD610,0);
+  draw_line(160,100,0,100,5);
+  while(!PEEK(0xD610)) continue;  POKE(0xD610,0);
+  draw_line(160,100,0,0,6);
+  while(!PEEK(0xD610)) continue;  POKE(0xD610,0);
+  draw_line(160,100,160,0,7);
+  while(!PEEK(0xD610)) continue;  POKE(0xD610,0);
+  draw_line(160,100,320,0,8);
+  while(!PEEK(0xD610)) continue;  POKE(0xD610,0);
   
   while(1) {
-    long addr;
-    int temp,slope,dx,dy;
     unsigned char colour=rand32(256);
     int x1=rand32(320);
     int y1=rand32(200);
     int x2=rand32(320);
     int y2=rand32(200);
 
-    // Ignore if we choose to draw a point
-    if (x2==x1&&y2==y1) continue;
-        
-    dx=x2-x1;
-    dy=y2-y1;
-    if (dx<0) dx=-dx;
-    if (dy<0) dy=-dy;
-
-    snprintf(msg,41,"(%d,%d) - (%d,%d)    ",x1,y1,x2,y2);
-    print_text(0,1,1,msg);
-
-    
-    // Draw line from x1,y1 to x2,y2
-    if (dx<dy) {
-      // Y is major axis
-
-      // Use hardware divider to get the slope
-      POKE(0xD770,dx&0xff);
-      POKE(0xD771,dx>>8);
-      POKE(0xD772,0);
-      POKE(0xD773,0);
-      POKE(0xD774,dy&0xff);
-      POKE(0xD775,dy>>8);
-      POKE(0xD776,0);
-      POKE(0xD777,0);
-
-      // Wait 16 cycles
-      POKE(0xD020,0);
-      POKE(0xD020,0);
-      POKE(0xD020,0);
-      POKE(0xD020,0);
-
-      // Slope is the most significant bytes of the fractional part
-      // of the division result
-      slope=PEEK(0xD76A)+(PEEK(0xD76B)<<8);
-
-      slope=0x7fff;
-
-      // Put slope into DMA options
-      line_dmalist[slope_ofs]=slope&0xff;
-      line_dmalist[slope_ofs+2]=slope&0xff;
-
-      // Load DMA dest address with the address of the first pixel
-      addr=0x40000+(y1<<3)+(x1&7)+(x1>>3)*64*25L;
-      line_dmalist[dst_ofs+0]=addr&0xff;
-      line_dmalist[dst_ofs+1]=addr>>8;
-      line_dmalist[dst_ofs+2]=(addr>>16)&0xf;
-
-      // Source is the colour
-      line_dmalist[src_ofs]=colour&0xf;
-
-      // Count is number of pixels, i.e., dy.
-      line_dmalist[count_ofs]=dy&0xff;
-      line_dmalist[count_ofs+1]=dy>>8;
-
-      // Command is FILL
-      line_dmalist[cmd_ofs]=0x03;
-
-      // Line mode active, major axis is Y
-      line_dmalist[line_mode_ofs]=0x80+0x40;
-
-      POKE(0xD020,1);
-      
-      POKE(0xD701,((unsigned int)(&line_dmalist))>>8);
-      POKE(0xD705,((unsigned int)(&line_dmalist))>>0);
-
-      POKE(0xD020,0);
-      
-    } else {
-      // X is major axis
-
-      
-      // Use hardware divider to get the slope
-      POKE(0xD770,dy&0xff);
-      POKE(0xD771,dy>>8);
-      POKE(0xD772,0);
-      POKE(0xD773,0);
-      POKE(0xD774,dx&0xff);
-      POKE(0xD775,dx>>8);
-      POKE(0xD776,0);
-      POKE(0xD777,0);
-
-      // Wait 16 cycles
-      POKE(0xD020,0);
-      POKE(0xD020,0);
-      POKE(0xD020,0);
-      POKE(0xD020,0);
-
-      // Slope is the most significant bytes of the fractional part
-      // of the division result
-      slope=PEEK(0xD76A)+(PEEK(0xD76B)<<8);
-
-      // Put slope into DMA options
-      line_dmalist[slope_ofs]=slope&0xff;
-      line_dmalist[slope_ofs+2]=slope&0xff;
-
-      // Load DMA dest address with the address of the first pixel
-      addr=0x40000+(y1<<3)+(x1&7)+(x1>>3)*64*25;
-      line_dmalist[dst_ofs+0]=addr&0xff;
-      line_dmalist[dst_ofs+1]=addr>>8;
-      line_dmalist[dst_ofs+2]=(addr>>16)&0xf;
-
-      // Source is the colour
-      line_dmalist[src_ofs]=colour&0xf;
-
-      // Count is number of pixels, i.e., dy.
-      line_dmalist[count_ofs]=dx&0xff;
-      line_dmalist[count_ofs+1]=dx>>8;
-
-      // Command is FILL
-      line_dmalist[cmd_ofs]=0x03;
-
-      // Line mode active, major axis is X
-      line_dmalist[line_mode_ofs]=0x80+0x00;
-
-      POKE(0xD020,1);
-      
-      POKE(0xD701,((unsigned int)(&line_dmalist))>>8);
-      POKE(0xD705,((unsigned int)(&line_dmalist))>>0);
-
-      POKE(0xD020,0);
-      
-    }
+    draw_line(x1,y1,x2,y2,colour);
 
     //    while(!PEEK(0xD610)) continue;
     //    POKE(0xD610,0);
