@@ -52,7 +52,8 @@ UTILITIES=	$(B65DIR)/ethertest.prg \
 		$(B65DIR)/cartload.prg
 
 TESTS=		$(TESTDIR)/ascii.prg \
-		$(TESTDIR)/vicii.prg
+		$(TESTDIR)/vicii.prg \
+		$(TESTDIR)/linedraw.prg 
 
 TOOLDIR=	$(SRCDIR)/tools
 TOOLS=	$(BINDIR)/etherload \
@@ -149,6 +150,9 @@ $(UTILDIR)/mega65_config.o:      $(UTILDIR)/mega65_config.s $(UTILDIR)/mega65_co
 
 $(TESTDIR)/vicii.prg:       $(TESTDIR)/vicii.c $(TESTDIR)/vicii_asm.s $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/vicii_asm.s
+
+$(TESTDIR)/linedraw.prg:       $(TESTDIR)/linedraw.c $(CC65)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/pulseoxy.prg:       $(TESTDIR)/pulseoxy.c $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $< 
