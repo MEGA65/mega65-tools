@@ -1063,6 +1063,19 @@ int detect_mode(void)
   saw_c64_mode=0;
   
   unsigned char mem_buff[8192];
+
+  // Look for OpenROMs
+  fetch_ram(0x20010,16,mem_buff);
+  if (mem_buff[0]=='V'||mem_buff[0]=='O') {
+    mem_buff[9]=0;
+    int date_code=atoi(&mem_buff[1]);
+    if (date_code>2000000) {
+      fprintf(stderr,"Detected OpenROM version %d\n",date_code);
+      saw_c64_mode=1;
+      return 0;
+    }
+  }
+  
   fetch_ram(0xffd3030,1,mem_buff);
   while(mem_buff[0]&0x01) {
     timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
@@ -2271,7 +2284,7 @@ int main(int argc,char **argv)
 	  if (comma_eight_comma_one)
 	    stuff_keybuffer("Lo\"!\",8,1\r");
 	  else
-	    stuff_keybuffer("Lo\"!\",8\r");
+	    stuff_keybuffer("LOAD\"!\",8\r");
 	}
 	else {
 	  // Really wait for C65 to get to READY prompt
