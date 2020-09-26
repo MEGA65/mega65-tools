@@ -146,7 +146,7 @@ void do_exit(int retval);
 void usage(void)
 {
   fprintf(stderr,"MEGA65 cross-development tool.\n");
-  fprintf(stderr,"usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
+  fprintf(stderr,"usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] [-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
   fprintf(stderr,"  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr,"  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr,"       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
@@ -177,6 +177,8 @@ void usage(void)
   fprintf(stderr,"  -t - Type text via keyboard virtualisation.\n");
   fprintf(stderr,"  -T - As above, but also provide carriage return\n");
   fprintf(stderr,"  -B - Set a breakpoint on synchronising, and then immediately exit.\n");
+  fprintf(stderr,"  -a - Read and display audio cross-bar mixer status.\n");
+  fprintf(stderr,"  -A - Set audio coefficient(s) xx (and optionally to yy) to ppp percent of maximum volume.\n");
   fprintf(stderr,"  -E - Enable streaming of video via ethernet.\n");
   fprintf(stderr,"  -L - Enable streaming of CPU instruction log via ethernet.\n");
   fprintf(stderr,"  -f - Specify which FPGA to reconfigure when calling fpgajtag\n");
@@ -208,6 +210,8 @@ PORT_TYPE fd=INVALID_HANDLE_VALUE;
 PORT_TYPE fd=-1;
 #endif
 
+int show_audio_mixer=0;
+char *set_mixer_args=NULL;
 int state=99;
 unsigned int name_len,name_lo,name_hi,name_addr=-1;
 int do_go64=0;
@@ -1850,9 +1854,11 @@ int main(int argc,char **argv)
   if (argc==1) usage();
   
   int opt;
-  while ((opt = getopt(argc, argv, "14B:b:c:C:d:EFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "14aA:B:b:c:C:d:EFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
     case 'h': case '?': usage();
+    case 'a': show_audio_mixer=1; break;
+    case 'A': set_mixer_args=optarg;
     case 'X': hyppo_report=1; break;
     case 'K': usedk=1; break;
     case 'Z':
@@ -2100,6 +2106,91 @@ int main(int argc,char **argv)
   if (ethernet_video) { mega65_poke(0xffd36e1,0x29); }
   if (ethernet_cpulog) { mega65_poke(0xffd36e1,0x05); }
 
+  /*
+    Show / set audio coefficient values.
+  */
+  if (set_mixer_args) {
+    // Parse HEX=percent, ... where HEX is a two-digit even hex address of the
+    // coefficient.
+    int ofs=0;
+    while(ofs<strlen(set_mixer_args)) {
+      int n,coeff,coeffhi,percent;
+      while(set_mixer_args[ofs]==',') ofs++;
+      if ((sscanf(&set_mixer_args[ofs],"%x-%x=%d%n",&coeff,&coeffhi,&percent,&n)>=3)) {
+	fprintf(stderr,"ofs=%d, n=%d\n",ofs,n);
+	ofs+=n;
+	if (coeffhi<coeff) coeffhi=coeff;
+	int val=percent*655;
+	while(coeff<=coeffhi) {
+	  mega65_poke(0xffd36f4,coeff+0);
+	  mega65_poke(0xffd36f5,val&0xff);
+	  mega65_poke(0xffd36f4,coeff+1);
+	  mega65_poke(0xffd36f5,val>>8);
+	  fprintf(stderr,"Setting audio coefficient $%02x to %04x\n",coeff,val);
+	  coeff+=2;
+	}	
+      } else if ((sscanf(&set_mixer_args[ofs],"%x=%d%n",&coeff,&percent,&n)>=2)) {
+	ofs+=n;
+	int val=percent*655;
+	mega65_poke(0xffd36f4,coeff+0);
+	mega65_poke(0xffd36f5,val&0xff);
+	mega65_poke(0xffd36f4,coeff+1);
+	mega65_poke(0xffd36f5,val>>8);
+	fprintf(stderr,"Setting audio coefficient $%02x to %04x\n",coeff,val);
+      }
+    }    
+  }
+  
+  if (show_audio_mixer)
+    {
+      monitor_sync();
+      fprintf(stderr,"Reading audio mixer coefficients (takes several seconds).\n");
+      unsigned char mixer_coefficients[256];
+      for(int i=0;i<256;i++) {
+	mega65_poke(0xffd36f4,i);
+	//	fprintf(stderr,"poked %d\n",i);
+	mixer_coefficients[i]=mega65_peek(0xffd36f5);
+	//	fprintf(stderr,"peeked\n");
+	fprintf(stderr,".");
+      }
+      fprintf(stderr,"\n");
+      for(int i=0;i<256;i+=32) {
+	switch(i) {
+	case 0x00: fprintf(stderr,"Speaker Left:\n"); break;
+	case 0x20: fprintf(stderr,"Speaker Right:\n"); break;
+	case 0x40: fprintf(stderr,"Telephone 1:\n"); break;
+	case 0x60: fprintf(stderr,"Telephone 2:\n"); break;
+	case 0x80: fprintf(stderr,"Bluetooth Left:\n"); break;
+	case 0xA0: fprintf(stderr,"Bluetooth Right:\n"); break;
+	case 0xC0: fprintf(stderr,"Headphones Right:\n"); break;
+	case 0xE0: fprintf(stderr,"Headphones Left:\n"); break;
+	}
+	for(int j=0;j<32;j+=2) {
+	  fprintf(stderr,"%02x ",i+j);
+	  switch(j) {
+	  case 0:  fprintf(stderr,"            SID Left: "); break;
+	  case 2:  fprintf(stderr,"           SID Right: "); break;
+	  case 4:  fprintf(stderr,"     Telephone 1 Mic: "); break;
+	  case 6:  fprintf(stderr,"     Telephone 2 Mic: "); break;
+	  case 8:  fprintf(stderr,"      Bluetooth Left: "); break;
+	  case 10: fprintf(stderr,"     Bluetooth Right: "); break;
+	  case 12: fprintf(stderr,"        Line-In Left: "); break;
+	  case 14: fprintf(stderr,"       Line-In Right: "); break;
+	  case 16: fprintf(stderr,"           Digi Left: "); break;
+	  case 18: fprintf(stderr,"          Digi Right: "); break;
+	  case 20: fprintf(stderr,"   Microphone 0 Left: "); break;
+	  case 22: fprintf(stderr,"  Microphone 0 Right: "); break;
+	  case 24: fprintf(stderr,"   Microphone 1 Left: "); break;
+	  case 26: fprintf(stderr,"  Microphone 1 Right: "); break;
+	  case 28: fprintf(stderr,"              OPL FM: "); break;
+	  case 30: fprintf(stderr,"       Master Volume: "); break;
+	  }
+	  fprintf(stderr," %03d%%\n",
+		  (mixer_coefficients[i+j]+(mixer_coefficients[i+j+1]<<8))/655);
+	}
+      }
+    }
+  
   if (filename||do_go64) {
     timestamp_msg("");
     fprintf(stderr,"Detecting C64/C65 mode status.\n");
