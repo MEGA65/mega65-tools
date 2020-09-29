@@ -49,13 +49,13 @@ void graphics_mode(void)
   POKE(0xD031,0xC0);
   // Adjust D016 smooth scrolling for VIC-III H640 offset
   POKE(0xD016,0xC9);
-  // 640x200 16bits per char, 16 pixels wide per char
-  // = 640/16 x 16 bits = 80 bytes per row
-  POKE(0xD058,80);
-  POKE(0xD059,80/256);
-  // Draw 40 (double-wide) chars per row
-  POKE(0xD05E,40);
-  // Put 2KB screen at $C000
+  // 640x200 16bits per char, 8 pixels wide per char
+  // = 640/8 x 16 bits = 160 bytes per row
+  POKE(0xD058,160);
+  POKE(0xD059,160/256);
+  // Draw 80 chars per row
+  POKE(0xD05E,80);
+  // Put 4KB screen at $C000
   POKE(0xD060,0x00);
   POKE(0xD061,0xc0);
   POKE(0xD062,0x00);
@@ -65,10 +65,10 @@ void graphics_mode(void)
   // Layout screen so that graphics data comes from $40000 -- $4FFFF
 
   i=0x40000/0x40;
-  for(a=0;a<40;a++)
+  for(a=0;a<80;a++)
     for(b=0;b<25;b++) {
-      POKE(0xC000+b*80+a*2+0,i&0xff);
-      POKE(0xC000+b*80+a*2+1,i>>8);
+      POKE(0xC000+b*160+a*2+0,i&0xff);
+      POKE(0xC000+b*160+a*2+1,i>>8);
 
       i++;
     }
@@ -76,8 +76,8 @@ void graphics_mode(void)
   // Clear colour RAM, while setting all chars to 4-bits per pixel
   // Actually set colour to 15, so that 4-bit graphics mode picks up colour 15
   // when using 0xf as colour (as VIC-IV uses char foreground colour in that case)
-  for(i=0;i<2000;i+=2) {
-    lpoke(0xff80000L+0+i,0x08);
+  for(i=0;i<4000;i+=2) {
+    lpoke(0xff80000L+0+i,0x00);
     lpoke(0xff80000L+1+i,0x0f);
   }
   POKE(0xD020,0);
@@ -106,7 +106,7 @@ void plot_pixel(unsigned short x,unsigned char y,unsigned char colour)
 unsigned char char_code;
 void print_text(unsigned char x,unsigned char y,unsigned char colour,char *msg)
 {
-  pixel_addr=0xC000+x*2+y*80;
+  pixel_addr=0xC000+x*2+y*160;
   while(*msg) {
     char_code=*msg;
     if (*msg>=0xc0&&*msg<=0xe0) char_code=*msg-0x80;
@@ -281,6 +281,10 @@ unsigned char setup_hyperram(void)
 
 unsigned char num_uarts=0;
 
+void do_terminal(unsigned char port)
+{
+}
+
 void main(void)
 {
   // Fast CPU, M65 IO
@@ -304,101 +308,107 @@ void main(void)
   // Audio cross-bar full volume
   for(i=0;i<256;i++) audioxbar_setcoefficient(i,0xff);
 
-  graphics_mode();
-  graphics_clear_double_buffer();
-
-  print_text(0,0,1,"MEGA65/MEGAphone Buffered UART Controller Test");
-  snprintf(msg,80,"Hardware model = %d",detect_target());
-  print_text(0,1,1,msg);
-
-  // Work out how many UARTs we have
-  for(num_uarts=0;num_uarts<16;num_uarts++) {
-    // Select UART
-    POKE(0xD0E0,num_uarts);
-    // Try to write to UART baud rate divisor
-    POKE(0xD0E4,0x00);
-    // If it doesn't set to 0, then no UART here
-    if (PEEK(0xD0E4)) break;
-    POKE(0xC000+num_uarts*2,PEEK(0xD0E4));
-  }
+  while (1) {
   
-  snprintf(msg,80,"Controller has %d UARTs",num_uarts);
-  print_text(0,2,7,msg);
-
-  // Perform loopback tests
-  for(i=0;i<num_uarts;i++)
-    {
-      // Select UART i, and enable loopback mode.
-      // Loopback mode connects UART 0 to 7 and vice versa, 1 to 6, ... 3 to 4.
-      POKE(0xD0E0,0x10+i);
-      // Clear RX buffer of UART
-      for(x=0;x<257;x++) POKE(0xD0E2,0);
-      POKE(0xD0E0,0x17-i);
-      // Clear RX buffer of loop-backed UART
-      for(x=0;x<257;x++) POKE(0xD0E2,0);
-      // And set baud rate to really fast to flush out
-      POKE(0xD0E4,0);
-      POKE(0xD0E5,0);
-      POKE(0xD0E6,0);
-
-      // Select our target UART again
-      POKE(0xD0E0,0x10+i);
-      // Flush any TX queue quickly by setting divisor to $000000
-      POKE(0xD0E4,0);
-      POKE(0xD0E5,0);
-      POKE(0xD0E6,0);
-      // Clear interrupt modes etc
-      POKE(0xD0E1,0x00);
-      // 255 chars x 1/115200sec = 2.2ms
-      // so waiting 10ms should be more than enough
-      usleep(10000);
-      
-      if (PEEK(0xD0E1)!=0x60) {
-	snprintf(msg,80,"UART#%d status incorrect. Should be $60. Saw $%02x",i,PEEK(0xD0E1));
-	print_text(0,4+i,2,msg);
-
-	// Try to clear RX buffer
-	POKE(0xD0E2,0);
-      }
-
-      // Send a char from UART, make sure TXEMPTY bit clears, then reasserts.
-
-      // Select UART again
-      POKE(0xD0E0,0x10+i);
-      // And set really slow baud rate, so we can watch TXEMPTY toggle
-      POKE(0xD0E4,0xff);
-      POKE(0xD0E5,0xff);
-      POKE(0xD0E6,0x00);
-      // Write char (which gets sent IMMEDIATELY because queue is empty)
-      POKE(0xD0E3,0x42);
-      // Then send a 2nd that WILL get queued
-      POKE(0xD0E3,0x42);
-      // We have to check fast, as else char will have been sent.
-      // Only 10/115200 seconds = ~0.1 milliseconds to check
-      x=PEEK(0xD0E1); 
-      while (x!=0x40) {
-	POKE(0xD0E2,0);
-	snprintf(msg,80,"UART#%d TXEMPTY not clearing ($%02x)                  ",num_uarts,x);
-	print_text(0,4+i,2,msg);
-	x=PEEK(0xD0E1);
-	if (x==0x60) {
-	  // Waiting for RX buffer to clear might have taken too long, so put chars back in
-	  POKE(0xD0E3,0x42);
-	  POKE(0xD0E3,0x42);
+    graphics_mode();
+    graphics_clear_double_buffer();
+    
+    print_text(0,0,1,"MEGA65/MEGAphone Buffered UART Controller Test");
+    snprintf(msg,80,"Hardware model = %d",detect_target());
+    print_text(0,1,1,msg);
+    
+    // Work out how many UARTs we have
+    for(num_uarts=0;num_uarts<16;num_uarts++) {
+      // Select UART
+      POKE(0xD0E0,num_uarts);
+      // Try to write to UART baud rate divisor
+      POKE(0xD0E4,0x00);
+      // If it doesn't set to 0, then no UART here
+      if (PEEK(0xD0E4)) break;
+      POKE(0xC000+num_uarts*2,PEEK(0xD0E4));
+    }
+    
+    snprintf(msg,80,"Controller has %d UARTs",num_uarts);
+    print_text(0,2,7,msg);
+    
+    // Perform loopback tests
+    for(i=0;i<num_uarts;i++)
+      {
+	// Select UART i, and enable loopback mode.
+	// Loopback mode connects UART 0 to 7 and vice versa, 1 to 6, ... 3 to 4.
+	POKE(0xD0E0,0x10+i);
+	// Clear RX buffer of UART
+	for(x=0;x<257;x++) POKE(0xD0E2,0);
+	POKE(0xD0E0,0x17-i);
+	// Clear RX buffer of loop-backed UART
+	for(x=0;x<257;x++) POKE(0xD0E2,0);
+	// And set baud rate to really fast to flush out
+	POKE(0xD0E4,0);
+	POKE(0xD0E5,0);
+	POKE(0xD0E6,0);
+	
+	// Select our target UART again
+	POKE(0xD0E0,0x10+i);
+	// Flush any TX queue quickly by setting divisor to $000000
+	POKE(0xD0E4,0);
+	POKE(0xD0E5,0);
+	POKE(0xD0E6,0);
+	// Clear interrupt modes etc
+	POKE(0xD0E1,0x00);
+	// 255 chars x 1/115200sec = 2.2ms
+	// so waiting 10ms should be more than enough
+	usleep(10000);
+	
+	if (PEEK(0xD0E1)!=0x60) {
+	  snprintf(msg,80,"UART#%d status incorrect. Should be $60. Saw $%02x",i,PEEK(0xD0E1));
+	  print_text(0,4+i,2,msg);
+	  
+	  // Try to clear RX buffer
+	  POKE(0xD0E2,0);
 	}
+	
+	// Send a char from UART, make sure TXEMPTY bit clears, then reasserts.
+	
+	// Select UART again
+	POKE(0xD0E0,0x10+i);
+	// And set really slow baud rate, so we can watch TXEMPTY toggle
+	POKE(0xD0E4,0xff);
+	POKE(0xD0E5,0xff);
+	POKE(0xD0E6,0x00);
+	// Write char (which gets sent IMMEDIATELY because queue is empty)
+	POKE(0xD0E3,0x42);
+	// Then send a 2nd that WILL get queued
+	POKE(0xD0E3,0x42);
+	// We have to check fast, as else char will have been sent.
+	// Only 10/115200 seconds = ~0.1 milliseconds to check
+	x=PEEK(0xD0E1); 
+	while (x!=0x40) {
+	  POKE(0xD0E2,0);
+	  snprintf(msg,80,"UART#%d TXEMPTY not clearing ($%02x)                  ",num_uarts,x);
+	  print_text(0,4+i,2,msg);
+	  x=PEEK(0xD0E1);
+	  if (x==0x60) {
+	    // Waiting for RX buffer to clear might have taken too long, so put chars back in
+	    POKE(0xD0E3,0x42);
+	    POKE(0xD0E3,0x42);
+	  }
+	}
+	
+	
+	// If all tested well.
+	snprintf(msg,80,"UART#%d OK.                                              ",i);
+	print_text(0,4+i,5,msg);
+	
       }
-      
-      
-      // If all tested well.
-      snprintf(msg,80,"UART#%d OK.                                              ",i);
-      print_text(0,4+i,5,msg);
-      
-    }
 
-  while(1)
-    { 
-     continue;
-    }
+    print_text(0,15,7,"Press 0 to 9 to activate terminal mode");
+    POKE(0xD610,0);
+    while(!PEEK(0xD610)) continue;
+
+    if (PEEK(0xD610)>='0'&&PEEK(0xD610)<='9')
+      do_terminal(PEEK(0xD610)-'0');
+    
+  }
   
   
   //  gap_histogram();
