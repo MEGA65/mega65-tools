@@ -278,11 +278,84 @@ unsigned char setup_hyperram(void)
   return 0;
 }
 
+unsigned char ascii_to_petscii(unsigned char c)
+{
+  if (c>=0x20&&c<=0x40) return c;
+  if (c>=0x41&&c<=0x5a) return c;
+  if (c>=0x61&&c<=0x7a) return c-0x60;
+  return c;
+}
 
 unsigned char num_uarts=0;
+unsigned char colour=1;
 
 void do_terminal(unsigned char port)
 {
+    graphics_mode();
+    graphics_clear_double_buffer();
+
+    while(PEEK(0xD610)) POKE(0xD610,0);
+    
+    POKE(0xD0E0,port);
+
+    POKE(0xD0E4,DIVISOR_115200>>0);
+    POKE(0xD0E5,DIVISOR_115200>>8);
+    POKE(0xD0E6,DIVISOR_115200>>16);
+    
+    x=0; y=0; colour=1;
+    
+    while(1) {
+      // Show blinking cursor
+      lpoke(0xff80000+y*160+x*2+0,0x00);
+      lpoke(0xff80000+y*160+x*2+1,colour^((PEEK(0xD7FA)>>1)&0x08));
+      POKE(0xC000+y*160+x*2+1,0);
+      POKE(0xC000+y*160+x*2+0,0xa0);
+      
+      // Keyboard input? Echo to serial port.
+      if (PEEK(0xD610)) {
+	POKE(0xD0E3,PEEK(0xD610));
+	POKE(0xD610,0);
+      }
+
+      if (!(PEEK(0xD0E1)&0x40)) {
+	// Undraw cursor
+	POKE(0xC000+y*160+x*2+0,0x20);
+
+	// get char
+	i=PEEK(0xD0E2); POKE(0xD0E2,0);
+	switch(i) {
+	case 0x08: // back space
+	  x--;
+	  if (x<0) { x=79; y--;}
+	  if (y<0) y=0;
+	  break;
+	case 0x0d: // Carriage return
+	  x=0;
+	  break;
+	case 0x0a: // line feed
+	  y++;
+	  if (y>=25) {
+	    lcopy(0xC000+160,0xC000,160*24);
+	    lcopy(0xff80000L+160,0xff80000L,160*24);
+	    y=24;
+	  }
+	  break;
+	default:
+	  POKE(0xC000+y*160+x*2+1,0);
+	  POKE(0xC000+y*160+x*2+0,ascii_to_petscii(i));
+	  lpoke(0xff80000+y*160+x*2+1,colour);
+	  lpoke(0xff80000+y*160+x*2+0,0);
+	  x++;
+	  if (x>79) { x=0; y++; }
+	  if (y>=25) {
+	    lcopy(0xC000+160,0xC000,160*24);
+	    lcopy(0xff80000L+160,0xff80000L,160*24);
+	    y=24;
+	  }
+	  
+	}
+      }
+    }
 }
 
 void main(void)
@@ -325,7 +398,6 @@ void main(void)
       POKE(0xD0E4,0x00);
       // If it doesn't set to 0, then no UART here
       if (PEEK(0xD0E4)) break;
-      POKE(0xC000+num_uarts*2,PEEK(0xD0E4));
     }
     
     snprintf(msg,80,"Controller has %d UARTs",num_uarts);
