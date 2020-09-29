@@ -332,15 +332,16 @@ void main(void)
       // Loopback mode connects UART 0 to 7 and vice versa, 1 to 6, ... 3 to 4.
       POKE(0xD0E0,0x10+i);
       // Clear RX buffer of UART
-      for(x=0;x<256;x++) POKE(0xD0E2,0);
+      for(x=0;x<257;x++) POKE(0xD0E2,0);
       POKE(0xD0E0,0x17-i);
       // Clear RX buffer of loop-backed UART
-      for(x=0;x<256;x++) POKE(0xD0E2,0);
-      // And set baud rate to 115200
-      POKE(0xD0E4,(DIVISOR_115200>>0));
-      POKE(0xD0E5,(DIVISOR_115200>>8));
-      POKE(0xD0E6,(DIVISOR_115200>>16));
-      
+      for(x=0;x<257;x++) POKE(0xD0E2,0);
+      // And set baud rate to really fast to flush out
+      POKE(0xD0E4,0);
+      POKE(0xD0E5,0);
+      POKE(0xD0E6,0);
+
+      // Select our target UART again
       POKE(0xD0E0,0x10+i);
       // Flush any TX queue quickly by setting divisor to $000000
       POKE(0xD0E4,0);
@@ -351,10 +352,13 @@ void main(void)
       // 255 chars x 1/115200sec = 2.2ms
       // so waiting 10ms should be more than enough
       usleep(10000);
+      
       if (PEEK(0xD0E1)!=0x60) {
 	snprintf(msg,80,"UART#%d status incorrect. Should be $60. Saw $%02x",i,PEEK(0xD0E1));
 	print_text(0,4+i,2,msg);
-	break;
+
+	// Try to clear RX buffer
+	POKE(0xD0E2,0);
       }
 
       // Send a char from UART, make sure TXEMPTY bit clears, then reasserts.
@@ -372,15 +376,21 @@ void main(void)
       // We have to check fast, as else char will have been sent.
       // Only 10/115200 seconds = ~0.1 milliseconds to check
       x=PEEK(0xD0E1); 
-      if (x!=0x40) {
-	snprintf(msg,80,"UART#%d TXEMPTY did not clear ($%02x)",num_uarts,x);
+      while (x!=0x40) {
+	POKE(0xD0E2,0);
+	snprintf(msg,80,"UART#%d TXEMPTY not clearing ($%02x)                  ",num_uarts,x);
 	print_text(0,4+i,2,msg);
-	break;
+	x=PEEK(0xD0E1);
+	if (x==0x60) {
+	  // Waiting for RX buffer to clear might have taken too long, so put chars back in
+	  POKE(0xD0E3,0x42);
+	  POKE(0xD0E3,0x42);
+	}
       }
       
       
       // If all tested well.
-      snprintf(msg,80,"UART#%d OK.",i);
+      snprintf(msg,80,"UART#%d OK.                                              ",i);
       print_text(0,4+i,5,msg);
       
     }
