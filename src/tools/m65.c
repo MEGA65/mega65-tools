@@ -1143,11 +1143,27 @@ int detect_mode(void)
   return 1;
 }
 
+int type_serial_mode=0;
 
 void do_type_key(unsigned char key)
 {  
+  char cmd[1024];
   int c1=0x7f;
   int c2=0x7f;
+
+  if (key=='~') {
+    type_serial_mode^=1;
+    if (type_serial_mode) {
+      fprintf(stderr,"NOTE: Switching to ASCII stuffing of buffered UART.\n");
+    }
+    return; }
+
+  // Type directly to MEGA65 buffered serial port in ASCII
+  if (type_serial_mode) {
+    snprintf(cmd,1024,"sffd30e3 %02x\n",key);
+    slow_write(fd,cmd,strlen(cmd));
+    return;
+  }
   
   // left shift for upper case letters
   if (key>=0x41&&key<=0x5A) c2=0x0f;
@@ -1247,7 +1263,6 @@ void do_type_key(unsigned char key)
       
     default: c1=0x7f;
     }
-  char cmd[1024];
   //  fprintf(stderr,"keys $%02x $%02x\n",c1,c2);
   snprintf(cmd,1024,"sffd3615 %02x %02x\n",c1,c2);
   slow_write(fd,cmd,strlen(cmd));
