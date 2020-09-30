@@ -67,6 +67,8 @@ void graphics_mode(void)
   i=0x40000/0x40;
   for(a=0;a<80;a++)
     for(b=0;b<25;b++) {
+      // XXX Actually just fill the screen with spaces
+      i=0x20;
       POKE(0xC000+b*160+a*2+0,i&0xff);
       POKE(0xC000+b*160+a*2+1,i>>8);
 
@@ -287,7 +289,7 @@ unsigned char ascii_to_petscii(unsigned char c)
 }
 
 unsigned char num_uarts=0;
-unsigned char colour=1;
+unsigned char colour=1, saved_char,saved_colour;
 
 void do_terminal(unsigned char port)
 {
@@ -303,13 +305,15 @@ void do_terminal(unsigned char port)
     POKE(0xD0E6,DIVISOR_115200>>16);
     
     x=0; y=0; colour=1;
+    saved_char=0x20;
+    saved_colour=1;
     
     while(1) {
       // Show blinking cursor
       lpoke(0xff80000+y*160+x*2+0,0x00);
-      lpoke(0xff80000+y*160+x*2+1,colour^((PEEK(0xD7FA)>>1)&0x08));
+      lpoke(0xff80000+y*160+x*2+1,colour);
       POKE(0xC000+y*160+x*2+1,0);
-      POKE(0xC000+y*160+x*2+0,0xa0);
+      POKE(0xC000+y*160+x*2+0,saved_char+(((PEEK(0xD7FA)>>4)&0x01)?0x80:0x00));
       
       // Keyboard input? Echo to serial port.
       if (PEEK(0xD610)) {
@@ -319,7 +323,8 @@ void do_terminal(unsigned char port)
 
       if (!(PEEK(0xD0E1)&0x40)) {
 	// Undraw cursor
-	POKE(0xC000+y*160+x*2+0,0x20);
+	POKE(0xC000+y*160+x*2+0,saved_char);
+        lpoke(0xff80000+y*160+x*2+1,saved_colour);
 
 	// get char
 	i=PEEK(0xD0E2); POKE(0xD0E2,0);
@@ -328,17 +333,24 @@ void do_terminal(unsigned char port)
 	  x--;
 	  if (x<0) { x=79; y--;}
 	  if (y<0) y=0;
+	  saved_char=PEEK(0xC000+y*160+x*2+0);
+	  saved_colour=lpeek(0xff80000+y*160+x*2+1);
 	  break;
 	case 0x0d: // Carriage return
 	  x=0;
+	  saved_char=PEEK(0xC000+y*160+x*2+0);
+	  saved_colour=lpeek(0xff80000+y*160+x*2+1);
 	  break;
 	case 0x0a: // line feed
 	  y++;
 	  if (y>=25) {
 	    lcopy(0xC000+160,0xC000,160*24);
 	    lcopy(0xff80000L+160,0xff80000L,160*24);
+	    lfill(0xC000+160*24,0x20,160);
 	    y=24;
 	  }
+	  saved_char=PEEK(0xC000+y*160+x*2+0);
+	  saved_colour=lpeek(0xff80000+y*160+x*2+1);
 	  break;
 	default:
 	  POKE(0xC000+y*160+x*2+1,0);
@@ -350,9 +362,11 @@ void do_terminal(unsigned char port)
 	  if (y>=25) {
 	    lcopy(0xC000+160,0xC000,160*24);
 	    lcopy(0xff80000L+160,0xff80000L,160*24);
+	    lfill(0xC000+160*24,0x20,160);
 	    y=24;
 	  }
-	  
+	  saved_char=PEEK(0xC000+y*160+x*2+0);	  
+	  saved_colour=lpeek(0xff80000+y*160+x*2+1);
 	}
       }
     }
