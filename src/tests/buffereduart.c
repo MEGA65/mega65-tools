@@ -9,6 +9,8 @@
 #include <time.h>
 #include <targets.h>
 
+#include "ascii.h"
+
 unsigned short i;
 unsigned char a,b,c,d;
 unsigned short interval_length;
@@ -291,6 +293,14 @@ unsigned char ascii_to_petscii(unsigned char c)
 unsigned char num_uarts=0;
 unsigned char colour=1, saved_char,saved_colour;
 
+void serial_write(char *s)
+{
+  while(*s) {
+    POKE(0xD0E3,*s);
+    s++;
+  }
+}
+
 void do_terminal(unsigned char port)
 {
     graphics_mode();
@@ -307,6 +317,41 @@ void do_terminal(unsigned char port)
     x=0; y=0; colour=1;
     saved_char=0x20;
     saved_colour=1;
+
+    if (port==5) {
+      // Bluetooth module, so power it on, enable command mode etc.
+
+      // Power on (don't forget to allow >=10ms between I2C register writes)
+      lpoke(0xFFD700E,0x9F);
+      usleep(10000);
+      lpoke(0xFFD700A,0xFF);
+      usleep(10000);
+
+      // Enter CMD mode
+      lpoke(0xFFD700F,0xFE);
+      usleep(10000);
+      lpoke(0xFFD700B,0xFE);
+      usleep(10000);
+
+      // Command echo ON
+      serial_write("+\r\n");
+      usleep(50000);
+      
+      // Set bluetooth name
+      serial_write("sn,megaphone\r\n");
+      usleep(50000);
+
+      // Set security pin
+      serial_write("sp,4510\r\n");
+      usleep(50000);
+      
+      // Make discoverable
+      serial_write("@,1\r\n");
+      usleep(50000);
+
+      // Show current settings
+      serial_write("d\r\n");
+    }
     
     while(1) {
       // Show blinking cursor
