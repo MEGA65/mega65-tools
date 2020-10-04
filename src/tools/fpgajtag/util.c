@@ -452,8 +452,36 @@ void fpgausb_open(int device_index, int interface)
         goto error;
     step++;
 #ifndef DARWIN // not supported on Mac-OS
-    if (libusb_claim_interface(usbhandle, interface) < 0)
-        goto error;
+    int claim_interface_result=libusb_claim_interface(usbhandle, interface);
+    if (claim_interface_result < 0) {
+      fprintf(stderr,"\nlibusb_claim_interface failed: Code %d\n",claim_interface_result);
+      switch (claim_interface_result) {
+      case -6: /* LIBUSB_ERROR_BUSY: */
+	fprintf(stderr,"USB Device is busy (some other process has opened it?)\n");
+	// So try detaching whatever has it
+	fprintf(stderr,"Trying to disconnect existing claimant...\n");
+	int disconnect_result=libusb_detach_kernel_driver(usbhandle,interface);
+	if (!disconnect_result)
+	  {
+	    fprintf(stderr,"Disconnected claimant, trying again to claim it for ourselves...\n");
+	    claim_interface_result=libusb_claim_interface(usbhandle, interface);
+	    if (!claim_interface_result) {
+	      fprintf(stderr,"Success.\n");
+	    } else {
+	      fprintf(stderr,"Which unfortunately didn't work.\n");
+	    }
+	  } else {
+	  fprintf(stderr,"libusb_detach_kernal_driver failed with code %d\n",disconnect_result);
+	}
+	break;
+      case -4: /* LIBUSB_ERROR_NO_DEVICE: */ fprintf(stderr,"No USB device (unplugged?)\n"); break;
+      case -5: /* LIBUSB_ERROR_NOTFOUND: */ fprintf(stderr,"USB Device not found (wrong or faulty USB device?)\n"); break;
+      }
+    }
+    if (claim_interface_result<0) {
+      fprintf(stderr,"Sorry, I still couldn't claim the interface.  Please check if the Vivado hw_server is running in the background, as this can cause this problem.\n");
+      goto error;
+    }
 #endif
     step++;
     if (USBCTRL(USBSIO_RESET, USBSIO_RESET, 0) < 0)
