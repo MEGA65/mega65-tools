@@ -11,6 +11,10 @@
 
 #include "ascii.h"
 
+unsigned char rxbuffer[4096];
+unsigned int rxbuffer_w=0;
+unsigned int rxbuffer_r=0;
+
 unsigned short i;
 unsigned char a,b,c,d;
 unsigned short interval_length;
@@ -311,10 +315,17 @@ void scroll_terminal(void)
   lfill(0xC000+160*24,0x20,160);
   y=24;
 
-#if 0
+#if 1
   if (!line_counter) {
-    print_text(0,24,7,"-- more --");
-    while(!PEEK(0xD610)) continue;
+    print_text(0,24,7,"-- MORE --");
+    while(!PEEK(0xD610)) {
+
+      while (!(PEEK(0xD0E1)&0x40)) {
+	rxbuffer[rxbuffer_w++]=PEEK(0xD0E2); POKE(0xD0E2,0);
+      }
+      
+      continue;
+    }
     POKE(0xD610,0);
     print_text(0,24,7,"          ");    
     line_counter=24;
@@ -322,10 +333,6 @@ void scroll_terminal(void)
 #endif
 
 }
-
-unsigned char rxbuffer[4096];
-unsigned int rxbuffer_w=0;
-unsigned int rxbuffer_r=0;
 
 void do_terminal(unsigned char port)
 {
