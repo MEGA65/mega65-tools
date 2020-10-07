@@ -16,6 +16,7 @@ unsigned char a,b,c,d;
 unsigned short interval_length;
 
 #define DIVISOR_115200 (40500000L/115200L)
+#define DIVISOR_57600 (40500000L/57600L)
 
 void get_interval(void)
 {
@@ -301,6 +302,31 @@ void serial_write(char *s)
   }
 }
 
+unsigned char line_counter=0;
+
+void scroll_terminal(void)
+{
+  lcopy(0xC000+160,0xC000,160*24);
+  lcopy(0xff80000L+160,0xff80000L,160*24);
+  lfill(0xC000+160*24,0x20,160);
+  y=24;
+
+#if 0
+  if (!line_counter) {
+    print_text(0,24,7,"-- more --");
+    while(!PEEK(0xD610)) continue;
+    POKE(0xD610,0);
+    print_text(0,24,7,"          ");    
+    line_counter=24;
+  } else line_counter--;
+#endif
+
+}
+
+unsigned char rxbuffer[4096];
+unsigned int rxbuffer_w=0;
+unsigned int rxbuffer_r=0;
+
 void do_terminal(unsigned char port)
 {
     graphics_mode();
@@ -318,6 +344,36 @@ void do_terminal(unsigned char port)
     saved_char=0x20;
     saved_colour=1;
 
+    if (port==0||port==2) {
+      // M.2 modem bays
+
+      // Raise DTR, disable airplane mode etc for both modems
+      lpoke(0xFFD7017,0xFF);
+      usleep(10000);
+      lpoke(0xFFD7013,0xFF);
+      usleep(10000);      
+    }
+    
+    if (port==6||port==7) {
+      // LoRa / Radio modules
+
+      // Send serial BREAK
+
+      POKE(0xD0E4,0xFF);
+      POKE(0xD0E5,0xFF);
+      POKE(0xD0E6,0xFF);
+      serial_write("U");
+      usleep(1000000);
+      
+      POKE(0xD0E4,DIVISOR_57600>>0);
+      POKE(0xD0E5,DIVISOR_57600>>8);
+      POKE(0xD0E6,DIVISOR_57600>>16);
+      
+      serial_write("sys get ver\r\n");
+      usleep(50000);
+      
+    }
+    
     if (port==5) {
       // Bluetooth module, so power it on, enable command mode etc.
 
@@ -341,8 +397,10 @@ void do_terminal(unsigned char port)
       serial_write("sn,megaphone\r\n");
       usleep(50000);
 
-      // Set security pin
-      serial_write("sp,4510\r\n");
+      // Set security pins
+      serial_write("sp,1,4510\r\n");
+      usleep(50000);
+      serial_write("sp,2,0000\r\n");
       usleep(50000);
       
       // Make discoverable
@@ -366,13 +424,18 @@ void do_terminal(unsigned char port)
 	POKE(0xD610,0);
       }
 
-      if (!(PEEK(0xD0E1)&0x40)) {
+      while (!(PEEK(0xD0E1)&0x40)) {
+	rxbuffer[rxbuffer_w++]=PEEK(0xD0E2); POKE(0xD0E2,0);
+      }
+      while ((rxbuffer_r!=rxbuffer_w)&&(PEEK(0xD0E1)&0x40)) {
+	// get char	
+	i=rxbuffer[rxbuffer_r++];
+      
 	// Undraw cursor
 	POKE(0xC000+y*160+x*2+0,saved_char);
         lpoke(0xff80000+y*160+x*2+1,saved_colour);
 
-	// get char
-	i=PEEK(0xD0E2); POKE(0xD0E2,0);
+	// Do drawing
 	switch(i) {
 	case 0x08: // back space
 	  x--;
@@ -389,10 +452,7 @@ void do_terminal(unsigned char port)
 	case 0x0a: // line feed
 	  y++;
 	  if (y>=25) {
-	    lcopy(0xC000+160,0xC000,160*24);
-	    lcopy(0xff80000L+160,0xff80000L,160*24);
-	    lfill(0xC000+160*24,0x20,160);
-	    y=24;
+	    scroll_terminal();
 	  }
 	  saved_char=PEEK(0xC000+y*160+x*2+0);
 	  saved_colour=lpeek(0xff80000+y*160+x*2+1);
@@ -405,10 +465,7 @@ void do_terminal(unsigned char port)
 	  x++;
 	  if (x>79) { x=0; y++; }
 	  if (y>=25) {
-	    lcopy(0xC000+160,0xC000,160*24);
-	    lcopy(0xff80000L+160,0xff80000L,160*24);
-	    lfill(0xC000+160*24,0x20,160);
-	    y=24;
+	    scroll_terminal();
 	  }
 	  saved_char=PEEK(0xC000+y*160+x*2+0);	  
 	  saved_colour=lpeek(0xff80000+y*160+x*2+1);
