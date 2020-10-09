@@ -155,7 +155,7 @@ $(TESTDIR)/linedraw.prg:       $(TESTDIR)/linedraw.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -Iinclude/ -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/pulseoxy.prg:       $(TESTDIR)/pulseoxy.c $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $< 
@@ -179,6 +179,11 @@ $(UTILDIR)/mega65_config.prg:       $(UTILDIR)/mega65_config.o $(CC65)
 	$(LD65) $< --mapfile $*.map -o $*.prg
 
 $(UTILDIR)/megaflash.prg:       $(UTILDIR)/megaflash.c $(CC65)
+	git submodule init
+	git submodule update
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
+$(UTILDIR)/megaphonenorflash.prg:       $(UTILDIR)/megaphonenorflash.c $(CC65)
 	git submodule init
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
