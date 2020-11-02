@@ -1454,13 +1454,13 @@ void strupr(char* str)
   }
 }
 
-void write_bytes(int addr, int size, ...)
+void write_bytes(int* addr, int size, ...)
 {
   va_list valist;
   va_start(valist, size);
 
   char str[10];
-  sprintf(outbuf, "s%08X", addr);
+  sprintf(outbuf, "s%08X", *addr);
 
   int i = 0;
   while(i < size) 
@@ -1475,6 +1475,8 @@ void write_bytes(int addr, int size, ...)
   serialRead(inbuf, BUFSIZE);
 
   va_end(valist);
+
+  *addr += size;
 }
 
 int getopcode(int mode, const char* instr)
@@ -1496,8 +1498,8 @@ void cmdAssemble(void)
 {
   int addr;
   char str[128] = { 0 };
-  char val1[128] = { 0 };
-  char val2[128] = { 0 };
+  int val1;
+  int val2;
   char* token = strtok(NULL, " ");
   if (token != NULL)
   {
@@ -1530,62 +1532,83 @@ void cmdAssemble(void)
     {
       if ((opcode = getopcode(M_impl, instr)) != -1)
       {
-        write_bytes(addr, 1, opcode);
-        addr++;
+        write_bytes(&addr, 1, opcode);
       }
       else if ((opcode = getopcode(M_A, instr)) != -1)
       {
-        write_bytes(addr, 1, opcode);
-        addr++;
+        write_bytes(&addr, 1, opcode);
       }
       else
       {
         invalid=1;
       }
     }
-    else if (sscanf(str, "(%s,X)",val1) == 1)
+    else if (sscanf(mode, "($%x,X)",&val1) == 1)
     {
-      // M_InnX
-      // M_InnnnX
+      if ((opcode = getopcode(M_InnX, instr)) != -1 && val1 < 0x100)
+      {
+        // e.g. ORA ($20,X)
+        write_bytes(&addr, 2, opcode, val1);
+      }
+      else if ((opcode = getopcode(M_InnnnX, instr)) != -1)
+      {
+        // e.g. JSR ($2000,X)
+        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
+      }
     }
-    else if (sscanf(str, "$%s,$%s",val1, val2) == 2)
+    else if (sscanf(mode, "$%x,$%x",&val1, &val2) == 2)
     {
-      // M_nnrr
+      if ((opcode = getopcode(M_nnrr, instr)) != -1)
+      {
+        // e.g. BBR $20,$2005
+        int rr = 0;
+        // TODO: confirm this arithmetic (for M_nnrr in disassemble_addr_into_string() too)
+        if (val2 > addr)
+          rr = val2 - addr - 2;
+        else
+          rr = (val2 - addr - 2) & 0xff;
+
+        write_bytes(&addr, 3, opcode, val1, rr);
+      }
     }
-    else if (sscanf(str, "($%s),Y", val1) == 1)
+    else if (sscanf(mode, "($%x),Y", &val1) == 1)
     {
-      // M_InnY
+      if ((opcode = getopcode(M_InnY, instr)) != -1)
+      {
+        // e.g. ORA ($20),Y
+        write_bytes(&addr, 2, opcode, val1);
+      }
     }
-    else if (sscanf(str, "($%s),Z", val1) == 1)
+    else if (sscanf(mode, "($%x),Z", &val1) == 1)
     {
       // M_InnZ
     }
-    else if (sscanf(str, "$%s,X", val1) == 1)
+    else if (sscanf(mode, "$%x,X", &val1) == 1)
     {
       // M_nnX
       // M_nnnnX
     }
-    else if (sscanf(str, "$%s,Y", val1) == 1)
+    else if (sscanf(mode, "$%x,Y", &val1) == 1)
     {
       // M_nnY
       // M_nnnnY
     }
-    else if (sscanf(str, "($%s)", val1) == 1)
+    else if (sscanf(mode, "($%x)", &val1) == 1)
     {
       // M_Innnn
     }
-    else if (sscanf(str, "($%s,SP),Y", val1) == 1)
+    else if (sscanf(mode, "($%x,SP),Y", &val1) == 1)
     {
       // M_InnSPY
     }
-    else if (sscanf(str, "$%s",val1) == 1)
+    else if (sscanf(mode, "$%x",&val1) == 1)
     {
       // M_nn
       // or M_nnnn
       // or M_rr (relative (signed). E.g. branch instructions)
       // or M_rrrr
     }
-    else if (sscanf(str, "#$%s",val1) == 1)
+    else if (sscanf(mode, "#$%x",&val1) == 1)
     {
       // M_immnn
       // M_immnnnn
