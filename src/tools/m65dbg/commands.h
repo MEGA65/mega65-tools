@@ -5,6 +5,7 @@ void cmdRawHelp(void);
 void cmdHelp(void);
 void cmdDump(void);
 void cmdMDump(void);
+void cmdAssemble(void);
 void cmdDisassemble(void);
 void cmdMDisassemble(void);
 void cmdContinue(void);

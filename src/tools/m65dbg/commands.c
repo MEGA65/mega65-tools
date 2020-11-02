@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <fcntl.h> 
 #include <unistd.h>
+#include <stdarg.h>
 #include "commands.h"
 #include "serial.h"
 #include "gs4510.h"
@@ -54,6 +55,7 @@ type_command_details command_details[] =
   { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
   { "dump", cmdDump, "<addr16> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
   { "mdump", cmdMDump, "<addr28> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
+  { "a", cmdAssemble, "<addr28>", "Assembles instructions at the given <addr28> location." },
   { "dis", cmdDisassemble, "[<addr16> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "mdis", cmdMDisassemble, "[<addr28> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "c", cmdContinue, "[<addr>]", "continue (until optional <addr>) (equivalent to t0, but more m65dbg-friendly)"},
@@ -65,8 +67,7 @@ type_command_details command_details[] =
   { "pw", cmdPrintWord, "<addr>", "Prints the word-value of the given address" },
   { "pd", cmdPrintDWord, "<addr>", "Prints the dword-value of the given address" },
   { "ps", cmdPrintString, "<addr>", "Prints the null-terminated string-value found at the given address" },
-  { "cls", cmdClearScreen, NULL, "Clears the screen" },
-  { "autocls", cmdAutoClearScreen, "0/1", "If set to 1, clears the screen prior to every step/next command" },
+  { "cls", cmdClearScreen, NULL, "Clears the screen" }, { "autocls", cmdAutoClearScreen, "0/1", "If set to 1, clears the screen prior to every step/next command" },
   { "break", cmdSetBreakpoint, "<addr>", "Sets the hardware breakpoint to the desired address" },
   { "wb", cmdWatchByte, "<addr>", "Watches the byte-value of the given address" },
   { "ww", cmdWatchWord, "<addr>", "Watches the word-value of the given address" },
@@ -1438,10 +1439,159 @@ void disassemble(bool useAddr28)
   } // end while
 }
 
-
 void cmdDisassemble(void)
 {
   disassemble(false);
+}
+
+void strupr(char* str)
+{
+  char* s = str;
+  while (*s)
+  {
+    *s = toupper((unsigned char)*s);
+    s++;
+  }
+}
+
+void write_bytes(int addr, int size, ...)
+{
+  va_list valist;
+  va_start(valist, size);
+
+  char str[10];
+  sprintf(outbuf, "s%08X", addr);
+
+  int i = 0;
+  while(i < size) 
+  {
+    sprintf(str, " %02X", va_arg(valist, int));
+    strcat(outbuf, str);
+    i++;
+  }
+  strcat(outbuf, "\n");
+
+  serialWrite(outbuf);
+  serialRead(inbuf, BUFSIZE);
+
+  va_end(valist);
+}
+
+int getopcode(int mode, const char* instr)
+{
+  for (int k = 0; k < 256; k++)
+  {
+    if (strcmp(instruction_lut[k], instr) == 0)
+    {
+      if (mode_lut[k] == mode)
+        return k;
+    }
+  }
+
+  // couldn't find it
+  return -1;
+}
+
+void cmdAssemble(void)
+{
+  int addr;
+  char str[128] = { 0 };
+  char val1[128] = { 0 };
+  char val2[128] = { 0 };
+  char* token = strtok(NULL, " ");
+  if (token != NULL)
+  {
+    addr = get_sym_value(token);
+  }
+
+  do
+  {
+    int invalid = 0;
+    int opcode = 0;
+
+    printf("$%07X ", addr);
+    fgets(str, 128, stdin);
+    if (str[strlen(str)-1] == '\n')
+      str[strlen(str)-1] = '\0';
+
+    if (strlen(str) == 0)
+      return;
+
+    strupr(str);
+
+    char* instr = strtok(str, " ");
+    char* mode = strtok(NULL, "\0");
+    
+    // todo: check if instruction is valid.
+    // if not, show syntax error.
+
+    // figure out instruction mode
+    if (mode == NULL || mode[0] == '\0')
+    {
+      if ((opcode = getopcode(M_impl, instr)) != -1)
+      {
+        write_bytes(addr, 1, opcode);
+        addr++;
+      }
+      else if ((opcode = getopcode(M_A, instr)) != -1)
+      {
+        write_bytes(addr, 1, opcode);
+        addr++;
+      }
+      else
+      {
+        invalid=1;
+      }
+    }
+    else if (sscanf(str, "(%s,X)",val1) == 1)
+    {
+      // M_InnX
+      // M_InnnnX
+    }
+    else if (sscanf(str, "$%s,$%s",val1, val2) == 2)
+    {
+      // M_nnrr
+    }
+    else if (sscanf(str, "($%s),Y", val1) == 1)
+    {
+      // M_InnY
+    }
+    else if (sscanf(str, "($%s),Z", val1) == 1)
+    {
+      // M_InnZ
+    }
+    else if (sscanf(str, "$%s,X", val1) == 1)
+    {
+      // M_nnX
+      // M_nnnnX
+    }
+    else if (sscanf(str, "$%s,Y", val1) == 1)
+    {
+      // M_nnY
+      // M_nnnnY
+    }
+    else if (sscanf(str, "($%s)", val1) == 1)
+    {
+      // M_Innnn
+    }
+    else if (sscanf(str, "($%s,SP),Y", val1) == 1)
+    {
+      // M_InnSPY
+    }
+    else if (sscanf(str, "$%s",val1) == 1)
+    {
+      // M_nn
+      // or M_nnnn
+      // or M_rr (relative (signed). E.g. branch instructions)
+      // or M_rrrr
+    }
+    else if (sscanf(str, "#$%s",val1) == 1)
+    {
+      // M_immnn
+      // M_immnnnn
+    }
+
+  } while (1);
 }
 
 void cmdMDisassemble(void)
