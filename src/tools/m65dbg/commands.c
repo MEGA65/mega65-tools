@@ -52,9 +52,9 @@ int  traceframe = 0;  // tracks which frame within the backtrace
 type_command_details command_details[] =
 {
   { "?", cmdRawHelp, NULL, "Shows help information for raw/native monitor commands" },
-  { "help", cmdHelp, NULL,  "Shows help information on m65dbg commands" },
-  { "dump", cmdDump, "<addr16> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column" },
-  { "mdump", cmdMDump, "<addr28> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column" },
+  { "help", cmdHelp, NULL,  "Shows help information for m65dbg commands" },
+  { "dump", cmdDump, "<addr16> [<count>]", "Dumps memory (CPU context) at given address (with character representation in right-column)" },
+  { "mdump", cmdMDump, "<addr28> [<count>]", "Dumps memory (28-bit addresses) at given address (with character representation in right-column)" },
   { "a", cmdAssemble, "<addr28>", "Assembles instructions at the given <addr28> location." },
   { "dis", cmdDisassemble, "[<addr16> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "mdis", cmdMDisassemble, "[<addr28> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
