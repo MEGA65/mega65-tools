@@ -1064,6 +1064,7 @@ void cmdRawHelp(void)
          "# - trap command - trigger a trap?\n"
          "E - flag break command - allows breaking on particular CPU flag settings\n"
          "L - load mem command - ?\n"
+         "N - step over (xemu only)\n"
   );
 }
 
