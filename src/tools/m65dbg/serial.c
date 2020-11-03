@@ -97,7 +97,8 @@ void set_blocking_serial (int fd, int should_block)
  */
 bool serialOpen(char* portname)
 {
-  if (!strncasecmp(portname, "unix#", 5)) {
+  if (!strncasecmp(portname, "unix#", 5) ||
+      !strncasecmp(portname, "unix\\#", 6)) {
 #ifdef SUPPORT_UNIX_DOMAIN_SOCKET
     struct sockaddr_un sock_st;
     fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -106,7 +107,8 @@ bool serialOpen(char* portname)
       return false;
     }
     sock_st.sun_family = AF_UNIX;
-    strcpy(sock_st.sun_path, portname + 5);
+    int hashloc = strchr(portname, '#') - portname;
+    strcpy(sock_st.sun_path, portname + hashloc + 1);
     if (connect(fd, (struct sockaddr*)&sock_st, sizeof(struct sockaddr_un))) {
       error_message("error %d connecting to UNIX-domain socket %s: %s\n", errno, portname + 5, strerror (errno));
       close(fd);
