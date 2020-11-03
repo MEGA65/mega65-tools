@@ -2522,7 +2522,7 @@ void cmdSearch(void)
     sscanf(strTotal, "%X", &total);
   }
 
-  char* strValues = strtok(NULL, " ");
+  char* strValues = strtok(NULL, "\0");
 
   // provided a string?
   if (strValues[0] == '\"')
@@ -2531,7 +2531,8 @@ void cmdSearch(void)
   }
   else
   {
-    char *sval = strValues;
+
+    char *sval = strtok(strValues, " ");
     do
     {
       int ival;
