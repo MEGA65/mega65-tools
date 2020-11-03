@@ -1444,7 +1444,7 @@ void cmdDisassemble(void)
   disassemble(false);
 }
 
-void strupr(char* str)
+void strupper(char* str)
 {
   char* s = str;
   while (*s)
@@ -1519,7 +1519,7 @@ void cmdAssemble(void)
     if (strlen(str) == 0)
       return;
 
-    strupr(str);
+    strupper(str);
 
     char* instr = strtok(str, " ");
     char* mode = strtok(NULL, "\0");
