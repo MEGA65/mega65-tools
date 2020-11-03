@@ -1005,7 +1005,7 @@ mem_data* get_mem28array(int addr)
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
   char* strLine = strtok(inbuf, "\n");
-  for (int k = 0; k < 16; k++)
+  for (int k = 0; k < 32; k++)
   {
     mem = &multimem[k];
     sscanf(strLine, ":%X:%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
