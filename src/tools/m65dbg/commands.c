@@ -2442,44 +2442,52 @@ void search_range(int addr, int total, unsigned char *bytes, int length)
   while (cnt < total)
   {
     // get memory at current pc
-    mem_data mem = get_mem(addr + cnt, true);
+    mem_data *multimem = get_mem28array(addr + cnt);
 
-    for (int k = 0; k < 16; k++)
+    for (int m = 0; m < 32; m++)
     {
-      if (!found_start)
+      mem_data mem = multimem[m];
+
+      for (int k = 0; k < 16; k++)
       {
-        if (mem.b[k] == bytes[0])
+        if (!found_start)
         {
-          found_start = true;
-          start_loc = mem.addr + k;
-          found_count++;
-        }
-      }
-      else // matched till the end?
-      {
-        if (mem.b[k] == bytes[found_count])
-        {
-          found_count++;
-          // we found a complete match?
-          if (found_count == length)
+          if (mem.b[k] == bytes[0])
           {
-            printf("%07X\n", start_loc);
-            found_start = false;
-            found_count = 0;
-            start_loc = 0;
-            results_cnt++;
+            found_start = true;
+            start_loc = mem.addr + k;
+            found_count++;
           }
         }
-        else
+        else // matched till the end?
         {
-          found_start = false;
-          start_loc = 0;
-          found_count = 0;
+          if (mem.b[k] == bytes[found_count])
+          {
+            found_count++;
+            // we found a complete match?
+            if (found_count == length)
+            {
+              printf("%07X\n", start_loc);
+              found_start = false;
+              found_count = 0;
+              start_loc = 0;
+              results_cnt++;
+            }
+          }
+          else
+          {
+            found_start = false;
+            start_loc = 0;
+            found_count = 0;
+          }
         }
-      }
-    }
+      } // end for k
 
-    cnt+=16;
+      cnt+=16;
+
+      if (cnt > total)
+        break;
+    } // end for m
 
     if (ctrlcflag)
       break;
