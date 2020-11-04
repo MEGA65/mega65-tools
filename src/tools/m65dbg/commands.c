@@ -1495,6 +1495,56 @@ int getopcode(int mode, const char* instr)
   return -1;
 }
 
+int modematcher(char* curmode, char* modeform, int* var1, int* var2)
+{
+  char str[8];
+  char* p = curmode;
+  int varcnt = 0;
+
+  for (int k = 0; k < strlen(modeform); k++)
+  {
+    // skip any whitespaces in curmode
+    while (*p == ' ')
+      p++;
+
+    // did we locate a var position?
+    if (modeform[k] == '%')
+    {
+      k++; // skip over the '%x' token
+
+      if (!isxdigit(*p))  // if no hexadecimal value here, then we've failed to match
+        return 0;
+
+      str[0] = '\0';
+      int i = 0;
+      while(isxdigit(*p)) // skip over the hexadecimal value
+      {
+        str[i] = *p;
+        i++;
+        p++;
+      }
+      str[i] = '\0';
+
+      if (varcnt == 0)
+        sscanf(str, "%x", var1);
+      else
+        sscanf(str, "%x", var2);
+      varcnt++;
+    }
+    // check for non-var locations, such as '(', ')', ','
+    else if (modeform[k] == *p)
+    {
+      p++;
+    }
+    else // we failed to match the non-var location
+    {
+      return 0;
+    }
+  }
+
+  return varcnt;
+}
+
 void cmdAssemble(void)
 {
   int addr;
@@ -1528,6 +1578,9 @@ void cmdAssemble(void)
     // todo: check if instruction is valid.
     // if not, show syntax error.
 
+    if (strcmp(instr, "NOP") == 0)
+      strcpy(instr, "EOM");
+
     // figure out instruction mode
     if (mode == NULL || mode[0] == '\0')
     {
@@ -1544,7 +1597,7 @@ void cmdAssemble(void)
         invalid=1;
       }
     }
-    else if (sscanf(mode, "($%x,X)",&val1) == 1)
+    else if (modematcher(mode, "($%x,X)",&val1, &val2) == 1)
     {
       if ((opcode = getopcode(M_InnX, instr)) != -1 && val1 < 0x100)
       {
@@ -1556,8 +1609,12 @@ void cmdAssemble(void)
         // e.g. JSR ($2000,X)
         write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
       }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "$%x,$%x",&val1, &val2) == 2)
+    else if (modematcher(mode, "$%x,$%x",&val1, &val2) == 2)
     {
       if ((opcode = getopcode(M_nnrr, instr)) != -1)
       {
@@ -1571,48 +1628,163 @@ void cmdAssemble(void)
 
         write_bytes(&addr, 3, opcode, val1, rr);
       }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "($%x),Y", &val1) == 1)
+    else if (modematcher(mode, "($%x),Y", &val1, &val2) == 1)
     {
       if ((opcode = getopcode(M_InnY, instr)) != -1)
       {
         // e.g. ORA ($20),Y
         write_bytes(&addr, 2, opcode, val1);
       }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "($%x),Z", &val1) == 1)
+    else if (modematcher(mode, "($%x),Z", &val1, &val2) == 1)
     {
-      // M_InnZ
+      if ((opcode = getopcode(M_InnZ, instr)) != -1)
+      {
+        // e.g. ORA ($20),Z
+        write_bytes(&addr, 2, opcode, val1);
+      }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "$%x,X", &val1) == 1)
+    else if (modematcher(mode, "$%x,X", &val1, &val2) == 1)
     {
-      // M_nnX
-      // M_nnnnX
+      if ((opcode = getopcode(M_nnX, instr)) != -1 && val1 < 0x100)
+      {
+        // e.g. ORA $20,X
+        write_bytes(&addr, 2, opcode, val1);
+      }
+      else if ((opcode = getopcode(M_nnnnX, instr)) != -1)
+      {
+        // e.g. ORA $2000,X
+        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
+      }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "$%x,Y", &val1) == 1)
+    else if (modematcher(mode, "$%x,Y", &val1, &val2) == 1)
     {
-      // M_nnY
-      // M_nnnnY
+      if ((opcode = getopcode(M_nnY, instr)) != -1 && val1 < 0x100)
+      {
+        // e.g. STX $20,Y
+        write_bytes(&addr, 2, opcode, val1);
+      }
+      else if ((opcode = getopcode(M_nnnnY, instr)) != -1)
+      {
+        // e.g. ORA $2000,Y
+        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
+      }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "($%x)", &val1) == 1)
+    else if (modematcher(mode, "($%x)", &val1, &val2) == 1)
     {
-      // M_Innnn
+      if ((opcode = getopcode(M_Innnn, instr)) != -1)
+      {
+        // e.g. JSR ($2000)
+        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
+      }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "($%x,SP),Y", &val1) == 1)
+    else if (modematcher(mode, "($%x,SP),Y", &val1, &val2) == 1)
     {
-      // M_InnSPY
+      if ((opcode = getopcode(M_InnSPY, instr)) != -1)
+      {
+        // e.g. STA ($20,SP),Y
+        write_bytes(&addr, 2, opcode, val1);
+      }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "$%x",&val1) == 1)
+    else if (modematcher(mode, "$%x",&val1, &val2) == 1)
     {
-      // M_nn
-      // or M_nnnn
-      // or M_rr (relative (signed). E.g. branch instructions)
-      // or M_rrrr
+      int diff = val1 - addr;
+      if (diff < 0) diff = -diff;
+
+      if ((opcode = getopcode(M_nn, instr)) != -1 && val1 < 0x100)
+      {
+        // e.g. STA $20
+        write_bytes(&addr, 2, opcode, val1);
+      }
+      else if ((opcode = getopcode(M_nnnn, instr)) != -1)
+      {
+        // e.g. STA $2000
+        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
+      }
+      
+      else if ((opcode = getopcode(M_rr, instr)) != -1 && diff < 0x100)
+      {
+        int rr = 0;
+        // TODO: confirm this arithmetic (for M_rr in disassemble_addr_into_string() too)
+        if (val1 > addr)
+          rr = val1 - addr - 2;
+        else
+          rr = (val1 - addr - 2) & 0xff;
+        // e.g. BCC $2005
+        write_bytes(&addr, 2, opcode, rr);
+      }
+      else if ((opcode = getopcode(M_rrrr, instr)) != -1)
+      {
+        int rrrr = 0;
+        // TODO: confirm this arithmetic (for M_rrrr in disassemble_addr_into_string() too)
+        if (val1 > addr)
+          rrrr = val1 - addr - 2;
+        else
+          rrrr = (val1 - addr - 2) & 0xffff;
+        // e.g. BPL $AD22
+        write_bytes(&addr, 3, opcode, rrrr & 0xff, rrrr >> 8);
+      }
+      else
+      {
+        invalid=1;
+      }
     }
-    else if (sscanf(mode, "#$%x",&val1) == 1)
+    else if (modematcher(mode, "#$%x",&val1, &val2) == 1)
     {
       // M_immnn
       // M_immnnnn
+      if ((opcode = getopcode(M_immnn, instr)) != -1 && val1 < 0x100)
+      {
+        // e.g. LDA #$20
+        write_bytes(&addr, 2, opcode, val1);
+      }
+      else if ((opcode = getopcode(M_immnnnn, instr)) != -1)
+      {
+        // e.g. PHW #$1234
+        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
+      }
+      else
+      {
+        invalid=1;
+      }
+    }
+    else
+    {
+      invalid = 1;
+    }
+
+    if (invalid)
+    {
+      printf("???\n");
     }
 
   } while (1);
