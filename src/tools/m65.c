@@ -1971,7 +1971,6 @@ int main(int argc,char **argv)
   // provided
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
-#ifndef WINDOWS
 #ifdef __APPLE__
   if (bitstream)
 #endif
@@ -1999,9 +1998,10 @@ int main(int argc,char **argv)
 	fclose(f);
       }
       fprintf(stderr,"INFO: Using fpga_id %x\n",fpga_id);
+#ifndef WINDOWS
       init_fpgajtag(NULL, bitstream, fpga_id);
-    }
 #endif
+    }
   
 #ifdef WINDOWS
   if (boundary_scan) {
