@@ -125,6 +125,8 @@ int halt=0;
 int usedk=0;
 
 
+char *show_image=NULL;
+
 // 0 = old hard coded monitor, 1= Kenneth's 65C02 based fancy monitor
 // Only REALLY old bitstreams don't have the new monitor
 int new_monitor=1;
@@ -1765,9 +1767,12 @@ void load_bitstream(char *bitstream)
 	  }
       }
       fclose(f);
+    } else {
+      fprintf(stderr,"WARNING: Could not open bitstream file '%s'\n",bitstream);
     }
 
     char *part_name="xc7a100t_0";
+    fprintf(stderr,"INFO: Expecting FPGA Part ID %x\n",fpga_id);
     if (fpga_id==0x3636093) part_name="xc7a200t_0";    
     
     FILE *tclfile=fopen("temp.tcl","w");
@@ -1802,6 +1807,7 @@ void load_bitstream(char *bitstream)
     unlink("temp.tcl");
   } else {
     // No Vivado.bat, so try to use internal fpgajtag implementation.
+    fprintf(stderr,"INFO: NOT using vivado.bat file\n");
     if (fpga_serial) {
       fpgajtag_main(bitstream,fpga_serial);
     }
@@ -1882,9 +1888,10 @@ int main(int argc,char **argv)
   if (argc==1) usage();
   
   int opt;
-  while ((opt = getopt(argc, argv, "14aA:B:b:c:C:d:EFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:c:C:d:EFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
     case 'h': case '?': usage();
+    case '@': show_image=optarg;      
     case 'a': show_audio_mixer=1; break;
     case 'A': set_mixer_args=optarg;
     case 'X': hyppo_report=1; break;
@@ -1969,12 +1976,14 @@ int main(int argc,char **argv)
   if (bitstream)
 #endif
     {
+      fprintf(stderr,"NOTE: Scanning bitstream file '%s' for device ID\n",bitstream);
       unsigned int fpga_id=0x3631093;
-      FILE *f=fopen(bitstream,"r");
+      FILE *f=fopen(bitstream,"rb");
       if (f) {
 	unsigned char buff[8192];
 	int len=fread(buff,1,8192,f);
-	for(int i=0;i<len;i+=4) {
+	fprintf(stderr,"NOTE: Read %d bytes to search\n",len);
+	for(int i=0;i<len;i++) {
 	  if ((buff[i+0]==0x30)&&(buff[i+1]==0x01)&&(buff[i+2]==0x80)&&(buff[i+3]==0x01))
 	    {
 	      i+=4;
@@ -1989,7 +1998,7 @@ int main(int argc,char **argv)
 	}
 	fclose(f);
       }
-      
+      fprintf(stderr,"INFO: Using fpga_id %x\n",fpga_id);
       init_fpgajtag(NULL, bitstream, fpga_id);
     }
 #endif
@@ -2134,6 +2143,32 @@ int main(int argc,char **argv)
   if (ethernet_video) { mega65_poke(0xffd36e1,0x29); }
   if (ethernet_cpulog) { mega65_poke(0xffd36e1,0x05); }
 
+  /*
+    Show image if requested.
+    We expect a file in the "logo" mode of pngprepare here.
+    These files have palette values followed by tiles, without de-duplication.
+    This means 640x480 requires ~300KB, plus the 9.6K screen and 9.6K colour data.
+
+  */
+  if (show_image) {
+
+    // 1. Load image file in its entirety at $0400
+    
+    enter_hypervisor_mode();
+    if (romfile) {
+      // Un-protect
+      mega65_poke(0xffd367d,mega65_peek(0xffd367d)&(0xff-4));
+
+      // Load image at $0400 to maximise space.
+      load_file(show_image,0x00400,0);
+	
+      return_from_hypervisor_mode();
+    }
+
+    // 2. Setup screen RAM, colour RAM and video mode
+  }
+  
+  
   /*
     Show / set audio coefficient values.
   */
