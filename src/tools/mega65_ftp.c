@@ -104,7 +104,7 @@ FILE *__imp___acrt_iob_func(void)
 #endif
 
 
-#ifdef APPLE
+#ifdef __APPLE__
 static const int B1000000 = 1000000;
 static const int B1500000 = 1500000;
 static const int B2000000 = 2000000;
@@ -112,9 +112,7 @@ static const int B4000000 = 4000000;
 #else
 #ifndef WINDOWS
 #include <sys/ioctl.h>
-#ifndef APPLE
 #include <linux/serial.h>
-#endif
 #endif
 #endif
 time_t start_time=0;
@@ -973,7 +971,7 @@ int main(int argc,char **argv)
   set_serial_speed(fd,serial_speed);
 #endif
   
-#ifndef APPLE
+#ifndef __APPLE__
 
 #ifndef WINDOWS
   // And also another way
