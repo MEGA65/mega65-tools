@@ -363,6 +363,9 @@ $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c Makefile $(TOOLDIR)/ftphelper.c
 $(BINDIR)/mega65_ftp.exe:	$(TOOLDIR)/mega65_ftp.c Makefile $(TOOLDIR)/ftphelper.c
 	$(WINCC) $(WINCOPT) -g -Wall -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c -lusb-1.0 -Wl,-Bstatic -lz -Wl,-Bdynamic
 
+$(BINDIR)/mega65_ftp.osx:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c Makefile
+	$(CC) $(COPT) -D__APPLE__ -g -Wall -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/m65.osx $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c -lusb-1.0 -lz -lpthread -lreadline
+
 $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile 
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
 
