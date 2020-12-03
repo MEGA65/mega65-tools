@@ -41,6 +41,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <dirent.h>
 #include <stdio.h>
 
+struct m65dirent {
+  long            d_ino;		/* start cluster */
+  long            d_filelen;		/* length of file */
+  unsigned short  d_reclen;		/* Always sizeof struct dirent. */
+  unsigned short  d_namlen;		/* Length of name in d_name. */
+  unsigned char   d_attr;               /* FAT file attributes */
+  unsigned        d_type;		/* Object type (digested attributes) */
+  char            d_name[FILENAME_MAX]; /* File name. */
+};
+
 #ifdef WINDOWS
 #include <windows.h>
 #undef SLOW_FACTOR
@@ -67,6 +77,32 @@ void do_usleep(__int64 usec)
 #define do_usleep usleep
 #endif
 
+#ifdef WINDOWS
+#define PORT_TYPE HANDLE
+SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
+int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
+#else
+#define PORT_TYPE int
+size_t serialport_read(int fd, uint8_t * buffer, size_t size);
+int serialport_write(int fd, uint8_t * buffer, size_t size);
+#endif
+
+#ifdef WINDOWS
+
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)  
+#define bcopy(b1,b2,len) (memmove((b2), (b1), (len)), (void) 0)
+
+FILE iobs[3];
+
+FILE *__imp___acrt_iob_func(void)
+{
+  iobs[0]=*stdin;
+  iobs[1]=*stdout;
+  iobs[2]=*stderr;
+  return iobs;
+}
+#endif
+
 
 #ifdef APPLE
 static const int B1000000 = 1000000;
@@ -82,11 +118,15 @@ static const int B4000000 = 4000000;
 time_t start_time=0;
 long long start_usec=0;
 
-int fd=-1;
+#ifdef WINDOWS
+PORT_TYPE fd=INVALID_HANDLE_VALUE;
+#else
+PORT_TYPE fd=-1;
+#endif
 int cpu_stopped=0;
 
-int slow_write_safe(int fd,char *d,int l);
-int slow_write(int fd,char *d,int l,int preWait);
+int slow_write_safe(PORT_TYPE fd,char *d,int l);
+int slow_write(PORT_TYPE fd,char *d,int l,int preWait);
 int open_file_system(void);
 int download_slot(int sllot,char *dest_name);
 int download_file(char *dest_name,char *local_name,int showClusters);
@@ -164,24 +204,16 @@ unsigned char fat_mbr[512];
 unsigned char syspart_sector0[512];
 unsigned char syspart_configsector[512];
 
+#define M65DT_REG 1
+#define M65DT_DIR 2
+#define M65DT_UNKNOWN 4
+
+
 #ifdef WINDOWS
 #include <windows.h>
 #undef SLOW_FACTOR
 #define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
-// #define do_usleep usleep
-void do_usleep(__int64 usec) 
-{ 
-    HANDLE timer; 
-    LARGE_INTEGER ft; 
-
-    ft.QuadPart = -(10*usec); // Convert to 100 nanosecond interval, negative value indicates relative time
-
-    timer = CreateWaitableTimer(NULL, TRUE, NULL); 
-    SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0); 
-    WaitForSingleObject(timer, INFINITE); 
-    CloseHandle(timer); 
-}
 
 #else
 #include <termios.h>
@@ -411,6 +443,7 @@ void set_serial_speed(int fd,int serial_speed)
 }
 #endif
 
+
 // From os.c in serval-dna
 long long gettime_us()
 {
@@ -554,7 +587,7 @@ int stuff_keybuffer(char *s)
 }
 
 
-int slow_write(int fd,char *d,int l,int preWait)
+int slow_write(PORT_TYPE fd,char *d,int l,int preWait)
 {
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
@@ -563,15 +596,17 @@ int slow_write(int fd,char *d,int l,int preWait)
   usleep(preWait);
   for(i=0;i<l;i++)
     {
-      int w=write(fd,&d[i],1);
+      int w=serialport_write(fd,(unsigned char *)&d[i],1);
       while (w<1) {
 	usleep(1000);
-	w=write(fd,&d[i],1);
+	w=serialport_write(fd,(unsigned char *)&d[i],1);
       }
       // Only control characters can cause us whole line delays,
       if (d[i]<' ') { usleep(2000); } else usleep(0);
     }
+#ifndef WINDOWS
     tcdrain(fd);
+#endif
   return 0;
 }
 
@@ -582,7 +617,7 @@ unsigned char mega65_peek(unsigned int addr)
   return b;
 }
 
-int slow_write_safe(int fd,char *d,int l)
+int slow_write_safe(PORT_TYPE fd,char *d,int l)
 {
   // There is a bug at the time of writing that causes problems
   // with the CPU's correct operation if various monitor commands
@@ -736,20 +771,21 @@ int process_char(unsigned char c, int live)
   return 0;
 }
 
-int process_waiting(int fd)
+int process_waiting(PORT_TYPE fd)
 {
   unsigned char  read_buff[1024];
-  int b=read(fd,read_buff,1024);
+  int b=serialport_read(fd,read_buff,1024);
   while (b>0) {
     int i;
     for(i=0;i<b;i++) {
       process_char(read_buff[i],1);
     }
-    b=read(fd,read_buff,1024);    
+    b=serialport_read(fd,read_buff,1024);    
   }
   return 0;
 }
 
+#ifndef WINDOWS
 void set_speed(int fd,int serial_speed)
 {
   struct termios t;
@@ -781,6 +817,7 @@ void set_speed(int fd,int serial_speed)
   if (tcsetattr(fd, TCSANOW, &t)) perror("Failed to set terminal parameters");
 
 }
+#endif
 
 int queued_command_count=0;
 #define MAX_QUEUED_COMMANDS 64
@@ -905,21 +942,35 @@ int main(int argc,char **argv)
   if (argc-optind==1) usage();
 
   errno=0;
+
+#ifdef WINDOWS
+  fd=open_serial_port(serial_port,2000000);
+  if (fd==INVALID_HANDLE_VALUE) {
+    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
+    exit(-1);
+  }
+  
+#else
+  errno=0;
   fd=open(serial_port,O_RDWR);
   if (fd==-1) {
     fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
     perror("open");
     exit(-1);
   }
-  fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
+
+  set_serial_speed(fd,serial_speed);
+#endif
   
 #ifndef APPLE
 
+#ifndef WINDOWS
   // And also another way
   struct serial_struct serial;
   ioctl(fd, TIOCGSERIAL, &serial); 
   serial.flags |= ASYNC_LOW_LATENCY;
   ioctl(fd, TIOCSSERIAL, &serial);
+#endif
 
   {
     char latency_timer[1024];
@@ -942,19 +993,25 @@ int main(int argc,char **argv)
     snprintf(cmd,1024,"fpgajtag -a %s",bitstream);
     fprintf(stderr,"%s\n",cmd);
     system(cmd);
+#ifdef WINDOWS
+    fprintf(stderr,"[T+%I64dsec] Bitstream loaded\n",(long long)time(0)-start_time);
+#else    
     fprintf(stderr,"[T+%lldsec] Bitstream loaded\n",(long long)time(0)-start_time);
+#endif
   }
-  
+
+#ifndef WINDOWS
   // Set higher speed on serial interface to improve throughput, and make sure
   // we have reset.
   set_speed(fd,2000000);
   //  slow_write(fd,"\r!\r",3,0); usleep(100000);
   slow_write(fd,"\r+9\r",4,5000);
-  set_speed(fd,4000000);
+  set_speed(fd,4000000);  
   //  slow_write(fd,"\r!\r",3,0); usleep(100000);
   //  set_speed(fd,2000000);  
   //  slow_write(fd,"\r+9\r",4,5000);
   //  set_speed(fd,4000000);
+#endif
   
   stop_cpu();
 
@@ -970,6 +1027,24 @@ int main(int argc,char **argv)
     for(int i=0;i<queued_command_count;i++) execute_command(queued_commands[i]);
     return 0;
   } else {
+#ifdef WINDOWS
+    char cmd[8192];
+    int len=0;
+    int c;
+    while(1) {
+      c=fgetc(stdin);
+      if (c==0x0a||c==0x0d) {
+	execute_command(cmd);
+	len=0;
+	cmd[0]=0;
+      }
+      if (c==EOF) break;
+      if (len<8191) {
+	cmd[len++]=c;
+	cmd[len]=0;
+      }
+    }      
+#else
     char *cmd=NULL;
     using_history();
     while((cmd=readline("MEGA65 SD-card> "))!=NULL) {
@@ -977,6 +1052,7 @@ int main(int argc,char **argv)
       add_history(cmd);
       free(cmd);
     }
+#endif
   }
   
   return 0;
@@ -1267,7 +1343,7 @@ int load_helper(void)
       // MEGA65FT1.0 string
       sleep(1);
       char buffer[8192];
-      int bytes=read(fd,buffer,8192);
+      int bytes=serialport_read(fd,(unsigned char *)buffer,8192);
       if (bytes>=strlen("MEGA65FT1.0"))
 	for(int i=0;i<bytes-strlen("MEGA65FT1.0");i++)
 	  if (!strncmp("MEGA65FT1.0",&buffer[i],strlen("MEGA65FT1.0"))) {
@@ -1303,7 +1379,7 @@ int load_helper(void)
       process_waiting(fd);
       int offset=2;
       while(offset<helperroutine_len) {
-	int written=write(fd,&helperroutine[offset],helperroutine_len-offset);
+	int written=serialport_write(fd,&helperroutine[offset],helperroutine_len-offset);
 	if (written!=helperroutine_len) {
 	  usleep(10000);
 	}
@@ -1404,7 +1480,7 @@ void job_process_results(void)
   int debug_rx=0;
   
   while (1) {
-    int b=read(fd,buff,8192);
+    int b=serialport_read(fd,buff,8192);
     if (b<1) usleep(0);
     if (b>0) if (debug_rx) dump_bytes(0,"jobresponse",buff,b);
     for(int i=0;i<b;i++) {
@@ -1419,7 +1495,11 @@ void job_process_results(void)
 	recent[31]=0;
 	if (!strncmp((char *)&recent[30-10],"FTBATCHDONE",11)) {
 	  long long endtime =gettime_us();
+#ifdef WINDOWS
+	  if (debug_rx) printf("%I64d: Saw end of batch job after %I64d usec\n",endtime-start_usec,endtime-now);
+#else
 	  if (debug_rx) printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
+#endif
 	  //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
 	  return;
 	}
@@ -1510,7 +1590,7 @@ int execute_write_queue(void)
     int offset=0;
     while (offset<write_buffer_offset)
       {
-	int written=write(fd,&write_data_buffer[offset],write_buffer_offset-offset);
+	int written=serialport_write(fd,&write_data_buffer[offset],write_buffer_offset-offset);
 	if (written>0) offset+=written;
 	else usleep(0);
       }
@@ -1831,7 +1911,7 @@ int fat_opendir(char *path)
   return retVal;
 }
 
-int fat_readdir(struct dirent *d)
+int fat_readdir(struct m65dirent *d)
 {
   int retVal=0;
   do {
@@ -1891,16 +1971,17 @@ int fat_readdir(struct dirent *d)
     d->d_name[namelen]=0;
 
     //    if (d->d_name[0]) dump_bytes(0,"dirent raw",&dir_sector_buffer[dir_sector_offset],32);
-    
-    d->d_off= //  XXX As a hack we put the size here
+
+    d->d_filelen= 
       (dir_sector_buffer[dir_sector_offset+0x1C]<<0)|
       (dir_sector_buffer[dir_sector_offset+0x1D]<<8)|
       (dir_sector_buffer[dir_sector_offset+0x1E]<<16)|
       (dir_sector_buffer[dir_sector_offset+0x1F]<<24);
-    d->d_reclen=dir_sector_buffer[dir_sector_offset+0xb]; // XXX as a hack, we put DOS file attributes here
-    if (d->d_off&0xC8) d->d_type=DT_UNKNOWN;
-    else if (d->d_off&0x10) d->d_type=DT_DIR;
-    else d->d_type=DT_REG;
+    d->d_attr=dir_sector_buffer[dir_sector_offset+0xb];
+    
+    if (d->d_attr&0xC8) d->d_type=M65DT_UNKNOWN;
+    else if (d->d_attr&0x10) d->d_type=M65DT_DIR;
+    else d->d_type=M65DT_REG;
 
   } while(0);
   return retVal;
@@ -2090,7 +2171,7 @@ unsigned int find_free_cluster(unsigned int first_cluster)
 
 int show_directory(char *path)
 {
-  struct dirent de;
+  struct m65dirent de;
   int retVal=0;
   do {
     if (!file_system_found) open_file_system();
@@ -2103,8 +2184,8 @@ int show_directory(char *path)
     if (fat_opendir(path)) { retVal=-1; break; }
     // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
     while(!fat_readdir(&de)) {
-      if (de.d_name[0]&&(de.d_off>=0))
-	printf("%12d %s\n",(int)de.d_off,de.d_name);
+      if (de.d_name[0]&&(de.d_filelen>=0))
+	printf("%12d %s\n",(int)de.d_filelen,de.d_name);
     }
   } while(0);
 
@@ -2113,7 +2194,7 @@ int show_directory(char *path)
 
 int rename_file(char *name,char *dest_name)
 {
-  struct dirent de;
+  struct m65dirent de;
   int retVal=0;
   do {
 
@@ -2127,7 +2208,7 @@ int rename_file(char *name,char *dest_name)
     if (fat_opendir("/")) { retVal=-1; break; }
     // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
     while(!fat_readdir(&de)) {
-      // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_off);
+      // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_filelen);
       // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
       if (!strcasecmp(de.d_name,name)) {
 	// Found file, so will replace it
@@ -2164,7 +2245,7 @@ int rename_file(char *name,char *dest_name)
 
 int upload_file(char *name,char *dest_name)
 {
-  struct dirent de;
+  struct m65dirent de;
   int retVal=0;
   do {
 
@@ -2187,7 +2268,7 @@ int upload_file(char *name,char *dest_name)
     if (fat_opendir("/")) { retVal=-1; break; }
     //    printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
     while(!fat_readdir(&de)) {
-      // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_off);
+      // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_filelen);
       //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
       if (!strcasecmp(de.d_name,dest_name)) {
 	// Found file, so will replace it
@@ -2200,7 +2281,7 @@ int upload_file(char *name,char *dest_name)
       printf("%s does not yet exist on the file system -- searching for empty directory slot to create it in.\n",name);
 
       if (fat_opendir("/")) { retVal=-1; break; }
-      struct dirent de;
+      struct m65dirent de;
       while(!fat_readdir(&de)) {
 	if (!de.d_name[0]) {
 	  if (0) printf("Found empty slot at dir_sector=%d, dir_sector_offset=%d\n",
@@ -2335,9 +2416,15 @@ int upload_file(char *name,char *dest_name)
       bzero(buffer,512);
       int bytes=fread(buffer,1,512,f);
       sector_number=partition_start+first_cluster_sector+(sectors_per_cluster*(file_cluster-first_cluster))+sector_in_cluster;
+#ifdef WINDOWS
+      if (0) printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
+		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
+      printf("\rUploaded %I64d bytes.",(long long)st.st_size-remaining_length);
+#else
       if (0) printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
 		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
       printf("\rUploaded %lld bytes.",(long long)st.st_size-remaining_length);
+#endif
       fflush(stdout);
       
       if (write_sector(sector_number,buffer)) {
@@ -2367,9 +2454,13 @@ int upload_file(char *name,char *dest_name)
     execute_write_queue();
     
     if (time(0)==upload_start) upload_start=time(0)-1;
+#ifdef WINDOWS
+    printf("\rUploaded %I64d bytes in %I64d seconds (%.1fKB/sec)\n",
+	   (long long)st.st_size,(long long)time(0)-upload_start,st.st_size*1.0/1024/(time(0)-upload_start));
+#else
     printf("\rUploaded %lld bytes in %lld seconds (%.1fKB/sec)\n",
 	   (long long)st.st_size,(long long)time(0)-upload_start,st.st_size*1.0/1024/(time(0)-upload_start));
-    
+#endif    
   } while(0);
 
   return retVal;
@@ -2427,7 +2518,7 @@ int download_slot(int slot_number,char *dest_name)
 
 int download_file(char *dest_name,char *local_name,int showClusters)
 {
-  struct dirent de;
+  struct m65dirent de;
   int retVal=0;
   do {
 
@@ -2443,7 +2534,7 @@ int download_file(char *dest_name,char *local_name,int showClusters)
     if (fat_opendir("/")) { retVal=-1; break; }
     //    printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
     while(!fat_readdir(&de)) {
-      // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_off);
+      // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_filelen);
       //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
       if (!strcasecmp(de.d_name,dest_name)) {
 	// Found file, so will replace it
@@ -2465,7 +2556,7 @@ int download_file(char *dest_name,char *local_name,int showClusters)
       |(dir_sector_buffer[dir_sector_offset+0x15]<<24);
 
     // Now write the file out sector by sector, and allocate new clusters as required
-    int remaining_bytes=de.d_off;
+    int remaining_bytes=de.d_filelen;
     int sector_in_cluster=0;
     int file_cluster=first_cluster_of_file;
     unsigned int sector_number;
@@ -2514,10 +2605,16 @@ int download_file(char *dest_name,char *local_name,int showClusters)
 	else
 	  fwrite(download_buffer,remaining_bytes,1,f);
       }
-      
+
+#ifdef WINDOWS
+      if (0) printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
+		    gettime_us()-start_usec,(int)de.d_filelen,sector_number,sector_number,file_cluster);
+      if (!showClusters) printf("\rDownloaded %I64d bytes.",(long long)de.d_filelen-remaining_bytes);
+#else
       if (0) printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
-		    gettime_us()-start_usec,(int)de.d_off,sector_number,sector_number,file_cluster);
-      if (!showClusters) printf("\rDownloaded %lld bytes.",(long long)de.d_off-remaining_bytes);
+		    gettime_us()-start_usec,(int)de.d_filelen,sector_number,sector_number,file_cluster);
+      if (!showClusters) printf("\rDownloaded %lld bytes.",(long long)de.d_filelen-remaining_bytes);
+#endif
       fflush(stdout);
       
       //      printf("T+%lld : after write.\n",gettime_us()-start_usec);
@@ -2530,8 +2627,13 @@ int download_file(char *dest_name,char *local_name,int showClusters)
     
     if (time(0)==upload_start) upload_start=time(0)-1;
     if (!showClusters) {
+#ifdef WINDOWS
+      printf("\rDownloaded %I64d bytes in %I64d seconds (%.1fKB/sec)\n",
+	     (long long)de.d_filelen,(long long)time(0)-upload_start,de.d_filelen*1.0/1024/(time(0)-upload_start));
+#else
       printf("\rDownloaded %lld bytes in %lld seconds (%.1fKB/sec)\n",
-	     (long long)de.d_off,(long long)time(0)-upload_start,de.d_off*1.0/1024/(time(0)-upload_start));
+	     (long long)de.d_filelen,(long long)time(0)-upload_start,de.d_filelen*1.0/1024/(time(0)-upload_start));
+#endif
     } else printf("\n");
     
   } while(0);
