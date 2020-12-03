@@ -27,7 +27,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <termios.h>
 #include <sys/time.h>
 #include <time.h>
 #include <strings.h>
@@ -41,8 +40,33 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <unistd.h>
 #include <dirent.h>
 #include <stdio.h>
+
+#ifdef WINDOWS
+#include <windows.h>
+#undef SLOW_FACTOR
+#define SLOW_FACTOR 1
+#define SLOW_FACTOR2 1
+// #define do_usleep usleep
+void do_usleep(__int64 usec)
+{
+    HANDLE timer;
+    LARGE_INTEGER ft;
+
+    ft.QuadPart = -(10*usec); // Convert to 100 nanosecond interval, negative value indicates relative time
+
+    timer = CreateWaitableTimer(NULL, TRUE, NULL);
+    SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0);
+    WaitForSingleObject(timer, INFINITE);
+    CloseHandle(timer);
+}
+
+#else
+#include <termios.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#define do_usleep usleep
+#endif
+
 
 #ifdef APPLE
 static const int B1000000 = 1000000;
@@ -50,9 +74,10 @@ static const int B1500000 = 1500000;
 static const int B2000000 = 2000000;
 static const int B4000000 = 4000000;
 #else
+#ifndef WINDOWS
 #include <sys/ioctl.h>
 #include <linux/serial.h>
-
+#endif
 #endif
 time_t start_time=0;
 long long start_usec=0;
