@@ -112,7 +112,9 @@ static const int B4000000 = 4000000;
 #else
 #ifndef WINDOWS
 #include <sys/ioctl.h>
+#ifndef APPLE
 #include <linux/serial.h>
+#endif
 #endif
 #endif
 time_t start_time=0;
@@ -218,6 +220,15 @@ unsigned char syspart_configsector[512];
 #else
 #include <termios.h>
 #define do_usleep usleep
+#endif
+
+#ifdef __APPLE__
+#include <sys/ioctl.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/serial/IOSerialKeys.h>
+#include <IOKit/serial/ioss.h>
+#include <IOKit/IOBSD.h>
 #endif
 
 void timestamp_msg(char *msg)
