@@ -1,0 +1,9 @@
+git clone https://git.savannah.gnu.org/git/readline.git
+cd readline
+CFLAGS="-mno-sse3 -march=x86-64" ./configure --disable-shared --enable-static
+make
+cd ..
+git clone https://github.com/mirror/ncurses.git
+cd ncurses
+CFLAGS="-mno-sse3 -march=x86-64" ./configure
+make

@@ -3,7 +3,7 @@
 
 #COPT=	-Wall -g -std=gnu99 -fsanitize=address -fno-omit-frame-pointer -fsanitize-address-use-after-scope
 #CC=	clang
-COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/include/libusb-1.0 -L/usr/local/lib
+COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/include/libusb-1.0 -L/usr/local/lib -mno-sse3 -march=x86-64
 # -I/usr/local/Cellar/libusb/1.0.23/include/libusb-1.0/ -L/usr/local/Cellar/libusb/1.0.23/lib/libusb-1.0/
 CC=	gcc
 WINCC=	x86_64-w64-mingw32-gcc
@@ -358,7 +358,10 @@ $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
 $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c Makefile $(TOOLDIR)/ftphelper.c
-	$(CC) $(COPT) -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c -lreadline
+	$(CC) $(COPT) -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c -static -lreadline -lncurses
+
+$(BINDIR)/mega65_ftp.static:	$(TOOLDIR)/mega65_ftp.c Makefile $(TOOLDIR)/ftphelper.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
+	$(CC) $(COPT) -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap
 
 $(BINDIR)/mega65_ftp.exe:	$(TOOLDIR)/mega65_ftp.c Makefile $(TOOLDIR)/ftphelper.c
 	$(WINCC) $(WINCOPT) -g -Wall -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c -lusb-1.0 -Wl,-Bstatic -lz -Wl,-Bdynamic
