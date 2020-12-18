@@ -117,6 +117,7 @@ int halt=0;
 
 int usedk=0;
 
+extern bool unix_socket_flag;
 
 // 0 = old hard coded monitor, 1= Kenneth's 65C02 based fancy monitor
 // Only REALLY old bitstreams don't have the new monitor
@@ -292,6 +293,10 @@ int slow_write(PORT_TYPE fd,char *d,int l)
       w=serialport_write(fd,(unsigned char *)&d[i],1);
     }
   }
+
+  if (unix_socket_flag)
+    do_usleep(30000*SLOW_FACTOR); 
+
   return 0;
 }
 
@@ -309,7 +314,9 @@ int slow_write_safe(PORT_TYPE fd,char *d,int l)
   // monitor tells us when a breakpoint has been reached.
   if (!cpu_stopped)
     slow_write(fd,"t1\r",3);
+
   slow_write(fd,d,l);
+
   if (!cpu_stopped) {
     //    printf("Resuming CPU after writing string\n");
     slow_write(fd,"t0\r",3);
@@ -561,7 +568,7 @@ int stuff_keybuffer(char *s)
   fprintf(stderr,"\n");
 
   char cmd[1024];
-  snprintf(cmd,1024,"s%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\rs%x %d\r",
+  snprintf(cmd,1024,"s%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\rs%x %02x\r",
       buffer_addr,s[0],s[1],s[2],s[3],s[4],s[5],s[6],s[7],s[8],s[9],
       buffer_len_addr,(int)strlen(s));
   return slow_write(fd,cmd,strlen(cmd));

@@ -22,6 +22,8 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #endif
+#include <netdb.h>
+#include <arpa/inet.h>
 #include "serial.h"
 
 #define error_message printf
@@ -31,6 +33,8 @@ PORT_TYPE fd=INVALID_HANDLE_VALUE;
 #else
 PORT_TYPE fd=-1;
 #endif
+
+bool unix_socket_flag = false;
 
 int set_interface_attribs (int fd, int speed, int parity)
 {
@@ -89,6 +93,36 @@ void set_blocking_serial (int fd, int should_block)
                 error_message ("error %d setting term attributes\n", errno);
 }
 
+/*
+	borrowed from: https://www.binarytides.com/hostname-to-ip-address-c-sockets-linux/
+	Get ip from domain name
+ */
+
+int hostname_to_ip(char * hostname , char* ip)
+{
+	struct hostent *he;
+	struct in_addr **addr_list;
+	int i;
+		
+	if ( (he = gethostbyname( hostname ) ) == NULL) 
+	{
+		// get the host info
+		herror("gethostbyname");
+		return 1;
+	}
+
+	addr_list = (struct in_addr **) he->h_addr_list;
+	
+	for(i = 0; addr_list[i] != NULL; i++) 
+	{
+		//Return the first one;
+		strcpy(ip , inet_ntoa(*addr_list[i]) );
+		return 0;
+	}
+	
+	return 1;
+}
+
 /**
  * opens the desired serial port at the required 2000000 bps, or to a unix-domain socket
  *
@@ -97,7 +131,39 @@ void set_blocking_serial (int fd, int should_block)
  */
 bool serialOpen(char* portname)
 {
-  if (!strncasecmp(portname, "unix#", 5) ||
+  if (!strncasecmp(portname, "tcp", 3))
+  {
+    char hostname[128] = "localhost";
+    int port = 4510;  // assume a default port of 4510
+    if (portname[3] == '#') // did user provide a hostname and port number?
+    {
+      sscanf(&portname[4], "%s:%d", hostname, &port);
+    }
+
+    struct sockaddr_in sock_st;
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+      error_message("error %d creating tcp/ip socket: %s\n", errno, strerror (errno));
+      return false;
+    }
+
+		char ip[100];
+		
+		hostname_to_ip(hostname , ip);
+		printf("%s resolved to %s" , hostname , ip);
+
+    sock_st.sin_addr.s_addr = inet_addr(ip);
+    sock_st.sin_family = AF_INET;
+    sock_st.sin_port = htons(port);
+
+    if (connect(fd, (struct sockaddr*)&sock_st, sizeof(sock_st)) < 0)
+    {
+      error_message("error %d connecting to tcp/ip socket %s:%d: %s\n", errno, hostname, port, strerror (errno));
+      close(fd);
+      return false;
+    }
+  }
+  else if (!strncasecmp(portname, "unix#", 5) ||
       !strncasecmp(portname, "unix\\#", 6)) {
 #ifdef SUPPORT_UNIX_DOMAIN_SOCKET
     struct sockaddr_un sock_st;
@@ -106,6 +172,7 @@ bool serialOpen(char* portname)
       error_message("error %d creating UNIX-domain socket: %s\n", errno, strerror (errno));
       return false;
     }
+    unix_socket_flag = true;
     sock_st.sun_family = AF_UNIX;
     int hashloc = strchr(portname, '#') - portname;
     strcpy(sock_st.sun_path, portname + hashloc + 1);
@@ -141,7 +208,7 @@ bool serialOpen(char* portname)
   return true;
 }
 
-bool serialBaud(bool fastmode)
+void serialBaud(bool fastmode)
 {
 #ifndef __CYGWIN__
   if (fastmode)
