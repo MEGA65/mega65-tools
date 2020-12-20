@@ -124,6 +124,8 @@ int halt=0;
 
 int usedk=0;
 
+int no_rxbuff=1;
+
 
 char *show_image=NULL;
 
@@ -298,10 +300,10 @@ int slow_write(PORT_TYPE fd,char *d,int l)
   
   for(i=0;i<l;i++)
     {
-      if (serial_speed==4000000) do_usleep(1000*SLOW_FACTOR); else do_usleep(2000*SLOW_FACTOR);
+      if (no_rxbuff) { if (serial_speed==4000000) do_usleep(1000*SLOW_FACTOR); else do_usleep(2000*SLOW_FACTOR); }
       int w=serialport_write(fd,(unsigned char *)&d[i],1);
       while (w<1) {
-	if (serial_speed==4000000) do_usleep(500*SLOW_FACTOR); else do_usleep(1000*SLOW_FACTOR);
+	if (no_rxbuff) { if (serial_speed==4000000) do_usleep(500*SLOW_FACTOR); else do_usleep(1000*SLOW_FACTOR); }
 	w=serialport_write(fd,(unsigned char *)&d[i],1);
       }
     }
@@ -746,6 +748,34 @@ void show_hyppo_report(void)
   printf("SYSPART present = $%02x\n",hyppo_buffer[0xf8]);
   printf("SYSPART start = $%02x%02x%02x%02x\n",
 	 syspart_buffer[3],syspart_buffer[2],syspart_buffer[1],syspart_buffer[0]);
+  
+}
+
+int rxbuff_detect(void)
+{
+  /*
+    Newer bitstreams finally have buffering on the serial monitor interface.
+    If detected, this means that we can send commands a lot faster.
+  */
+  unsigned char read_buff[8192];
+  
+  monitor_sync();
+  // Send two commands one after the other with no delay.
+  // If we have RX buffering, both commands will execute.
+  // If not, then only the first one will execute
+  printf("Checking if MEGA65 has RX buffer\n");
+  serialport_write(fd,"\025m0\rm1\r",7);
+  do_usleep(20000); // Give plenty of time for things to settle
+  int b=1;
+  while(b>0) {
+    b=serialport_read(fd,read_buff,8192);
+    read_buff[b]=0;
+    if ((strstr((char *)read_buff,":00000000:"))
+	&&(strstr((char *)read_buff,":00000001:"))) {
+      no_rxbuff=0;
+      printf("RX buffer detected.  Latency will be reduced.\n");
+    }
+  }
   
 }
 
@@ -2039,10 +2069,8 @@ int main(int argc,char **argv)
   }
 
   open_the_serial_port();
-  
-  // XXX - Auto-detect if serial speed is not correct?
-  
-  //  printf("Calling monitor_sync()\n");
+   
+  rxbuff_detect();
   monitor_sync();
 
   if (zap) {
