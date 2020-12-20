@@ -72,7 +72,7 @@ void do_usleep(__int64 usec)
 #include <termios.h>
 void do_usleep(unsigned long usec)
 {
-  printf("do_usleep(%ld)\n",usec);
+  //  printf("do_usleep(%ld)\n",usec);
   usleep(usec);
 }
 #endif
@@ -869,7 +869,7 @@ int monitor_sync(void)
       
       // if (b>0) dump_bytes(0,"read_data",read_buff,b);
       if (strstr((char *)read_buff,cmd)) {
-	printf("Found token. Synchronised with monitor.\n");
+	//	printf("Found token. Synchronised with monitor.\n");
 	state=99;
 	return 0;      
       }
@@ -1171,6 +1171,8 @@ int detect_mode(void)
       return 0;
     }
   }
+
+  while(in_hypervisor()) do_usleep(1000);
   
   fetch_ram(0xffd3030,1,mem_buff);
   while(mem_buff[0]&0x01) {
@@ -1185,17 +1187,7 @@ int detect_mode(void)
     if (no_rxbuff) do_usleep(5000); else do_usleep(500);
     d054=mega65_peek(0xffd3054);
   }
-
-  while(in_hypervisor()) do_usleep(1000);
   
-  int pc=get_pc();
-
-  fprintf(stderr,"PC=$%04x\n",pc);
-  
-  do_usleep(5000);
-
-  pc=get_pc();
-  fprintf(stderr,"PC=$%04x\n",pc);
   
   fetch_ram(0xffd3030,1,mem_buff);
   if (mem_buff[0]==0x64) {
@@ -2396,7 +2388,7 @@ int main(int argc,char **argv)
     monitor_sync();
     stuff_keybuffer("GO64\rY\r");    
     saw_c65_mode=0;
-    do_usleep(10000);
+    //    do_usleep(100000);
     detect_mode();
     int count=0;
     while (!saw_c64_mode) {
@@ -2406,8 +2398,8 @@ int main(int argc,char **argv)
       fprintf(stderr,"count=%d\n",count);
       if (count>0) {
 	fprintf(stderr,"Retyping GO64\n");
-	stuff_keybuffer("GO64\rY\r");
-	do_usleep(10000);
+	stuff_keybuffer("\r\rGO64\rY\r");
+	do_usleep(20000);
 	count=0;
       }
       detect_mode();
@@ -2577,7 +2569,7 @@ int main(int argc,char **argv)
 	else
 	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+1000-1);
 	slow_write(fd,cmd,strlen(cmd));
-	do_usleep(1000*SLOW_FACTOR);
+	if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
 	{
 	  int n=1000;
 	  unsigned char *p=player_screen;
@@ -2586,7 +2578,7 @@ int main(int argc,char **argv)
 	    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	  }
 	}
-	do_usleep(50000);
+	wait_for_prompt();
 	
 	// Patch load address
 	load_addr=(sid_header[0x7d-0x02]<<8)+sid_header[0x7c-0x02];
@@ -2646,7 +2638,7 @@ int main(int argc,char **argv)
 	else
 	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+b-1);
 	slow_write(fd,cmd,strlen(cmd));
-	do_usleep(1000*SLOW_FACTOR);
+	if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
 	int n=b;
 	unsigned char *p=player;
 	while(n>0) {
@@ -2667,7 +2659,7 @@ int main(int argc,char **argv)
       else printf("Load address is $%04x\n",load_addr);
 
       
-      do_usleep(50000);
+      if (no_rxbuff) do_usleep(50000);
       unsigned char buf[32768];
       int max_bytes=32768;
       int b=fread(buf,1,max_bytes,f);     
@@ -2770,20 +2762,14 @@ int main(int argc,char **argv)
 	else
 	  sprintf(cmd,"l%x %x\r",load_addr-1,load_addr+b-1);
 	slow_write(fd,cmd,strlen(cmd));
-	do_usleep(1000*SLOW_FACTOR);
+	if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
 	int n=b;
 	unsigned char *p=buf;
 	while(n>0) {
 	  int w=serialport_write(fd,p,n);
 	  if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	}
-	if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
-	  else if (serial_speed==2000000)
-	    // 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
-	    do_usleep(6*b*SLOW_FACTOR2);
-	  else
-	    // 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
-	    do_usleep(3*b*SLOW_FACTOR2);
+	wait_for_prompt();
 #endif
 	load_addr+=b;
 	b=fread(buf,1,max_bytes,f);	  
