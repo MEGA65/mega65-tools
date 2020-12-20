@@ -928,6 +928,27 @@ int get_pc(void)
   else return -1;
 }
 
+int in_hypervisor(void)
+{
+  /*
+    Get H flag from register output
+  */
+  if (!no_rxbuff) monitor_sync();
+
+  slow_write_safe(fd,"r\r",2);
+  if (no_rxbuff) do_usleep(50000); else do_usleep(2000);
+  unsigned char buff[8192];
+  int b=serialport_read(fd,buff,8192);
+  if (b<0) b=0;
+  if (b>8191) b=8191;
+  buff[b]=0;
+  //  if (b>0) dump_bytes(2,"H read input",buff,b);
+  char *s=strstr((char *)buff," H ");
+  if (s) return 1;
+  else return 0;
+}
+
+
 int breakpoint_pc=-1;
 int breakpoint_set(int pc)
 {
@@ -1154,18 +1175,52 @@ int detect_mode(void)
   fetch_ram(0xffd3030,1,mem_buff);
   while(mem_buff[0]&0x01) {
     timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
-    do_usleep(200000);
+    if (no_rxbuff) do_usleep(200000);
     fetch_ram(0xffd3030,1,mem_buff);    
   }
 
   // Wait for HYPPO to exit
   int d054=mega65_peek(0xffd3054);
   while(d054&7) {
-    do_usleep(5000);
+    if (no_rxbuff) do_usleep(5000); else do_usleep(500);
     d054=mega65_peek(0xffd3054);
   }
+
+  while(in_hypervisor()) do_usleep(1000);
   
+  int pc=get_pc();
+
+  fprintf(stderr,"PC=$%04x\n",pc);
   
+  do_usleep(5000);
+
+  pc=get_pc();
+  fprintf(stderr,"PC=$%04x\n",pc);
+  
+  fetch_ram(0xffd3030,1,mem_buff);
+  if (mem_buff[0]==0x64) {
+    saw_c65_mode=1;
+    timestamp_msg("");
+    fprintf(stderr,"In C65 Mode.\n");
+    return 0;
+  }
+  
+  // Use screen address to guess mode
+  fetch_ram(0xffd3060,3,mem_buff);
+  if (mem_buff[1]==0x04) {
+    saw_c64_mode=1;
+    timestamp_msg("");
+    fprintf(stderr,"In C64 Mode.\n");
+    return 0;
+  }
+  if (mem_buff[1]=0x08) {
+    saw_c65_mode=1;
+    timestamp_msg("");
+    fprintf(stderr,"In C65 Mode.\n");
+    return 0;
+  }
+
+#if 0
   //  printf("$D030 = $%02X\n",mem_buff[0]);
   if (mem_buff[0]==0x64) {
     // Probably C65 mode
@@ -1202,8 +1257,8 @@ int detect_mode(void)
       // XXX Might not work with OpenROMs?
       if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;
       else {
-	//	printf("Odd PC=$%04x\n",pc);
-	usleep(100000);
+	printf("Odd PC=$%04x\n",pc);
+	do_usleep(5000);
       }
     }
     if (in_range>3) {
@@ -1214,6 +1269,8 @@ int detect_mode(void)
       return 0;
     }
   }
+#endif
+  
   timestamp_msg("Could not determine C64/C65/MEGA65 mode.\n");
   return 1;
 }
@@ -2339,7 +2396,7 @@ int main(int argc,char **argv)
     monitor_sync();
     stuff_keybuffer("GO64\rY\r");    
     saw_c65_mode=0;
-    do_usleep(100000);
+    do_usleep(10000);
     detect_mode();
     int count=0;
     while (!saw_c64_mode) {
@@ -2350,7 +2407,7 @@ int main(int argc,char **argv)
       if (count>0) {
 	fprintf(stderr,"Retyping GO64\n");
 	stuff_keybuffer("GO64\rY\r");
-	do_usleep(100000);
+	do_usleep(10000);
 	count=0;
       }
       detect_mode();
