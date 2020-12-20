@@ -70,7 +70,11 @@ void do_usleep(__int64 usec)
 
 #else
 #include <termios.h>
-#define do_usleep usleep
+void do_usleep(unsigned long usec)
+{
+  printf("do_usleep(%ld)\n",usec);
+  usleep(usec);
+}
 #endif
 
 #ifdef __APPLE__
@@ -359,6 +363,26 @@ long long gettime_us()
   return retVal;
 }
 
+void wait_for_prompt(void)
+{
+  unsigned char read_buff[8192];
+  int b=1;
+  while(1) {
+    b=serialport_read(fd,read_buff,8191);
+    read_buff[b]=0;
+    if (strstr((char *)read_buff,".")) break;      
+  }  
+}
+
+void purge_input(void)
+{
+  unsigned char read_buff[8192];
+  int b=1;
+  while(b>0) {
+    b=serialport_read(fd,read_buff,8191);
+  }
+}
+
 unsigned long long gettime_ms()
 {
   struct timeval nowtv;
@@ -376,8 +400,17 @@ int stop_cpu(void)
   }
   // Stop CPU
   printf("Stopping CPU\n");
-  do_usleep(50000);
+  if (no_rxbuff) do_usleep(50000);
   slow_write(fd,"t1\r",3);
+  if (!no_rxbuff) {
+    unsigned char read_buff[8192];
+    int b=1;
+    while(1) {
+      b=serialport_read(fd,read_buff,8191);
+      read_buff[b]=0;
+      if (strstr((char *)read_buff,"t1\r")) break;      
+    }
+  }
   cpu_stopped=1;
   return 0;
 }
@@ -389,8 +422,17 @@ int start_cpu(void)
     timestamp_msg("");
     fprintf(stderr,"Starting CPU\n");
   }
-  do_usleep(50000);
+  if (no_rxbuff) do_usleep(50000);
   slow_write(fd,"t0\r",3);
+  if (!no_rxbuff) {
+    unsigned char read_buff[8192];
+    int b=1;
+    while(1) {
+      b=serialport_read(fd,read_buff,8191);
+      read_buff[b]=0;
+      if (strstr((char *)read_buff,"t0\r")) break;      
+    }
+  }
   cpu_stopped=0;
   return 0;
 }
@@ -405,7 +447,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
     exit(-2);
   }
   
-  do_usleep(50000);
+  if (no_rxbuff) do_usleep(50000);
   unsigned char buf[65536];
   int max_bytes;
   int byte_limit=4096;
@@ -460,20 +502,14 @@ int load_file(char *filename,int load_addr,int patchHyppo)
       sprintf(cmd,"l%x %x\r",munged_load_addr-1,(munged_load_addr+b-1)&0xffff);
     // printf("  command ='%s'\n",cmd);
     slow_write(fd,cmd,strlen(cmd));
-    do_usleep(5000*SLOW_FACTOR);
+    wait_for_prompt();
     int n=b;
     unsigned char *p=buf;
     while(n>0) {
       int w=serialport_write(fd,p,n);
-      if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+      if (w>0) { p+=w; n-=w; } else do_usleep(1000);
     }
-    if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
-    else if (serial_speed==2000000)
-      // 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
-      do_usleep(6*b*SLOW_FACTOR2);
-    else
-      // 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
-      do_usleep(3*b*SLOW_FACTOR2);
+    wait_for_prompt();    
 #endif
     
     load_addr+=b;
@@ -508,10 +544,12 @@ int restart_hyppo(void)
   // Start executing in new hyppo
   if (!halt) {
     printf("Re-Starting CPU in new HYPPO\n");
-    do_usleep(50000);
+    if (!no_rxbuff) do_usleep(50000);
+    purge_input();
     slow_write(fd,"g8100\r",6);
-    do_usleep(10000);
+    wait_for_prompt();
     slow_write(fd,"t0\r",3);
+    wait_for_prompt();
     cpu_stopped=0;
   }
   return 0;
@@ -648,7 +686,7 @@ int virtual_f011_read(int device,int track,int sector,int side)
 	    sprintf(cmd,"l%x %x\r",READ_SECTOR_BUFFER_ADDRESS-1,
 		    READ_SECTOR_BUFFER_ADDRESS+0x200-1);
 	  slow_write(fd,cmd,strlen(cmd));
-	  do_usleep(1000*SLOW_FACTOR);
+	  if (!no_rxbuff) do_usleep(1000*SLOW_FACTOR);
 	  int n=0x200;
 	  unsigned char *p=buf;
 	  //	      fprintf(stderr,"%s\n",cmd);
@@ -657,8 +695,7 @@ int virtual_f011_read(int device,int track,int sector,int side)
 	    int w=serialport_write(fd,p,n);
 	    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	  }
-	  if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
-	  else do_usleep(10000+6*b*SLOW_FACTOR);
+	  wait_for_prompt();
 #ifdef WINDOWS       
 	  printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
 #else	
@@ -786,22 +823,23 @@ int monitor_sync(void)
   */
 
   unsigned char read_buff[8192];
+  int b=1;
   
   // Begin by sending a null command and purging input
   char cmd[8192];
   cmd[0]=0x15; // ^U
   cmd[1]='#'; // prevent instruction stepping
   cmd[2]=0x0d; // Carriage return
-  do_usleep(20000); // Give plenty of time for things to settle
+  purge_input();
+  if (no_rxbuff) do_usleep(20000); // Give plenty of time for things to settle
   slow_write_safe(fd,cmd,3);
   //  printf("Wrote empty command.\n");
-  do_usleep(20000); // Give plenty of time for things to settle
-  int b=1;
-  // Purge input  
-  //  printf("Purging input.\n");
-  while(b>0) {
-    b=serialport_read(fd,read_buff,8192);
-    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
+  if (no_rxbuff) {
+    do_usleep(20000); // Give plenty of time for things to settle
+    purge_input();
+  } else {
+    wait_for_prompt();
+    purge_input();
   }
 
   for(int tries=0;tries<10;tries++) {
@@ -814,21 +852,30 @@ int monitor_sync(void)
     slow_write_safe(fd,cmd,strlen(cmd));
 
     for(int i=0;i<10;i++) {
-      do_usleep(10000*SLOW_FACTOR);      
+      if (no_rxbuff) do_usleep(10000*SLOW_FACTOR);
       b=serialport_read(fd,read_buff,8192);
       if (b<0) b=0;
+      if (b<1) { do_usleep(100);
+	b=serialport_read(fd,read_buff,8192);
+	if (b<0) b=0;
+      }
+      if (b<1) { do_usleep(1000);
+	b=serialport_read(fd,read_buff,8192);
+	if (b<0) b=0;
+      }
       if (b>8191) b=8191;
       read_buff[b]=0;
       //      if (b>0) dump_bytes(2,"Sync input",read_buff,b);
       
-      //      if (b>0) dump_bytes(0,"read_data",read_buff,b);
+      // if (b>0) dump_bytes(0,"read_data",read_buff,b);
       if (strstr((char *)read_buff,cmd)) {
-	//	printf("Found token. Synchronised with monitor.\n");
+	printf("Found token. Synchronised with monitor.\n");
 	state=99;
 	return 0;      
       }
     }
-    do_usleep(10000*SLOW_FACTOR);
+    if (no_rxbuff) do_usleep(10000*SLOW_FACTOR);
+    else do_usleep(1000);
   }
   printf("Failed to synchronise with the monitor.\n");
   return 1;
@@ -866,8 +913,10 @@ int get_pc(void)
   /*
     Get current programme counter value of CPU
   */
+  if (!no_rxbuff) monitor_sync();
+
   slow_write_safe(fd,"r\r",2);
-  do_usleep(50000);
+  if (no_rxbuff) do_usleep(50000); else do_usleep(2000);
   unsigned char buff[8192];
   int b=serialport_read(fd,buff,8192);
   if (b<0) b=0;
@@ -946,20 +995,14 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       else
 	sprintf(cmd,"l%lx %lx\r",address+offset-1,address+offset+b-1);
       slow_write(fd,cmd,strlen(cmd));
-      do_usleep(1000*SLOW_FACTOR);
+      if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
       int n=b;
       unsigned char *p=&buffer[offset];
       while(n>0) {
 	int w=serialport_write(fd,p,n);
 	if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
       }
-      if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
-      else if (serial_speed==2000000)
-	// 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
-	do_usleep(6*b*SLOW_FACTOR2);
-      else
-	// 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
-	do_usleep(3*b*SLOW_FACTOR2);
+      wait_for_prompt();
 
       offset+=b;
     }
@@ -1118,7 +1161,7 @@ int detect_mode(void)
   // Wait for HYPPO to exit
   int d054=mega65_peek(0xffd3054);
   while(d054&7) {
-    do_usleep(50000);
+    do_usleep(5000);
     d054=mega65_peek(0xffd3054);
   }
   
@@ -1140,7 +1183,7 @@ int detect_mode(void)
 	if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
 	else {
 	  //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
-	  do_usleep(100000);
+	  do_usleep(5000);
 	}
       }
     }
@@ -2298,11 +2341,18 @@ int main(int argc,char **argv)
     saw_c65_mode=0;
     do_usleep(100000);
     detect_mode();
+    int count=0;
     while (!saw_c64_mode) {
       fprintf(stderr,"WARNING: Failed to switch to C64 mode.\n");
       monitor_sync();
-      stuff_keybuffer("GO64\rY\r");    
-      do_usleep(100000);
+      count++;
+      fprintf(stderr,"count=%d\n",count);
+      if (count>0) {
+	fprintf(stderr,"Retyping GO64\n");
+	stuff_keybuffer("GO64\rY\r");
+	do_usleep(100000);
+	count=0;
+      }
       detect_mode();
     }
   }
