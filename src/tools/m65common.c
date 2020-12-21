@@ -642,8 +642,6 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	b=(0xffff-((address+offset)&0xffff));
       if (b>4096) b=4096;
 
-      monitor_sync();
-      
       if (new_monitor) 
 	sprintf(cmd,"l%lx %lx\r",address+offset,(address+offset+b)&0xffff);
       else

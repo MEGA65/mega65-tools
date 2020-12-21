@@ -313,6 +313,8 @@ int main(int argc,char **argv)
   stop_cpu();
 
   load_helper();  
+
+  monitor_sync();
   
   sdhc_check();
   
@@ -613,7 +615,7 @@ void queue_execute(void)
 {
   //  long long start = gettime_us();
   
-  // Push queued jobs in on go
+  // Push queued jobs in one go
   push_ram(0xc001,queue_addr-0xc001,queue_cmds);
 
   // Then set number of jobs to execute them
@@ -659,7 +661,10 @@ int execute_write_queue(void)
   do {
     if (0) printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
 		  write_sector_count,write_buffer_offset);
-    push_ram(0x50000,write_buffer_offset,write_data_buffer);
+    //    printf("T+%lldms : enter push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
+    push_ram(0x50000,write_buffer_offset,&write_data_buffer[0]);
+      
+    //    printf("T+%lldms : exit push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
 
     // XXX - Sort sector number order and merge consecutive writes into
     // multi-sector writes would be a good idea here.
@@ -667,7 +672,9 @@ int execute_write_queue(void)
       {
 	queue_physical_write_sector(write_sector_numbers[i],0x50000+(i<<9));
       }
+    //    printf("T+%lldms : enter queue_execute()\n",(gettime_us()-start_usec)/1000);
     queue_execute();
+    //    printf("T+%lldms : exit queue_execute()\n",(gettime_us()-start_usec)/1000);
     
     // Reset write queue
     write_buffer_offset=0;
