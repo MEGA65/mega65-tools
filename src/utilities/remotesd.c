@@ -29,14 +29,18 @@ uint8_t aa;
 // Write a char to the serial monitor interface
 #define SERIAL_WRITE(the_char) { __asm__ ("LDA %v",the_char); __asm__ ("STA $D643"); __asm__ ("NOP"); }
 
-uint8_t c,j;
+uint8_t c,j,pl;
 uint16_t i;
 void serial_write_string(uint8_t *m,uint16_t len)
 {
-  for(i=0;i<len;i++) {
-    c=*m; m++;
-    SERIAL_DELAY;
-    SERIAL_WRITE(c);
+  for(i=0;i<len;) {
+    if (len-i>255) pl=255; else pl=len-i;
+    i+=pl;
+    for(j=0;j<pl;j++) {
+      c=*m; m++;
+      SERIAL_DELAY;
+      SERIAL_WRITE(c);
+    }    
   }
 }
 
@@ -302,7 +306,8 @@ void main(void)
 #endif
 	  
 	  break;
-	case 0x03:
+	case 0x03: // 0x03 == with RLE
+	case 0x04: // 0x04 == no RLE
 	  // Read sectors and stream
 	  job_addr++;
 	  sector_count=*(uint16_t *)job_addr;
@@ -318,7 +323,8 @@ void main(void)
 	  // Reset RLE state
 	  rle_init();
 
-	  snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-7,sector_count*0x200L);
+	  if (PEEK(job_addr)==3) snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-7,sector_count*0x200L);
+	  else snprintf(msg,80,"ftjobdatr:%04x:%08lx:",job_addr-7,sector_count*0x200L);
 	  serial_write_string(msg,strlen(msg));	    
 
 	  while(sector_count||buffer_ready||read_pending)
@@ -359,12 +365,16 @@ void main(void)
 		
 		// XXX - Just send it all in one go, since we don't buffer multiple
 		// sectors
-		rle_write_string(temp_sector_buffer,0x200);
+		if (PEEK(job_addr)==3)
+		  rle_write_string(temp_sector_buffer,0x200);
+		else
+		  serial_write_string(temp_sector_buffer,0x200);
 		buffer_ready = 0;		
 	      }
 	    }
 
-	  rle_finalise();
+	  if (PEEK(job_addr)==3)
+	    rle_finalise();
 	  
 #if DEBUG
 	  printf("$%04x : Read sector $%08lx into mem $%07lx\n",*(uint16_t *)0xDC08,
