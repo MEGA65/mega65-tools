@@ -247,6 +247,9 @@ void main(void)
 	  __asm__("jmp 58552");
 	  break;
 	case 0x02:
+	case 0x05: // multi write first
+	case 0x06: // multi write middle
+	case 0x07: // multi write end
 	  // Write sector
 	  job_addr++;
 	  buffer_address=*(uint32_t *)job_addr;
@@ -265,7 +268,10 @@ void main(void)
 	  // Write sector
 	  *(uint32_t *)0xD681 = sector_number;	  
 	  POKE(0xD680,0x57); // Open write gate
-	  POKE(0xD680,0x03);
+	  if (PEEK(job_addr-9)==0x02) POKE(0xD680,0x03);
+	  if (PEEK(job_addr-9)==0x05) POKE(0xD680,0x04);
+	  if (PEEK(job_addr-9)==0x06) POKE(0xD680,0x05);
+	  if (PEEK(job_addr-9)==0x07) POKE(0xD680,0x06);
 
 	  // Wait for SD to go busy
 	  while(!(PEEK(0xD680)&0x03)) continue;
