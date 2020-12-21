@@ -103,7 +103,7 @@ int first_go64=1;
 unsigned char viciv_regs[0x100];
 int mode_report=0;
 
-char *serial_port="/dev/ttyUSB1";
+char serial_port[1024]="/dev/ttyUSB1";
 char *bitstream=NULL;
 
 unsigned char *sd_read_buffer=NULL;
@@ -259,11 +259,13 @@ int main(int argc,char **argv)
 {
   start_time=time(0);
   start_usec=gettime_us();  
-  
+
   int opt;
   while ((opt = getopt(argc, argv, "b:s:l:c:")) != -1) {
     switch (opt) {
-    case 'l': strcpy(serial_port,optarg); break;
+    case 'l':
+      strcpy(serial_port,optarg);
+      break;
     case 's':
       serial_speed=atoi(optarg);
       switch(serial_speed) {
@@ -290,7 +292,7 @@ int main(int argc,char **argv)
   open_the_serial_port(serial_port);
 
   rxbuff_detect();
-  
+
   // Load bitstream if file provided
   if (bitstream) {
     char cmd[1024];
@@ -309,15 +311,14 @@ int main(int argc,char **argv)
   // slowing things down, at 4mbit/sec we are now too fast for the serial monitor to keep up
   // when receiving stuff
 
-  
   stop_cpu();
 
   load_helper();  
 
   monitor_sync();
-  
+
   sdhc_check();
-  
+
   if (!file_system_found) open_file_system();
   
   if (queued_command_count) {
