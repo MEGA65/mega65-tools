@@ -295,14 +295,11 @@ int main(int argc,char **argv)
 #endif
   }
 
-#ifndef WINDOWS
-  // Set higher speed on serial interface to improve throughput, and make sure
-  // we have reset.
-  set_serial_speed(fd,2000000);
-  slow_write(fd,"\r+9\r",4);
-  set_serial_speed(fd,4000000);
-  monitor_sync();
-#endif
+  // We used to push the interface to 4mbit to speed things up, but that's not needed now.
+  // In fact, with the RX buffering allowing us to fix a bunch of other problems that were
+  // slowing things down, at 4mbit/sec we are now too fast for the serial monitor to keep up
+  // when receiving stuff
+
   
   stop_cpu();
 
@@ -444,15 +441,17 @@ int load_helper(void)
 
       char cmd[1024];
 
-      push_ram(0x0801,helperroutine_len,helperroutine);
+      // Load helper, minus the 2 byte load address header
+      push_ram(0x0801,helperroutine_len-2,&helperroutine[2]);
       
       printf("Helper in memory\n");
-      while(1) continue;
-      
+
       // Launch helper programme
       snprintf(cmd,1024,"g080d\r");
       slow_write(fd,cmd,strlen(cmd));
       wait_for_prompt();
+      
+      
       snprintf(cmd,1024,"t0\r");
       slow_write(fd,cmd,strlen(cmd));
       wait_for_prompt();
