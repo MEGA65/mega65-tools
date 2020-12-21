@@ -61,9 +61,6 @@ char *show_image=NULL;
 int viciv_mode_report(unsigned char *viciv_regs);
 
 int do_screen_shot(void);
-int process_char(unsigned char c,int live);
-int process_line(char *line,int live);
-int process_waiting(PORT_TYPE fd);
 int fpgajtag_main(char *bitstream,char *serialport);
 void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idcode);
 int xilinx_boundaryscan(char *xdc,char *bsdl,char *sensitivity);
