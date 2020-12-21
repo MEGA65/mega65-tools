@@ -336,8 +336,8 @@ int main(int argc,char **argv)
 	len=0;
 	cmd[0]=0;
       }
-      if (c==EOF) break;
-      if (len<8191) {
+      else if (c==EOF) break;
+      else if (len<8191) {
 	cmd[len++]=c;
 	cmd[len]=0;
       }
