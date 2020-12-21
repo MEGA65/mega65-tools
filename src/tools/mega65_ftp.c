@@ -51,6 +51,9 @@ struct m65dirent {
   char            d_name[FILENAME_MAX]; /* File name. */
 };
 
+#define SLOW_FACTOR 1
+#define SLOW_FACTOR2 1
+
 #ifdef WINDOWS
 #include <windows.h>
 #undef SLOW_FACTOR
@@ -140,7 +143,9 @@ int stuff_keybuffer(char *s);
 int get_pc(void);
 unsigned char mega65_peek(unsigned int addr);
 int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer);
+int push_ram(unsigned long address,unsigned int count,unsigned char *buffer);
 
+int no_rxbuff=1;
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -381,6 +386,8 @@ SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
 #else
 int serialport_write(int fd, uint8_t * buffer, size_t size)
 {
+  //  dump_bytes(2,"serialport_write",buffer,size);
+  
 #ifdef __APPLE__
   return write(fd,buffer,size);
 #else
@@ -389,7 +396,7 @@ int serialport_write(int fd, uint8_t * buffer, size_t size)
     int written=write(fd,&buffer[offset],size-offset);
     if (written>0) offset+=written;
     if (offset<size) { usleep(1000);
-      //      printf("Wrote %d bytes\n",written);
+      printf("Wrote %d bytes\n",written);
     }
   }
   return size;
@@ -498,6 +505,56 @@ void usage(void)
   exit(-3);
 }
 
+int rxbuff_detect(void)
+{
+  /*
+    Newer bitstreams finally have buffering on the serial monitor interface.
+    If detected, this means that we can send commands a lot faster.
+  */
+  unsigned char read_buff[8192];
+  
+  monitor_sync();
+  // Send two commands one after the other with no delay.
+  // If we have RX buffering, both commands will execute.
+  // If not, then only the first one will execute
+  printf("Checking if MEGA65 has RX buffer\n");
+  serialport_write(fd,"\025m0\rm1\r",7);
+  do_usleep(20000); // Give plenty of time for things to settle
+  int b=1;
+  while(b>0) {
+    b=serialport_read(fd,read_buff,8192);
+    read_buff[b]=0;
+    if ((strstr((char *)read_buff,":00000000:"))
+	&&(strstr((char *)read_buff,":00000001:"))) {
+      no_rxbuff=0;
+      printf("RX buffer detected.  Latency will be reduced.\n");
+    }
+  }
+  
+}
+
+int in_hypervisor(void)
+{
+  /*
+    Get H flag from register output
+  */
+  if (!no_rxbuff) monitor_sync();
+
+  slow_write_safe(fd,"r\r",2);
+  if (no_rxbuff) do_usleep(50000); else do_usleep(2000);
+  unsigned char buff[8192];
+  int b=serialport_read(fd,buff,8192);
+  if (b<0) b=0;
+  if (b>8191) b=8191;
+  buff[b]=0;
+  //  if (b>0) dump_bytes(2,"H read input",buff,b);
+  char *s=strstr((char *)buff," H ");
+  if (s) return 1;
+  else return 0;
+}
+
+
+
 int monitor_sync(void)
 {
   /* Synchronise with the monitor interface.
@@ -505,22 +562,23 @@ int monitor_sync(void)
   */
 
   unsigned char read_buff[8192];
+  int b=1;
   
   // Begin by sending a null command and purging input
   char cmd[8192];
   cmd[0]=0x15; // ^U
   cmd[1]='#'; // prevent instruction stepping
   cmd[2]=0x0d; // Carriage return
-  do_usleep(20000); // Give plenty of time for things to settle
+  purge_input();
+  if (no_rxbuff) do_usleep(20000); // Give plenty of time for things to settle
   slow_write_safe(fd,cmd,3);
   //  printf("Wrote empty command.\n");
-  do_usleep(20000); // Give plenty of time for things to settle
-  int b=1;
-  // Purge input  
-  //  printf("Purging input.\n");
-  while(b>0) {
-    b=serialport_read(fd,read_buff,8192);
-    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
+  if (no_rxbuff) {
+    do_usleep(20000); // Give plenty of time for things to settle
+    purge_input();
+  } else {
+    wait_for_prompt();
+    purge_input();
   }
 
   for(int tries=0;tries<10;tries++) {
@@ -533,20 +591,29 @@ int monitor_sync(void)
     slow_write_safe(fd,cmd,strlen(cmd));
 
     for(int i=0;i<10;i++) {
-      usleep(10000);
+      if (no_rxbuff) do_usleep(10000*SLOW_FACTOR);
       b=serialport_read(fd,read_buff,8192);
       if (b<0) b=0;
+      if (b<1) { do_usleep(100);
+	b=serialport_read(fd,read_buff,8192);
+	if (b<0) b=0;
+      }
+      if (b<1) { do_usleep(1000);
+	b=serialport_read(fd,read_buff,8192);
+	if (b<0) b=0;
+      }
       if (b>8191) b=8191;
       read_buff[b]=0;
       //      if (b>0) dump_bytes(2,"Sync input",read_buff,b);
       
-      //      if (b>0) dump_bytes(0,"read_data",read_buff,b);
+      // if (b>0) dump_bytes(0,"read_data",read_buff,b);
       if (strstr((char *)read_buff,cmd)) {
 	//	printf("Found token. Synchronised with monitor.\n");
 	return 0;      
       }
     }
-    usleep(10000);
+    if (no_rxbuff) do_usleep(10000*SLOW_FACTOR);
+    else do_usleep(1000);
   }
   printf("Failed to synchronise with the monitor.\n");
   return 1;
@@ -619,6 +686,14 @@ int slow_write(PORT_TYPE fd,char *d,int l,int preWait)
   return 0;
 }
 
+
+
+int mega65_poke(unsigned int addr,unsigned char value)
+{
+return push_ram(addr,1,&value);
+}
+
+
 unsigned char mega65_peek(unsigned int addr)
 {
   unsigned char b;
@@ -661,11 +736,68 @@ unsigned long long gettime_ms()
   return nowtv.tv_sec * 1000LL + nowtv.tv_usec / 1000;
 }
 
+void wait_for_prompt(void)
+{
+  unsigned char read_buff[8192];
+  int b=1;
+  while(1) {
+    b=serialport_read(fd,read_buff,8191);
+    read_buff[b]=0;
+    if (strstr((char *)read_buff,".")) break;      
+  }  
+}
+
+void purge_input(void)
+{
+  unsigned char read_buff[8192];
+  int b=1;
+  while(b>0) {
+    b=serialport_read(fd,read_buff,8191);
+  }
+}
+
 int stop_cpu(void)
 {
+  if (cpu_stopped) {
+    printf("CPU already stopped.\n");
+    return 1;
+  }
   // Stop CPU
-  usleep(50000);
-  slow_write(fd,"t1\r",3,2500);
+  printf("Stopping CPU\n");
+  if (no_rxbuff) do_usleep(50000);
+  slow_write(fd,"t1\r",3,0);
+  if (!no_rxbuff) {
+    unsigned char read_buff[8192];
+    int b=1;
+    while(1) {
+      b=serialport_read(fd,read_buff,8191);
+      read_buff[b]=0;
+      if (strstr((char *)read_buff,"t1\r")) break;      
+    }
+  }
+  cpu_stopped=1;
+  return 0;
+}
+
+int start_cpu(void)
+{
+  // Stop CPU
+  if (cpu_stopped) {
+    timestamp_msg("");
+    fprintf(stderr,"Starting CPU\n");
+  }
+  if (no_rxbuff) do_usleep(50000);
+  slow_write(fd,"t0\r",3,0);
+  if (!no_rxbuff) {
+    unsigned char read_buff[8192];
+    int b=1;
+    while(1) {
+      b=serialport_read(fd,read_buff,8191);
+      read_buff[b]=0;
+      if (strstr((char *)read_buff,"t0\r")) break;      
+    }
+  }
+  cpu_stopped=0;
   return 0;
 }
 
@@ -673,7 +805,7 @@ int restart_hyppo(void)
 {
   // Start executing in new hyppo
   if (!halt) {
-    usleep(50000);
+    do_usleep(50000);
     slow_write(fd,"g8100\r",6,2500);
     usleep(10000);
     slow_write(fd,"t0\r",3,2500);
@@ -970,6 +1102,8 @@ int main(int argc,char **argv)
 
   set_serial_speed(fd,serial_speed);
 #endif
+
+  rxbuff_detect();
   
 #ifndef __APPLE__
 
@@ -1024,8 +1158,8 @@ int main(int argc,char **argv)
   
   stop_cpu();
 
-  load_helper();
-
+  load_helper();  
+  
   monitor_sync();
   
   sdhc_check();
@@ -1142,6 +1276,40 @@ int sdhc_check(void)
   return sdhc;
 }
 
+int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
+{
+  char cmd[8192];
+  fprintf(stderr,"push_ram(0x%04x,0x%04x)\n",address,count);
+  for(unsigned int offset=0;offset<count;)
+    {
+      int b=count-offset;      
+      // Limit to same 64KB slab
+      if (b>(0xffff-((address+offset)&0xffff)))
+	b=(0xffff-((address+offset)&0xffff));
+      if (b>4096) b=4096;
+
+      monitor_sync();
+      
+      if (new_monitor) 
+	sprintf(cmd,"l%lx %lx\r",address+offset,(address+offset+b)&0xffff);
+      else
+	sprintf(cmd,"l%lx %lx\r",address+offset-1,address+offset+b-1);
+      slow_write(fd,cmd,strlen(cmd),0);
+      if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
+      int n=b;
+      unsigned char *p=&buffer[offset];
+      while(n>0) {
+	int w=serialport_write(fd,p,n);
+	if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+      }
+      wait_for_prompt();
+
+      offset+=b;
+    }
+  return 0;
+}
+
+
 int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
   /* Fetch a block of RAM into the provided buffer.
@@ -1257,7 +1425,6 @@ int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *
   
 }
 
-
 int detect_mode(void)
 {
   /*
@@ -1271,21 +1438,60 @@ int detect_mode(void)
   saw_c64_mode=0;
   
   unsigned char mem_buff[8192];
+
+  // Look for OpenROMs
+  fetch_ram(0x20010,16,mem_buff);
+  if (mem_buff[0]=='V'||mem_buff[0]=='O') {
+    mem_buff[9]=0;
+    int date_code=atoi(&mem_buff[1]);
+    if (date_code>2000000) {
+      fprintf(stderr,"Detected OpenROM version %d\n",date_code);
+      saw_c64_mode=1;
+      return 0;
+    }
+  }
+
+  while(in_hypervisor()) do_usleep(1000);
+  
   fetch_ram(0xffd3030,1,mem_buff);
   while(mem_buff[0]&0x01) {
-    fprintf(stderr,"Waiting for MEGA65 KERNAL/OS to settle...\n");
-    do_usleep(200000);
+    timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
+    if (no_rxbuff) do_usleep(200000);
     fetch_ram(0xffd3030,1,mem_buff);    
   }
 
   // Wait for HYPPO to exit
   int d054=mega65_peek(0xffd3054);
   while(d054&7) {
-    do_usleep(50000);
+    if (no_rxbuff) do_usleep(5000); else do_usleep(500);
     d054=mega65_peek(0xffd3054);
   }
   
   
+  fetch_ram(0xffd3030,1,mem_buff);
+  if (mem_buff[0]==0x64) {
+    saw_c65_mode=1;
+    timestamp_msg("");
+    fprintf(stderr,"In C65 Mode.\n");
+    return 0;
+  }
+  
+  // Use screen address to guess mode
+  fetch_ram(0xffd3060,3,mem_buff);
+  if (mem_buff[1]==0x04) {
+    saw_c64_mode=1;
+    timestamp_msg("");
+    fprintf(stderr,"In C64 Mode.\n");
+    return 0;
+  }
+  if (mem_buff[1]=0x08) {
+    saw_c65_mode=1;
+    timestamp_msg("");
+    fprintf(stderr,"In C65 Mode.\n");
+    return 0;
+  }
+
+#if 0
   //  printf("$D030 = $%02X\n",mem_buff[0]);
   if (mem_buff[0]==0x64) {
     // Probably C65 mode
@@ -1303,7 +1509,7 @@ int detect_mode(void)
 	if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
 	else {
 	  //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
-	  do_usleep(100000);
+	  do_usleep(5000);
 	}
       }
     }
@@ -1322,8 +1528,8 @@ int detect_mode(void)
       // XXX Might not work with OpenROMs?
       if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;
       else {
-	//	printf("Odd PC=$%04x\n",pc);
-	usleep(100000);
+	printf("Odd PC=$%04x\n",pc);
+	do_usleep(5000);
       }
     }
     if (in_range>3) {
@@ -1334,10 +1540,35 @@ int detect_mode(void)
       return 0;
     }
   }
-  printf("Could not determine C64/C65/MEGA65 mode.\n");
+#endif
+  
+  timestamp_msg("Could not determine C64/C65/MEGA65 mode.\n");
   return 1;
 }
 
+int switch_to_c64mode(void)
+{
+  printf("Trying to switch to C64 mode...\n");
+  monitor_sync();
+  stuff_keybuffer("GO64\rY\r");    
+  saw_c65_mode=0;
+  //    do_usleep(100000);
+  detect_mode();
+  int count=0;
+  while (!saw_c64_mode) {
+    fprintf(stderr,"WARNING: Failed to switch to C64 mode.\n");
+    monitor_sync();
+    count++;
+    fprintf(stderr,"count=%d\n",count);
+    if (count>0) {
+      fprintf(stderr,"Retyping GO64\n");
+      stuff_keybuffer("\r\rGO64\rY\r");
+      do_usleep(20000);
+      count=0;
+    }
+    detect_mode();
+  }
+}
 
 int load_helper(void)
 {
@@ -1363,39 +1594,18 @@ int load_helper(void)
       detect_mode();
    
       if ((!saw_c64_mode)) {
-	printf("Trying to switch to C64 mode...\n");
-	monitor_sync();
-	stuff_keybuffer("GO64\rY\r");    
-	saw_c65_mode=0;
-	do_usleep(100000);
-	detect_mode();
-	while (!saw_c64_mode) {
-	  fprintf(stderr,"WARNING: Failed to switch to C64 mode.\n");
-	  monitor_sync();
-	  stuff_keybuffer("GO64\rY\r");    
-	  do_usleep(100000);
-	  detect_mode();
-	}
+	start_cpu();
+	switch_to_c64mode();
       }
+
+      stop_cpu();
 
       char cmd[1024];
-      snprintf(cmd,1024,"t1\r");
-      slow_write(fd,cmd,strlen(cmd),500);
 
-      snprintf(cmd,1024,"l0801 %x\r",0x801+helperroutine_len-2);
-      slow_write(fd,cmd,strlen(cmd),500);
-      usleep(10000); // give uart monitor time to get ready for the data
-      process_waiting(fd);
-      int offset=2;
-      while(offset<helperroutine_len) {
-	int written=serialport_write(fd,&helperroutine[offset],helperroutine_len-offset);
-	if (written!=helperroutine_len) {
-	  usleep(10000);
-	}
-	offset+=written;
-      }
-      slow_write(fd,"\r",1,500);
-      process_waiting(fd);
+      push_ram(0x0801,helperroutine_len,helperroutine);
+      
+      printf("Helper in memory\n");
+      while(1) continue;
       
       // Launch helper programme
       snprintf(cmd,1024,"g080d\r");

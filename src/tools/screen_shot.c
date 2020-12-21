@@ -21,6 +21,8 @@
 #include <termios.h>
 #endif
 
+#include "m65common.h"
+
 #define SCREEN_POSITION ((800-720)/2)
 
 int monitor_sync(void);
@@ -616,7 +618,7 @@ void paint_screen_shot(void)
 
 	xc=0;
 	if (glyph_goto) {
-	  x_position=chargen_x+char_value&0x3ff;
+	  x_position=chargen_x+(char_value&0x3ff);
 	  transparent_background=colour_value&0x8000;
 	} else
 	for(float xx=0;xx<glyph_width;xx+=x_step) {

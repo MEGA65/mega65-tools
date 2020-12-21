@@ -40,8 +40,12 @@
 #include <inttypes.h>
 #include <unistd.h>
 #include <dirent.h>
+
+#include "m65common.h"
+
 #ifdef WINDOWS 
 #include <winsock.h>
+
 
 u_long htonl(u_long x)
 {
