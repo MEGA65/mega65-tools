@@ -82,12 +82,6 @@ FILE *__imp___acrt_iob_func(void)
 }
 #endif
 
-#ifdef __APPLE__
-static const int B1000000 = 1000000;
-static const int B1500000 = 1500000;
-static const int B2000000 = 2000000;
-static const int B4000000 = 4000000;
-#endif
 time_t start_time=0;
 
 int no_rxbuff=1;
@@ -1069,7 +1063,7 @@ void set_serial_speed(int fd,int serial_speed)
   
 #ifdef __APPLE__
   speed_t speed = serial_speed;
-  fprintf(stderr,"Setting serial speed to %d bps using OSX method.\n",speed); 
+  fprintf(stderr,"Setting serial speed to %d bps using OSX method.\n",(int)speed); 
   if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
     perror("Failed to set output baud rate using IOSSIOSPEED");
   }
