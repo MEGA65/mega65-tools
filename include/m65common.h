@@ -1,9 +1,13 @@
 
+
 #ifdef WINDOWS
+#include <windows.h>
+#define SSIZE_T SIZE_T
 #define PORT_TYPE HANDLE
 SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
 int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
 #else
+#define SSIZE_T size_t
 #define PORT_TYPE int
 size_t serialport_read(int fd, uint8_t * buffer, size_t size);
 int serialport_write(int fd, uint8_t * buffer, size_t size);

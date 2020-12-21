@@ -245,8 +245,6 @@ int virtual_f011_read(int device,int track,int sector,int side)
 	
 	  //      dump_bytes(0,"The sector",buf,512);
 	
-	  char cmd[1024];
-	
 	  /* send block to m65 memory */
 	  push_ram(READ_SECTOR_BUFFER_ADDRESS,0x200,buf);
 #ifdef WINDOWS       
@@ -500,7 +498,9 @@ void do_type_text(char *type_text)
 {
   fprintf(stderr,"Typing text via virtual keyboard...\n");
 
+#ifndef WINDOWS
   int use_line_mode=0;
+#endif
   
   if (!strcmp(type_text,"-")) {
 #ifndef WINDOWS
@@ -1365,7 +1365,7 @@ int main(int argc,char **argv)
 
 	unsigned int start_addr=(sid_header[0x0a-0x02]<<8)+sid_header[0x0b-0x02];
 	unsigned int play_addr=(sid_header[0x0c-0x02]<<8)+sid_header[0x0d-0x02];
-	unsigned int play_speed=sid_header[0x12-0x02];
+	//	unsigned int play_speed=sid_header[0x12-0x02];
 
 	char *name=(char *)&sid_header[0x16-0x02];
 	char *author=(char *)&sid_header[0x36-0x02];
