@@ -700,7 +700,7 @@ void queue_read_sectors(uint32_t sector_number,uint16_t sector_count)
   job[4]=sector_number>>8;
   job[5]=sector_number>>16;
   job[6]=sector_number>>24;
-  printf("queue reading %d sectors, beginning with sector $%08x\n",sector_count,sector_number);
+  //  printf("queue reading %d sectors, beginning with sector $%08x\n",sector_count,sector_number);
   queue_add_job(job,7);
 }
 
@@ -746,9 +746,10 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
     // Request multiple sectors at once to make it more efficient
     int batch_read_size=16;
 
-    for (int n=0;n<batch_read_size;n++)
-      queue_read_sector(sector_number+n,0x40000+(n<<9));
-    queue_read_mem(0x40000,512*batch_read_size);
+    //    for (int n=0;n<batch_read_size;n++)
+    //      queue_read_sector(sector_number+n,0x40000+(n<<9));
+    //    queue_read_mem(0x40000,512*batch_read_size);
+    queue_read_sectors(sector_number,batch_read_size);
     queue_execute();
 
     for(int n=0;n<batch_read_size;n++) {

@@ -70,7 +70,7 @@ uint8_t bo=0;
 void rle_write_string(uint32_t buffer_address,uint32_t transfer_size)
 {
   lcopy(buffer_address,(uint32_t)local_buffer,256);
-  lcopy(buffer_address,(uint32_t)0x4a0,256);
+  
   POKE(0xD610,0);
   while (transfer_size) {
     
@@ -78,7 +78,7 @@ void rle_write_string(uint32_t buffer_address,uint32_t transfer_size)
     if (transfer_size&0x7f) block_len=transfer_size&0x7f;
     else block_len=0x80;
 
-    printf("transfer_size=%d, block_len=%d\n",transfer_size,block_len);
+    //     printf("transfer_size=%d, block_len=%d,ba=$%x\n",transfer_size,block_len,buffer_address);
     
     transfer_size-=block_len;
     
@@ -165,6 +165,7 @@ void rle_write_string(uint32_t buffer_address,uint32_t transfer_size)
       if (iofs==0xff) {
 	buffer_address+=256;
 	lcopy(buffer_address,(long)&local_buffer[0],256);
+
 	iofs=0;
       } else iofs++;
     }
@@ -231,8 +232,6 @@ void main(void)
 #if DEBUG
       printf("Received list of %d jobs.\n",job_count);
 #endif
-      POKE(0x0428,PEEK(0x428)+1);
-      POKE(0x0400,job_count);
       job_addr=0xc001;
       for(j=0;j<job_count;j++) {
 	if (job_addr>0xcfff) break;
@@ -282,7 +281,6 @@ void main(void)
 	  printf("$%04x : Read sector $%08lx into mem $%07lx\n",*(uint16_t *)0xDC08,
 		 sector_number,buffer_address);
 #endif
-	  POKE(0x042a,PEEK(0x42a)+1);
 	  // Do read
 	  *(uint32_t *)0xD681 = sector_number;	  
 	  POKE(0xD680,0x02);
@@ -318,13 +316,12 @@ void main(void)
 
 	  // Reset RLE state
 	  rle_init();
-	  
+
 	  snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-7,sector_count*0x200L);
 	  serial_write_string(msg,strlen(msg));	    
 
 	  while(sector_count||buffer_ready||read_pending)
 	    {
-	      POKE(0x0424,PEEK(0x0424)+1);
 	      if (sector_count&&(!read_pending))
 		if (!(PEEK(0xD680)&0x03)) {
 		  // Schedule reading of next sector
@@ -332,37 +329,32 @@ void main(void)
 		  POKE(0xD020,PEEK(0xD020)+1);
  
 		  // Do read
-		  *(uint32_t *)0xD681 = sector_number;	  
-		  POKE(0xD680,0x02);
+		  *(uint32_t *)0xD681 = sector_number;
+
 		  read_pending=1;
 		  sector_count--;
 
-		  printf("reading sector $%x, %d to go\n",sector_number,sector_count);
-
-		  sector_number++;
-
-#if 0
+		  POKE(0xD680,0x02);
 		  // Wait for SD card to go busy
 		  while (!(PEEK(0xD680)&0x03)) {
-		    POKE(0x0423,PEEK(0x0423)+1);
 		    continue;
 		  }
-#endif
+		  
+		  sector_number++;
+
 		}
 	      if (read_pending&&(!buffer_ready)) {
-		POKE(0x0427,PEEK(0x0427)+1);
 		
 		// Read is complete, now queue it for sending back
 		if (!(PEEK(0xD680)&0x03)) {
 		  // Sector has been read. Copy it to a local buffer for sending,
 		  // so that we can send it while reading the next sector
-		  //		  lcopy(0xffd6e00,(long)&temp_sector_buffer[0],0x200);
+		  lcopy(0xffd6e00,(long)&temp_sector_buffer[0],0x200);
 		  read_pending=0;
 		  buffer_ready=1;
 		}
 	      }
 	      if (buffer_ready) {
-		POKE(0x0426,PEEK(0x0426)+1);
 		
 		// XXX - Just send it all in one go, since we don't buffer multiple
 		// sectors
@@ -371,7 +363,6 @@ void main(void)
 	      }
 	    }
 
-	  POKE(0x0425,PEEK(0x0425)+1);	  
 	  rle_finalise();
 	  
 #if DEBUG
