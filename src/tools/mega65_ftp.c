@@ -43,6 +43,12 @@
 
 #include "m65common.h"
 
+#define SECTOR_CACHE_SIZE 4096
+int sector_cache_count=0;
+unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
+unsigned int sector_cache_sectors[SECTOR_CACHE_SIZE];
+
+
 struct m65dirent {
   long            d_ino;		/* start cluster */
   long            d_filelen;		/* length of file */
@@ -208,6 +214,8 @@ int execute_command(char *cmd)
     rename_file(src,dst);
   }
   else if (sscanf(cmd,"sector %d",&sector_num)==1) {
+    // Clear cache to force re-reading
+    sector_cache_count = 0;
     show_sector(sector_num);
   }
   else if (sscanf(cmd,"sector $%x",&sector_num)==1) {
@@ -506,27 +514,10 @@ void queue_data_decode(uint8_t v)
 
 void queue_add_job(uint8_t *j,int len)
 {
-  int b;
-  uint8_t read_buff[8192];
-
-  b=1;
-  while(b>0) {
-    b=serialport_read(fd,read_buff,8192);
-    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
-  }
-
   bcopy(j,&queue_cmds[queue_addr-0xc001],len);
   queue_jobs++;
   queue_addr+=len;
-  //  printf("remote job queued.\n");
-
-  b=1;
-  while(b>0) {
-    b=serialport_read(fd,read_buff,8192);
-    //    if (b>0) dump_bytes(2,"Purged input",read_buff,b);
-  }
-  
-  
+  //  printf("remote job queued.\n");  
 }
 
 void job_process_results(void)
@@ -598,8 +589,16 @@ void queue_execute(void)
   
   // Push queued jobs in on go
   push_ram(0xc001,queue_addr-0xc001,queue_cmds);
+
   // Then set number of jobs to execute them
-  mega65_poke(0xc000,queue_jobs);
+  // mega65_poke will try to read data after from on the
+  // serial interface, which messes up the protocol.
+  // so don't do that.
+  char cmd[1024];
+  snprintf(cmd,1024,"sc000 %x\r",queue_jobs);
+  slow_write(fd,cmd,strlen(cmd));
+
+  //  printf("queue_jobs=%d\n",queue_jobs);
   
   job_process_results();
   queue_addr=0xc001;
@@ -623,6 +622,7 @@ void queue_physical_write_sector(uint32_t sector_number,uint32_t mega65_address)
   job[2]=mega65_address>>8;
   job[3]=mega65_address>>16;
   job[4]=mega65_address>>24;
+  printf("queue writing to sector $%08x\n",sector_number);
   queue_add_job(job,9);
 }
 
@@ -686,7 +686,22 @@ void queue_read_sector(uint32_t sector_number,uint32_t mega65_address)
   job[2]=mega65_address>>8;
   job[3]=mega65_address>>16;
   job[4]=mega65_address>>24;
+  //  printf("queue reading from sector $%08x into MEM @ $%08x\n",sector_number,mega65_address);
   queue_add_job(job,9);
+}
+
+void queue_read_sectors(uint32_t sector_number,uint16_t sector_count)
+{
+  uint8_t job[7];
+  job[0]=0x03;
+  job[1]=sector_count>>0;
+  job[2]=sector_count>>8;
+  job[3]=sector_number>>0;
+  job[4]=sector_number>>8;
+  job[5]=sector_number>>16;
+  job[6]=sector_number>>24;
+  printf("queue reading %d sectors, beginning with sector $%08x\n",sector_count,sector_number);
+  queue_add_job(job,7);
 }
 
 void queue_read_mem(uint32_t mega65_address,uint32_t len)
@@ -701,14 +716,10 @@ void queue_read_mem(uint32_t mega65_address,uint32_t len)
   job[6]=len>>8;
   job[7]=len>>16;
   job[8]=len>>24;
+  //  printf("queue reading mem @ $%08x (len = %d)\n",mega65_address,len);
   queue_add_job(job,9);
 }
 
-
-#define SECTOR_CACHE_SIZE 4096
-int sector_cache_count=0;
-unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
-unsigned int sector_cache_sectors[SECTOR_CACHE_SIZE];
 
 // XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
 int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCacheP)
@@ -734,8 +745,8 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
     // lower latency than the old way
     // Request multiple sectors at once to make it more efficient
     int batch_read_size=16;
-    
-    for(int n=0;n<batch_read_size;n++)
+
+    for (int n=0;n<batch_read_size;n++)
       queue_read_sector(sector_number+n,0x40000+(n<<9));
     queue_read_mem(0x40000,512*batch_read_size);
     queue_execute();

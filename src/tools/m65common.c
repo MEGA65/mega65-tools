@@ -631,7 +631,7 @@ int breakpoint_wait(void)
 
 int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
-  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
+  //  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
 
   char cmd[8192];
   for(unsigned int offset=0;offset<count;)
@@ -648,7 +648,6 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	sprintf(cmd,"l%lx %lx\r",address+offset,(address+offset+b)&0xffff);
       else
 	sprintf(cmd,"l%lx %lx\r",address+offset-1,address+offset+b-1);
-      fprintf(stderr,"  %s\n",cmd);
       slow_write(fd,cmd,strlen(cmd));
       if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
       int n=b;
