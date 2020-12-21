@@ -47,10 +47,155 @@ char msg[80+1];
 
 uint32_t buffer_address,sector_number,transfer_size;
 
+uint8_t temp_sector_buffer[0x200];
+
 uint8_t rle_count=0,a;
 uint8_t olen=0,iofs=0,last_value=0;
 uint8_t obuf[0x80];
-uint8_t local_buffer[0x100];
+uint8_t local_buffer[256];
+
+uint8_t buffer_ready=0;
+uint16_t sector_count=0;
+uint8_t read_pending=0;
+
+void rle_init(void)
+{
+  olen=0; iofs=0;
+  last_value=0xFF; rle_count=0;
+}
+
+uint8_t block_len=0;
+uint8_t bo=0;
+
+void rle_write_string(uint32_t buffer_address,uint32_t transfer_size)
+{
+  lcopy(buffer_address,(uint32_t)local_buffer,256);
+  lcopy(buffer_address,(uint32_t)0x4a0,256);
+  POKE(0xD610,0);
+  while (transfer_size) {
+    
+    // Use tight inner loop to send more quickly
+    if (transfer_size&0x7f) block_len=transfer_size&0x7f;
+    else block_len=0x80;
+
+    printf("transfer_size=%d, block_len=%d\n",transfer_size,block_len);
+    
+    transfer_size-=block_len;
+    
+    for(bo=0;bo<block_len;bo++) {
+#if DEBUG>1
+      printf("olen=%d, rle_count=%d, last=$%02x, byte=$%02x\n",
+	     olen,rle_count,last_value,local_buffer[iofs]);
+      while(!PEEK(0xD610)) continue; POKE(0xD610,0);
+#endif
+      if (olen==127)
+	{
+	  // Write out 0x00 -- 0x7F as length of non RLE bytes,
+	  // followed by the bytes
+#if DEBUG>1
+	  printf("$%02x raw\n",olen);
+#endif
+	  SERIAL_WRITE(olen);
+	  for(a=0;a<0x80;a++) {
+	    c=obuf[a];
+	    SERIAL_DELAY;
+	    SERIAL_WRITE(c);
+	  }
+	  olen=0;
+	  rle_count=0;
+	}
+
+      if (rle_count==127) {
+	// Flush a full RLE buffer
+#if DEBUG>1
+	printf("$%02x x $%02x\n",rle_count,last_value);
+#endif
+	c=0x80|rle_count;
+	SERIAL_WRITE(c);
+	SERIAL_DELAY;
+	SERIAL_WRITE(last_value);
+#if DEBUG>1
+	printf("Wrote $%02x, $%02x\n",c,last_value);
+#endif
+	rle_count=0;
+      }
+      obuf[olen++]=local_buffer[iofs];
+      if (local_buffer[iofs]==last_value) {
+	rle_count++;
+	if (rle_count==3) {
+	  // Switch from raw to RLE, flushing any pending raw bytes
+	  if (olen>3) olen-=3; else olen=0;
+#if DEBUG>1
+	  printf("Flush $%02x raw %02x %02x %02x ...\n",olen,
+		 obuf[0],obuf[1],obuf[2]);
+#endif
+	  if (olen) {
+	    SERIAL_WRITE(olen);
+	    for(a=0;a<olen;a++) {
+	      c=obuf[a];
+	      SERIAL_DELAY;
+	      SERIAL_WRITE(c);
+	    }
+	  }
+	  olen=0;		
+	} else if (rle_count<3) {
+	  // Don't do anything yet, as we haven't yet flipped to RLE coding
+	} else {
+	  // rle_count>3, so keep accumulating RLE data
+	  olen--;
+	}
+      } else {
+	// Flush any accumulated RLE data
+	if (rle_count>2) {
+#if DEBUG>1
+	  printf("$%02x x $%02x\n",rle_count,last_value);
+#endif
+	  c=0x80|rle_count;
+	  SERIAL_WRITE(c);
+	  SERIAL_DELAY;
+	  SERIAL_WRITE(last_value);
+	}
+	// 1 of the new byte seen
+	rle_count=1;
+      }
+      
+      last_value=local_buffer[iofs];
+      
+      // Advance and keep buffer primed
+      if (iofs==0xff) {
+	buffer_address+=256;
+	lcopy(buffer_address,(long)&local_buffer[0],256);
+	iofs=0;
+      } else iofs++;
+    }
+  }
+}
+
+void rle_finalise(void)
+{   
+  // Flush any accumulated RLE data
+  if (rle_count>2) {
+#if DEBUG>1
+    printf("Terminal $%02x x $%02x\n",rle_count,last_value);
+#endif
+    c=0x80|rle_count;
+    SERIAL_WRITE(c);
+    SERIAL_DELAY;
+    SERIAL_WRITE(last_value);
+  } else if (olen) {
+#if DEBUG>1
+    printf("Terminal flush $%02x raw %02x %02x %02x ...\n",olen,
+	   obuf[0],obuf[1],obuf[2]);
+#endif
+    SERIAL_WRITE(olen);
+    for(a=0;a<olen;a++) {
+      c=obuf[a];
+      SERIAL_DELAY;
+      SERIAL_WRITE(c);
+    }
+  }
+}
+
 
 void main(void)
 {
@@ -86,6 +231,8 @@ void main(void)
 #if DEBUG
       printf("Received list of %d jobs.\n",job_count);
 #endif
+      POKE(0x0428,PEEK(0x428)+1);
+      POKE(0x0400,job_count);
       job_addr=0xc001;
       for(j=0;j<job_count;j++) {
 	if (job_addr>0xcfff) break;
@@ -134,7 +281,8 @@ void main(void)
 #if DEBUG
 	  printf("$%04x : Read sector $%08lx into mem $%07lx\n",*(uint16_t *)0xDC08,
 		 sector_number,buffer_address);
-#endif	  
+#endif
+	  POKE(0x042a,PEEK(0x42a)+1);
 	  // Do read
 	  *(uint32_t *)0xD681 = sector_number;	  
 	  POKE(0xD680,0x02);
@@ -155,6 +303,91 @@ void main(void)
 #endif
 	  
 	  break;
+	case 0x03:
+	  // Read sectors and stream
+	  job_addr++;
+	  sector_count=*(uint16_t *)job_addr;
+	  job_addr+=2;
+	  sector_number=*(uint32_t *)job_addr;
+	  job_addr+=4;
+
+	  // Begin with no bytes to send
+	  buffer_ready=0;
+	  // and no sector in progress being read
+	  read_pending=0;
+
+	  // Reset RLE state
+	  rle_init();
+	  
+	  snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-7,sector_count*0x200L);
+	  serial_write_string(msg,strlen(msg));	    
+
+	  while(sector_count||buffer_ready||read_pending)
+	    {
+	      POKE(0x0424,PEEK(0x0424)+1);
+	      if (sector_count&&(!read_pending))
+		if (!(PEEK(0xD680)&0x03)) {
+		  // Schedule reading of next sector
+
+		  POKE(0xD020,PEEK(0xD020)+1);
+ 
+		  // Do read
+		  *(uint32_t *)0xD681 = sector_number;	  
+		  POKE(0xD680,0x02);
+		  read_pending=1;
+		  sector_count--;
+
+		  printf("reading sector $%x, %d to go\n",sector_number,sector_count);
+
+		  sector_number++;
+
+#if 0
+		  // Wait for SD card to go busy
+		  while (!(PEEK(0xD680)&0x03)) {
+		    POKE(0x0423,PEEK(0x0423)+1);
+		    continue;
+		  }
+#endif
+		}
+	      if (read_pending&&(!buffer_ready)) {
+		POKE(0x0427,PEEK(0x0427)+1);
+		
+		// Read is complete, now queue it for sending back
+		if (!(PEEK(0xD680)&0x03)) {
+		  // Sector has been read. Copy it to a local buffer for sending,
+		  // so that we can send it while reading the next sector
+		  //		  lcopy(0xffd6e00,(long)&temp_sector_buffer[0],0x200);
+		  read_pending=0;
+		  buffer_ready=1;
+		}
+	      }
+	      if (buffer_ready) {
+		POKE(0x0426,PEEK(0x0426)+1);
+		
+		// XXX - Just send it all in one go, since we don't buffer multiple
+		// sectors
+		rle_write_string(temp_sector_buffer,0x200);
+		buffer_ready = 0;		
+	      }
+	    }
+
+	  POKE(0x0425,PEEK(0x0425)+1);	  
+	  rle_finalise();
+	  
+#if DEBUG
+	  printf("$%04x : Read sector $%08lx into mem $%07lx\n",*(uint16_t *)0xDC08,
+		 sector_number,buffer_address);
+#endif
+
+	  snprintf(msg,80,"ftjobdone:%04x:\n\r",job_addr-9);
+	  serial_write_string(msg,strlen(msg));
+
+#if DEBUG
+	  printf("$%04x : Read sector done\n",*(uint16_t *)0xDC08);
+#endif
+	  
+	  break;
+
 	case 0x11:
 	  // Send block of memory
 	  job_addr++;
@@ -173,118 +406,9 @@ void main(void)
 	  serial_write_string(msg,strlen(msg));	    
 	  
 	  // Set up buffers
-	  olen=0; iofs=0;
-	  last_value=0xFF; rle_count=0;
-	  lcopy(buffer_address,(uint32_t)local_buffer,256);
-	  POKE(0xD610,0);
-	  while (transfer_size--) {
-#if DEBUG>1
-	    printf("olen=%d, rle_count=%d, last=$%02x, byte=$%02x\n",
-		   olen,rle_count,last_value,local_buffer[iofs]);
-	    while(!PEEK(0xD610)) continue; POKE(0xD610,0);
-#endif
-	    if (olen==127)
-	      {
-		// Write out 0x00 -- 0x7F as length of non RLE bytes,
-		// followed by the bytes
-#if DEBUG>1
-		printf("$%02x raw\n",olen);
-#endif
-		SERIAL_WRITE(olen);
-		for(a=0;a<0x80;a++) {
-		  c=obuf[a];
-		  SERIAL_DELAY;
-		  SERIAL_WRITE(c);
-		}
-		olen=0;
-		rle_count=0;
-	      }
-	    // XXX We have trouble with $FF RLE bytes not being received for some reason.
-	    if (rle_count==127) {
-	      // Flush a full RLE buffer
-#if DEBUG>1
-	      printf("$%02x x $%02x\n",rle_count,last_value);
-#endif
-	      c=0x80|rle_count;
-	      SERIAL_WRITE(c);
-	      SERIAL_DELAY;
-	      SERIAL_WRITE(last_value);
-#if DEBUG>1
-	      printf("Wrote $%02x, $%02x\n",c,last_value);
-#endif
-	      rle_count=0;
-	    }
-	    obuf[olen++]=local_buffer[iofs];
-	    if (local_buffer[iofs]==last_value) {
-	      rle_count++;
-	      if (rle_count==3) {
-		// Switch from raw to RLE, flushing any pending raw bytes
-		if (olen>3) olen-=3; else olen=0;
-#if DEBUG>1
-		printf("Flush $%02x raw %02x %02x %02x ...\n",olen,
-		       obuf[0],obuf[1],obuf[2]);
-#endif
-		if (olen) {
-		  SERIAL_WRITE(olen);
-		  for(a=0;a<olen;a++) {
-		    c=obuf[a];
-		    SERIAL_DELAY;
-		    SERIAL_WRITE(c);
-		  }
-		}
-		olen=0;		
-	      } else if (rle_count<3) {
-		// Don't do anything yet, as we haven't yet flipped to RLE coding
-	      } else {
-		// rle_count>3, so keep accumulating RLE data
-		olen--;
-	      }
-	    } else {
-	      // Flush any accumulated RLE data
-	      if (rle_count>2) {
-#if DEBUG>1
-		printf("$%02x x $%02x\n",rle_count,last_value);
-#endif
-		c=0x80|rle_count;
-		SERIAL_WRITE(c);
-		SERIAL_DELAY;
-		SERIAL_WRITE(last_value);
-	      }
-	      // 1 of the new byte seen
-	      rle_count=1;
-	    }
-
-	    last_value=local_buffer[iofs];
-	    
-	    // Advance and keep buffer primed
-	    buffer_address++;
-	    if (iofs==0xff) {
-	      lcopy(buffer_address,local_buffer,256);
-	      iofs=0;
-	    } else iofs++;
-	  }
-
-	  // Flush any accumulated RLE data
-	  if (rle_count>2) {
-#if DEBUG>1
-	    printf("Terminal $%02x x $%02x\n",rle_count,last_value);
-#endif
-	    c=0x80|rle_count;
-	    SERIAL_WRITE(c);
-	    SERIAL_DELAY;
-	    SERIAL_WRITE(last_value);
-	  } else if (olen) {
-#if DEBUG>1
-	    printf("Terminal flush $%02x raw %02x %02x %02x ...\n",olen,
-		   obuf[0],obuf[1],obuf[2]);
-#endif
-	    SERIAL_WRITE(olen);
-	    for(a=0;a<olen;a++) {
-	      c=obuf[a];
-	      SERIAL_DELAY;
-	      SERIAL_WRITE(c);
-	    }
-	  }
+	  rle_init();
+	  rle_write_string(buffer_address,transfer_size);
+	  rle_finalise();
 	 
 	  snprintf(msg,80,"ftjobdone:%04x:\n\r",job_addr-9);
 	  serial_write_string(msg,strlen(msg));
