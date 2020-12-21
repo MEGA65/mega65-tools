@@ -23,7 +23,8 @@
 #define DEBUG 0
 
 // Slight delay between chars for old HYPPO versions that lack ready check on serial write
-#define SERIAL_DELAY for(aa=0;aa!=5;aa++) continue;
+#define SERIAL_DELAY
+// #define SERIAL_DELAY for(aa=0;aa!=5;aa++) continue;
 uint8_t aa;
 // Write a char to the serial monitor interface
 #define SERIAL_WRITE(the_char) { __asm__ ("LDA %v",the_char); __asm__ ("STA $D643"); __asm__ ("NOP"); }
