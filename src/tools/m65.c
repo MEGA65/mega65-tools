@@ -56,7 +56,7 @@ int halt=0;
 
 int usedk=0;
 
-char *show_image=NULL;
+char *load_binary=NULL;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
@@ -70,7 +70,7 @@ void do_exit(int retval);
 void usage(void)
 {
   fprintf(stderr,"MEGA65 cross-development tool.\n");
-  fprintf(stderr,"usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] [-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>]\n");
+  fprintf(stderr,"usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k <hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] [-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr]\n");
   fprintf(stderr,"  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr,"  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr,"       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
@@ -108,6 +108,7 @@ void usage(void)
   fprintf(stderr,"  -f - Specify which FPGA to reconfigure when calling fpgajtag\n");
   fprintf(stderr,"  -S - Show the text-mode screen\n");
   fprintf(stderr,"  -Z - Zap (reconfigure) FPGA from specified hex address in flash.\n");
+  fprintf(stderr,"  -@ - Load a binary file at a specific address.\n");
   fprintf(stderr,"  filename - Load and run this file in C64 mode before exiting.\n");
   fprintf(stderr,"\n");
   exit(-3);
@@ -880,7 +881,7 @@ int main(int argc,char **argv)
   while ((opt = getopt(argc, argv, "@:14aA:B:b:c:C:d:EFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
     case 'h': case '?': usage();
-    case '@': show_image=optarg;      
+    case '@': load_binary=optarg;      
     case 'a': show_audio_mixer=1; break;
     case 'A': set_mixer_args=optarg;
     case 'X': hyppo_report=1; break;
@@ -1137,22 +1138,26 @@ int main(int argc,char **argv)
     This means 640x480 requires ~300KB, plus the 9.6K screen and 9.6K colour data.
 
   */
-  if (show_image) {
+  if (load_binary) {
 
-    // 1. Load image file in its entirety at $0400
+    char filename[1024];
+    int load_addr=0;
+
+    if (sscanf(load_binary,"%[^@]@%x",filename,&load_addr)!=2) {
+      fprintf(stderr,"ERROR: -@ option format is file@hexaddr\n");
+      usage();
+    }
     
     enter_hypervisor_mode();
     if (romfile) {
       // Un-protect
       mega65_poke(0xffd367d,mega65_peek(0xffd367d)&(0xff-4));
 
-      // Load image at $0400 to maximise space.
-      load_file(show_image,0x00400,0);
+      load_file(filename,load_addr,0);
 	
       return_from_hypervisor_mode();
     }
 
-    // 2. Setup screen RAM, colour RAM and video mode
   }
   
   
