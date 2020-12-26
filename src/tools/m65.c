@@ -881,7 +881,7 @@ int main(int argc,char **argv)
   while ((opt = getopt(argc, argv, "@:14aA:B:b:c:C:d:EFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
     case 'h': case '?': usage();
-    case '@': load_binary=optarg;      
+    case '@': load_binary=optarg; break;
     case 'a': show_audio_mixer=1; break;
     case 'A': set_mixer_args=optarg;
     case 'X': hyppo_report=1; break;
