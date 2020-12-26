@@ -332,9 +332,8 @@ int load_file(char *filename,int load_addr,int patchHyppo)
       sprintf(cmd,"l%x %x\r",load_addr,(load_addr+b)&0xffff);
     else    
       sprintf(cmd,"l%x %x\r",munged_load_addr-1,(munged_load_addr+b-1)&0xffff);
-    // printf("  command ='%s'\n",cmd);
+    //    printf("  command ='%s'\n  b=%d\n",cmd,b);
     slow_write(fd,cmd,strlen(cmd));
-    wait_for_prompt();
     int n=b;
     unsigned char *p=buf;
     while(n>0) {
@@ -1002,7 +1001,7 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
     if (written>0) offset+=written;
     if (offset<size) {
       // Assume buffer is full, so wait a little while
-      usleep(1000);
+      //      usleep(1000);
     }
   }
   success = FlushFileBuffers(port);
