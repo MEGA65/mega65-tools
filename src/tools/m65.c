@@ -840,7 +840,6 @@ void enter_hypervisor_mode(void)
   stop_cpu();
   slow_write_safe(fd,"sffd367e 0\r",11);
   slow_write_safe(fd,"\r",1);
-  fprintf(stderr,"Foo!\n");
 }
 
 void return_from_hypervisor_mode(void)
@@ -1139,7 +1138,7 @@ int main(int argc,char **argv)
 
   */
   if (load_binary) {
-
+    
     char filename[1024];
     int load_addr=0;
 
@@ -1149,15 +1148,14 @@ int main(int argc,char **argv)
     }
     
     enter_hypervisor_mode();
-    if (romfile) {
-      // Un-protect
-      mega65_poke(0xffd367d,mega65_peek(0xffd367d)&(0xff-4));
 
-      load_file(filename,load_addr,0);
-	
-      return_from_hypervisor_mode();
-    }
-
+    // Un-protect ROM area
+    mega65_poke(0xffd367d,mega65_peek(0xffd367d)&(0xff-4));
+    
+    load_file(filename,load_addr,0);
+    fprintf(stderr,"Loaded file '%s' @ $%x\n",filename,load_addr);
+    
+    return_from_hypervisor_mode();
   }
   
   
