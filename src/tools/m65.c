@@ -48,6 +48,12 @@
 
 #include "m65common.h"
 
+extern int pending_vf011_read;
+extern int pending_vf011_device;
+extern int pending_vf011_track;
+extern int pending_vf011_sector;
+extern int pending_vf011_side;
+
 int osk_enable=0;
 
 int not_already_loaded=1;
@@ -195,6 +201,8 @@ int last_virtual_side=-1;
 int virtual_f011_read(int device,int track,int sector,int side)
 {
 
+  pending_vf011_read=0;
+  
   long long start=gettime_ms();
 
 #ifdef WINDOWS
@@ -259,7 +267,7 @@ int virtual_f011_read(int device,int track,int sector,int side)
     }
 
   /* signal done/result */
-  mega65_poke(0xffd3068,side);
+  mega65_poke(0xffd3086,side&0x7f);
 
   timestamp_msg("Finished V-FDC read.\n");
 
@@ -1257,6 +1265,7 @@ int main(int argc,char **argv)
     switch_to_c64mode();
   }
 
+#if 0
   // Increase serial speed, if possible
 #ifndef WINDOWS
   if (virtual_f011&&serial_speed==2000000) {
@@ -1266,7 +1275,8 @@ int main(int argc,char **argv)
     serial_speed=4000000;
   }
 #endif
-
+#endif
+  
   // OSK enable
   if (osk_enable) { mega65_poke(0xffd361f,0xff); printf("OSK Enabled\n"); }  
 
@@ -1639,6 +1649,28 @@ int main(int argc,char **argv)
   }
   
   // XXX - loop for virtualisation, JTAG boundary scanning etc
+
+  if (virtual_f011) {
+    fprintf(stderr,"Entering virtualised F011 wait loop...\n");
+    while(1) {
+      unsigned char buff[8192];
+      int b=serialport_read(fd,buff,8192);
+      if (b>0) dump_bytes(2,"VF011 wait",buff,b);
+      if (b==4&&(buff[3]=='!')) {
+	// Handle request
+	pending_vf011_read=1;
+	pending_vf011_device=0;
+	pending_vf011_track=buff[0]&0x7f;
+	pending_vf011_sector=buff[1]&0x7f;
+	pending_vf011_side=buff[2]&0x7f;
+	while (pending_vf011_read) {
+	  virtual_f011_read(pending_vf011_device,pending_vf011_track,
+			    pending_vf011_sector,pending_vf011_side);
+	}
+      }
+      continue;
+    }
+  }
   
   do_exit(0);
 }

@@ -195,14 +195,35 @@ long long gettime_us()
   return retVal;
 }
 
+int pending_vf011_read=0;
+int pending_vf011_device=0;
+int pending_vf011_track=0;
+int pending_vf011_sector=0;
+int pending_vf011_side=0;
+
 void wait_for_prompt(void)
 {
   unsigned char read_buff[8192];
   int b=1;
   while(1) {
     b=serialport_read(fd,read_buff,8191);
+    //    if (b>0) dump_bytes(0,"wait_for_prompt",read_buff,b);
     read_buff[b]=0;
-    if (strstr((char *)read_buff,".")) break;      
+    // Check for Virtual F011 requests coming through
+    for (int i=3;i<b;i++) {
+      if (read_buff[i]=='!') {
+	if ((read_buff[i-1]&read_buff[i-2]&read_buff[i-3])&0x80) {
+	  pending_vf011_read=1;
+	  pending_vf011_device=0;
+	  pending_vf011_track=read_buff[i-3]&0x7f;
+	  pending_vf011_sector=read_buff[i-2]&0x7f;
+	  pending_vf011_side=read_buff[i-1]&0x7f;	  
+	}
+      }
+    }
+    if (strstr((char *)read_buff,".")) {
+      break;
+    }
   }  
 }
 
@@ -624,7 +645,7 @@ int breakpoint_wait(void)
 
 int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
-  //  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
+  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
 
   char cmd[8192];
   for(unsigned int offset=0;offset<count;)
@@ -635,17 +656,23 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	b=(0xffff-((address+offset)&0xffff));
       if (b>4096) b=4096;
 
-      if (new_monitor) 
-	sprintf(cmd,"l%lx %lx\r",address+offset,(address+offset+b)&0xffff);
-      else
-	sprintf(cmd,"l%lx %lx\r",address+offset-1,address+offset+b-1);
-      slow_write(fd,cmd,strlen(cmd));
-      if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
-      int n=b;
-      unsigned char *p=&buffer[offset];
-      while(n>0) {
-	int w=serialport_write(fd,p,n);
-	if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+      if (count==1) {
+	sprintf(cmd,"s%lx %x\r",address,buffer[0]);
+	slow_write(fd,cmd,strlen(cmd));
+	if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);	
+      } else {
+	if (new_monitor) 
+	  sprintf(cmd,"l%lx %lx\r",address+offset,(address+offset+b)&0xffff);
+	else
+	  sprintf(cmd,"l%lx %lx\r",address+offset-1,address+offset+b-1);
+	slow_write(fd,cmd,strlen(cmd));
+	if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
+	int n=b;
+	unsigned char *p=&buffer[offset];
+	while(n>0) {
+	  int w=serialport_write(fd,p,n);
+	  if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+	}
       }
       wait_for_prompt();
 
