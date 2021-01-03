@@ -198,6 +198,9 @@ int last_virtual_track=-1;
 int last_virtual_sector=-1;
 int last_virtual_side=-1;
 
+long long vf011_first_read_time=0;
+int vf011_bytes_read=0;
+
 int virtual_f011_read(int device,int track,int sector,int side)
 {
 
@@ -205,6 +208,9 @@ int virtual_f011_read(int device,int track,int sector,int side)
   
   long long start=gettime_ms();
 
+  if (!vf011_first_read_time) vf011_first_read_time = start - 1;
+  
+#if 0
 #ifdef WINDOWS
   fprintf(stderr,"T+%I64d ms : Servicing hypervisor request for F011 FDC sector read.\n",
 	  gettime_ms()-start);
@@ -212,7 +218,7 @@ int virtual_f011_read(int device,int track,int sector,int side)
   fprintf(stderr,"T+%lld ms : Servicing hypervisor request for F011 FDC sector read.\n",
 	  gettime_ms()-start);
 #endif
-  fprintf(stderr, "device: %d  track: %d  sector: %d  side: %d\n", device, track, sector, side);
+#endif
 
   if(fd81 == NULL) {
 
@@ -241,7 +247,9 @@ int virtual_f011_read(int device,int track,int sector,int side)
       unsigned char buf[512];
       int b=-1;
       int physical_sector=( side==0 ? sector-1 : sector+9 );
+
       int result = fseek(fd81, (track*20+physical_sector)*512, SEEK_SET);
+
       if(result) {
       
 	fprintf(stderr, "Error finding D81 sector %d @ 0x%x\n", result, (track*20+physical_sector)*512);
@@ -249,18 +257,14 @@ int virtual_f011_read(int device,int track,int sector,int side)
       }
       else {
 	b=fread(buf,1,512,fd81);
-	fprintf(stderr, " bytes read: %d @ 0x%x\n", b,(track*20+physical_sector)*512);
+	//	fprintf(stderr, " bytes read: %d @ 0x%x\n", b,(track*20+physical_sector)*512);
+	
 	if(b==512) {
 	
 	  //      dump_bytes(0,"The sector",buf,512);
 	
 	  /* send block to m65 memory */
 	  push_ram(READ_SECTOR_BUFFER_ADDRESS,0x200,buf);
-#ifdef WINDOWS       
-	  printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
-#else	
-	  printf("T+%lld ms : Block sent.\n",gettime_ms()-start);
-#endif	
 	}
       }
 
@@ -269,8 +273,11 @@ int virtual_f011_read(int device,int track,int sector,int side)
   /* signal done/result */
   mega65_poke(0xffd3086,side&0x7f);
 
-  timestamp_msg("Finished V-FDC read.\n");
-
+  timestamp_msg("");
+  vf011_bytes_read+=256;
+  fprintf(stderr, "device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec\n",
+	  device, track, sector, side, vf011_bytes_read * 1.0 / (gettime_ms() - vf011_first_read_time));
+  
   return 0;
 }
 
@@ -1065,7 +1072,11 @@ int main(int argc,char **argv)
       timestamp_msg("Extracting HYPPO from running system...\n");
       unsigned char hyppo_data[0x4000];
       fetch_ram(0xFFF8000,0x4000,hyppo_data);
+#ifdef WINDOWS
+      char *temp_name="HYPPOEXT.M65";
+#else
       char *temp_name="/tmp/HYPPOEXT.M65";
+#endif
       FILE *f=fopen(temp_name,"wb");
       if (!f) {
 	perror("Could not create temporary HYPPO file.");
@@ -1650,19 +1661,28 @@ int main(int argc,char **argv)
   
   // XXX - loop for virtualisation, JTAG boundary scanning etc
 
+  unsigned char recent_bytes[4]={0,0,0,0};
+  
   if (virtual_f011) {
     fprintf(stderr,"Entering virtualised F011 wait loop...\n");
     while(1) {
       unsigned char buff[8192];
       int b=serialport_read(fd,buff,8192);
       if (b>0) dump_bytes(2,"VF011 wait",buff,b);
-      if (b==4&&(buff[3]=='!')) {
+      for(int i=0;i<b;i++) {
+	recent_bytes[0]=recent_bytes[1];
+	recent_bytes[1]=recent_bytes[2];
+	recent_bytes[2]=recent_bytes[3];
+	recent_bytes[3]=buff[i];
+      }
+      if (recent_bytes[3]=='!') {
 	// Handle request
+	recent_bytes[3]=0;
 	pending_vf011_read=1;
 	pending_vf011_device=0;
-	pending_vf011_track=buff[0]&0x7f;
-	pending_vf011_sector=buff[1]&0x7f;
-	pending_vf011_side=buff[2]&0x7f;
+	pending_vf011_track=recent_bytes[0]&0x7f;
+	pending_vf011_sector=recent_bytes[1]&0x7f;
+	pending_vf011_side=recent_bytes[2]&0x7f;
 	while (pending_vf011_read) {
 	  virtual_f011_read(pending_vf011_device,pending_vf011_track,
 			    pending_vf011_sector,pending_vf011_side);

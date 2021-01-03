@@ -651,10 +651,8 @@ int breakpoint_wait(void)
 
 int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
-  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
+  //  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
 
-  long long start=gettime_ms();
-  
   char cmd[8192];
   for(unsigned int offset=0;offset<count;)
     {
@@ -682,20 +680,7 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	  if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	}
       }
-#ifdef WINDOWS       
-	  printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
-#else	
-	  printf("T+%lld ms : Block sent.\n",gettime_ms()-start);
-#endif	
-      
-	  wait_for_prompt();
-
-#ifdef WINDOWS       
-	  printf("T+%I64d ms : Synced.\n",gettime_ms()-start);
-#else	
-	  printf("T+%lld ms : Synced.\n",gettime_ms()-start);
-#endif	
-      
+      wait_for_prompt();
       offset+=b;
     }
   return 0;
