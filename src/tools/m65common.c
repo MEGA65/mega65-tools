@@ -35,7 +35,13 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <pthread.h>
-
+#ifndef WINDOWS
+#ifndef __APPLE__
+#include <sys/ioctl.h>
+#include <linux/serial.h>
+#include <linux/tty_flags.h>
+#endif
+#endif
 #include "m65common.h"
 
 #define SLOW_FACTOR 1
@@ -647,6 +653,8 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
   fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
 
+  long long start=gettime_ms();
+  
   char cmd[8192];
   for(unsigned int offset=0;offset<count;)
     {
@@ -674,8 +682,20 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 	  if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
 	}
       }
-      wait_for_prompt();
+#ifdef WINDOWS       
+	  printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
+#else	
+	  printf("T+%lld ms : Block sent.\n",gettime_ms()-start);
+#endif	
+      
+	  wait_for_prompt();
 
+#ifdef WINDOWS       
+	  printf("T+%I64d ms : Synced.\n",gettime_ms()-start);
+#else	
+	  printf("T+%lld ms : Synced.\n",gettime_ms()-start);
+#endif	
+      
       offset+=b;
     }
   return 0;
@@ -1124,6 +1144,12 @@ void set_serial_speed(int fd,int serial_speed)
                  INPCK | ISTRIP | IXON | IXOFF | IXANY | PARMRK);
   t.c_oflag &= ~OPOST;
   if (tcsetattr(fd, TCSANOW, &t)) perror("Failed to set terminal parameters");
+
+  // Also set USB serial port to low latency
+  struct serial_struct serial;
+  ioctl(fd, TIOCGSERIAL, &serial); 
+  serial.flags |= ASYNC_LOW_LATENCY;
+  ioctl(fd, TIOCSSERIAL, &serial);
 #endif
   
 }
@@ -1148,6 +1174,33 @@ void open_the_serial_port(char *serial_port)
   }
 
   set_serial_speed(fd,serial_speed);
+
+  // Also try to reduce serial port latency
+  char *last_part=serial_port;
+  for(int i=0;serial_port[i];i++) if (serial_port[i]=='/') last_part=&serial_port[i+1];
+  char latency_file[1024];
+  snprintf(latency_file,1024,"/sys/bus/usb-serial/devices/%s/latency_timer",last_part);
+  FILE *f=fopen(latency_file,"r");
+  if (f) {
+    char line[1024];
+    fread(line,1024,1,f);
+    int latency=atoi(line);
+    fclose(f);
+    if (latency!=1) {
+      f=fopen(latency_file,"w");
+      if (!f) {
+	fprintf(stderr,"WARNING: Cannot write to '%s' to reduce USB port latency.  Performance will be reduced.\n",
+		latency_file);
+	fprintf(stderr,"         You can try something like the following to fix it:\n"
+		"         echo 1 | sudo tee %s\n",
+		latency_file);	
+      } else {
+	fprintf(f,"1\n");
+	fclose(f);
+	fprintf(stderr,"Reduced USB latency from %d ms to 1 ms.\n",latency);
+      }
+    }
+  }
 #endif
 }
 
