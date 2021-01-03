@@ -653,6 +653,8 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
   //  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
 
+  slow_write(fd,"\r",1); wait_for_prompt();
+  
   char cmd[8192];
   for(unsigned int offset=0;offset<count;)
     {

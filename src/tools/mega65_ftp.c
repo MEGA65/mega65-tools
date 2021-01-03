@@ -315,7 +315,11 @@ int main(int argc,char **argv)
 
   load_helper();  
 
-  monitor_sync();
+  // Give helper time to get all sorted.
+  // Without this delay serial monitor commands to set memory seem to fail :/
+  usleep(500000);
+  
+  //  monitor_sync();
 
   sdhc_check();
 
@@ -618,7 +622,8 @@ void queue_execute(void)
   
   // Push queued jobs in one go
   push_ram(0xc001,queue_addr-0xc001,queue_cmds);
-
+  //  dump_bytes(0,"queue_cmds",queue_cmds,queue_addr-0xc001);
+  
   // Then set number of jobs to execute them
   // mega65_poke will try to read data after from on the
   // serial interface, which messes up the protocol.
@@ -626,8 +631,6 @@ void queue_execute(void)
   char cmd[1024];
   snprintf(cmd,1024,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd));
-
-  //  printf("queue_jobs=%d\n",queue_jobs);
   
   job_process_results();
   queue_addr=0xc001;
@@ -662,10 +665,18 @@ int execute_write_queue(void)
   do {
     if (0) printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
 		  write_sector_count,write_buffer_offset);
-    //    printf("T+%lldms : enter push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
+#ifdef WINDOWS
+    printf("T+%I64dms : enter push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
+#else
+    printf("T+%lldms : enter push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
+#endif
     push_ram(0x50000,write_buffer_offset,&write_data_buffer[0]);
-      
-    //    printf("T+%lldms : exit push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
+
+#ifdef WINDOWS
+    printf("T+%I64dms : exit push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
+#else
+    printf("T+%lldms : exit push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
+#endif
 
     // XXX - Sort sector number order and merge consecutive writes into
     // multi-sector writes would be a good idea here.
@@ -673,9 +684,17 @@ int execute_write_queue(void)
       {
 	queue_physical_write_sector(write_sector_numbers[i],0x50000+(i<<9));
       }
-    //    printf("T+%lldms : enter queue_execute()\n",(gettime_us()-start_usec)/1000);
+#ifdef WINDOWS
+    printf("T+%I64dms : enter queue_execute()\n",(gettime_us()-start_usec)/1000);
+#else
+    printf("T+%lldms : enter queue_execute()\n",(gettime_us()-start_usec)/1000);
+#endif
     queue_execute();
-    //    printf("T+%lldms : exit queue_execute()\n",(gettime_us()-start_usec)/1000);
+#ifdef WINDOWS
+    printf("T+%I64dms : exit queue_execute()\n",(gettime_us()-start_usec)/1000);
+#else
+    printf("T+%lldms : exit queue_execute()\n",(gettime_us()-start_usec)/1000);
+#endif
     
     // Reset write queue
     write_buffer_offset=0;
@@ -820,13 +839,15 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
   do {
     // With new method, we write the data, then schedule the write to happen with a job
     char cmd[1024];
-    // Clear pending input first
+#if 0
+    // Clear pending input first    
     int b=1;
     while(b>0){
       b=serialport_read(fd,(uint8_t *)cmd,1024);
       //      if (b) dump_bytes(3,"write_sector() flush data",cmd,b);
     }
-
+#endif
+    
     queue_write_sector(sector_number,buffer);
     
     // Store in cache / update cache
