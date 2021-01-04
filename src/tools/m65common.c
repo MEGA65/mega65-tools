@@ -651,9 +651,15 @@ int breakpoint_wait(void)
 
 int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
-  //  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
+  // fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
 
-  slow_write(fd,"\r",1); wait_for_prompt();
+  int cpu_stopped_state=cpu_stopped;
+
+  // We have to stop the CPU first, so that the serial monitor can keep up with
+  // the full 2mbit/sec data rate (as otherwise the CPU can block the serial
+  // monitor processor for some number of cycles per character while it finishes
+  // instructions.
+  if (!cpu_stopped_state) stop_cpu();
   
   char cmd[8192];
   for(unsigned int offset=0;offset<count;)
@@ -685,6 +691,7 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       wait_for_prompt();
       offset+=b;
     }
+  if (!cpu_stopped_state) start_cpu();
   return 0;
 }
 
@@ -701,7 +708,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   char next_addr_str[8192];
   int ofs=0;
 
-  //  fprintf(stderr,"Fetching $%x bytes @ $%x\n",count,address);
+  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
   
   //  monitor_sync();
   while(addr<(address+count)) {
@@ -712,14 +719,14 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
       end_addr=addr+0x100;
     }
-    //    printf("Sending '%s'\n",cmd);
+    printf("Sending '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
     while(addr!=end_addr) {
       snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
       int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
       if (b<0) b=0;
       if ((ofs+b)>8191) b=8191-ofs;
-      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
+      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
       read_buff[ofs+b]=0;
       ofs+=b;
       char *s=strstr((char *)read_buff,next_addr_str);

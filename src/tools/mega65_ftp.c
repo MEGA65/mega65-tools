@@ -665,18 +665,7 @@ int execute_write_queue(void)
   do {
     if (0) printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
 		  write_sector_count,write_buffer_offset);
-#ifdef WINDOWS
-    printf("T+%I64dms : enter push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
-#else
-    printf("T+%lldms : enter push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
-#endif
     push_ram(0x50000,write_buffer_offset,&write_data_buffer[0]);
-
-#ifdef WINDOWS
-    printf("T+%I64dms : exit push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
-#else
-    printf("T+%lldms : exit push_ram(%d)\n",(gettime_us()-start_usec)/1000,write_buffer_offset);
-#endif
 
     // XXX - Sort sector number order and merge consecutive writes into
     // multi-sector writes would be a good idea here.
@@ -684,17 +673,7 @@ int execute_write_queue(void)
       {
 	queue_physical_write_sector(write_sector_numbers[i],0x50000+(i<<9));
       }
-#ifdef WINDOWS
-    printf("T+%I64dms : enter queue_execute()\n",(gettime_us()-start_usec)/1000);
-#else
-    printf("T+%lldms : enter queue_execute()\n",(gettime_us()-start_usec)/1000);
-#endif
     queue_execute();
-#ifdef WINDOWS
-    printf("T+%I64dms : exit queue_execute()\n",(gettime_us()-start_usec)/1000);
-#else
-    printf("T+%lldms : exit queue_execute()\n",(gettime_us()-start_usec)/1000);
-#endif
     
     // Reset write queue
     write_buffer_offset=0;
