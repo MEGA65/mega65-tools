@@ -1341,6 +1341,9 @@ int rename_file(char *name,char *dest_name)
     if (write_sector(partition_start+dir_sector,dir_sector_buffer)) {
       printf("Failed to write updated directory sector.\n");
       retVal=-1; break; }
+
+    // Flush any pending sector writes out
+    execute_write_queue();   
     
   } while(0);
 
