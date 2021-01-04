@@ -234,6 +234,9 @@ int execute_command(char *cmd)
     for(int i=0;src[i];i++) if (src[i]=='/') dest=&src[i+1];
     upload_file(src,dest);
   }
+  else if (sscanf(cmd,"mkdir %s",src)==1) {
+    create_dir(src);
+  }
   else if (sscanf(cmd,"get %s",src)==1) {
     download_file(src,src,0);
   } else if (sscanf(cmd,"clusters %s",src)==1) {
@@ -975,20 +978,36 @@ int dir_cluster=0;
 int dir_sector_in_cluster=0;
 int dir_sector_offset=0;
 
+char current_dir[1024]="/";
+
 int fat_opendir(char *path)
 {
   int retVal=0;
   do {
-    if (strcmp(path,"/")) {
-      printf("XXX Sub-directories not implemented\n");
-    }
 
     dir_cluster=first_cluster;
     dir_sector=first_cluster_sector;
     dir_sector_offset=-32;
     dir_sector_in_cluster=0;
+
     retVal=read_sector(partition_start+dir_sector,dir_sector_buffer,0,0);
     if (retVal) dir_sector=-1;
+        
+    while(strlen(path)) {
+      // Get name of next dir segment
+      int seg_len=0;
+      char path_seg[1024]="";
+      for(seg_len=0;path[seg_len]&&path[seg_len]!='/';seg_len++) continue;
+      strcpy(path_seg,path);
+      path_seg[seg_len]=0;
+      path+=seg_len;
+      while (path[0]=='/') path++;
+      printf("Path segment = '%s', remaining path = '%s'\n",path_seg,path);
+
+      if (path_seg[0]) {
+	// Each call we have the first sector of the directory
+      }
+    }
     
   } while(0);
   return retVal;
@@ -1267,7 +1286,10 @@ int show_directory(char *path)
     if (fat_opendir(path)) { retVal=-1; break; }
     // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
     while(!fat_readdir(&de)) {
-      if (de.d_name[0]&&(de.d_filelen>=0))
+      if (de.d_attr&0x10) {
+	printf(" <directory> %s\n",de.d_name);
+      }
+      else if (de.d_name[0]&&(de.d_filelen>=0))
 	printf("%12d %s\n",(int)de.d_filelen,de.d_name);
     }
   } while(0);
@@ -1288,7 +1310,7 @@ int rename_file(char *name,char *dest_name)
       break;
     }
 
-    if (fat_opendir("/")) { retVal=-1; break; }
+    if (fat_opendir(current_dir)) { retVal=-1; break; }
     // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
     while(!fat_readdir(&de)) {
       // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_filelen);
@@ -1348,7 +1370,7 @@ int upload_file(char *name,char *dest_name)
       break;
     }
 
-    if (fat_opendir("/")) { retVal=-1; break; }
+    if (fat_opendir(current_dir)) { retVal=-1; break; }
     //    printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
     while(!fat_readdir(&de)) {
       // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_filelen);
@@ -1361,9 +1383,9 @@ int upload_file(char *name,char *dest_name)
     }
     if (dir_sector==-1) {
       // File does not (yet) exist, get ready to create it
-      printf("%s does not yet exist on the file system -- searching for empty directory slot to create it in.\n",name);
+      printf("%s does not yet exist on the file system -- searching for empty directory slot to create it in.\n",dest_name);
 
-      if (fat_opendir("/")) { retVal=-1; break; }
+      if (fat_opendir(current_dir)) { retVal=-1; break; }
       struct m65dirent de;
       while(!fat_readdir(&de)) {
 	if (!de.d_name[0]) {
@@ -1549,6 +1571,262 @@ int upload_file(char *name,char *dest_name)
   return retVal;
 }
 
+// Must be a single path segment.  Creating sub-directories requires multiple chdir/cd + mkdir calls
+int create_dir(char *dest_name)
+{
+  int parent_cluster = 2;
+  struct m65dirent de;
+  int retVal=0;
+  do {
+
+    time_t upload_start=time(0);
+    
+    if (!file_system_found) open_file_system();
+    if (!file_system_found) {
+      fprintf(stderr,"ERROR: Could not open file system.\n");
+      retVal=-1;
+      break;
+    }
+
+    if (fat_opendir(current_dir)) { retVal=-1; break; }
+    parent_cluster = dir_cluster;
+    //    printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
+    while(!fat_readdir(&de)) {
+      // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_filelen);
+      //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
+      if (!strcasecmp(de.d_name,dest_name)) {
+	// Name exists
+	fprintf(stderr,"ERROR: File or directory '%s' already exists.\n",dest_name);
+	retVal=-1;
+	break;
+      }
+    }
+    if (dir_sector==-1) {
+      // File does not (yet) exist, get ready to create it
+      printf("%s does not yet exist on the file system -- searching for empty directory slot to create it in.\n",dest_name);
+
+      if (fat_opendir(current_dir)) { retVal=-1; break; }
+      struct m65dirent de;
+      while(!fat_readdir(&de)) {
+	if (!de.d_name[0]) {
+	  if (0) printf("Found empty slot at dir_sector=%d, dir_sector_offset=%d\n",
+			dir_sector,dir_sector_offset);
+
+	  // Create directory entry, and write sector back to SD card
+	  unsigned char dir[32];
+	  bzero(dir,32);
+
+	  // Write name
+	  for(int i=0;i<11;i++) dir[i]=0x20;
+	  for(int i=0;i<9;i++)
+	    if (dest_name[i]=='.') {
+	      // Write out extension
+	      for(int j=0;j<3;j++)
+		if (dest_name[i+1+j]) dir[8+j]=dest_name[i+1+j];
+	      break;
+	    } else if (!dest_name[i]) break;
+	    else dir[i]=dest_name[i];
+
+	  // Set file attributes (only directory bit)
+	  dir[0xb]=0x10;
+
+	  // Store create time and date
+	  time_t t=time(0);
+	  struct tm *tm=localtime(&t);
+	  dir[0xe]=(tm->tm_sec>>1)&0x1F;  // 2 second resolution
+	  dir[0xe]|=(tm->tm_min&0x7)<<5;
+	  dir[0xf]=(tm->tm_min&0x3)>>3;
+	  dir[0xf]|=(tm->tm_hour)<<2;
+	  dir[0x10]=tm->tm_mday&0x1f;
+	  dir[0x10]|=((tm->tm_mon+1)&0x7)<<5;
+	  dir[0x11]=((tm->tm_mon+1)&0x1)>>3;
+	  dir[0x11]|=(tm->tm_year-80)<<1;
+
+	  //	  dump_bytes(0,"New directory entry",dir,32);
+	  
+	  // (Cluster and size we set after writing to the file)
+
+	  // Copy back into directory sector, and write it
+	  bcopy(dir,&dir_sector_buffer[dir_sector_offset],32);
+	  if (write_sector(partition_start+dir_sector,dir_sector_buffer)) {
+	    printf("Failed to write updated directory sector.\n");
+	    retVal=-1; break; }
+	  
+	  break;
+	}
+      }
+    }
+    if (dir_sector==-1) {
+      printf("ERROR: Directory is full.  Request support for extending directory into multiple clusters.\n");
+      retVal=-1;
+      break;
+    } else {
+      //      printf("Directory entry is at offset $%03x of sector $%x\n",dir_sector_offset,dir_sector);
+    }
+
+    // Read out the first cluster. If zero, then we need to allocate a first cluster.
+    // After that, we can allocate and chain clusters in a constant manner
+    unsigned int first_cluster_of_file=
+      (dir_sector_buffer[dir_sector_offset+0x1A]<<0)
+      |(dir_sector_buffer[dir_sector_offset+0x1B]<<8)
+      |(dir_sector_buffer[dir_sector_offset+0x14]<<16)
+      |(dir_sector_buffer[dir_sector_offset+0x15]<<24);
+    if (!first_cluster_of_file) {
+      //      printf("File currently has no first cluster allocated.\n");
+
+      int a_cluster=find_free_cluster(0);
+      if (!a_cluster) {
+	printf("ERROR: Failed to find a free cluster.\n");
+	retVal=-1; break;
+      }
+      if (allocate_cluster(a_cluster)) {
+	printf("ERROR: Could not allocate cluster $%x\n",a_cluster);
+	retVal=-1; break;	
+      }
+
+      // Write cluster number into directory entry
+      dir_sector_buffer[dir_sector_offset+0x1A]=(a_cluster>>0)&0xff;
+      dir_sector_buffer[dir_sector_offset+0x1B]=(a_cluster>>8)&0xff;
+      dir_sector_buffer[dir_sector_offset+0x14]=(a_cluster>>16)&0xff;
+      dir_sector_buffer[dir_sector_offset+0x15]=(a_cluster>>24)&0xff;
+      
+      if (write_sector(partition_start+dir_sector,dir_sector_buffer)) {
+	printf("ERROR: Failed to write updated directory sector after allocating first cluster.\n");
+	retVal=-1; break; }
+      
+      first_cluster_of_file=a_cluster;
+    } // else printf("First cluster of file is $%x\n",first_cluster_of_file);
+
+    // Now write the file out sector by sector, and allocate new clusters as required
+    int remaining_length=4096;  // XXX assumes 4KB clusters
+    int sector_in_cluster=0;
+    int file_cluster=first_cluster_of_file;
+    unsigned int sector_number;
+
+    while(remaining_length>0) {
+      if (sector_in_cluster>=sectors_per_cluster) {
+	// Advance to next cluster
+	// If we are currently the last cluster, then allocate a new one, and chain it in
+
+	int next_cluster=chained_cluster(file_cluster);
+	if (next_cluster==0||next_cluster>=0xffffff8) {
+	  next_cluster=find_free_cluster(file_cluster);
+	  if (allocate_cluster(next_cluster)) {
+	    printf("ERROR: Could not allocate cluster $%x\n",next_cluster);
+	    retVal=-1; break;
+	  }
+	  if (chain_cluster(file_cluster,next_cluster)) {
+	    printf("ERROR: Could not chain cluster $%x to $%x\n",file_cluster,next_cluster);
+	    retVal=-1; break;
+	  }
+	}
+	if (!next_cluster) {
+	  printf("ERROR: Could not find a free cluster\n");
+	  retVal=-1; break;
+	}
+	
+	
+	file_cluster=next_cluster;
+	sector_in_cluster=0;
+      }
+
+      // Write sector
+      unsigned char buffer[512];
+      bzero(buffer,512);
+
+      if (remaining_length==4096) {
+	// Build . and .. directory entries in first sector of directory
+
+	time_t t=time(0);
+	struct tm *tm=localtime(&t);	
+	
+	for (int i=0;i<11;i++) buffer[0x00+i]=' ';
+	buffer[0x00+0]='.';
+	buffer[0x00+0xb]=0x10; // directory
+	buffer[0x00+0xe]=(tm->tm_sec>>1)&0x1F;  // 2 second resolution
+	buffer[0x00+0xe]|=(tm->tm_min&0x7)<<5;
+	buffer[0x00+0xf]=(tm->tm_min&0x3)>>3;
+	buffer[0x00+0xf]|=(tm->tm_hour)<<2;
+	buffer[0x00+0x10]=tm->tm_mday&0x1f;
+	buffer[0x00+0x10]|=((tm->tm_mon+1)&0x7)<<5;
+	buffer[0x00+0x11]=((tm->tm_mon+1)&0x1)>>3;
+	buffer[0x00+0x11]|=(tm->tm_year-80)<<1;
+	buffer[0x00+0x1A]=(first_cluster_of_file>>0)&0xff;
+	buffer[0x00+0x1B]=(first_cluster_of_file>>8)&0xff;
+	buffer[0x00+0x14]=(first_cluster_of_file>>16)&0xff;
+	buffer[0x00+0x15]=(first_cluster_of_file>>24)&0xff;
+	
+
+	for (int i=0;i<11;i++) buffer[0x20+i]=' ';
+	buffer[0x20+0]='.'; buffer[0x20+1]='.';
+	buffer[0x20+0xb]=0x10; // directory
+	buffer[0x20+0xe]=(tm->tm_sec>>1)&0x1F;  // 2 second resolution
+	buffer[0x20+0xe]|=(tm->tm_min&0x7)<<5;
+	buffer[0x20+0xf]=(tm->tm_min&0x3)>>3;
+	buffer[0x20+0xf]|=(tm->tm_hour)<<2;
+	buffer[0x20+0x10]=tm->tm_mday&0x1f;
+	buffer[0x20+0x10]|=((tm->tm_mon+1)&0x7)<<5;
+	buffer[0x20+0x11]=((tm->tm_mon+1)&0x1)>>3;
+	buffer[0x20+0x11]|=(tm->tm_year-80)<<1;
+	buffer[0x20+0x1A]=(parent_cluster>>0)&0xff;
+	buffer[0x20+0x1B]=(parent_cluster>>8)&0xff;
+	buffer[0x20+0x14]=(parent_cluster>>16)&0xff;
+	buffer[0x20+0x15]=(parent_cluster>>24)&0xff;
+
+      }
+      
+      int bytes=512;
+      sector_number=partition_start+first_cluster_sector+(sectors_per_cluster*(file_cluster-first_cluster))+sector_in_cluster;
+#ifdef WINDOWS
+      if (0) printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
+		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
+      printf("\rUploaded %I64d bytes.",(long long)st.st_size-remaining_length);
+#else
+      if (0) printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
+		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
+#endif
+      fflush(stdout);
+      
+      if (write_sector(sector_number,buffer)) {
+	printf("ERROR: Failed to write to sector %d\n",sector_number);
+	retVal=-1;
+	break;
+      }
+      //      printf("T+%lld : after write.\n",gettime_us()-start_usec);
+
+      sector_in_cluster++;
+      remaining_length-=512;
+    }
+
+    // XXX check for orphan clusters at the end, and if present, free them.
+
+    // Write file size into directory entry
+    dir_sector_buffer[dir_sector_offset+0x1C]=(4096)&0xff;
+    dir_sector_buffer[dir_sector_offset+0x1D]=(4096)&0xff;
+    dir_sector_buffer[dir_sector_offset+0x1E]=(4096)&0xff;
+    dir_sector_buffer[dir_sector_offset+0x1F]=(4096)&0xff;
+
+    if (write_sector(partition_start+dir_sector,dir_sector_buffer)) {
+      printf("ERROR: Failed to write updated directory sector after updating file length.\n");
+      retVal=-1; break; }
+
+    // Flush any pending sector writes out
+    execute_write_queue();
+    
+    if (time(0)==upload_start) upload_start=time(0)-1;
+#ifdef WINDOWS
+    printf("\rUploaded %I64d bytes in %I64d seconds (%.1fKB/sec)\n",
+	   (long long)st.st_size,(long long)time(0)-upload_start,st.st_size*1.0/1024/(time(0)-upload_start));
+#else
+    printf("\rUploaded %lld bytes in %lld seconds (%.1fKB/sec)\n",
+	   (long long)4096,(long long)time(0)-upload_start,4096*1.0/1024/(time(0)-upload_start));
+#endif    
+  } while(0);
+
+  return retVal;
+}
+
+
 unsigned char download_buffer[512];
 
 int download_slot(int slot_number,char *dest_name)
@@ -1614,7 +1892,7 @@ int download_file(char *dest_name,char *local_name,int showClusters)
       break;
     }
 
-    if (fat_opendir("/")) { retVal=-1; break; }
+    if (fat_opendir(current_dir)) { retVal=-1; break; }
     //    printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
     while(!fat_readdir(&de)) {
       // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_filelen);
