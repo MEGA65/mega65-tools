@@ -59,6 +59,8 @@ struct m65dirent {
   char            d_name[FILENAME_MAX]; /* File name. */
 };
 
+char current_dir[1024]="/";
+
 #define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
 
@@ -226,7 +228,7 @@ int execute_command(char *cmd)
     show_directory(src);
   }
   else if (!strcmp(cmd,"dir")) {
-    show_directory("/");
+    show_directory(current_dir);
   }
   else if (sscanf(cmd,"put %s",src)==1) {
     char *dest=src;
@@ -236,6 +238,61 @@ int execute_command(char *cmd)
   }
   else if (sscanf(cmd,"mkdir %s",src)==1) {
     create_dir(src);
+  } else if ((sscanf(cmd,"chdir %s",src)==1)
+	     ||(sscanf(cmd,"cd %s",src)==1)) {
+    if (src[0]=='/') {
+      // absolute path
+      if (fat_opendir(src)) {
+	fprintf(stderr,"ERROR: Could not open directory '%s'\n",src);
+      }
+      strcpy(current_dir,src);
+    } else {
+      // relative path
+      char temp_path[1024],src_copy[1024];
+      {
+	// Apply each path segment, handling . and .. appropriately
+	snprintf(temp_path,1024,"%s",current_dir);
+	strcpy(src_copy,src);
+        while(src_copy[0]) {
+
+	  printf("src_copy='%s'\n",src_copy);
+	  
+	  while(src_copy[0]=='/') strcpy(src_copy,&src_copy[1]);
+	  
+	  int seg_len=0;
+	  char seg[1024];
+	  for(seg_len=0;src_copy[seg_len];seg_len++) {
+	    if (src_copy[seg_len]=='/') break;
+	    else seg[seg_len]=src_copy[seg_len];
+	  }
+	  seg[seg_len]=0;
+	  printf(" path seg '%s'\n",seg);
+	  if (!strcmp(seg,".")) {
+	    // Ignore "." elements
+	  } else if (!strcmp(seg,"..")) {
+	    // Remove an element for each ".."
+	    int len=0;
+	    for(int i=0;temp_path[i];i++) if (temp_path[i]=='/') len=i-1;
+	    if (len<1) len=1;
+	    temp_path[len]=0;
+	  } else {
+	    // Append element otherwise
+	    if (strcmp(temp_path,"/"))
+	      snprintf(&temp_path[strlen(temp_path)],1024-strlen(temp_path),"/%s",seg);
+	    else
+	      snprintf(&temp_path[strlen(temp_path)],1024-strlen(temp_path),"%s",seg);
+	  }
+	  strcpy(src_copy,&src_copy[seg_len]);
+
+	  printf("  temp_path='%s'\n",temp_path);
+	}
+	// Stay in current directory
+      }
+
+      if (fat_opendir(temp_path)) {
+	fprintf(stderr,"ERROR: Could not open directory '%s'\n",temp_path);
+      } else strcpy(current_dir,temp_path);
+    }
   }
   else if (sscanf(cmd,"get %s",src)==1) {
     download_file(src,src,0);
@@ -327,6 +384,8 @@ int main(int argc,char **argv)
   sdhc_check();
 
   if (!file_system_found) open_file_system();
+
+  char prompt[1024];
   
   if (queued_command_count) {
     for(int i=0;i<queued_command_count;i++) execute_command(queued_commands[i]);
@@ -336,6 +395,9 @@ int main(int argc,char **argv)
     char cmd[8192];
     int len=0;
     int c;
+    snprintf(prompt,1024,"MEGA65 SD-Card:%s> ",current_dir);
+    printf("%s",prompt);
+    fflush(stdout);
     while(1) {
       c=fgetc(stdin);
       if (c==0x0a||c==0x0d) {
@@ -352,10 +414,12 @@ int main(int argc,char **argv)
 #else
     char *cmd=NULL;
     using_history();
-    while((cmd=readline("MEGA65 SD-card> "))!=NULL) {
+    snprintf(prompt,1024,"MEGA65 SD-Card:%s> ",current_dir);
+    while((cmd=readline(prompt))!=NULL) {
       execute_command(cmd);
       add_history(cmd);
       free(cmd);
+      snprintf(prompt,1024,"MEGA65 SD-Card:%s> ",current_dir);
     }
 #endif
   }
@@ -978,8 +1042,6 @@ int dir_cluster=0;
 int dir_sector_in_cluster=0;
 int dir_sector_offset=0;
 
-char current_dir[1024]="/";
-
 int fat_opendir(char *path)
 {
   int retVal=0;
@@ -1006,8 +1068,51 @@ int fat_opendir(char *path)
 
       if (path_seg[0]) {
 	// Each call we have the first sector of the directory
+	// Go through the directory looking for the file
+	// We can use fat_readdir for this
+	struct m65dirent d;
+	int found=0;
+	while(!fat_readdir(&d)) {
+	  if (!strcmp(d.d_name,path_seg)) {
+	    if (d.d_attr&0x10) {
+	      // Its a dir, so change directory to here, and repeat
+	      
+	      dir_cluster = d.d_ino;
+	      dir_sector= first_cluster_sector + (dir_cluster - first_cluster) * sectors_per_cluster;
+	      dir_sector_offset=-32;
+	      dir_sector_in_cluster=0;	      
+
+	      printf("Found matching subdir '%s' @ cluster %ld\n",d.d_name,d.d_ino);
+	      
+	      retVal=read_sector(partition_start+dir_sector,dir_sector_buffer,0,0);
+	      if (retVal) dir_sector=-1;
+	      else found=1;
+	      
+	      break;
+	    } else {
+	      fprintf(stderr,"ERROR: %s is not a directory\n",path_seg);
+	      retVal=-1;
+	      break;
+	    }
+	  }
+	  if (retVal) break;
+	}
+	if (!found) {
+	  fprintf(stderr,"ERROR: Could not find directory segment '%s'\n",path_seg);
+
+	  dir_cluster=first_cluster;
+	  dir_sector=first_cluster_sector;
+	  dir_sector_offset=-32;
+	  dir_sector_in_cluster=0;
+	  
+	  retVal=-1;
+	  break;
+	}
       }
+      if (retVal) break;
     }
+
+    printf("dir_cluster = %d, dir_sector = %d\n",dir_cluster,dir_sector);
     
   } while(0);
   return retVal;
