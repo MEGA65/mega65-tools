@@ -1116,7 +1116,7 @@ int main(int argc,char **argv)
     timestamp_msg("Replacing HYPPO...\n");
     
     stop_cpu();
-    if (hyppo) { load_file(hyppo,0xfff8000,patchKS); } 
+    if (hyppo) { stop_cpu(); load_file(hyppo,0xfff8000,patchKS); } 
     if (flashmenufile) { load_file(flashmenufile,0x50000,0); } 
     if (romfile) { load_file(romfile,0x20000,0); } 
     if (charromfile) load_file(charromfile,0xFF7E000,0); 
