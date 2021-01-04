@@ -1108,7 +1108,7 @@ int fat_opendir(char *path)
       if (retVal) break;
     }
 
-    //    printf("dir_cluster = %d, dir_sector = %d\n",dir_cluster,dir_sector);
+    printf("dir_cluster = $%x, dir_sector = $%x\n",dir_cluster,partition_start+dir_sector);
     
   } while(0);
   return retVal;
@@ -1884,7 +1884,6 @@ int create_dir(char *dest_name)
 #ifdef WINDOWS
       if (0) printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
 		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
-      printf("\rUploaded %I64d bytes.",(long long)st.st_size-remaining_length);
 #else
       if (0) printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
 		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
@@ -1920,7 +1919,7 @@ int create_dir(char *dest_name)
     if (time(0)==upload_start) upload_start=time(0)-1;
 #ifdef WINDOWS
     printf("\rUploaded %I64d bytes in %I64d seconds (%.1fKB/sec)\n",
-	   (long long)st.st_size,(long long)time(0)-upload_start,st.st_size*1.0/1024/(time(0)-upload_start));
+	   (long long)4096,(long long)time(0)-upload_start,4096*1.0/1024/(time(0)-upload_start));
 #else
     printf("\rUploaded %lld bytes in %lld seconds (%.1fKB/sec)\n",
 	   (long long)4096,(long long)time(0)-upload_start,4096*1.0/1024/(time(0)-upload_start));
