@@ -255,8 +255,6 @@ int execute_command(char *cmd)
 	strcpy(src_copy,src);
         while(src_copy[0]) {
 
-	  printf("src_copy='%s'\n",src_copy);
-	  
 	  while(src_copy[0]=='/') strcpy(src_copy,&src_copy[1]);
 	  
 	  int seg_len=0;
@@ -266,13 +264,12 @@ int execute_command(char *cmd)
 	    else seg[seg_len]=src_copy[seg_len];
 	  }
 	  seg[seg_len]=0;
-	  printf(" path seg '%s'\n",seg);
 	  if (!strcmp(seg,".")) {
 	    // Ignore "." elements
 	  } else if (!strcmp(seg,"..")) {
 	    // Remove an element for each ".."
 	    int len=0;
-	    for(int i=0;temp_path[i];i++) if (temp_path[i]=='/') len=i-1;
+	    for(int i=0;temp_path[i];i++) if (temp_path[i]=='/') len=i;
 	    if (len<1) len=1;
 	    temp_path[len]=0;
 	  } else {
@@ -284,7 +281,6 @@ int execute_command(char *cmd)
 	  }
 	  strcpy(src_copy,&src_copy[seg_len]);
 
-	  printf("  temp_path='%s'\n",temp_path);
 	}
 	// Stay in current directory
       }
@@ -302,6 +298,7 @@ int execute_command(char *cmd)
     printf("MEGA65 File Transfer Program Command Reference:\n");
     printf("\n");
     printf("dir [directory] - show contents of current or specified directory.\n");
+    printf("cd [directory] - change current working directory.\n");
     printf("put <file> [destination name] - upload file to SD card, and optionally rename it destination file.\n");
     printf("get <file> [destination name] - download file from SD card, and optionally rename it destination file.\n");
     printf("clusters <file> - show cluster chain of specified file.\n");
@@ -1064,7 +1061,6 @@ int fat_opendir(char *path)
       path_seg[seg_len]=0;
       path+=seg_len;
       while (path[0]=='/') path++;
-      printf("Path segment = '%s', remaining path = '%s'\n",path_seg,path);
 
       if (path_seg[0]) {
 	// Each call we have the first sector of the directory
@@ -1082,7 +1078,7 @@ int fat_opendir(char *path)
 	      dir_sector_offset=-32;
 	      dir_sector_in_cluster=0;	      
 
-	      printf("Found matching subdir '%s' @ cluster %ld\n",d.d_name,d.d_ino);
+	      //	      printf("Found matching subdir '%s' @ cluster %ld\n",d.d_name,d.d_ino);
 	      
 	      retVal=read_sector(partition_start+dir_sector,dir_sector_buffer,0,0);
 	      if (retVal) dir_sector=-1;
@@ -1112,7 +1108,7 @@ int fat_opendir(char *path)
       if (retVal) break;
     }
 
-    printf("dir_cluster = %d, dir_sector = %d\n",dir_cluster,dir_sector);
+    //    printf("dir_cluster = %d, dir_sector = %d\n",dir_cluster,dir_sector);
     
   } while(0);
   return retVal;
