@@ -49,6 +49,7 @@
 #include "m65common.h"
 
 extern int pending_vf011_read;
+extern int pending_vf011_write;
 extern int pending_vf011_device;
 extern int pending_vf011_track;
 extern int pending_vf011_sector;
@@ -1683,11 +1684,25 @@ int main(int argc,char **argv)
 	pending_vf011_track=recent_bytes[0]&0x7f;
 	pending_vf011_sector=recent_bytes[1]&0x7f;
 	pending_vf011_side=recent_bytes[2]&0x7f;
-	while (pending_vf011_read) {
+      }
+      if (recent_bytes[3]==0x5c) {
+	// Handle request
+	recent_bytes[3]=0;
+	pending_vf011_read=1;
+	pending_vf011_device=0;
+	pending_vf011_track=recent_bytes[0]&0x7f;
+	pending_vf011_sector=recent_bytes[1]&0x7f;
+	pending_vf011_side=recent_bytes[2]&0x7f;
+      }
+      while (pending_vf011_read||pending_vf011_write) {
+	if (pending_vf011_read)
 	  virtual_f011_read(pending_vf011_device,pending_vf011_track,
 			    pending_vf011_sector,pending_vf011_side);
-	}
+	if (pending_vf011_write)
+	  virtual_f011_read(pending_vf011_device,pending_vf011_track,
+			    pending_vf011_sector,pending_vf011_side);
       }
+      
       continue;
     }
   }

@@ -202,6 +202,7 @@ long long gettime_us()
 }
 
 int pending_vf011_read=0;
+int pending_vf011_write=0;
 int pending_vf011_device=0;
 int pending_vf011_track=0;
 int pending_vf011_sector=0;
@@ -220,6 +221,15 @@ void wait_for_prompt(void)
       if (read_buff[i]=='!') {
 	if ((read_buff[i-1]&read_buff[i-2]&read_buff[i-3])&0x80) {
 	  pending_vf011_read=1;
+	  pending_vf011_device=0;
+	  pending_vf011_track=read_buff[i-3]&0x7f;
+	  pending_vf011_sector=read_buff[i-2]&0x7f;
+	  pending_vf011_side=read_buff[i-1]&0x7f;	  
+	}
+      }
+      if (read_buff[i]==0x5c) {
+	if ((read_buff[i-1]&read_buff[i-2]&read_buff[i-3])&0x80) {
+	  pending_vf011_write=1;
 	  pending_vf011_device=0;
 	  pending_vf011_track=read_buff[i-3]&0x7f;
 	  pending_vf011_sector=read_buff[i-2]&0x7f;
