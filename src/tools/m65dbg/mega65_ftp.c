@@ -132,7 +132,7 @@ extern int saw_c64_mode;
 extern int saw_c65_mode;
 
 
-unsigned char viciv_regs[0x100];
+extern unsigned char viciv_regs[0x100];
 static int mode_report=0;
 
 extern int serial_speed;
@@ -658,8 +658,8 @@ int sdhc_check(void)
   return sdhc;
 }
 
-unsigned char ram_cache[512*1024+255];
-unsigned char ram_cache_valids[512*1024+255];
+extern unsigned char ram_cache[512*1024+255];
+extern unsigned char ram_cache_valids[512*1024+255];
 extern int ram_cache_initialised;
 
 int load_helper(void)
