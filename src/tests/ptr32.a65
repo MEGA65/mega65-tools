@@ -1,0 +1,92 @@
+; Simple programme to test 16 vs 32-bit pointers
+
+
+; Include C64 BASIC program load header
+
+	 .word $0801
+	 .org $0801
+
+	 .scope
+	 .word _next, 10                       ; Next line and current line number
+	 .byte $97, "2,0:", $9e, " 2014", $AA, "65",0      ; POKE 2,0 : SYS 2014+65
+_next:	 .word 0
+
+iter1:	 .byte 0
+
+	 .checkpc 2079
+	 .advance 2079
+
+programentrypoint:
+	
+	; Enable C65GS io
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $D02f
+
+	; full CPU speed
+	lda #65
+	sta 0
+
+	ldy #$00
+	lda #$20
+l4:	sta $0400,y
+	sta $0500,y
+	sta $0600,y
+	sta $0700,y
+	iny
+	bne l4
+
+	; Put $06 (F character for far) in $18000 (target of whole 32-bit pointer)
+	lda #$06 ; // F screen code
+	sta pokeaddr
+	lda #$00
+	sta $d702
+	lda #>farpokelist
+	sta $D701
+	lda #<farpokelist
+	sta $d705
+
+	; Put $0e ( N character for Near) in $08000 (target of lower 16-bits of pointer)
+	lda #$0e
+	sta $8000
+
+	; Now setup a pointer to $18000 in ZP
+	lda #<$8000
+	sta $fc
+	lda #>$8000
+	sta $fd
+	lda #<$0001
+	sta $fe
+	lda #>$0001
+	sta $ff
+
+	; And do 16-bit and 32-bit peeks
+	ldz #0
+	lda ($fc),z
+	sta $0400
+	nop
+	lda ($fc),z
+	sta $0401
+
+loop:
+	inc $d020
+	jmp loop
+
+farpokelist:
+	.byte $0a ; $F018A format
+	.byte $00 ; no more options
+	.byte $00 ; copy + last request in chain
+	.word 1 ; size of copy is 1 byte
+	.word pokeaddr
+	.byte $00   ; I/O, hold source address
+	.word $8000 ; destination address is $18000
+	.byte $01   ; 
+	.word $0000 ; modulo (unused)
+
+pokeaddr:
+	.byte $00
+
+	.scend
+
+	.outfile "bin65/ptr32.prg"
