@@ -266,6 +266,10 @@ unsigned long long gettime_ms()
 
 int stop_cpu(void)
 {
+  char recent[4];
+
+  time_t start = time(0);
+  
   if (cpu_stopped) {
     printf("CPU already stopped.\n");
     return 1;
@@ -277,14 +281,32 @@ int stop_cpu(void)
   if (!no_rxbuff) {
     unsigned char read_buff[8192];
     int b=1;
+    recent[0]=0;
+    recent[1]=0;
+    recent[2]=0;
+    recent[3]=0;
     while(1) {
       b=serialport_read(fd,read_buff,8191);
-      read_buff[b]=0;
-      if (strstr((char *)read_buff,"t1\r")) break;      
+
+      for(int i=0;i<b;i++) {
+	recent[0]=recent[1];
+	recent[1]=recent[2];
+	recent[2]=read_buff[i];
+	dump_bytes(0,"recent looking for t1\r",recent,3);
+	if (strstr((char *)recent,"t1\r")) {
+	  cpu_stopped=1;
+	  return 0;
+	}
+      }
+
+      // Safety catch in case first command was missed
+      if (time(0)>=(start+1)) {
+	slow_write(fd,"t1\r",3);
+	start=time(0);
+      }
+	
     }
   }
-  cpu_stopped=1;
-  return 0;
 }
 
 int start_cpu(void)
@@ -946,6 +968,8 @@ int detect_mode(void)
   return 1;
 }
 
+int last_read_count=0;
+
 #ifdef WINDOWS
 
 void print_error(const char * context)
@@ -1038,14 +1062,17 @@ HANDLE open_serial_port(const char * device, uint32_t baud_rate)
 }
 
 // Writes bytes to the serial port, returning 0 on success and -1 on failure.
-int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
+int do_serial_port_write(HANDLE port, uint8_t * buffer, size_t size,const char *func,const char *file,const int line)
 {
   DWORD offset=0;
   DWORD written;
   BOOL success;
   //  printf("Calling WriteFile(%d)\n",size);
 
-  if (debug_serial) dump_bytes(0,"serial write (windows)",buffer,size);
+  if (debug_serial) {
+    fprintf(stderr,"%s:%d:%s(): ",file,line,func);
+    dump_bytes(0,"serial write (windows)",buffer,size);
+  }
   
   while(offset<size) {  
     success = WriteFile(port, &buffer[offset], size - offset, &written, NULL);
@@ -1071,12 +1098,18 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
 // timeout or other error.
 // Returns the number of bytes successfully read into the buffer, or -1 if
 // there was an error reading.
-SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
+SSIZE_T do_serial_port_read(HANDLE port, uint8_t * buffer, size_t size,const char *func,const char *file,const int line)
 {
   DWORD received=0;
   //  printf("Calling ReadFile(%I64d)\n",size);
   BOOL success = ReadFile(port, buffer, size, &received, NULL);
-  if (debug_serial) dump_bytes(0,"serial read (linux)",buffer,received);
+  if (last_read_count||received) {
+    if (debug_serial) {
+      fprintf(stderr,"%s:%d:%s():",file,line,func);
+      dump_bytes(0,"serial read (linux)",buffer,received);
+    }
+  }
+  last_read_count=received;
   if (!success)
     {
       print_error("Failed to read from port");
@@ -1087,14 +1120,21 @@ SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
 }
 
 #else
-int serialport_write(int fd, uint8_t * buffer, size_t size)
+int do_serial_port_write(int fd, uint8_t * buffer, size_t size,const char *function,const char *file,const int line)
 {
+  
 #ifdef __APPLE__
-  if (debug_serial) dump_bytes(0,"serial write (osx)",buffer,size);
+  if (debug_serial) {
+    fprintf(stderr,"%s:%d:%s(): ",file,line,function);
+    dump_bytes(0,"serial write (osx)",buffer,size);
+  }
   return write(fd,buffer,size);
 #else
   size_t offset=0;
-  if (debug_serial) dump_bytes(0,"serial write (linux)",buffer,size);
+  if (debug_serial) {
+    fprintf(stderr,"%s:%d:%s(): ",file,line,function);
+    dump_bytes(0,"serial write (linux)",buffer,size);
+  }
   while(offset<size) {
     int written=write(fd,&buffer[offset],size-offset);
     if (written>0) offset+=written;
@@ -1106,10 +1146,16 @@ int serialport_write(int fd, uint8_t * buffer, size_t size)
   return size;
 }
 
-size_t serialport_read(int fd, uint8_t * buffer, size_t size)
+size_t do_serial_port_read(int fd, uint8_t * buffer, size_t size,const char *function,const char *file,const int line)
 {
   int count = read(fd,buffer,size);
-  if (debug_serial) dump_bytes(0,"serial read (linux/osx)",buffer,count);
+  if (last_read_count||count) {
+    if (debug_serial) {
+      fprintf(stderr,"%s:%d:%s():",file,line,function);
+      dump_bytes(0,"serial read (linux/osx)",buffer,count);
+    }
+  }
+  last_read_count=count;
   return count;
 }
 

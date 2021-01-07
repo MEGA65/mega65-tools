@@ -1,17 +1,20 @@
 
-
 #ifdef WINDOWS
 #include <windows.h>
 #define SSIZE_T SIZE_T
 #define PORT_TYPE HANDLE
-SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
-int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
+SSIZE_T do_serial_port_read(HANDLE port, uint8_t * buffer, size_t size,const char *func,const char *file,const int line);
+int do_serial_port_write(HANDLE port, uint8_t * buffer, size_t size,const char *func,const char *file,const int line);
 #else
 #define SSIZE_T size_t
 #define PORT_TYPE int
-size_t serialport_read(int fd, uint8_t * buffer, size_t size);
-int serialport_write(int fd, uint8_t * buffer, size_t size);
+size_t do_serial_port_read(int fd, uint8_t * buffer, size_t size,const char *func,const char *file,const int line);
+int do_serial_port_write(int fd, uint8_t * buffer, size_t size,const char *func,const char *file,const int line);
 #endif
+
+#define serialport_read(A,B,C) do_serial_port_read(A,B,C, __func__, __FILE__, __LINE__)
+#define serialport_write(A,B,C) do_serial_port_write(A,B,C, __func__, __FILE__, __LINE__)
+
 
 int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer);
 int push_ram(unsigned long address,unsigned int count,unsigned char *buffer);
@@ -46,11 +49,7 @@ int detect_mode(void);
 void print_error(const char * context);
 #ifdef WINDOWS
 HANDLE open_serial_port(const char * device, uint32_t baud_rate);
-int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
-SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
 #else
-int serialport_write(int fd, uint8_t * buffer, size_t size);
-size_t serialport_read(int fd, uint8_t * buffer, size_t size);
 void set_serial_speed(int fd,int serial_speed);
 #endif
 void open_the_serial_port(char *serial_port);
