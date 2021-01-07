@@ -205,6 +205,8 @@ void rle_finalise(void)
 
 void main(void)
 {
+  unsigned char jid;
+  
   asm ( "sei" );
 
   // Fast CPU, M65 IO
@@ -238,7 +240,7 @@ void main(void)
       printf("Received list of %d jobs.\n",job_count);
 #endif
       job_addr=0xc001;
-      for(j=0;j<job_count;j++) {
+      for(jid=0;jid<job_count;jid++) {
 	if (job_addr>0xcfff) break;
 	switch(PEEK(job_addr)) {
 	case 0x00: job_addr++; break;
