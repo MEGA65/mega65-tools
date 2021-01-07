@@ -495,7 +495,8 @@ int rxbuff_detect(void)
   int b=1;
   while(b>0) {
     b=serialport_read(fd,read_buff,8192);
-    read_buff[b]=0;
+    if (b>=0) read_buff[b]=0;
+    dump_bytes(0,"bytes from serial port",read_buff,b);
     if ((strstr((char *)read_buff,":00000000:"))
 	&&(strstr((char *)read_buff,":00000001:"))) {
       no_rxbuff=0;
