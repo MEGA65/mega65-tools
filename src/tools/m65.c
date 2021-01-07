@@ -276,11 +276,78 @@ int virtual_f011_read(int device,int track,int sector,int side)
 
   timestamp_msg("");
   vf011_bytes_read+=256;
-  fprintf(stderr, "device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec\n",
+  fprintf(stderr, "READ  device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec\n",
 	  device, track, sector, side, vf011_bytes_read * 1.0 / (gettime_ms() - vf011_first_read_time));
   
   return 0;
 }
+
+int virtual_f011_write(int device,int track,int sector,int side)
+{
+
+  pending_vf011_read=0;
+  
+  long long start=gettime_ms();
+
+  if (!vf011_first_read_time) vf011_first_read_time = start - 1;
+  
+#if 1
+#ifdef WINDOWS
+  fprintf(stderr,"T+%I64d ms : Servicing hypervisor request for F011 FDC sector write.\n",
+	  gettime_ms()-start);
+#else
+  fprintf(stderr,"T+%lld ms : Servicing hypervisor request for F011 FDC sector write.\n",
+	  gettime_ms()-start);
+#endif
+#endif
+
+  if(fd81 == NULL) {
+
+    fd81 = fopen(d81file, "wb+");
+    if(!fd81) {
+      
+      fprintf(stderr, "Could not open D81 file: '%s'\n", d81file);
+      exit(-1);
+    }
+  }
+
+  last_virtual_time=gettime_ms();
+  last_virtual_track=track;
+  last_virtual_sector=sector;
+  last_virtual_side=side;
+  
+  unsigned char buf[512];
+  fetch_ram(WRITE_SECTOR_BUFFER_ADDRESS,512,buf);
+  
+  int physical_sector=( side==0 ? sector-1 : sector+9 );
+  
+  int result = fseek(fd81, (track*20+physical_sector)*512, SEEK_SET);
+  
+  if(result) {
+    
+    fprintf(stderr, "Error finding D81 sector %d @ 0x%x\n", result, (track*20+physical_sector)*512);
+    exit(-2);
+  }
+  else {
+    int b=fwrite(buf,1,512,fd81);
+    //	fprintf(stderr, " bytes read: %d @ 0x%x\n", b,(track*20+physical_sector)*512);
+    
+    if(b!=512) {
+      fprintf(stderr,"ERROR: Short write of %d bytes\n",b);
+    }
+  }
+
+  /* signal done/result */
+  mega65_poke(0xffd3086,side&0x7f);
+  
+  timestamp_msg("");
+  vf011_bytes_read+=256;
+  fprintf(stderr, "WRITE device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec\n",
+	  device, track, sector, side, vf011_bytes_read * 1.0 / (gettime_ms() - vf011_first_read_time));
+  
+  return 0;
+}
+
 
 
 void show_hyppo_report(void)
@@ -1699,8 +1766,8 @@ int main(int argc,char **argv)
 	  virtual_f011_read(pending_vf011_device,pending_vf011_track,
 			    pending_vf011_sector,pending_vf011_side);
 	if (pending_vf011_write)
-	  virtual_f011_read(pending_vf011_device,pending_vf011_track,
-			    pending_vf011_sector,pending_vf011_side);
+	  virtual_f011_write(pending_vf011_device,pending_vf011_track,
+			     pending_vf011_sector,pending_vf011_side);
       }
       
       continue;
