@@ -302,6 +302,7 @@ int execute_command(char *cmd)
     printf("put <file> [destination name] - upload file to SD card, and optionally rename it destination file.\n");
     printf("get <file> [destination name] - download file from SD card, and optionally rename it destination file.\n");
     printf("clusters <file> - show cluster chain of specified file.\n");
+    printf("sector <number|$hex number> - display the contents of the specified sector.\n");
     printf("getslot <slot> <destination name> - download a freeze slot.\n");
     printf("exit - leave this programme.\n");
     printf("quit - leave this programme.\n");
@@ -1451,13 +1452,115 @@ int rename_file(char *name,char *dest_name)
   return retVal;
 }
 
+#ifdef USE_LFN
+int normalise_long_name(char *long_name,char *short_name,char *dir_name)
+{
+  int base_len=0;
+  int ext_len=0;
+  int dot_count=0;
+  int needs_long_name=0;
+
+  short_name[8+3]=0;
+  
+  // Handle . and .. special cases
+  if (!strcmp(long_name,".")) {
+    bcopy(".          ",short_name);
+    return;
+  }
+  if (!strcmp(long_name,"..")) {
+    bcopy("..         ",short_name);
+    return;
+  }
+
+  for(int i=0;long_name[i];i++)
+    {
+      if (long_name[i]=='.') {
+	dot_count++;
+	if (dot_count>1) needs_long_name=1;
+      } else {
+	if (toupper(long_name[i])!=long_name[i]) needs_long_name=1;
+	if (dot_count==0) {
+	  if (base_len<8) {
+	    short_name[base_len]=toupper(long_name[i]);
+	  } else {
+	    needs_long_name=1;
+	  }
+	} else if (dot_count==1) {
+	  if (ext_len<3) {
+	    short_name[8+ext_len]=toupper(long_name[i]);
+	  } else {
+	    needs_long_name=1;
+	  }
+	}
+      }      
+    }
+
+  if (needs_long_name) {
+    // Put ~X suffix on base name.
+    // XXX Needs to be unique in the sub-directory
+    for(int i=1;i<=99999;i++) {
+      int length_of_number=5;
+      if (i<10000) length_of_number=4;
+      if (i<1000) length_of_number=3;
+      if (i<100) length_of_number=2;
+      if (i<10) length_of_number=1;
+      int ofs=7-length_of_number;
+      char temp[9];
+      snprintf(temp,8-ofs,"~%d",i);
+      bcopy(temp,&short_name[ofs],8-ofs);
+      printf("  considering short-name '%s'...\n",short_name);
+      if (fat_opendir(dir)) {
+	fprintf(stderr,"ERROR: Could not open directory '%s' to check for LFN uniqueness.\n",dir);
+	// So just assume its unique
+	break;
+      } else {
+	// iterate through the directory looking for
+	while(!fat_readdir(&de)) {
+	  // Compare short name with each directory entry.
+	  // XXX We have the non-dotted version to compare against,
+	  // so maybe we should just do direct sector reading and examination,
+	  // rather than calling fat_readdir(). Else we can make fat_readdir()
+	  // store the unmodified short-name (and eventually long-name)?
+	  fprintf(stderr,"ERROR: Not implemented.\n");
+	  exit(-1);
+	}
+      }
+      
+    }
+  }
+  
+  return needs_long_name;
+}
+
+unsigned char lfn_checksum(const unsigned char *pFCBName)
+{
+   int i;
+   unsigned char sum = 0;
+
+   for (i = 11; i; i--)
+      sum = ((sum & 1) << 7) + (sum >> 1) + *pFCBName++;
+
+   return sum;
+}
+#endif
 
 int upload_file(char *name,char *dest_name)
 {
+  
   struct m65dirent de;
   int retVal=0;
   do {
 
+#ifdef USE_LFN
+    unsigned char short_name[8+3+1];
+    
+    // Normalise dest_name into 8.3 format.
+    normalise_long_name(dest_name,short_name);
+
+    // Calculate checksum of 8.3 name
+    unsigned char lfn_csum = lfn_checksum(short_name);
+#endif
+    
     time_t upload_start=time(0);
     
     struct stat st;
@@ -2087,6 +2190,7 @@ int download_file(char *dest_name,char *local_name,int showClusters)
 
       sector_in_cluster++;
       remaining_bytes-=512;
+      if (remaining_bytes<0) remaining_bytes=0;
     }
 
     if (f) fclose(f);
