@@ -47,6 +47,9 @@
 #define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
 
+int debug_serial=0;
+
+
 #ifdef WINDOWS
 #include <windows.h>
 #undef SLOW_FACTOR
@@ -1042,6 +1045,8 @@ int serialport_write(HANDLE port, uint8_t * buffer, size_t size)
   BOOL success;
   //  printf("Calling WriteFile(%d)\n",size);
 
+  if (debug_serial) dump_bytes(0,"serial write (windows)",buffer,size);
+  
   while(offset<size) {  
     success = WriteFile(port, &buffer[offset], size - offset, &written, NULL);
     //  printf("  WriteFile() returned.\n");
@@ -1071,6 +1076,7 @@ SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
   DWORD received=0;
   //  printf("Calling ReadFile(%I64d)\n",size);
   BOOL success = ReadFile(port, buffer, size, &received, NULL);
+  if (debug_serial) dump_bytes(0,"serial read (linux)",buffer,received);
   if (!success)
     {
       print_error("Failed to read from port");
@@ -1084,9 +1090,11 @@ SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size)
 int serialport_write(int fd, uint8_t * buffer, size_t size)
 {
 #ifdef __APPLE__
+  if (debug_serial) dump_bytes(0,"serial write (osx)",buffer,size);
   return write(fd,buffer,size);
 #else
   size_t offset=0;
+  if (debug_serial) dump_bytes(0,"serial write (linux)",buffer,size);
   while(offset<size) {
     int written=write(fd,&buffer[offset],size-offset);
     if (written>0) offset+=written;
@@ -1100,7 +1108,9 @@ int serialport_write(int fd, uint8_t * buffer, size_t size)
 
 size_t serialport_read(int fd, uint8_t * buffer, size_t size)
 {
-  return read(fd,buffer,size);
+  int count = read(fd,buffer,size);
+  if (debug_serial) dump_bytes(0,"serial read (linux/osx)",buffer,count);
+  return count;
 }
 
 void set_serial_speed(int fd,int serial_speed)

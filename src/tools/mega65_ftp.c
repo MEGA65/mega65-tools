@@ -310,8 +310,10 @@ int execute_command(char *cmd)
     fprintf(stderr,"ERROR: Unknown command or invalid syntax. Type help for help.\n");
     return -1;
   }
-  return 0;
+  return 0;  
 }
+
+extern int debug_serial;
 
 int main(int argc,char **argv)
 {
@@ -319,8 +321,9 @@ int main(int argc,char **argv)
   start_usec=gettime_us();  
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:s:l:c:")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:")) != -1) {
     switch (opt) {
+    case 'D': debug_serial=1; break;
     case 'l':
       strcpy(serial_port,optarg);
       break;

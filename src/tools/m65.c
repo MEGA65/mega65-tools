@@ -55,6 +55,8 @@ extern int pending_vf011_track;
 extern int pending_vf011_sector;
 extern int pending_vf011_side;
 
+extern int debug_serial;
+
 int osk_enable=0;
 
 int not_already_loaded=1;
@@ -960,8 +962,9 @@ int main(int argc,char **argv)
   if (argc==1) usage();
   
   int opt;
-  while ((opt = getopt(argc, argv, "@:14aA:B:b:c:C:d:EFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:c:C:d:DEFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
+    case 'D': debug_serial=1; break;
     case 'h': case '?': usage();
     case '@': load_binary=optarg; break;
     case 'a': show_audio_mixer=1; break;
