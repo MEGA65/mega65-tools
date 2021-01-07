@@ -218,6 +218,7 @@ void wait_for_prompt(void)
   while(1) {
     b=serialport_read(fd,read_buff,8191);
     //    if (b>0) dump_bytes(0,"wait_for_prompt",read_buff,b);
+    if (b<0||b>8191) continue;
     read_buff[b]=0;
     // Check for Virtual F011 requests coming through
     for (int i=3;i<b;i++) {
