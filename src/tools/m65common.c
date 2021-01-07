@@ -500,7 +500,7 @@ int rxbuff_detect(void)
     if ((strstr((char *)read_buff,":00000000:"))
 	&&(strstr((char *)read_buff,":00000001:"))) {
       no_rxbuff=0;
-      printf("RX buffer detected.  Latency will be reduced.\n");
+      timestamp_msg("RX buffer detected.  Latency will be reduced.");
     }
   }
   return !no_rxbuff;
