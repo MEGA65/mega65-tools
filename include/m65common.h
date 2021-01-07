@@ -14,7 +14,8 @@ int do_serial_port_write(int fd, uint8_t * buffer, size_t size,const char *func,
 
 #define serialport_read(A,B,C) do_serial_port_read(A,B,C, __func__, __FILE__, __LINE__)
 #define serialport_write(A,B,C) do_serial_port_write(A,B,C, __func__, __FILE__, __LINE__)
-
+#define slow_write(A,B,C) do_slow_write(A,B,C, __func__, __FILE__, __LINE__)
+#define slow_write_safe(A,B,C) do_slow_write_safe(A,B,C, __func__, __FILE__, __LINE__)
 
 int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer);
 int push_ram(unsigned long address,unsigned int count,unsigned char *buffer);
@@ -30,8 +31,8 @@ unsigned long long gettime_ms();
 void purge_input(void);
 void wait_for_prompt(void);
 long long gettime_us();
-int slow_write_safe(PORT_TYPE fd,char *d,int l);
-int slow_write(PORT_TYPE fd,char *d,int l);
+int do_slow_write_safe(PORT_TYPE fd,char *d,int l, const char *func,const char *file,const int line);
+int do_slow_write(PORT_TYPE fd,char *d,int l, const char *func,const char *file,const int line);
 void timestamp_msg(char *msg);
 int stuff_keybuffer(char *s);
 int read_and_print(PORT_TYPE fd);

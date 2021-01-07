@@ -127,7 +127,7 @@ void timestamp_msg(char *msg)
 }
 
 
-int slow_write(PORT_TYPE fd,char *d,int l)
+int do_slow_write(PORT_TYPE fd,char *d,int l,const char *func,const char *file,const int line)
 {
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
@@ -146,16 +146,16 @@ int slow_write(PORT_TYPE fd,char *d,int l)
   for(i=0;i<l;i++)
     {
       if (no_rxbuff) { if (serial_speed==4000000) do_usleep(1000*SLOW_FACTOR); else do_usleep(2000*SLOW_FACTOR); }
-      int w=serialport_write(fd,(unsigned char *)&d[i],1);
+      int w=do_serial_port_write(fd,(unsigned char *)&d[i],1,func,file,line);
       while (w<1) {
 	if (no_rxbuff) { if (serial_speed==4000000) do_usleep(500*SLOW_FACTOR); else do_usleep(1000*SLOW_FACTOR); }
-	w=serialport_write(fd,(unsigned char *)&d[i],1);
+	w=do_serial_port_write(fd,(unsigned char *)&d[i],1,func,file,line);
       }
     }
   return 0;
 }
 
-int slow_write_safe(PORT_TYPE fd,char *d,int l)
+int do_slow_write_safe(PORT_TYPE fd,char *d,int l,const char *func,const char *file,int line)
 {
   // There is a bug at the time of writing that causes problems
   // with the CPU's correct operation if various monitor commands
@@ -168,11 +168,11 @@ int slow_write_safe(PORT_TYPE fd,char *d,int l)
   // (We can work around this by using the fact that the new UART
   // monitor tells us when a breakpoint has been reached.
   if (!cpu_stopped)
-    slow_write(fd,"t1\r",3);
-  slow_write(fd,d,l);
+    do_slow_write(fd,"t1\r",3,func,file,line);
+  do_slow_write(fd,d,l,func,file,line);
   if (!cpu_stopped) {
     //    printf("Resuming CPU after writing string\n");
-    slow_write(fd,"t0\r",3);
+    do_slow_write(fd,"t0\r",3,func,file,line);
   }
   return 0;
 }
@@ -557,16 +557,23 @@ int monitor_sync(void)
     purge_input();
   }
 
+  char recent[16];
+  bzero(recent,16);
+  
   for(int tries=0;tries<10;tries++) {
 #ifdef WINDOWS
     snprintf(cmd,1024,"#%08x\r",rand());
 #else
     snprintf(cmd,1024,"#%08lx\r",random());
 #endif
-    //    printf("Writing token: '%s'\n",cmd);
+    printf("Writing token: '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
 
-    for(int i=0;i<10;i++) {
+    time_t start=time(0);
+
+    int total_read=0;
+    
+    while(1) {
       if (no_rxbuff) do_usleep(10000*SLOW_FACTOR);
       b=serialport_read(fd,read_buff,8192);
       if (b<0) b=0;
@@ -580,13 +587,36 @@ int monitor_sync(void)
       }
       if (b>8191) b=8191;
       read_buff[b]=0;
+      if (b>0) total_read+=b;
+
+      if ((time(0)-start)>1) {
+	if (!total_read) {
+	  // Seems to be locked up.
+	  // It could be that someone had a half-finished s command in progress.
+	  // So write 64K x 0
+	  char zeroes[256];
+	  bzero(zeroes,256);
+	  for(int i=0;i<256;i++) serialport_write(fd,zeroes,256);
+
+	  slow_write_safe(fd,cmd,strlen(cmd));
+	  
+	  start=time(0);
+	}
+      }
+
+      for(int n=0;n<b;n++) {
+	for(int j=0;j<15;j++) recent[j]=recent[j+1];
+	recent[15]=read_buff[n];
+
+	//	dump_bytes(0,"recent",recent,strlen(cmd));
+	
+	// Token present?
+	if (!strncmp(cmd,&recent[16-strlen(cmd)],strlen(cmd)))
+	  return 0;
+      }
+      
       //      if (b>0) dump_bytes(2,"Sync input",read_buff,b);
       
-      // if (b>0) dump_bytes(0,"read_data",read_buff,b);
-      if (strstr((char *)read_buff,cmd)) {
-	//	printf("Found token. Synchronised with monitor.\n");
-	return 0;      
-      }
     }
     if (no_rxbuff) do_usleep(10000*SLOW_FACTOR);
     else do_usleep(1000);
