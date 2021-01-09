@@ -466,10 +466,23 @@ void main(void)
   
   // Draw some sprite data into $8000
   // Make a masked sprite shape so that we get transparent bits
+  // Result should be a circle with the outside edge in a different colour.
   for(i=0;i<21;i++)
     for(j=0;j<16;j++) {
-      if (((i-11)*(i-11)+(j-8)*(j-8))>64) POKE(0x8000+i*8+(j>>1),0);
-      else POKE(0x8000+i*8+(j>>1),0x77);
+      POKE(0x8000+i*8+(j>>1),0);
+    }
+  for(i=0;i<21;i++)
+    for(j=0;j<16;j++) {
+      if (((i-11)*(i-11)+(j-8)*(j-8))<=64) {
+	if ((j&1))
+	  POKE(0x8000+i*8+(j>>1),PEEK(0x8000+i*8+(j>>1))|0x06);
+	else POKE(0x8000+i*8+(j>>1),PEEK(0x8000+i*8+(j>>1))|0x60);
+      }
+      if (((i-11)*(i-11)+(j-8)*(j-8))<=49) {
+	if ((j&1))
+	  POKE(0x8000+i*8+(j>>1),PEEK(0x8000+i*8+(j>>1))|0x01);
+	else POKE(0x8000+i*8+(j>>1),PEEK(0x8000+i*8+(j>>1))|0x10);
+      }
     }
   
   
@@ -481,6 +494,21 @@ void main(void)
 
   // Enable all sprites
   POKE(0xD015,0xFF);
+
+  /*
+    At this point, we are able to see the problem:
+    Any pixel in a sprite which is in front of another sprite is displayed,
+    but it seems the X counter of that sprite is not advanced, and thus the same
+    pixel value smears across to the right edge of the sprite that is in front.
+
+    This is visible by the outside edge of the bottom corner of each sprite extending
+    to the right-hand edge of the sprite.
+
+    AH! It looks like the transparent pixels are still being marked as set by the 
+    foreground sprite, so when the background sprite is behind it, the colour of the
+    (supposedly transparent) foreground sprite pixel is used instead.
+
+  */
   
 }
 
