@@ -2,7 +2,7 @@
 
 int main(int argc,char **argv)
 {
-  FILE *in=fopen(argv[1],"r");
+  FILE *in=fopen(argv[1],"rb");
   char *name=argv[2];
   FILE *out=fopen(argv[3],"w");
 
