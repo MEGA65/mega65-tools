@@ -32,17 +32,6 @@ int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *
 int detect_mode(void);
 void progress_to_RTI(void);
 
-
-#ifdef WINDOWS
-#define PORT_TYPE HANDLE
-SSIZE_T serialport_read(HANDLE port, uint8_t * buffer, size_t size);
-int serialport_write(HANDLE port, uint8_t * buffer, size_t size);
-#else
-#define PORT_TYPE int
-size_t serialport_read(int fd, uint8_t * buffer, size_t size);
-int serialport_write(int fd, uint8_t * buffer, size_t size);
-#endif
-
 #ifdef WINDOWS
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)  
 #define bcopy(b1,b2,len) (memmove((b2), (b1), (len)), (void) 0)
