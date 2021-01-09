@@ -234,8 +234,9 @@ int virtual_f011_read(int device,int track,int sector,int side)
   }
 
   // Only actually load new sector contents if we don't think it is a duplicate request
-  if (((gettime_ms()-last_virtual_time)>100)
-      ||(last_virtual_writep)
+  if (// ((gettime_ms()-last_virtual_time)>100)
+      // ||
+      (last_virtual_writep)
       ||(last_virtual_track!=track)
       ||(last_virtual_sector!=sector)
       ||(last_virtual_side!=side)
