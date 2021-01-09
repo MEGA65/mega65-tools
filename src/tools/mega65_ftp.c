@@ -1644,7 +1644,8 @@ int upload_file(char *name,char *dest_name)
 	  if (write_sector(partition_start+dir_sector,dir_sector_buffer)) {
 	    printf("Failed to write updated directory sector.\n");
 	    retVal=-1; break; }
-	  
+
+	  // Stop looking for an empty directory entry slot
 	  break;
 	}
       }
@@ -1733,6 +1734,9 @@ int upload_file(char *name,char *dest_name)
       unsigned char buffer[512];
       bzero(buffer,512);
       int bytes=fread(buffer,1,512,f);
+      if (bytes!=512) {
+	fprintf(stderr,"ERROR: Short read: Only got %d bytes\n",bytes);
+      }
       sector_number=partition_start+first_cluster_sector+(sectors_per_cluster*(file_cluster-first_cluster))+sector_in_cluster;
 #ifdef WINDOWS
       if (0) printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
