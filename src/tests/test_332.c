@@ -438,7 +438,10 @@ void main(void)
   graphics_clear_double_buffer();
   activate_double_buffer();
 
-  print_text(0,0,1,"Issue #332 - overlapping 16-colour sprites result in wrong colours.");
+  print_text(0,0,1,"Issue #332 - overlapping 16-colour      sprites result in wrong colours.");
+  print_text(0,2,2,"Fault is outside lower right corner of  circles is filled with the edge colour.");
+  print_text(0,4,5,"Correct behaviour is the circles and");
+  print_text(0,5,5,"their edges are all    symmetrical.");
 
   // Enable 16-bit sprite pointers
   POKE(0xD06E,0x80);
@@ -448,6 +451,7 @@ void main(void)
   POKE(0xD06D,0x03);
 
   // Set transparency colour to 0 for all
+  // Fault will not occur without this, as it is the transparency logic that was faulty
   for(i=0;i<8;i++) {
     POKE(0xD027+i,0);
   }
@@ -489,7 +493,7 @@ void main(void)
   // Set sprite locations
   for(i=0;i<8;i++) {
     POKE(0xD000+i*2,0x40+10*i);
-    POKE(0xD001+i*2,0x40+10*i);
+    POKE(0xD001+i*2,0x60+10*i);
   }
 
   // Enable all sprites
