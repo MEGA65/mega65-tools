@@ -34,8 +34,8 @@
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
-#include <pthread.h>
 #ifndef WINDOWS
+#include <pthread.h>    // msys2-mingw64 doesn't have pthread.h, so had to drop it in here
 #ifndef __APPLE__
 #include <sys/ioctl.h>
 #include <linux/serial.h>
@@ -53,8 +53,8 @@ int debug_serial=0;
 #ifdef WINDOWS
 #include <windows.h>
 #undef SLOW_FACTOR
-#define SLOW_FACTOR 1
-#define SLOW_FACTOR2 1
+#define SLOW_FACTOR 8
+#define SLOW_FACTOR2 8
 // #define do_usleep usleep
 void do_usleep(__int64 usec) 
 { 
@@ -82,13 +82,16 @@ void do_usleep(unsigned long usec)
 
 FILE iobs[3];
 
+/* This seems to exist in MSYS2-Mingw64, in "mingw-w64-crt-git/src/mingw-w64/mingw-w64-crt/stdio/acrt_iob_func.c" */
+/* I'll comment it out for my install, but will leave it up to you in the PR if you want to comment it out or if it's needed on your side */
+/*
 FILE *__imp___acrt_iob_func(void)
 {
   iobs[0]=*stdin;
   iobs[1]=*stdout;
   iobs[2]=*stderr;
   return iobs;
-}
+}*/
 #endif
 
 time_t start_time=0;

@@ -317,6 +317,13 @@ extern int debug_serial;
 
 int main(int argc,char **argv)
 {
+#ifdef WINDOWS
+  // working around mingw64-stdout line buffering issue with advice suggested here:
+  // https://stackoverflow.com/questions/13035075/printf-not-printing-on-console
+  setvbuf (stdout, NULL, _IONBF, 0);
+#endif
+  printf("hello\n");
+  printf("hello \r\n");
   start_time=time(0);
   start_usec=gettime_us();  
 
@@ -614,7 +621,7 @@ void job_process_results(void)
 
   data_byte_count=0;
 
-  int debug_rx=0;
+  int debug_rx=1;
   
   while (1) {
     int b=serialport_read(fd,buff,8192);
@@ -674,6 +681,7 @@ void job_process_results(void)
 		   );
 	  q_rle_count=0; q_raw_count=0; q_rle_enable=0;
 	  data_byte_count=transfer_size;
+	  printf("data_byte_count=0x%X\n", data_byte_count);
 	  // Don't forget to process the bytes we have already injested
 	  for(int k=n;k<=30;k++) {
 	    if (data_byte_count) {
@@ -703,6 +711,8 @@ void queue_execute(void)
   snprintf(cmd,1024,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd));
   
+  //usleep(50000);
+
   job_process_results();
   queue_addr=0xc001;
   queue_jobs=0;
@@ -1022,7 +1032,7 @@ unsigned int get_next_cluster(int cluster)
   
   do {
     // Read chain entry for this cluster
-    int cluster_sector_number=cluster/(512/4);
+    int cluster_sector_number=cluster/(512/4);	// This is really the sector that the current cluster-id is located in the FAT table
     int cluster_sector_offset=(cluster*4)&511;
 
     // Read sector of cluster
@@ -1695,7 +1705,7 @@ int upload_file(char *name,char *dest_name)
     int sector_in_cluster=0;
     int file_cluster=first_cluster_of_file;
     unsigned int sector_number;
-    FILE *f=fopen(name,"r");
+    FILE *f=fopen(name,"rb");
 
     if (!f) {
       printf("ERROR: Could not open file '%s' for reading.\n",name);
@@ -2058,7 +2068,7 @@ int download_slot(int slot_number,char *dest_name)
       break;
     }
     
-    FILE *f=fopen(dest_name,"w");
+    FILE *f=fopen(dest_name,"wb");
     if (!f) {
       printf("ERROR: Could not open file '%s' for writing\n",dest_name);
       retVal=-1;
@@ -2136,7 +2146,7 @@ int download_file(char *dest_name,char *local_name,int showClusters)
     FILE *f=NULL;
 
     if (!showClusters) {
-      f=fopen(local_name,"w");
+      f=fopen(local_name,"wb");
       if (!f) {
 	printf("ERROR: Could not open file '%s' for writing.\n",local_name);
 	retVal=-1; break;

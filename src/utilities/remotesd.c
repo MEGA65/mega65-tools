@@ -20,7 +20,7 @@
 #include <random.h>
 
 // Set to 1 to show debug messages
-#define DEBUG 0
+#define DEBUG 1
 
 // Slight delay between chars for old HYPPO versions that lack ready check on serial write
 #define SERIAL_DELAY
