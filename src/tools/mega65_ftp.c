@@ -621,7 +621,7 @@ void job_process_results(void)
 
   data_byte_count=0;
 
-  int debug_rx=1;
+  int debug_rx=0;
   
   while (1) {
     int b=serialport_read(fd,buff,8192);
