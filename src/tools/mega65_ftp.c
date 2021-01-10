@@ -405,6 +405,9 @@ int main(int argc,char **argv)
 	execute_command(cmd);
 	len=0;
 	cmd[0]=0;
+	snprintf(prompt,1024,"MEGA65 SD-Card:%s> ",current_dir);
+	printf("%s",prompt);
+	fflush(stdout);
       }
       else if (c==EOF) break;
       else if (len<8191) {
@@ -633,6 +636,7 @@ void job_process_results(void)
 	bcopy(&recent[1],&recent[0],30);
 	recent[30]=buff[i];
 	recent[31]=0;
+	fprintf(stderr,"i=%d, b=%d, recent[30-10]='%s'\n",i,b,&recent[30-10]);
 	if (!strncmp((char *)&recent[30-10],"FTBATCHDONE",11)) {
 	  long long endtime =gettime_us();
 #ifdef WINDOWS
