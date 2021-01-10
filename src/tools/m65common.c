@@ -536,11 +536,11 @@ int rxbuff_detect(void)
   while(b>0) {
     b=serialport_read(fd,read_buff,8192);
     if (b>=0) read_buff[b]=0;
-    dump_bytes(0,"bytes from serial port",read_buff,b);
+    //    dump_bytes(0,"bytes from serial port",read_buff,b);
     if ((strstr((char *)read_buff,":00000000:"))
 	&&(strstr((char *)read_buff,":00000001:"))) {
       no_rxbuff=0;
-      timestamp_msg("RX buffer detected.  Latency will be reduced.");
+      timestamp_msg("RX buffer detected.  Latency will be reduced.\n");
     }
   }
   return !no_rxbuff;
@@ -581,7 +581,7 @@ int monitor_sync(void)
 #else
     snprintf(cmd,1024,"#%08lx\r",random());
 #endif
-    printf("Writing token: '%s'\n",cmd);
+    //    printf("Writing token: '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
 
     time_t start=time(0);
@@ -790,7 +790,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   char next_addr_str[8192];
   int ofs=0;
 
-  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
+  //  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
   
   //  monitor_sync();
   while(addr<(address+count)) {
@@ -801,14 +801,14 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
       end_addr=addr+0x100;
     }
-    printf("Sending '%s'\n",cmd);
+    //    printf("Sending '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
     while(addr!=end_addr) {
       snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
       int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
       if (b<0) b=0;
       if ((ofs+b)>8191) b=8191-ofs;
-      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
+      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
       read_buff[ofs+b]=0;
       ofs+=b;
       char *s=strstr((char *)read_buff,next_addr_str);
@@ -892,6 +892,7 @@ int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *
   
 }
 
+time_t last_settle_msg_time=0;
 
 int detect_mode(void)
 {
@@ -925,7 +926,10 @@ int detect_mode(void)
   
     fetch_ram(0xffd3030,1,mem_buff);
     while(mem_buff[0]&0x01) {
-      timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
+      if (last_settle_msg_time!=time(0)) {
+	timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
+	last_settle_msg_time=time(0);
+      }
       if (no_rxbuff) do_usleep(200000);
       fetch_ram(0xffd3030,1,mem_buff);    
     }
