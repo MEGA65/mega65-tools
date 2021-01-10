@@ -952,7 +952,7 @@ int detect_mode(void)
       // check $01 port value
       fetch_ram(0x7770001,1,mem_buff);
       printf("Port $01 contains $%02x\n",mem_buff[0]);
-      if ((mem_buff[0]&0x7)==0x07) {
+      if ((mem_buff[0]&0xf)==0x07) {
 	saw_c64_mode=1;
 	timestamp_msg("");
 	fprintf(stderr,"In C64 Mode.\n");
@@ -1336,7 +1336,7 @@ int switch_to_c64mode(void)
     if (count>0) {
       fprintf(stderr,"Retyping GO64\n");
       stuff_keybuffer("\r\rGO64\rY\r");
-      do_usleep(20000);
+      do_usleep(50000);
       count=0;
     }
     detect_mode();
