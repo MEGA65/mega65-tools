@@ -625,7 +625,6 @@ void job_process_results(void)
     int b=serialport_read(fd,buff,8192);
     if (b<1) usleep(0);
     if (b>0) if (debug_rx) dump_bytes(0,"jobresponse",buff,b);
-    if (data_byte_count
     for(int i=0;i<b;i++) {
       // Keep rolling window of most recent chars for interpretting job
       // results
