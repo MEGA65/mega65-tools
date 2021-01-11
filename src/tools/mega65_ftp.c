@@ -880,6 +880,8 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
 	sector_cache_sectors[i]=sector_number+n;
 	if (sector_cache_count<(i+1)) sector_cache_count=i+1;
       }
+      else
+    	  sector_cache_count=0;
     }
 
     // Make sure to return the actual sector that was asked for
@@ -919,7 +921,8 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
       sector_cache_sectors[i]=sector_number;
       if (sector_cache_count<(i+1)) sector_cache_count=i+1;
     }
-
+    else
+    	sector_cache_count=0;
     
   } while(0);
   if (retVal) printf("FAIL writing sector %d\n",sector_number);
