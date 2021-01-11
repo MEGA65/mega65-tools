@@ -878,8 +878,8 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
       if (i<SECTOR_CACHE_SIZE) {
 	bcopy(buffer,sector_cache[i],512);
 	sector_cache_sectors[i]=sector_number+n;
+	if (sector_cache_count<(i+1)) sector_cache_count=i+1;
       }
-      if (sector_cache_count<(i+1)) sector_cache_count=i+1;
     }
 
     // Make sure to return the actual sector that was asked for
@@ -917,8 +917,8 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
     if (i<SECTOR_CACHE_SIZE) {
       bcopy(buffer,sector_cache[i],512);
       sector_cache_sectors[i]=sector_number;
+      if (sector_cache_count<(i+1)) sector_cache_count=i+1;
     }
-    if (sector_cache_count<(i+1)) sector_cache_count=i+1;
 
     
   } while(0);
