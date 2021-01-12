@@ -331,7 +331,7 @@ void main(void)
 	  // Reset RLE state
 	  rle_init();
 
-	  if (PEEK(job_addr)==3) snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-7,sector_count*0x200L);
+	  if (PEEK(job_addr-7)==3) snprintf(msg,80,"ftjobdata:%04x:%08lx:",job_addr-7,sector_count*0x200L);
 	  else snprintf(msg,80,"ftjobdatr:%04x:%08lx:",job_addr-7,sector_count*0x200L);
 	  serial_write_string(msg,strlen(msg));	    
 

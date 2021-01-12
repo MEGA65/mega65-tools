@@ -321,6 +321,7 @@ int main(int argc,char **argv)
   // working around mingw64-stdout line buffering issue with advice suggested here:
   // https://stackoverflow.com/questions/13035075/printf-not-printing-on-console
   setvbuf (stdout, NULL, _IONBF, 0);
+  setvbuf (stderr, NULL, _IONBF, 0);
 #endif
   printf("hello\n");
   printf("hello \r\n");
@@ -742,9 +743,12 @@ void queue_physical_write_sector(uint32_t sector_number,uint32_t mega65_address)
 
 int execute_write_queue(void)
 {
+  if (write_sector_count == 0)
+    return 0;
+
   int retVal=0;
   do {
-    if (0) printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
+    if (1) printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
 		  write_sector_count,write_buffer_offset);
     push_ram(0x50000,write_buffer_offset,&write_data_buffer[0]);
 
@@ -780,6 +784,7 @@ void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
   // can't do 64KB
   if (write_buffer_offset>=32768) execute_write_queue();
   
+  printf("adding sector $%08x to the write queue (pos#%d)\n", sector_number, write_sector_count);
   bcopy(buffer,&write_data_buffer[write_buffer_offset],512);
   write_buffer_offset+=512;
   write_sector_numbers[write_sector_count]=sector_number;
@@ -806,7 +811,7 @@ void queue_read_sector(uint32_t sector_number,uint32_t mega65_address)
 void queue_read_sectors(uint32_t sector_number,uint16_t sector_count)
 {
   uint8_t job[7];
-  job[0]=0x03;
+  job[0]=0x04; // switching from 0x03 (RLE) to 0x04 (no RLE) as I'm sensing RLE is problematic, and wasn't even being triggered (except by chance), to due a bug on the 'remotesd.c' side.
   job[1]=sector_count>>0;
   job[2]=sector_count>>8;
   job[3]=sector_number>>0;
@@ -881,7 +886,10 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
 	if (sector_cache_count<(i+1)) sector_cache_count=i+1;
       }
       else
+      {
+        execute_write_queue();
     	  sector_cache_count=0;
+      }
     }
 
     // Make sure to return the actual sector that was asked for
@@ -922,7 +930,10 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
       if (sector_cache_count<(i+1)) sector_cache_count=i+1;
     }
     else
+    {
+      execute_write_queue();
     	sector_cache_count=0;
+    }
     
   } while(0);
   if (retVal) printf("FAIL writing sector %d\n",sector_number);
@@ -1282,7 +1293,7 @@ int allocate_cluster(unsigned int cluster)
 
     //    dump_bytes(0,"FAT sector",fat_sector,512);
     
-    if (0) printf("Marking cluster $%x in use by writing to offset $%x of FAT sector $%x\n",
+    if (1) printf("Marking cluster $%x in use by writing to offset $%x of FAT sector $%x\n",
 		  cluster,fat_sector_offset,fat_sector_num);
     
     // Set the bytes for this cluster to $0FFFFF8 to mark end of chain and in use
@@ -1298,7 +1309,7 @@ int allocate_cluster(unsigned int cluster)
       printf("ERROR: Failed to write updated FAT sector $%x to FAT1\n",fat_sector_num);
       retVal=-1; break; }
 
-    if (0) printf("Marking cluster in use in FAT2\n");
+    if (1) printf("Marking cluster in use in FAT2\n");
 
     // Write sector back to FAT2
     if (write_sector(partition_start+fat2_sector+fat_sector_num,fat_sector)) {
@@ -1721,12 +1732,16 @@ int upload_file(char *name,char *dest_name)
 	// If we are currently the last cluster, then allocate a new one, and chain it in
 
 	int next_cluster=chained_cluster(file_cluster);
+	printf("chained_cluster(0x%X) = 0x%X\n", file_cluster, next_cluster);
 	if (next_cluster==0||next_cluster>=0xffffff8) {
 	  next_cluster=find_free_cluster(file_cluster);
+	  printf("find_free_cluster(0x%X) = 0x%X\n", file_cluster, next_cluster);
+	  printf("allocate_cluster(0x%X)\n", next_cluster);
 	  if (allocate_cluster(next_cluster)) {
 	    printf("ERROR: Could not allocate cluster $%x\n",next_cluster);
 	    retVal=-1; break;
 	  }
+	  printf("chain_cluster(0x%X, 0x%X)\n", file_cluster, next_cluster);
 	  if (chain_cluster(file_cluster,next_cluster)) {
 	    printf("ERROR: Could not chain cluster $%x to $%x\n",file_cluster,next_cluster);
 	    retVal=-1; break;
@@ -1750,14 +1765,14 @@ int upload_file(char *name,char *dest_name)
 #ifdef WINDOWS
       if (0) printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
 		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
-      printf("\rUploaded %I64d bytes.",(long long)st.st_size-remaining_length);
+      printf("\rUploaded %I64d bytes.\n",(long long)st.st_size-remaining_length);
 #else
       if (0) printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
 		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
-      printf("\rUploaded %lld bytes.",(long long)st.st_size-remaining_length);
+      printf("\rUploaded %lld bytes.\n",(long long)st.st_size-remaining_length);
 #endif
       fflush(stdout);
-      
+      printf("write_sector(0x%X)\n", sector_number);
       if (write_sector(sector_number,buffer)) {
 	printf("ERROR: Failed to write to sector %d\n",sector_number);
 	retVal=-1;
