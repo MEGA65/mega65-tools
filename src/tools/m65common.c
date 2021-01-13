@@ -214,6 +214,32 @@ int pending_vf011_track=0;
 int pending_vf011_sector=0;
 int pending_vf011_side=0;
 
+void check_for_vf011_jobs(unsigned char *read_buff,int b)
+{
+  // Check for Virtual F011 requests coming through
+  for (int i=3;i<b;i++) {
+    if (read_buff[i]=='!') {
+      if ((read_buff[i-1]&read_buff[i-2]&read_buff[i-3])&0x80) {
+	pending_vf011_read=1;
+	pending_vf011_device=0;
+	pending_vf011_track=read_buff[i-3]&0x7f;
+	pending_vf011_sector=read_buff[i-2]&0x7f;
+	pending_vf011_side=read_buff[i-1]&0x7f;	  
+      }
+    }
+    if (read_buff[i]==0x5c) {
+      if ((read_buff[i-1]&read_buff[i-2]&read_buff[i-3])&0x80) {
+	pending_vf011_write=1;
+	pending_vf011_device=0;
+	pending_vf011_track=read_buff[i-3]&0x7f;
+	pending_vf011_sector=read_buff[i-2]&0x7f;
+	pending_vf011_side=read_buff[i-1]&0x7f;	  
+      }
+    }
+  }
+}
+
+
 void wait_for_prompt(void)
 {
   unsigned char read_buff[8192];
@@ -223,27 +249,9 @@ void wait_for_prompt(void)
     //    if (b>0) dump_bytes(0,"wait_for_prompt",read_buff,b);
     if (b<0||b>8191) continue;
     read_buff[b]=0;
-    // Check for Virtual F011 requests coming through
-    for (int i=3;i<b;i++) {
-      if (read_buff[i]=='!') {
-	if ((read_buff[i-1]&read_buff[i-2]&read_buff[i-3])&0x80) {
-	  pending_vf011_read=1;
-	  pending_vf011_device=0;
-	  pending_vf011_track=read_buff[i-3]&0x7f;
-	  pending_vf011_sector=read_buff[i-2]&0x7f;
-	  pending_vf011_side=read_buff[i-1]&0x7f;	  
-	}
-      }
-      if (read_buff[i]==0x5c) {
-	if ((read_buff[i-1]&read_buff[i-2]&read_buff[i-3])&0x80) {
-	  pending_vf011_write=1;
-	  pending_vf011_device=0;
-	  pending_vf011_track=read_buff[i-3]&0x7f;
-	  pending_vf011_sector=read_buff[i-2]&0x7f;
-	  pending_vf011_side=read_buff[i-1]&0x7f;	  
-	}
-      }
-    }
+
+    check_for_vf011_jobs(read_buff,b);
+    
     if (strstr((char *)read_buff,".")) {
       break;
     }
@@ -268,20 +276,11 @@ unsigned long long gettime_ms()
   return nowtv.tv_sec * 1000LL + nowtv.tv_usec / 1000;
 }
 
-int stop_cpu(void)
+void purge_and_check_for_vf011_jobs(int stopP)
 {
   char recent[4];
-
-  time_t start = time(0);
+  time_t start = time(0);  
   
-  if (cpu_stopped) {
-    printf("CPU already stopped.\n");
-    return 1;
-  }
-  // Stop CPU
-  printf("Stopping CPU\n");
-  if (no_rxbuff) do_usleep(50000);
-  slow_write(fd,"t1\r",3);
   if (!no_rxbuff) {
     unsigned char read_buff[8192];
     int b=1;
@@ -292,25 +291,49 @@ int stop_cpu(void)
     while(1) {
       b=serialport_read(fd,read_buff,8191);
 
+      check_for_vf011_jobs(read_buff,b);
+      
       for(int i=0;i<b;i++) {
 	recent[0]=recent[1];
 	recent[1]=recent[2];
 	recent[2]=read_buff[i];
-	dump_bytes(0,"recent looking for t1\r",recent,3);
-	if (strstr((char *)recent,"t1\r")) {
-	  cpu_stopped=1;
-	  return 0;
+	if (stopP) {
+	  //	  dump_bytes(0,"recent looking for t1\r",recent,3);
+	  if (strstr((char *)recent,"t1\r")) {
+	    cpu_stopped=1;
+	    return 0;
+	  }
+	} else {
+	  //	  dump_bytes(0,"recent looking for t0\r",recent,3);
+	  if (strstr((char *)recent,"t0\r")) {
+	    cpu_stopped=0;
+	    return 0;
+	  }
 	}
       }
 
       // Safety catch in case first command was missed
       if (time(0)>=(start+1)) {
-	slow_write(fd,"t1\r",3);
+	if (stopP) slow_write(fd,"t1\r",3); else slow_write(fd,"t0\r",3);
 	start=time(0);
       }
 	
     }
   }
+}
+
+int stop_cpu(void)
+{
+  if (cpu_stopped) {
+    //    printf("CPU already stopped.\n");
+    return 1;
+  }
+  // Stop CPU
+  timestamp_msg("");
+  fprintf(stderr,"Stopping CPU\n");
+  if (no_rxbuff) do_usleep(50000);
+  slow_write_safe(fd,"t1\r",3);
+  purge_and_check_for_vf011_jobs(1);
 }
 
 int start_cpu(void)
@@ -322,16 +345,7 @@ int start_cpu(void)
   }
   if (no_rxbuff) do_usleep(50000);
   slow_write(fd,"t0\r",3);
-  if (!no_rxbuff) {
-    unsigned char read_buff[8192];
-    int b=1;
-    while(1) {
-      b=serialport_read(fd,read_buff,8191);
-      read_buff[b]=0;
-      if (strstr((char *)read_buff,"t0\r")) break;      
-    }
-  }
-  cpu_stopped=0;
+  purge_and_check_for_vf011_jobs(0);
   return 0;
 }
 
@@ -525,11 +539,11 @@ int rxbuff_detect(void)
   while(b>0) {
     b=serialport_read(fd,read_buff,8192);
     if (b>=0) read_buff[b]=0;
-    dump_bytes(0,"bytes from serial port",read_buff,b);
+    //    dump_bytes(0,"bytes from serial port",read_buff,b);
     if ((strstr((char *)read_buff,":00000000:"))
 	&&(strstr((char *)read_buff,":00000001:"))) {
       no_rxbuff=0;
-      timestamp_msg("RX buffer detected.  Latency will be reduced.");
+      timestamp_msg("RX buffer detected.  Latency will be reduced.\n");
     }
   }
   return !no_rxbuff;
@@ -570,7 +584,7 @@ int monitor_sync(void)
 #else
     snprintf(cmd,1024,"#%08lx\r",random());
 #endif
-    printf("Writing token: '%s'\n",cmd);
+    //    printf("Writing token: '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
 
     time_t start=time(0);
@@ -721,7 +735,7 @@ int breakpoint_wait(void)
 
 int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
 {
-  // fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
+  //  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
 
   int cpu_stopped_state=cpu_stopped;
 
@@ -741,15 +755,16 @@ int push_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       if (b>4096) b=4096;
 
       if (count==1) {
+	//	fprintf(stderr,"Writing single byte\n");
 	sprintf(cmd,"s%lx %x\r",address,buffer[0]);
-	slow_write(fd,cmd,strlen(cmd));
+	slow_write_safe(fd,cmd,strlen(cmd));
 	if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);	
       } else {
 	if (new_monitor) 
 	  sprintf(cmd,"l%lx %lx\r",address+offset,(address+offset+b)&0xffff);
 	else
 	  sprintf(cmd,"l%lx %lx\r",address+offset-1,address+offset+b-1);
-	slow_write(fd,cmd,strlen(cmd));
+	slow_write_safe(fd,cmd,strlen(cmd));
 	if (no_rxbuff) do_usleep(1000*SLOW_FACTOR);
 	int n=b;
 	unsigned char *p=&buffer[offset];
@@ -778,7 +793,7 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
   char next_addr_str[8192];
   int ofs=0;
 
-  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
+  //  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
   
   //  monitor_sync();
   while(addr<(address+count)) {
@@ -789,14 +804,14 @@ int fetch_ram(unsigned long address,unsigned int count,unsigned char *buffer)
       snprintf(cmd,8192,"M%X\r",(unsigned int)addr);
       end_addr=addr+0x100;
     }
-    printf("Sending '%s'\n",cmd);
+    //    printf("Sending '%s'\n",cmd);
     slow_write_safe(fd,cmd,strlen(cmd));
     while(addr!=end_addr) {
       snprintf(next_addr_str,8192,"\n:%08X:",(unsigned int)addr);
       int b=serialport_read(fd,&read_buff[ofs],8192-ofs);
       if (b<0) b=0;
       if ((ofs+b)>8191) b=8191-ofs;
-      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
+      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
       read_buff[ofs+b]=0;
       ofs+=b;
       char *s=strstr((char *)read_buff,next_addr_str);
@@ -880,6 +895,7 @@ int fetch_ram_cacheable(unsigned long address,unsigned int count,unsigned char *
   
 }
 
+time_t last_settle_msg_time=0;
 
 int detect_mode(void)
 {
@@ -908,45 +924,56 @@ int detect_mode(void)
   }
 
   while(in_hypervisor()) do_usleep(1000);
-  
-  fetch_ram(0xffd3030,1,mem_buff);
-  while(mem_buff[0]&0x01) {
-    timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
-    if (no_rxbuff) do_usleep(200000);
-    fetch_ram(0xffd3030,1,mem_buff);    
-  }
 
-  // Wait for HYPPO to exit
-  int d054=mega65_peek(0xffd3054);
-  while(d054&7) {
-    if (no_rxbuff) do_usleep(5000); else do_usleep(500);
-    d054=mega65_peek(0xffd3054);
+  while(1) {
+  
+    fetch_ram(0xffd3030,1,mem_buff);
+    while(mem_buff[0]&0x01) {
+      if (last_settle_msg_time!=time(0)) {
+	timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
+	last_settle_msg_time=time(0);
+      }
+      if (no_rxbuff) do_usleep(200000);
+      fetch_ram(0xffd3030,1,mem_buff);    
+    }
+    
+    // Wait for HYPPO to exit
+    int d054=mega65_peek(0xffd3054);
+    while(d054&7) {
+      if (no_rxbuff) do_usleep(5000); else do_usleep(500);
+      d054=mega65_peek(0xffd3054);
+    }
+    
+    fetch_ram(0xffd3030,1,mem_buff);
+    if (mem_buff[0]==0x64) {
+      saw_c65_mode=1;
+      timestamp_msg("");
+      fprintf(stderr,"In C65 Mode.\n");
+      return 0;
+    }
+    
+    // Use screen address to guess mode
+    fetch_ram(0xffd3060,3,mem_buff);
+    if (mem_buff[1]==0x04) {
+      printf("Screen is at $0400\n");
+      // check $01 port value
+      fetch_ram(0x7770001,1,mem_buff);
+      printf("Port $01 contains $%02x\n",mem_buff[0]);
+      if ((mem_buff[0]&0xf)==0x07) {
+	saw_c64_mode=1;
+	timestamp_msg("");
+	fprintf(stderr,"In C64 Mode.\n");
+	return 0;
+      }
+    }
+    if (mem_buff[1]==0x08) {
+      saw_c65_mode=1;
+      timestamp_msg("");
+      fprintf(stderr,"In C65 Mode.\n");
+      return 0;
+    }
   }
   
-  
-  fetch_ram(0xffd3030,1,mem_buff);
-  if (mem_buff[0]==0x64) {
-    saw_c65_mode=1;
-    timestamp_msg("");
-    fprintf(stderr,"In C65 Mode.\n");
-    return 0;
-  }
-  
-  // Use screen address to guess mode
-  fetch_ram(0xffd3060,3,mem_buff);
-  if (mem_buff[1]==0x04) {
-    saw_c64_mode=1;
-    timestamp_msg("");
-    fprintf(stderr,"In C64 Mode.\n");
-    return 0;
-  }
-  if (mem_buff[1]==0x08) {
-    saw_c65_mode=1;
-    timestamp_msg("");
-    fprintf(stderr,"In C65 Mode.\n");
-    return 0;
-  }
-
 #if 0
   //  printf("$D030 = $%02X\n",mem_buff[0]);
   if (mem_buff[0]==0x64) {
@@ -1316,7 +1343,7 @@ int switch_to_c64mode(void)
     if (count>0) {
       fprintf(stderr,"Retyping GO64\n");
       stuff_keybuffer("\r\rGO64\rY\r");
-      do_usleep(20000);
+      do_usleep(50000);
       count=0;
     }
     detect_mode();
