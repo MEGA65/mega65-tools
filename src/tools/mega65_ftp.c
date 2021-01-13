@@ -82,6 +82,9 @@ int sdhc_check(void);
 int read_sector(const unsigned int sector_number,unsigned char *buffer, int noCacheP, int readAhead);
 int load_helper(void);
 int stuff_keybuffer(char *s);
+int create_dir(char *);
+int fat_opendir(char *);
+int fat_readdir(struct m65dirent *);
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
