@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <strings.h>
 
 unsigned char bitstream[4*1048576];
@@ -35,7 +36,7 @@ int main(int argc,char **argv)
   fprintf(of,"MEGA65BITSTREAM0");
   // Write core file name and version
   char header_block[4096-16];
-  bzero(header_block,4096-16);
+  memset(header_block,0,4096-16);
   for(int i=0;(i<32)&&argv[2][i];i++) header_block[i]=argv[2][i];
   for(int i=0;(i<32)&&argv[3][i];i++) header_block[32+i]=argv[3][i];
   fwrite(header_block,4096-16,1,of);
