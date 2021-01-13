@@ -385,7 +385,10 @@ $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
 
 $(BINDIR)/bit2core:	$(TOOLDIR)/bit2core.c Makefile 
-	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bit2core $(TOOLDIR)/bit2core.c
+	$(CC) -g -Wall -o $(BINDIR)/bit2core $(TOOLDIR)/bit2core.c
+
+$(BINDIR)/bit2core.exe:	$(TOOLDIR)/bit2core.c Makefile 
+	$(WINCC) $(WINCOPT) -g -Wall -o $(BINDIR)/bit2core.exe $(TOOLDIR)/bit2core.c
 
 $(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile 
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
