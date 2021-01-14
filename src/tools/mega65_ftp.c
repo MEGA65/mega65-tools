@@ -838,7 +838,7 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
 
     int cachedRead=0;
 
-    if (noCacheP==NOT_CACHEABLE) {
+    if (noCacheP!=NOT_CACHEABLE) {
       for(int i=0;i<sector_cache_count;i++) {
 	if (sector_cache_sectors[i]==sector_number) {
 	  bcopy(sector_cache[i],buffer,512);
