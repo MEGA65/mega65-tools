@@ -456,10 +456,10 @@ void main(void)
   print_text(0,4,7,"O - Drive LED off");
   print_text(0,5,7,"B - Drive LED should blink RED");
   print_text(0,6,7,"M - Drive LED should be solid green");
+  print_text(0,7,7,"1-9,0,+,- - Modify RGB channels of LEDs");
 
   while(1) {
     c=PEEK(0xD610);
-    if (c) POKE(0xc000,c);
     // CC65 always wants to convert characters to PETSCII, so we have
     // to use the literal values here, since they are ASCII.
     switch(c) {
@@ -474,20 +474,22 @@ void main(void)
       POKE(0xD080,0x00); break;
       // 0 - 9 and + and - control the 12 RGB LED channels.
     case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+      c--; if (c==0x2f) c=0x39;
+      if (c<'6') { c+=6; } else { c-=6; }
       POKE(0xD61D,0xff);
       led[c-'0']+=0x40;
       POKE(0xD61E,led[c-'0']);
       POKE(0xD61D,0x80+c-'0');
       break;
     case '+':
-      c='9'+1;
+      c='4';
       POKE(0xD61D,0xff);
       led[c-'0']+=0x40;
       POKE(0xD61E,led[c-'0']);
       POKE(0xD61D,0x80+c-'0');
       break;
     case '-':
-      c='9'+2;
+      c='5';
       POKE(0xD61D,0xff);
       led[c-'0']+=0x40;
       POKE(0xD61E,led[c-'0']);
