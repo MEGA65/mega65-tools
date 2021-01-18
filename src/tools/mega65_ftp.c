@@ -391,7 +391,7 @@ int main(int argc,char **argv)
 
   // Give helper time to get all sorted.
   // Without this delay serial monitor commands to set memory seem to fail :/
-  usleep(500000);
+  // usleep(500000);
   
   //  monitor_sync();
 
@@ -757,7 +757,7 @@ int execute_write_queue(void)
 
   int retVal=0;
   do {
-    if (1) printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
+    if (0) printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n",
 		  write_sector_count,write_buffer_offset);
     push_ram(0x50000,write_buffer_offset,&write_data_buffer[0]);
 
@@ -781,7 +781,7 @@ void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
   // Merge writes to same sector
   for (int i=0;i<write_sector_count;i++) {
     if (sector_number==write_sector_numbers[i]) {
-      printf("Updating sector $%08x while in the write queue.\n",sector_number);
+      // printf("Updating sector $%08x while in the write queue.\n",sector_number);
       bcopy(buffer,&write_data_buffer[i<<9],512);
       return;
     }
@@ -793,7 +793,7 @@ void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
   // can't do 64KB
   if (write_buffer_offset>=32768) execute_write_queue();
   
-  printf("adding sector $%08x to the write queue (pos#%d)\n", sector_number, write_sector_count);
+  // printf("adding sector $%08x to the write queue (pos#%d)\n", sector_number, write_sector_count);
   bcopy(buffer,&write_data_buffer[write_buffer_offset],512);
   write_buffer_offset+=512;
   write_sector_numbers[write_sector_count]=sector_number;
@@ -1785,7 +1785,7 @@ int upload_file(char *name,char *dest_name)
       printf("\rUploaded %lld bytes.\n",(long long)st.st_size-remaining_length);
 #endif
       fflush(stdout);
-      printf("write_sector(0x%X)\n", sector_number);
+      //printf("write_sector(0x%X)\n", sector_number);
       if (write_sector(sector_number,buffer)) {
 	printf("ERROR: Failed to write to sector %d\n",sector_number);
 	retVal=-1;
