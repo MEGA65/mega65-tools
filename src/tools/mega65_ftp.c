@@ -630,7 +630,7 @@ void job_process_results(void)
 
   data_byte_count=0;
 
-  int debug_rx=0;
+  int debug_rx=0; // think the system is sensitive to this debug setting
   
   while (1) {
     int b=serialport_read(fd,buff,8192);
@@ -649,7 +649,7 @@ void job_process_results(void)
 	bcopy(&recent[1],&recent[0],30);
 	recent[30]=buff[i];
 	recent[31]=0;
-	fprintf(stderr,"i=%d, b=%d, recent[30-10]='%s'\n",i,b,&recent[30-10]);
+	//fprintf(stderr,"i=%d, b=%d, recent[30-10]='%s'\n",i,b,&recent[30-10]);
 	if (!strncmp((char *)&recent[30-10],"FTBATCHDONE",11)) {
 	  long long endtime =gettime_us();
 #ifdef WINDOWS
@@ -713,6 +713,8 @@ void queue_execute(void)
   push_ram(0xc001,queue_addr-0xc001,queue_cmds);
   //  dump_bytes(0,"queue_cmds",queue_cmds,queue_addr-0xc001);
   
+  usleep(50000);
+
   // Then set number of jobs to execute them
   // mega65_poke will try to read data after from on the
   // serial interface, which messes up the protocol.
@@ -721,8 +723,6 @@ void queue_execute(void)
   snprintf(cmd,1024,"sc000 %x\r",queue_jobs);
   slow_write(fd,cmd,strlen(cmd));
   
-  //usleep(50000);
-
   job_process_results();
   queue_addr=0xc001;
   queue_jobs=0;
@@ -856,7 +856,7 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
 
     int cachedRead=0;
 
-    if (noCacheP=NOT_CACHEABLE) {
+    if (noCacheP==CACHEABLE) {
       for(int i=0;i<sector_cache_count;i++) {
 	if (sector_cache_sectors[i]==sector_number) {
 	  bcopy(sector_cache[i],buffer,512);
