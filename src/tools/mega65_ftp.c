@@ -328,8 +328,6 @@ int main(int argc,char **argv)
   setvbuf (stdout, NULL, _IONBF, 0);
   setvbuf (stderr, NULL, _IONBF, 0);
 #endif
-  printf("hello\n");
-  printf("hello \r\n");
   start_time=time(0);
   start_usec=gettime_us();  
 
@@ -391,7 +389,7 @@ int main(int argc,char **argv)
 
   // Give helper time to get all sorted.
   // Without this delay serial monitor commands to set memory seem to fail :/
-  // usleep(500000);
+  usleep(500000);
   
   //  monitor_sync();
 
@@ -630,7 +628,7 @@ void job_process_results(void)
 
   data_byte_count=0;
 
-  int debug_rx=0; // think the system is sensitive to this debug setting
+  int debug_rx=0;
   
   while (1) {
     int b=serialport_read(fd,buff,8192);
@@ -691,7 +689,7 @@ void job_process_results(void)
 		   );
 	  q_rle_count=0; q_raw_count=0; q_rle_enable=0;
 	  data_byte_count=transfer_size;
-	  printf("data_byte_count=0x%X\n", data_byte_count);
+	  //printf("data_byte_count=0x%X\n", data_byte_count);
 	  // Don't forget to process the bytes we have already injested
 	  for(int k=n;k<=30;k++) {
 	    if (data_byte_count) {
@@ -713,8 +711,6 @@ void queue_execute(void)
   push_ram(0xc001,queue_addr-0xc001,queue_cmds);
   //  dump_bytes(0,"queue_cmds",queue_cmds,queue_addr-0xc001);
   
-  usleep(50000);
-
   // Then set number of jobs to execute them
   // mega65_poke will try to read data after from on the
   // serial interface, which messes up the protocol.
@@ -1302,7 +1298,7 @@ int allocate_cluster(unsigned int cluster)
 
     //    dump_bytes(0,"FAT sector",fat_sector,512);
     
-    if (1) printf("Marking cluster $%x in use by writing to offset $%x of FAT sector $%x\n",
+    if (0) printf("Marking cluster $%x in use by writing to offset $%x of FAT sector $%x\n",
 		  cluster,fat_sector_offset,fat_sector_num);
     
     // Set the bytes for this cluster to $0FFFFF8 to mark end of chain and in use
@@ -1318,7 +1314,7 @@ int allocate_cluster(unsigned int cluster)
       printf("ERROR: Failed to write updated FAT sector $%x to FAT1\n",fat_sector_num);
       retVal=-1; break; }
 
-    if (1) printf("Marking cluster in use in FAT2\n");
+    if (0) printf("Marking cluster in use in FAT2\n");
 
     // Write sector back to FAT2
     if (write_sector(partition_start+fat2_sector+fat_sector_num,fat_sector)) {
@@ -1742,16 +1738,12 @@ int upload_file(char *name,char *dest_name)
 	// If we are currently the last cluster, then allocate a new one, and chain it in
 
 	int next_cluster=chained_cluster(file_cluster);
-	printf("chained_cluster(0x%X) = 0x%X\n", file_cluster, next_cluster);
 	if (next_cluster==0||next_cluster>=0xffffff8) {
 	  next_cluster=find_free_cluster(file_cluster);
-	  printf("find_free_cluster(0x%X) = 0x%X\n", file_cluster, next_cluster);
-	  printf("allocate_cluster(0x%X)\n", next_cluster);
 	  if (allocate_cluster(next_cluster)) {
 	    printf("ERROR: Could not allocate cluster $%x\n",next_cluster);
 	    retVal=-1; break;
 	  }
-	  printf("chain_cluster(0x%X, 0x%X)\n", file_cluster, next_cluster);
 	  if (chain_cluster(file_cluster,next_cluster)) {
 	    printf("ERROR: Could not chain cluster $%x to $%x\n",file_cluster,next_cluster);
 	    retVal=-1; break;
@@ -1778,14 +1770,14 @@ int upload_file(char *name,char *dest_name)
 #ifdef WINDOWS
       if (0) printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
 		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
-      printf("\rUploaded %I64d bytes.\n",(long long)st.st_size-remaining_length);
+      printf("\rUploaded %I64d bytes.",(long long)st.st_size-remaining_length);
 #else
       if (0) printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n",
 		    gettime_us()-start_usec,bytes,sector_number,sector_number,file_cluster);
-      printf("\rUploaded %lld bytes.\n",(long long)st.st_size-remaining_length);
+      printf("\rUploaded %lld bytes.",(long long)st.st_size-remaining_length);
 #endif
       fflush(stdout);
-      //printf("write_sector(0x%X)\n", sector_number);
+      
       if (write_sector(sector_number,buffer)) {
 	printf("ERROR: Failed to write to sector %d\n",sector_number);
 	retVal=-1;
