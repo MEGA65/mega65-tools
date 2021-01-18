@@ -189,6 +189,23 @@ void main(void)
   POKE(0xD02F,0x47);
   POKE(0xD02F,0x53);
 
+  // Setup first palette (in palette bank 3, which we will also use as the chargen palette)
+  // with grey gradient, and select palette bank 0 for the alternate palette.
+  // top 2 bits select the memory mapped palette, so here we are setting up palette bank 3.
+  POKE(0xD070,0xf0);
+  for(i=16;i<256;i++) {
+    POKE(0xD100+i,(i>>4)+(i<<4));
+    POKE(0xD200+i,(i>>4)+(i<<4));
+    POKE(0xD300+i,(i>>4)+(i<<4));
+  }
+  // And setup the alternate palette in palette bank 0 with blue to red transition
+  POKE(0xD070,0x30);
+  for(i=16;i<256;i++) {
+    POKE(0xD100+i,(i>>4)+(i<<4));
+    POKE(0xD200+i,0);
+    POKE(0xD300+i,0xff);
+  }
+  
   while(PEEK(0xD610)) POKE(0xD610,0);
   
   POKE(0xD020,0);
@@ -231,15 +248,30 @@ void main(void)
 
   print_text(0,0,1,"Issue #342: Use of alternate palette via");
   print_text(0,1,1,"BOLD + REVERSE attributes together.");
+  print_text(0,2,7,"Upper colour bar should have 16 C64");
+  print_text(0,3,7,"  colours, then grey gradient.");
+  print_text(0,4,7,"Lower colour bar should have 16 C64");
+  print_text(0,5,7,"  colours, then blue to purple.");
 
-  print_text(0,96/8,7, "   Normal:");
-  print_text(0,128/8,7,"Alternate:");
+  print_text(0,96/8,15, "   Normal:");
+  print_text(0,128/8,15,"Alternate:");
   
+  // enable extended attributes (with hot regs off)
+  POKE(0xD05D,PEEK(0xD05D)&0x7f);
+  POKE(0xD031,PEEK(0xD031)+0x20);
+
   // Setup some identical gradients
   for(i=0;i<256;i++) {
     for(j=0;j<8;j++) plot_pixel_direct(96+i,96+j,i);
 
     for(j=0;j<8;j++) plot_pixel_direct(96+i,128+j,i);
+  }
+  
+  // Now set alternate palette flag for the second lot
+  load_addr = 0xff80000L+(96/8)*2+(128/8*(40*2));
+  for(i=0;i<32;i++) {
+    // Set reverse and bold flags in 2nd byte of colour RAM
+    lpoke(load_addr+i*2+1,0x60);
   }
   
 }
