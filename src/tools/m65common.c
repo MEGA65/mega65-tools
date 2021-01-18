@@ -53,8 +53,8 @@ int debug_serial=0;
 #ifdef WINDOWS
 #include <windows.h>
 #undef SLOW_FACTOR
-#define SLOW_FACTOR 8
-#define SLOW_FACTOR2 8
+#define SLOW_FACTOR 1
+#define SLOW_FACTOR2 1
 // #define do_usleep usleep
 void do_usleep(__int64 usec) 
 { 
@@ -1350,5 +1350,4 @@ int switch_to_c64mode(void)
   }
   return 0;
 }
-
 
