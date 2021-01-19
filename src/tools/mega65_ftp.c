@@ -76,6 +76,7 @@ int open_file_system(void);
 int download_slot(int sllot,char *dest_name);
 int download_file(char *dest_name,char *local_name,int showClusters);
 int show_directory(char *path);
+int delete_file(char *name);
 int rename_file(char *name,char *dest_name);
 int upload_file(char *name,char *dest_name);
 int sdhc_check(void);
@@ -217,6 +218,9 @@ int execute_command(char *cmd)
   }
   else if (sscanf(cmd,"put %s %s",src,dst)==2) {
     upload_file(src,dst);
+  }
+  else if (sscanf(cmd, "del %s",src)==1) {
+    delete_file(src);
   }
   else if (sscanf(cmd,"rename %s %s",src,dst)==2) {
     rename_file(src,dst);
@@ -1277,7 +1281,7 @@ int chain_cluster(unsigned int cluster,unsigned int next_cluster)
   return retVal;
 }
 
-int allocate_cluster(unsigned int cluster)
+int set_fat_cluster_ptr(unsigned int cluster, unsigned int value)
 {
   int retVal=0;
 
@@ -1302,10 +1306,10 @@ int allocate_cluster(unsigned int cluster)
 		  cluster,fat_sector_offset,fat_sector_num);
     
     // Set the bytes for this cluster to $0FFFFF8 to mark end of chain and in use
-    fat_sector[fat_sector_offset+0]=0xf8;
-    fat_sector[fat_sector_offset+1]=0xff;
-    fat_sector[fat_sector_offset+2]=0xff;
-    fat_sector[fat_sector_offset+3]=0x0f;
+    fat_sector[fat_sector_offset+0]=(value) & 0xff;
+    fat_sector[fat_sector_offset+1]=(value >> 8) & 0xff;
+    fat_sector[fat_sector_offset+2]=(value >> 16) & 0xff;
+    fat_sector[fat_sector_offset+3]=(value >> 24) & 0xff;
 
     if (0) printf("Marking cluster in use in FAT1\n");
 
@@ -1326,6 +1330,16 @@ int allocate_cluster(unsigned int cluster)
   } while(0);
   
   return retVal;
+}
+
+int deallocate_cluster(unsigned int cluster)
+{
+    return set_fat_cluster_ptr(cluster, 0x00000000);
+}
+
+int allocate_cluster(unsigned int cluster)
+{
+    return set_fat_cluster_ptr(cluster, 0x0ffffff8);
 }
 
 unsigned int chained_cluster(unsigned int cluster)
@@ -1434,18 +1448,93 @@ int show_directory(char *path)
   return retVal;
 }
 
+int check_file_system_access(void)
+{
+    int retVal=0;
+
+    if (!file_system_found) open_file_system();
+    if (!file_system_found) {
+      fprintf(stderr,"ERROR: Could not open file system.\n");
+      retVal=-1;
+    }
+    return retVal;
+}
+
+int find_file_in_dir(struct m65dirent *de, const char* name)
+{
+    while(!fat_readdir(de)) {
+        // if (de->d_name[0]) printf("'%s'   %d\n",de->d_name,(int)de->d_filelen);
+        // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
+        if (!strcasecmp(de->d_name,name)) {
+            // Found file, so will replace it
+            printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de->d_ino);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+unsigned int get_first_cluster_of_file(void)
+{
+    return (dir_sector_buffer[dir_sector_offset+0x1A]<<0)
+        |(dir_sector_buffer[dir_sector_offset+0x1B]<<8)
+        |(dir_sector_buffer[dir_sector_offset+0x14]<<16)
+        |(dir_sector_buffer[dir_sector_offset+0x15]<<24);
+}
+
+int delete_file(char *name)
+{
+    struct m65dirent de;
+    int retVal=0;
+
+    if (check_file_system_access() == -1)
+        return -1;
+
+    if (fat_opendir(current_dir))
+        return -1;
+
+    if (!find_file_in_dir(&de, name)) {
+        printf("File %s does not exist.\n", name);
+        return -1;
+    }
+
+    unsigned int first_cluster_of_file = get_first_cluster_of_file();
+
+    // remove entry from cluster#2
+    bzero(&dir_sector_buffer[dir_sector_offset], 32);
+    if (write_sector(partition_start+dir_sector,dir_sector_buffer)) {
+	    printf("Failed to write updated directory sector.\n");
+	    return -1;
+    }
+
+    // remove cluster-chain from cluster-map in FAT tables #1 and #2
+    unsigned int current_cluster = first_cluster_of_file;
+    unsigned int next_cluster = 0;
+    do
+    {
+        next_cluster = chained_cluster(current_cluster);
+        if (0)
+        {
+            printf("current_cluster=0x%08X\n", current_cluster);
+            printf("next_cluster=0x%08X\n", next_cluster);
+        }
+        deallocate_cluster(current_cluster);
+        current_cluster = next_cluster;
+    }
+    while (current_cluster>0 && current_cluster<0xffffff8);
+
+    // Flush any pending sector writes out
+    execute_write_queue();
+}
+
 int rename_file(char *name,char *dest_name)
 {
   struct m65dirent de;
   int retVal=0;
   do {
 
-    if (!file_system_found) open_file_system();
-    if (!file_system_found) {
-      fprintf(stderr,"ERROR: Could not open file system.\n");
-      retVal=-1;
-      break;
-    }
+    if (check_file_system_access() == -1)
+        return -1;
 
     if (fat_opendir(current_dir)) { retVal=-1; break; }
     // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
