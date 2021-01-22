@@ -511,7 +511,7 @@ int load_helper(void)
       char buffer[8193];
       int bytes=serialport_read(fd,(unsigned char *)buffer,8192);
       buffer[8192]=0;
-      if (bytes>=strlen("MEGA65FT1.0"))
+      if (bytes>=(int)strlen("MEGA65FT1.0"))
 	for(int i=0;i<bytes-strlen("MEGA65FT1.0");i++) {
 	  printf("i=%d, bytes=%d, strlen=%d\n",i,bytes,strlen("MEGA65FT1.0"));
 	  if (!strncmp("MEGA65FT1.0",&buffer[i],strlen("MEGA65FT1.0"))) {
