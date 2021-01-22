@@ -298,13 +298,13 @@ void purge_and_check_for_vf011_jobs(int stopP)
 	  //	  dump_bytes(0,"recent looking for t1\r",recent,3);
 	  if (strstr((char *)recent,"t1\r")) {
 	    cpu_stopped=1;
-	    return 0;
+	    return;
 	  }
 	} else {
 	  //	  dump_bytes(0,"recent looking for t0\r",recent,3);
 	  if (strstr((char *)recent,"t0\r")) {
 	    cpu_stopped=0;
-	    return 0;
+	    return;
 	  }
 	}
       }
