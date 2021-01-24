@@ -3,13 +3,13 @@
 #include <string.h>
 #include <strings.h>
 
-const int MAX_MB = 8;
-const int BYTES_IN_MEGABYTE = (1024*1024);
-const int CORE_HEADER_SIZE = 4096;
-const int BITSTREAM_HEADER_SIZE = 120;
-
+#define MAX_MB 8
+#define BYTES_IN_MEGABYTE (1024*1024)
 #define MAGIC_STR "MEGA65BITSTREAM0"
 #define MAGIC_LEN strlen(MAGIC_STR)
+
+const int CORE_HEADER_SIZE = 4096;
+const int BITSTREAM_HEADER_SIZE = 120;
 
 unsigned char bitstream[MAX_MB*BYTES_IN_MEGABYTE];
 
