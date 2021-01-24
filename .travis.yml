@@ -18,8 +18,9 @@ before_deploy:
 deploy:
 - provider: releases
   api_key: $GITHUB_API_KEY
+  file_glob: true
   file: 
-  - $TRAVIS_BUILD_DIR/bin
+  - $TRAVIS_BUILD_DIR/bin/*
   skip_cleanup: true
   prerelease: true
   draft: false
