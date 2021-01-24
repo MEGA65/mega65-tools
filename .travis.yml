@@ -7,6 +7,7 @@ branches:
     - CI-latest
 script:
 - sudo apt-get install -y libusb-1.0-0-dev
+- sudo apt-get install -y libgif-dev
 - make
 before_deploy:
 - |
