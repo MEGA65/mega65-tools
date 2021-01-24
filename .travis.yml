@@ -6,6 +6,7 @@ branches:
   except:
     - CI-latest
 script:
+- sudo apt-get install -y libusb-1.0-0-dev
 - make
 before_deploy:
 - |
