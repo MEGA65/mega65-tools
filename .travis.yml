@@ -9,7 +9,7 @@ script:
 - sudo apt-get install -y libusb-1.0-0-dev
 - sudo apt-get install -y libgif-dev
 - sudo apt-get install -y libpng-dev
-- sudo apt-get upgrage -y mingw-w64-x86_64-libpng
+- sudo apt-get upgrade -y mingw-w64-x86_64-libpng
 - make
 before_deploy:
 - |
