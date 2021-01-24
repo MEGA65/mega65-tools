@@ -19,7 +19,7 @@ deploy:
 - provider: releases
   api_key: $GITHUB_API_KEY
   file: 
-  - $TRAVIS_BUILD_DIR/dummy
+  - $TRAVIS_BUILD_DIR/bin
   skip_cleanup: true
   prerelease: true
   draft: false
