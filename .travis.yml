@@ -8,6 +8,7 @@ branches:
 script:
 - sudo apt-get install -y libusb-1.0-0-dev
 - sudo apt-get install -y libgif-dev
+- sudo apt-get install -y libpng-dev
 - make
 before_deploy:
 - |
