@@ -137,7 +137,13 @@ int parse_bsdl(char *bsdl)
   return 0;
 }
 
-#define BOUNDARY_PPAT INT32(0xff), REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff), REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff), REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff)
+/* PGS 20210125: This pattern is much too long. The first byte of the pattern encodes its length.
+   But here we have a length of 151 x 32-bits = 604 bytes.  So it gets clipped to 92 bytes, and
+   the C compiler rightfully complains about it all.
+   So I have reduced this to fit in the 255 byte limit.
+ */
+//#define BOUNDARY_PPAT INT32(0xff), REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff), REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff), REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff)
+#define BOUNDARY_PPAT INT32(0xff), REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff), REPEAT10(0xff),  REPEAT10(0xff)
 
 static uint8_t boundary_ppattern[] = DITEM(BOUNDARY_PPAT);
 
