@@ -41,6 +41,8 @@ void graphics_clear_double_buffer(void)
 
 void graphics_mode(void)
 {
+  // Lower case
+  POKE(0xD018,0x17);
   // 16-bit text mode, full-colour text for high chars
   POKE(0xD054,0x05);
   // H640, fast CPU
