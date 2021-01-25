@@ -1353,13 +1353,13 @@ int main(int argc,char **argv)
     detect_mode();
   }
    
-  if (type_text) do_type_text(type_text);
-  
   // -4 Switch to C64 mode
   if ((!saw_c64_mode)&&do_go64) {
     switch_to_c64mode();
   }
 
+  if (type_text) do_type_text(type_text);  
+  
 #if 0
   // Increase serial speed, if possible
 #ifndef WINDOWS
