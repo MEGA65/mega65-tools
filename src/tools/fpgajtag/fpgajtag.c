@@ -800,24 +800,31 @@ void init_fpgajtag(const char *serialno, const char *filename, uint32_t file_idc
 	    DIR *d=opendir("/sys/bus/usb-serial/devices");
 	    if (d) {
 	      struct dirent *de=NULL;
+	      char serial_path[1024]="";
 	      while ((de=readdir(d))!=NULL) {
 		char link[1024]="";
 		char path[1024];
 		snprintf(path,1024,"/sys/bus/usb-serial/devices/%s",de->d_name);
 		int len=readlink(path,link,sizeof(link));
 		link[len]=0;
-		// fprintf(stderr,"  Checking '%s' -> '%s'\n",path,link);
+		fprintf(stderr,"  Checking '%s' -> '%s'\n",path,link);
 		char match[1024];
 		snprintf(match,1024,"/%d-%d/%d-%d:1.1",bus,port,bus,port);
+		//		fprintf(stderr,"    match is '%s'\n",match);
+		snprintf(serial_path,1024,"/dev/%s",de->d_name);
 		if (strstr(link,match)) {
-		  char serial_path[1024];
-		  snprintf(serial_path,1024,"/dev/%s",de->d_name);
 		  timestamp_msg("");
 		  fprintf(stderr,"Auto-detected serial port '%s'\n",serial_path);
 		  serial_port=strdup(serial_path);
 		}
 	      }
 	      closedir(d);
+	      if (!serial_port) {
+		if (serial_path[0]) {
+		  fprintf(stderr,"Auto-guessing serial port '%s' due to lack of exact match\n",serial_path);
+		  serial_port=strdup(serial_path);
+		}
+	      }
 	    }
 	  }
 #endif
