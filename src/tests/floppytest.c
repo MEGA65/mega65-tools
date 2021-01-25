@@ -324,21 +324,31 @@ void read_all_sectors()
     print_text(0,0,1,"Reading all sectors...");
     print_text(0,22,15,"GREEN = good, RED = bad");
     print_text(0,23,15,"YELLOW = Track >80 bad");
-
+    
     // Seek back to track 0
     while(!(PEEK(0xD082)&1))
       {
 	POKE(0xD081,0x10);
 	usleep(6000);
       }
+
+    if (PEEK(0xD610)) {
+      POKE(0xD610,0);
+      break;
+    }	 
     
     for(t=0;t<85;t++) {
+      if (PEEK(0xD610)) break;
       for(h=0;h<2;h++) {
+	if (PEEK(0xD610)) break;
 	for(ss=1;ss<=10;ss++) {
+
 	  // Interleave reads, as by the time we have updated the display,
 	  // the drive is most likely already into the following sector.
 	  unsigned char sector_order[10]={1,3,5,7,9,2,4,6,8,10};	  
 	  s=sector_order[ss-1];
+
+	  if (PEEK(0xD610)) break;
 	  
 	  snprintf(read_message,40,"Trying T:$%02x, S:$%02x, H:$%02x",t,s,h);
 	  print_text(0,1,7,read_message);
