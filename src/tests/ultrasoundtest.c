@@ -76,15 +76,13 @@ void graphics_mode(void)
 {
   // 16-bit text mode, full-colour text for high chars
   POKE(0xD054,0x05);
-  // H640, fast CPU
-  POKE(0xD031,0xC0);
-  // Adjust D016 smooth scrolling for VIC-III H640 offset
-  POKE(0xD016,0xC9);
-  // 640x200 16bits per char, 16 pixels wide per char
-  // = 640/16 x 16 bits = 80 bytes per row
+  // H320, fast CPU
+  POKE(0xD031,0x40);
+  // 320x200 per char, 16 pixels wide per char
+  // = 320/8 x 16 bits = 80 bytes per row
   POKE(0xD058,80);
   POKE(0xD059,80/256);
-  // Draw 40 (double-wide) chars per row
+  // Draw 40 chars per row
   POKE(0xD05E,40);
   // Put 2KB screen at $C000
   POKE(0xD060,0x00);
@@ -102,9 +100,9 @@ void graphics_mode(void)
       i++;
     }
    
-  // Clear colour RAM, while setting all chars to 4-bits per pixel
+  // Clear colour RAM
   for(i=0;i<2000;i++) {
-    lpoke(0xff80000L+0+i,0x08);
+    lpoke(0xff80000L+0+i,0x00);
     lpoke(0xff80000L+1+i,0x00);
   }
 
@@ -118,36 +116,19 @@ unsigned short pixel_addr;
 unsigned char pixel_temp;
 void plot_pixel(unsigned short x,unsigned char y,unsigned char colour)
 {
-  pixel_addr=((x&0xf)>>1)+64*25*(x>>4);
+  pixel_addr=(x&0x7)+64*25*(x>>3);
   pixel_addr+=y<<3;
 
-  pixel_temp=lpeek(0x50000L+pixel_addr);
-  if (x&1) {
-    pixel_temp&=0x0f;
-    pixel_temp|=colour<<4;
-  } else {
-    pixel_temp&=0xf0;
-    pixel_temp|=colour&0xf;
-  }
-  lpoke(0x50000L+pixel_addr,pixel_temp);
+  lpoke(0x50000L+pixel_addr,colour);
 
 }
 
 void plot_pixel_direct(unsigned short x,unsigned char y,unsigned char colour)
 {
-  pixel_addr=((x&0xf)>>1)+64*25*(x>>4);
+  pixel_addr=(x&0x7)+64*25*(x>>3);
   pixel_addr+=y<<3;
 
-  pixel_temp=lpeek(0x40000L+pixel_addr);
-  if (x&1) {
-    pixel_temp&=0x0f;
-    pixel_temp|=colour<<4;
-  } else {
-    pixel_temp&=0xf0;
-    pixel_temp|=colour&0xf;
-  }
-  lpoke(0x40000L+pixel_addr,pixel_temp);
-
+  lpoke(0x40000L+pixel_addr,colour);
 }
 
 unsigned char char_code;
