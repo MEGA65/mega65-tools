@@ -62,12 +62,17 @@ unsigned char sprite_data[63]={
 
 void show_rtc(void)
 {
-    getrtc(&tm);
+  //    getrtc(&tm);
     
     //    seconds = lpeek_debounced(0xffd7110);
     //    minutes = lpeek_debounced(0xffd7111);
 
-    printf("Real-time clock: %02d:%02d.%02d",tm.tm_hour,tm.tm_min,tm.tm_sec);
+  // MEGAphone R1
+  tm.tm_sec=lpeek(0xffd701a)&0x5f;
+  tm.tm_min=lpeek(0xffd701b)&0x5f;
+  tm.tm_hour=lpeek(0xffd701c)&0x3f;
+  
+    printf("Real-time clock: %02x:%02x.%02x",tm.tm_hour,tm.tm_min,tm.tm_sec);
     printf("\n");
 
     printf("Date:            %02d-",tm.tm_mday+1);
