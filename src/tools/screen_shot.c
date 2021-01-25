@@ -497,7 +497,7 @@ void paint_screen_shot(void)
     for(int cx=0;cx<screen_width;cx++) {
 
       // printf("Rendering char (%d,%d) at (%d,%d)\n",cx,cy,x_position,y_position);
-      int char_background_colour;
+      //      int char_background_colour;
       int char_id=0;
       int char_value=screen_data[cy*screen_line_step+cx*(1+sixteenbit_mode)];
       if (sixteenbit_mode)
@@ -509,11 +509,11 @@ void paint_screen_shot(void)
       }
       if (extended_background_mode) {
 	char_id=char_value&=0x3f;
-	char_background_colour=vic_regs[0x21+((char_value>>6)&3)];
+	//	char_background_colour=vic_regs[0x21+((char_value>>6)&3)];
       } 
       else {
 	char_id=char_value&0x1fff;
-	char_background_colour=background_colour;
+	//	char_background_colour=background_colour;
       }
       int glyph_width_deduct=char_value>>13;
       

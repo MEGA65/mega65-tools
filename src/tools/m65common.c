@@ -334,6 +334,7 @@ int stop_cpu(void)
   if (no_rxbuff) do_usleep(50000);
   slow_write_safe(fd,"t1\r",3);
   purge_and_check_for_vf011_jobs(1);
+  return 0;
 }
 
 int start_cpu(void)
@@ -614,7 +615,7 @@ int monitor_sync(void)
 	  // So write 64K x 0
 	  char zeroes[256];
 	  bzero(zeroes,256);
-	  for(int i=0;i<256;i++) serialport_write(fd,zeroes,256);
+	  for(int i=0;i<256;i++) serialport_write(fd,(unsigned char *)zeroes,256);
 
 	  slow_write_safe(fd,cmd,strlen(cmd));
 	  
