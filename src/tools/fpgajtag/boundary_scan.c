@@ -15,9 +15,6 @@
 #include <strings.h>
 #include <time.h>
 
-#ifdef WINDOWS
-#define bcopy(s2,s1,n) memcpy(s1, s2, n)
-#endif
 char *strcasestr(const char *haystack, const char *needle);
 
 unsigned long long gettime_ms(void);
