@@ -1525,6 +1525,9 @@ int delete_file(char *name)
 
     // Flush any pending sector writes out
     execute_write_queue();
+
+    printf("File '%s' successfully deleted\n", name);
+    return 0;
 }
 
 int rename_file(char *name,char *dest_name)
