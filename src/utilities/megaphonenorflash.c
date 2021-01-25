@@ -69,8 +69,8 @@ void wait_10ms(void)
   /RESET     - OUT - IO Expander 2, Port 1, bit 2
   /CS2       - OUT - IO Expander 2, Port 1, bit 3
   /CS1       - OUT - IO Expander 2, Port 1, bit 4
-  SI/IO0     - OUT - IO Expander 2, Port 1, bit 0
   /WP / IO2  - OUT - IO Expander 2, Port 1, bit 5
+  SI/IO0     - OUT - IO Expander 2, Port 0, bit 6
   SO/IO1     - IN  - IO Expander 2, Port 0, bit 5
 
   So we set port 1 to be all output, and bit 5 of port 0 to be input.
@@ -94,6 +94,8 @@ void wait_10ms(void)
 
 unsigned char port1=0xff;
 unsigned char port0=0xff;
+
+unsigned char ev=0;
 
 void iowrite(unsigned char reg,unsigned char val)
 {
@@ -140,18 +142,23 @@ void spi_tristate_so(void)
 
 unsigned char spi_sample_so(void)
 {
-  // Wait 2 complete read cycles to be sure data is fresh
+  // Wait 1 complete read cycles to be sure data is fresh
   unsigned char v=lpeek(0xFFD70FE);
-  v+=2;
-  while(lpeek(0xFFD70FE)!=v) continue;
-  if (lpeek(0xFFD7008)&0x20) return 1; else return 0;
+  while(lpeek(0xFFD70FE)==v) continue;
+  v=lpeek(0xFFD70FE);
+  while(lpeek(0xFFD70FE)==v) continue;
+  
+  v=lpeek(0xFFD7008)&0x20;
+  //  printf("%02x sample SO = %d\n",ev++,v?1:0);
+  if (v) return 1; else return 0;
 }
 
 void spi_si_set(unsigned char b)
 {
   // De-tri-state SO data line, and set value
-  if (b) port1|=0x01; else port1&=0xfe;
-  iowrite(2,port1);
+  if (b) port0|=0x40; else port0&=0xbf;
+  iowrite(2,port0);
+  //  printf("%02x set SI = %d\n",ev++,b?1:0);
 }
 
 
@@ -159,11 +166,15 @@ void spi_clock_low(void)
 {
   // Activate IEC CLK line
   POKE(0xDD00,PEEK(0xDD00)|0x10);
+  wait_10ms();
+  //  printf("%02x CLK low\n",ev++);
 }
 
 void spi_clock_high(void)
 {
   POKE(0xDD00,PEEK(0xDD00)&0xEF);
+  wait_10ms();
+  //  printf("%02x CLK high\n",ev++);
 }
 
 void spi_idle_clocks(unsigned int count)
@@ -179,13 +190,15 @@ void spi_idle_clocks(unsigned int count)
 void spi_cs_low(void)
 {
   port1&=0xEF;
-  iowrite(2,port1);
+  iowrite(3,port1);
+  printf("CS low\n");
 }
 
 void spi_cs_high(void)
 {
   port1|=0x10;
-  iowrite(2,port1);
+  iowrite(3,port1);
+  printf("CS high\n");
 }
 
 
@@ -201,7 +214,7 @@ void spi_tx_bit(unsigned char bit)
 void spi_tx_byte(unsigned char b)
 {
   unsigned char i;
-  
+  printf("%02x TX byte $%02x\n",ev++,b);
   for(i=0;i<8;i++) {
     spi_tx_bit(b&0x80);
     b=b<<1;
@@ -358,6 +371,12 @@ void fetch_rdid(void)
   device_id=spi_rx_byte()<<8;
   device_id|=spi_rx_byte();
 
+  printf("Manufacturer = %02x, devID=%02x\n",manufacturer,device_id);
+  while(!PEEK(0xD610)) {
+    continue;
+  }
+  POKE(0xD610,0);
+  
   // Now get the CFI data block
   for(i=0;i<512;i++) cfi_data[i]=0x00;  
   cfi_length=spi_rx_byte();
