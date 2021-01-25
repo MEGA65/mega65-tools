@@ -443,6 +443,9 @@ void main(void)
   graphics_clear_double_buffer();
   activate_double_buffer();
 
+  // Disable hot registers
+  POKE(0xD05D,PEEK(0xD05D)&0x7f);
+  
   // Set background colour to light grey
   POKE(0xD021,0x0b);
   
