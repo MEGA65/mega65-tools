@@ -1485,7 +1485,6 @@ unsigned int get_first_cluster_of_file(void)
 int delete_file(char *name)
 {
     struct m65dirent de;
-    int retVal=0;
 
     if (check_file_system_access() == -1)
         return -1;
