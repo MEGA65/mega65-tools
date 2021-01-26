@@ -23,7 +23,7 @@ typedef struct {
 
 static rev_info revs[] =
 {
-  // name num MB
+  // name   num MB  Target Device Name
   { "nexys", 1, 4, "7a100tcsg324" },
   { "r2",    2, 4, "7a100tfgg484" },
   { "r3",    3, 8, "7a200tfbg484" }
