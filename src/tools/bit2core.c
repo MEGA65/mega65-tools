@@ -10,6 +10,7 @@
 
 const int CORE_HEADER_SIZE = 4096;
 const int BITSTREAM_HEADER_SIZE = 120;
+const int BITSTREAM_HEADER_TARGETNAME_LOC = 0x4C;
 
 unsigned char bitstream[MAX_MB*BYTES_IN_MEGABYTE];
 
@@ -17,30 +18,34 @@ typedef struct {
   char name[8];
   int num;
   int max_core_mb_size;
+  char target_device_name[13];
 } rev_info;
+
+static rev_info revs[] =
+{
+  // name num MB
+  { "nexys", 1, 4, "7a100tcsg324" },
+  { "r2",    2, 4, "7a100tfgg484" },
+  { "r3",    3, 8, "7a200tfbg484" }
+};
+// NOTE: Append future revision details to end of this array
+
 
 void show_help(void)
 {
   fprintf(stderr, "MEGA65 bitstream to core file converter v0.0.2.\n"
                   "---------------------------------------\n"
-                  "Usage: <r2|r3> <foo.bit> <core name> <core version> <out.cor>\n"
+                  "Usage: <nexys|r2|r3> <foo.bit> <core name> <core version> <out.cor>\n"
                   "\n"
                   "Note: 1st parameter must be either:\n"
+                  "  nexys (bitstream for Nexys4DDR board, for max core size of 4MB)\n"
                   "  r2 (bitstream for Mega65 revision2 board, for max core size of 4MB)\n"
-                  "  r3 (bitstream for Mega65 revision3 board, for max core size of 8MB)\n");
+                  "  r3 (bitstream for Mega65 revision3 board, as used by DevKits, for max core size of 8MB)\n");
 }
 
 
 rev_info parse_revision_arg(const char* rev)
 {
-  rev_info revs[] =
-  {
-    // name num MB
-    { "r2",  2, 4 },
-    { "r3",  3, 8 }
-  };
-  // NOTE: Append future revision details to end of this array
-
   int revcnt = sizeof(revs) / sizeof(rev_info);
 
   for (int idx = 0; idx < revcnt; idx++) {
@@ -60,6 +65,37 @@ rev_info parse_revision_arg(const char* rev)
   exit(-1);
 }
 
+rev_info* find_board_revision_from_targetname(char* targetname)
+{
+  int revcnt = sizeof(revs) / sizeof(rev_info);
+
+  for (int idx = 0; idx < revcnt; idx++)
+  {
+    if (strcmp(targetname, revs[idx].target_device_name) == 0)
+    {
+      printf("Bitstream's target device is detected as: \"%s\" (%s)\n", revs[idx].name, revs[idx].target_device_name);
+      return &revs[idx];
+    }
+  }
+
+  printf("This bitstream is for an unknown target device: \"???\" (%s)\"\n", targetname);
+  return NULL;
+}
+
+int check_bitstream_header_targetdevice(rev_info rev, unsigned char* bitstream)
+{
+  char* targetdevicename = (char*)&bitstream[BITSTREAM_HEADER_TARGETNAME_LOC];
+
+  rev_info* discovered_rev = find_board_revision_from_targetname(targetdevicename);
+
+  if (discovered_rev == NULL)
+    return 0;
+
+  if (strcmp(discovered_rev->target_device_name, rev.target_device_name) != 0)
+    return 0;
+
+  return 1;
+}
 
 int read_bitstream_file(rev_info rev, const char* filename, unsigned char* data)
 {
@@ -78,6 +114,12 @@ int read_bitstream_file(rev_info rev, const char* filename, unsigned char* data)
       bit_size > (rev.max_core_mb_size * BYTES_IN_MEGABYTE - CORE_HEADER_SIZE)) {
     fprintf(stderr,"ERROR: Bitstream file must be >1K and no bigger than (%dMB - 4K)\n", rev.max_core_mb_size);
     exit(-2);
+  }
+
+  if (!check_bitstream_header_targetdevice(rev, data))
+  {
+    fprintf(stderr, "ERROR: Provided bitstream is for a different target to the one you specified: \"%s\" (%s)\n", rev.name, rev.target_device_name);
+    exit(-4);
   }
 
   return bit_size;
