@@ -110,16 +110,16 @@ int read_bitstream_file(rev_info rev, const char* filename, unsigned char* data)
 
   printf("Bitstream file is %d bytes long.\n", bit_size);
 
+  if (bit_size >= BITSTREAM_HEADER_SIZE && !check_bitstream_header_targetdevice(rev, data))
+  {
+    fprintf(stderr, "ERROR: Provided bitstream is for a different target to the one you specified: \"%s\" (%s)\n", rev.name, rev.target_device_name);
+    exit(-4);
+  }
+
   if (bit_size < 1024 ||
       bit_size > (rev.max_core_mb_size * BYTES_IN_MEGABYTE - CORE_HEADER_SIZE)) {
     fprintf(stderr,"ERROR: Bitstream file must be >1K and no bigger than (%dMB - 4K)\n", rev.max_core_mb_size);
     exit(-2);
-  }
-
-  if (!check_bitstream_header_targetdevice(rev, data))
-  {
-    fprintf(stderr, "ERROR: Provided bitstream is for a different target to the one you specified: \"%s\" (%s)\n", rev.name, rev.target_device_name);
-    exit(-4);
   }
 
   return bit_size;
