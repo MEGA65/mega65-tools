@@ -66,8 +66,13 @@ TOOLS=	$(BINDIR)/etherload \
 	$(BINDIR)/monitor_save \
 	$(BINDIR)/pngprepare \
 	$(BINDIR)/giftotiles \
+	$(BINDIR)/m65ftp_test \
+	$(BINDIR)/bit2core \
+	$(BINDIR)/bit2mcs \
 	$(BINDIR)/m65.exe \
-	$(BINDIR)/m65ftp_test
+	$(BINDIR)/mega65_ftp.exe \
+	$(BINDIR)/bit2core.exe \
+	$(BINDIR)/bit2mcs.exe
 
 SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
@@ -400,6 +405,9 @@ $(BINDIR)/bit2core.exe:	$(TOOLDIR)/bit2core.c Makefile
 
 $(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile 
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
+
+$(BINDIR)/bit2mcs.exe:	$(TOOLDIR)/bit2mcs.c Makefile 
+	$(WINCC) $(WINCOPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
 
 $(BINDIR)/monitor_save:	$(TOOLDIR)/monitor_save.c Makefile
 	$(CC) $(COPT) -o $(BINDIR)/monitor_save $(TOOLDIR)/monitor_save.c
