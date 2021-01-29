@@ -16,7 +16,6 @@
 #define ARG_COREPATH      argv[5]
 
 static const int CORE_HEADER_SIZE = 4096;
-static const int BITSTREAM_HEADER_SIZE = 120;
 static const int BITSTREAM_HEADER_FPGA_PART_LOC = 0x4C;
 
 static unsigned char bitstream_data[MAX_MB*BYTES_IN_MEGABYTE];
