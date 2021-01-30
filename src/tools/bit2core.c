@@ -16,7 +16,6 @@
 #define ARG_COREPATH      argv[5]
 
 static const int CORE_HEADER_SIZE = 4096;
-static const int BITSTREAM_HEADER_SIZE = 120;
 static const int BITSTREAM_HEADER_FPGA_PART_LOC = 0x4C;
 
 static unsigned char bitstream_data[MAX_MB*BYTES_IN_MEGABYTE];
@@ -212,7 +211,7 @@ void write_core_file(const int bit_size, const char* core_name, const char* core
     header_block[32 + i] = core_version[i];
 
   fwrite(header_block, CORE_HEADER_SIZE - MAGIC_LEN, 1, of);
-  fwrite(&bitstream_data[BITSTREAM_HEADER_SIZE], bit_size - BITSTREAM_HEADER_SIZE, 1, of);
+  fwrite(bitstream_data, bit_size, 1, of);
   fclose(of);
 
   fprintf(stderr, "Core file written: \"%s\"\n", core_filename);
