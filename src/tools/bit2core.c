@@ -66,7 +66,7 @@ void show_mega65_target_name_list(void)
 
 void show_help(void)
 {
-  fprintf(stderr, "MEGA65 bitstream to core file converter v0.0.3.\n"
+  fprintf(stderr, "MEGA65 bitstream to core file converter v0.0.4.\n"
                   "---------------------------------------\n"
                   "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor>\n"
                   "\n"
