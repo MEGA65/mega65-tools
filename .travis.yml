@@ -26,5 +26,5 @@ deploy:
   draft: false
   overwrite: true
   on:
-    tags: false
+    tags: true
     branch: master
