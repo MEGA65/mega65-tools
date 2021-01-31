@@ -16,6 +16,7 @@ script:
   if [[ -z "$TRAVIS_TAG" ]]; then
     export TRAVIS_TAG=CI-latest
     git tag -f $TRAVIS_TAG
+    git push origin --tags
   fi
 before_deploy:
 deploy:
