@@ -10,14 +10,11 @@ script:
 - sudo apt-get install -y libgif-dev
 - sudo apt-get install -y libpng-dev
 - make
+before_deploy:
 - |
-  echo TRAVIS_TAG=$TRAVIS_TAG
-  echo TRAVIS_BRANCH=$TRAVIS_BRANCH
   if [[ -z "$TRAVIS_TAG" ]]; then
     export TRAVIS_TAG=CI-latest
-    git tag -f $TRAVIS_TAG
   fi
-before_deploy:
 deploy:
 - provider: releases
   api_key: $GITHUB_API_KEY
@@ -29,5 +26,5 @@ deploy:
   draft: false
   overwrite: true
   on:
-    tags: true
+    tags: false
     branch: master
