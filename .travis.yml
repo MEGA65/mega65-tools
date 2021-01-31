@@ -12,6 +12,7 @@ script:
 - make
 before_deploy:
 - |
+  echo TRAVIS_TAG=$TRAVIS_TAG
   if [[ -z "$TRAVIS_TAG" ]]; then
     export TRAVIS_TAG=CI-latest
   fi
