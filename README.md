@@ -13,3 +13,9 @@ If you want to cross-build the tools for Windows, you'll also need:
 apt-get install binutils-mingw-w64 mingw-w64-common gcc-mingw-w64
 ```
 
+After cloning the repository, enter its directory and call
+
+```
+make
+```
+
