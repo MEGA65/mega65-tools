@@ -460,12 +460,17 @@ int main(int argc, char** argv)
 #else
     char* cmd = NULL;
     using_history();
-    snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
+    int ret = snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
+    if (ret < 0)
+      ; // suppressing gcc-8 -Wformat-truncation warning like this for now...
+
     while ((cmd = readline(prompt)) != NULL) {
       execute_command(cmd);
       add_history(cmd);
       free(cmd);
-      snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
+      ret = snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
+      if (ret < 0)
+        ; // suppressing gcc-8 -Wformat-truncation warning like this for now...
     }
 #endif
   }
