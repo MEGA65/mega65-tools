@@ -25,7 +25,7 @@ ifdef USE_LOCAL_CC65
 	CC65_PREFIX=
 else
 	# use the binary built from the submodule
-	CC65_PREFIX=$(PWD)/cc65/bin
+	CC65_PREFIX=$(PWD)/cc65/bin/
 endif
 
 CC65=  $(CC65_PREFIX)cc65
