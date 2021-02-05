@@ -20,11 +20,21 @@ VIVADO=	./vivado_wrapper
 
 ACME=	/usr/local/bin/acme
 
-CC65=  cc65/bin/cc65
-CA65=  cc65/bin/ca65 --cpu 4510
-LD65=  cc65/bin/ld65 -t none
-CL65=  cc65/bin/cl65 --config src/tests/vicii.cfg
-GHDL=  ghdl/build/bin/ghdl
+ifdef USE_LOCAL_CC65
+	# use locally installed binary (requires 'cc65,ld65,etc' to be in the $PATH)
+	CC65=  cc65
+	CA65=  ca65 --cpu 4510
+	LD65=  ld65 -t none
+	CL65=  cl65 --config src/tests/vicii.cfg
+	CC65_DEPEND=
+else
+	# use the binary built from the submodule
+	CC65=  cc65/bin/cc65
+	CA65=  cc65/bin/ca65 --cpu 4510
+	LD65=  cc65/bin/ld65 -t none
+	CL65=  cc65/bin/cl65 --config src/tests/vicii.cfg
+	CC65_DEPEND=$(CC65)
+endif
 
 CBMCONVERT=	cbmconvert/cbmconvert
 
@@ -88,14 +98,14 @@ $(SDCARD_DIR)/FREEZER.M65:
 $(CBMCONVERT):
 	git submodule init
 	git submodule update
-	echo "Saving 'cbmconvert' build output to 'cbmconvert_build_log.txt'..."
-	( cd cbmconvert && make -f Makefile.unix &> cbmconvert_build_log.txt )
+	( cd cbmconvert && make -f Makefile.unix )
 
+ifndef USE_LOCAL_CC65
 $(CC65):
 	git submodule init
 	git submodule update
-	echo "Saving 'cc65' build output to 'cc65_build_log.txt'..."
-	( cd cc65 && make -j 8 &> cc65_build_log.txt )
+	( cd cc65 && make -j 8 )
+endif
 
 $(OPHIS):
 	git submodule init
