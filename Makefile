@@ -88,12 +88,14 @@ $(SDCARD_DIR)/FREEZER.M65:
 $(CBMCONVERT):
 	git submodule init
 	git submodule update
-	( cd cbmconvert && make -f Makefile.unix )
+	echo "Saving 'cbmconvert' build output to 'cbmconvert_build_log.txt'..."
+	( cd cbmconvert && make -f Makefile.unix &> cbmconvert_build_log.txt )
 
 $(CC65):
 	git submodule init
 	git submodule update
-	( cd cc65 && make -j 8 )
+	echo "Saving 'cc65' build output to 'cc65_build_log.txt'..."
+	( cd cc65 && make -j 8 &> cc65_build_log.txt )
 
 $(OPHIS):
 	git submodule init
