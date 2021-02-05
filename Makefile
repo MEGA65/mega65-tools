@@ -350,6 +350,10 @@ $(BINDIR)/giftotiles:	$(TOOLDIR)/pngprepare/giftotiles.c Makefile
 $(BINDIR)/pnghcprepare:	$(TOOLDIR)/pngprepare/pnghcprepare.c Makefile
 	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/pnghcprepare $(TOOLDIR)/pngprepare/pnghcprepare.c -lpng
 
+# Utility to make hi-colour displays from PNGs, with upto 256 colours per char row
+$(BINDIR)/md2h65:	$(TOOLDIR)/pngprepare/md2h65.c Makefile
+	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/md2h65 $(TOOLDIR)/pngprepare/md2h65.c -lpng
+
 
 $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
 	$(CC) $(COPT) -o $(BINDIR)/utilpacker $(TOOLDIR)/utilpacker/utilpacker.c
