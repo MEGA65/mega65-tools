@@ -5,12 +5,12 @@
 #CC=	clang
 COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/include/libusb-1.0 -L/usr/local/lib -mno-sse3 -march=x86-64
 # -I/usr/local/Cellar/libusb/1.0.23/include/libusb-1.0/ -L/usr/local/Cellar/libusb/1.0.23/lib/libusb-1.0/
-CC=	gcc
+CC=	gcc-8
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=	$(COPT) -DWINDOWS -Imingw64/include -Lmingw64/lib
 
 OPHIS=	Ophis/bin/ophis
-OPHISOPT=	-4
+OPHISOPT=	-4 --no-warn
 OPHIS_MON= Ophis/bin/ophis -c
 
 JAVA = java
