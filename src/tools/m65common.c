@@ -42,6 +42,14 @@
 #include <linux/tty_flags.h>
 #endif
 #endif
+
+#ifdef WINDOWS
+#include <Winsock2.h>
+#else
+#include <netdb.h>
+#include <arpa/inet.h>
+#endif
+
 #include "m65common.h"
 
 #define SLOW_FACTOR 1
@@ -1357,12 +1365,81 @@ void set_serial_speed(int fd, int serial_speed)
 }
 #endif
 
-void open_the_serial_port(char* serial_port)
+/*
+	borrowed from: https://www.binarytides.com/hostname-to-ip-address-c-sockets-linux/
+	Get ip from domain name
+ */
+
+int hostname_to_ip(char * hostname , char* ip)
 {
+	struct hostent *he;
+	struct in_addr **addr_list;
+	int i;
+		
+	if ( (he = gethostbyname( hostname ) ) == NULL) 
+	{
+		// get the host info
+		herror("gethostbyname");
+		return 1;
+	}
+
+	addr_list = (struct in_addr **) he->h_addr_list;
+	
+	for(i = 0; addr_list[i] != NULL; i++) 
+	{
+		//Return the first one;
+		strcpy(ip , inet_ntoa(*addr_list[i]) );
+		return 0;
+	}
+	
+	return 1;
+}
+
+int open_tcp_port(char* portname)
+{
+	char hostname[128] = "localhost";
+	int port = 4510;  // assume a default port of 4510
+	if (portname[3] == '#') // did user provide a hostname and port number?
+	{
+		sscanf(&portname[4], "%s:%d", hostname, &port);
+	}
+
+	struct sockaddr_in sock_st;
+	fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (fd < 0) {
+		error_message("error %d creating tcp/ip socket: %s\n", errno, strerror (errno));
+		return 0;
+	}
+
+	char ip[100];
+	
+	hostname_to_ip(hostname , ip);
+	printf("%s resolved to %s" , hostname , ip);
+
+	sock_st.sin_addr.s_addr = inet_addr(ip);
+	sock_st.sin_family = AF_INET;
+	sock_st.sin_port = htons(port);
+
+	if (connect(fd, (struct sockaddr*)&sock_st, sizeof(sock_st)) < 0)
+	{
+		error_message("error %d connecting to tcp/ip socket %s:%d: %s\n", errno, hostname, port, strerror (errno));
+		close(fd);
+		return 0;
+	}
+
+	return 1;
+}
+
+void open_the_serial_port(char *serial_port)
+{
+  if (!strncasecmp(serial_port, "tcp", 3)) {
+    open_tcp_port(serial_port);
+    return;
+  }
 #ifdef WINDOWS
-  fd = open_serial_port(serial_port, 2000000);
-  if (fd == INVALID_HANDLE_VALUE) {
-    fprintf(stderr, "Could not open serial port '%s'\n", serial_port);
+  fd=open_serial_port(serial_port,2000000);
+  if (fd==INVALID_HANDLE_VALUE) {
+    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
     exit(-1);
   }
 
