@@ -223,7 +223,7 @@ void process_file(char *outputfilename)
     fprintf(stderr,"Could not convert file to RGB or RGBA\n");
   }
 
-  outfile=fopen(outputfilename,"w");
+  outfile=fopen(outputfilename,"wb");
   if (outfile == NULL) {
     // could not open output file, so close all and exit
     if (infile != NULL) {
@@ -296,7 +296,7 @@ void process_file(char *outputfilename)
 	    }
 	  }
 	  if (i==colour_count) {
-	    if (colour_count<256) {
+	    if (colour_count<MAX_COLOURS) {
 	      // Allocate a new colour
 	      colours[colour_count++]=c;
 	      this_tile[yy-y][xx-x]=c;
@@ -342,6 +342,10 @@ void process_file(char *outputfilename)
       
     }
     printf("\n%d unique tiles, %d colour substitutions\n",tile_count,subst);
+
+    // Write out palette
+    
+    
   }
 
   
