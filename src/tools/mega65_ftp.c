@@ -398,11 +398,7 @@ int main(int argc, char** argv)
     snprintf(cmd, 1024, "fpgajtag -a %s", bitstream);
     fprintf(stderr, "%s\n", cmd);
     system(cmd);
-#ifdef WINDOWS
-    fprintf(stderr, "[T+%I64dsec] Bitstream loaded\n", (long long)time(0) - start_time);
-#else
     fprintf(stderr, "[T+%lldsec] Bitstream loaded\n", (long long)time(0) - start_time);
-#endif
   }
 
   // We used to push the interface to 4mbit to speed things up, but that's not needed now.
@@ -562,7 +558,7 @@ int load_helper(void)
       buffer[8192] = 0;
       if (bytes >= (int)strlen("MEGA65FT1.0"))
         for (int i = 0; i < bytes - strlen("MEGA65FT1.0"); i++) {
-          printf("i=%d, bytes=%d, strlen=%d\n", i, bytes, strlen("MEGA65FT1.0"));
+          printf("i=%d, bytes=%d, strlen=%d\n", i, bytes, (int)strlen("MEGA65FT1.0"));
           if (!strncmp("MEGA65FT1.0", &buffer[i], strlen("MEGA65FT1.0"))) {
             printf("Helper already running. Nothing to do.\n");
             return 0;
@@ -699,13 +695,8 @@ void job_process_results(void)
         // fprintf(stderr,"i=%d, b=%d, recent[30-10]='%s'\n",i,b,&recent[30-10]);
         if (!strncmp((char*)&recent[30 - 10], "FTBATCHDONE", 11)) {
           long long endtime = gettime_us();
-#ifdef WINDOWS
-          if (debug_rx)
-            printf("%I64d: Saw end of batch job after %I64d usec\n", endtime - start_usec, endtime - now);
-#else
           if (debug_rx)
             printf("%lld: Saw end of batch job after %lld usec\n", endtime - start_usec, endtime - now);
-#endif
           //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
           return;
         }
@@ -968,8 +959,8 @@ int write_sector(const unsigned int sector_number, unsigned char* buffer)
   int retVal = 0;
   do {
     // With new method, we write the data, then schedule the write to happen with a job
-    char cmd[1024];
 #if 0
+    char cmd[1024];
     // Clear pending input first    
     int b=1;
     while(b>0){
@@ -2007,17 +1998,10 @@ int upload_file(char* name, char* dest_name)
       }
       sector_number = partition_start + first_cluster_sector + (sectors_per_cluster * (file_cluster - first_cluster))
                     + sector_in_cluster;
-#ifdef WINDOWS
-      if (0)
-        printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
-            bytes, sector_number, sector_number, file_cluster);
-      printf("\rUploaded %I64d bytes.", (long long)st.st_size - remaining_length);
-#else
       if (0)
         printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
             bytes, sector_number, sector_number, file_cluster);
       printf("\rUploaded %lld bytes.", (long long)st.st_size - remaining_length);
-#endif
       fflush(stdout);
 
       if (write_sector(sector_number, buffer)) {
@@ -2050,13 +2034,8 @@ int upload_file(char* name, char* dest_name)
 
     if (time(0) == upload_start)
       upload_start = time(0) - 1;
-#ifdef WINDOWS
-    printf("\rUploaded %I64d bytes in %I64d seconds (%.1fKB/sec)\n", (long long)st.st_size,
-        (long long)time(0) - upload_start, st.st_size * 1.0 / 1024 / (time(0) - upload_start));
-#else
     printf("\rUploaded %lld bytes in %lld seconds (%.1fKB/sec)\n", (long long)st.st_size, (long long)time(0) - upload_start,
         st.st_size * 1.0 / 1024 / (time(0) - upload_start));
-#endif
   } while (0);
 
   return retVal;
@@ -2290,15 +2269,9 @@ int create_dir(char* dest_name)
       int bytes = 512;
       sector_number = partition_start + first_cluster_sector + (sectors_per_cluster * (file_cluster - first_cluster))
                     + sector_in_cluster;
-#ifdef WINDOWS
-      if (0)
-        printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
-            bytes, sector_number, sector_number, file_cluster);
-#else
       if (0)
         printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
             bytes, sector_number, sector_number, file_cluster);
-#endif
       fflush(stdout);
 
       if (write_sector(sector_number, buffer)) {
@@ -2331,13 +2304,8 @@ int create_dir(char* dest_name)
 
     if (time(0) == upload_start)
       upload_start = time(0) - 1;
-#ifdef WINDOWS
-    printf("\rUploaded %I64d bytes in %I64d seconds (%.1fKB/sec)\n", (long long)4096, (long long)time(0) - upload_start,
-        4096 * 1.0 / 1024 / (time(0) - upload_start));
-#else
     printf("\rUploaded %lld bytes in %lld seconds (%.1fKB/sec)\n", (long long)4096, (long long)time(0) - upload_start,
         4096 * 1.0 / 1024 / (time(0) - upload_start));
-#endif
   } while (0);
 
   return retVal;
@@ -2499,19 +2467,11 @@ int download_file(char* dest_name, char* local_name, int showClusters)
           fwrite(download_buffer, remaining_bytes, 1, f);
       }
 
-#ifdef WINDOWS
-      if (0)
-        printf("T+%I64d : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
-            (int)de.d_filelen, sector_number, sector_number, file_cluster);
-      if (!showClusters)
-        printf("\rDownloaded %I64d bytes.", (long long)de.d_filelen - remaining_bytes);
-#else
       if (0)
         printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
             (int)de.d_filelen, sector_number, sector_number, file_cluster);
       if (!showClusters)
         printf("\rDownloaded %lld bytes.", (long long)de.d_filelen - remaining_bytes);
-#endif
       fflush(stdout);
 
       //      printf("T+%lld : after write.\n",gettime_us()-start_usec);
@@ -2528,13 +2488,8 @@ int download_file(char* dest_name, char* local_name, int showClusters)
     if (time(0) == upload_start)
       upload_start = time(0) - 1;
     if (!showClusters) {
-#ifdef WINDOWS
-      printf("\rDownloaded %I64d bytes in %I64d seconds (%.1fKB/sec)\n", (long long)de.d_filelen,
-          (long long)time(0) - upload_start, de.d_filelen * 1.0 / 1024 / (time(0) - upload_start));
-#else
       printf("\rDownloaded %lld bytes in %lld seconds (%.1fKB/sec)\n", (long long)de.d_filelen,
           (long long)time(0) - upload_start, de.d_filelen * 1.0 / 1024 / (time(0) - upload_start));
-#endif
     }
     else
       printf("\n");
