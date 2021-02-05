@@ -401,7 +401,7 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
-  FILE *infile=fopen(argv[2],"r");
+  FILE *infile=fopen(argv[1],"r");
   if (!infile) {
     perror("Could not open input file");
     exit(-3);
@@ -413,6 +413,14 @@ int main(int argc, char **argv)
     exit(-3);
   }
 
+  char line[1024];
+  line[0]=0; fgets(line,1024,infile);
+  while(line[0]) {
+    
+    line[0]=0; fgets(line,1024,infile);
+  }
+
+  
   // Allow upto 128KB of tiles 
   struct tile_set *ts=new_tileset(128*1024/64);
 
