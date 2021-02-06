@@ -30,14 +30,14 @@ png_byte bit_depth;
 png_structp png_ptr;
 png_infop info_ptr;
 int number_of_passes;
-png_bytep * row_pointers;
+png_bytep* row_pointers;
 
-FILE *infile;
-FILE *outfile;
+FILE* infile;
+FILE* outfile;
 
 /* ============================================================= */
 
-void abort_(const char * s, ...)
+void abort_(const char* s, ...)
 {
   va_list args;
   va_start(args, s);
@@ -51,7 +51,7 @@ void abort_(const char * s, ...)
 
 void read_png_file(char* file_name)
 {
-  unsigned char header[8];    // 8 is the maximum size that can be checked
+  unsigned char header[8]; // 8 is the maximum size that can be checked
 
   /* open file and test for it being a png */
   infile = fopen(file_name, "rb");
@@ -97,9 +97,9 @@ void read_png_file(char* file_name)
   if (setjmp(png_jmpbuf(png_ptr)))
     abort_("[read_png_file] Error during read_image");
 
-  row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * height);
-  for (y=0; y<height; y++)
-    row_pointers[y] = (png_byte*) malloc(png_get_rowbytes(png_ptr,info_ptr));
+  row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * height);
+  for (y = 0; y < height; y++)
+    row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png_ptr, info_ptr));
 
   png_read_image(png_ptr, row_pointers);
 
@@ -113,87 +113,89 @@ void read_png_file(char* file_name)
 
 /* ============================================================= */
 
-int cut_sprite(int x1,int y1,int x2,int y2)
+int cut_sprite(int x1, int y1, int x2, int y2)
 {
-  int multiplier=-1;
+  int multiplier = -1;
   if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB)
-    multiplier=3;
+    multiplier = 3;
 
   if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGBA)
-    multiplier=4;
+    multiplier = 4;
 
   if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_GRAY)
-    multiplier=1;
-  
-  if (multiplier==-1) {
-    fprintf(stderr,"Could not convert file to grey-scale, RGB or RGBA\n");
-  }
-  
-  int xstep=(x2-x1)/24;
-  int ystep=(y2-y1)/21;
+    multiplier = 1;
 
-  int x,y;
-  int xx,yy;
-  for(y=0;y<21;y++) {
+  if (multiplier == -1) {
+    fprintf(stderr, "Could not convert file to grey-scale, RGB or RGBA\n");
+  }
+
+  int xstep = (x2 - x1) / 24;
+  int ystep = (y2 - y1) / 21;
+
+  int x, y;
+  int xx, yy;
+  for (y = 0; y < 21; y++) {
     printf("  /* ");
-    unsigned int bit_vector=0;
-    for(x=0;x<24;x++)
-      {
-	
-	long long pixel_value=0;
-	for(yy=0;yy<ystep;yy++)
-	  for(xx=0;xx<xstep;xx++) {
-	    pixel_value+=row_pointers[y1+y*ystep+yy][(x1+x*xstep+xx)*multiplier];
-	  }
-	if (xstep||ystep)
-	  pixel_value/=(xstep*ystep);
-	else {
-	  printf("Error: xstep=%d, ystep=%d\n",xstep,ystep);
-	}
-	//	printf("[%02x]",pixel_value&0xff);
-	if (pixel_value<0x7f) printf("*"); else printf(".");
-	bit_vector=bit_vector<<1;
-	if (pixel_value<0x7f) bit_vector|=1;
+    unsigned int bit_vector = 0;
+    for (x = 0; x < 24; x++) {
+
+      long long pixel_value = 0;
+      for (yy = 0; yy < ystep; yy++)
+        for (xx = 0; xx < xstep; xx++) {
+          pixel_value += row_pointers[y1 + y * ystep + yy][(x1 + x * xstep + xx) * multiplier];
+        }
+      if (xstep || ystep)
+        pixel_value /= (xstep * ystep);
+      else {
+        printf("Error: xstep=%d, ystep=%d\n", xstep, ystep);
       }
+      //	printf("[%02x]",pixel_value&0xff);
+      if (pixel_value < 0x7f)
+        printf("*");
+      else
+        printf(".");
+      bit_vector = bit_vector << 1;
+      if (pixel_value < 0x7f)
+        bit_vector |= 1;
+    }
     printf("*/  ");
-    printf("  0x%02x,0x%02x,0x%02x,\n",
-	   (bit_vector>>16)&0xff,(bit_vector>>8)&0xff,(bit_vector>>0)&0xff);
+    printf("  0x%02x,0x%02x,0x%02x,\n", (bit_vector >> 16) & 0xff, (bit_vector >> 8) & 0xff, (bit_vector >> 0) & 0xff);
   }
   printf("  0xff,\n");
   return 0;
 }
 
-
 /* ============================================================= */
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
   if (argc < 2) {
-    fprintf(stderr,"Usage: program_name <file in> [sprite cut info]\n");
+    fprintf(stderr, "Usage: program_name <file in> [sprite cut info]\n");
     exit(-1);
   }
 
-  printf("Reading %s\n",argv[1]);
+  printf("Reading %s\n", argv[1]);
   read_png_file(argv[1]);
 
-  int x1,y1,x2,y2;
+  int x1, y1, x2, y2;
 
-  for(y1=300;y1<2700;y1+=900)
-    for(x1=200;x1<5000;x1+=1350) {
-      cut_sprite(x1,y1,x1+1200,y1+600);
+  for (y1 = 300; y1 < 2700; y1 += 900)
+    for (x1 = 200; x1 < 5000; x1 += 1350) {
+      cut_sprite(x1, y1, x1 + 1200, y1 + 600);
       printf("\n");
     }
-  
-  for(int i=2;i<argc;i++) {
-    if (sscanf(argv[i],"%d,%d,%d,%d",&x1,&y1,&x2,&y2)==4) {
-      cut_sprite(x1,y1,x2,y2);
+
+  for (int i = 2; i < argc; i++) {
+    if (sscanf(argv[i], "%d,%d,%d,%d", &x1, &y1, &x2, &y2) == 4) {
+      cut_sprite(x1, y1, x2, y2);
       printf("\n");
-    } else {
-      printf("Could not parse argument '%s'\n",argv[i]);
+    }
+    else {
+      printf("Could not parse argument '%s'\n", argv[i]);
       exit(-3);
     }
   }
-  
+
   printf("done\n");
 
   if (infile != NULL) {
