@@ -426,6 +426,9 @@ $(BINDIR)/videoproxy:	$(TOOLDIR)/videoproxy.c
 $(BINDIR)/vncserver:	$(TOOLDIR)/vncserver.c
 	$(CC) $(COPT) -O3 -o $(BINDIR)/vncserver $(TOOLDIR)/vncserver.c -I/usr/local/include -lvncserver -lpthread
 
+format:
+	find -iname '*.h' -o -iname '*.c' | xargs clang-format --style=file -i
+
 clean:
 	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
 

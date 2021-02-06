@@ -26,6 +26,18 @@ After cloning the repository, enter its directory and call
 make
 ```
 
+For developers that want to commit code to the repo, it's suggested you also install clang, in order to run clang-format.
+
+```
+apt-get install clang
+```
+
+You can then apply the enforced style by typing:
+
+```
+make format
+```
+
 # Building under Windows
 
 You will need to prepare a mingw64 environment for windows.
@@ -56,6 +68,18 @@ You should then be able to build with `make`.
 If you want to build specific tools, you can run targets like:
 - `make bin/mega65_ftp.exe`
 - `make bin/m65.exe`
+
+For developers that want to commit code to the repo, it's suggested you also install clang, in order to run clang-format.
+
+```
+pacman -S clang
+```
+
+You can then apply the enforced style by typing:
+
+```
+make format
+```
 
 ## Known compiler error for mingw64
 
