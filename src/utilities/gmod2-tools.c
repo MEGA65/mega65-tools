@@ -10,6 +10,9 @@ int main(void)
   // Fast CPU
   POKE(0,64);
 
+  POKE(0x286,0x0e);
+  printf("%c\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",0x93);
+  
   // Disable cart first
   POKE(0xDE00,0x40);
   
@@ -25,7 +28,7 @@ int main(void)
   POKE(0xDE00,0xC2);
   lpoke(0x701F555,0xF0);  
   
-#if 0
+#if 1
   // Do FLASH identify sequence
   POKE(0xDE00,0xC2);
   lpoke(0x701F555,0xAA);
