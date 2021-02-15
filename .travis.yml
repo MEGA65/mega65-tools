@@ -9,6 +9,11 @@ script:
 - sudo apt-get install -y libusb-1.0-0-dev
 - sudo apt-get install -y libgif-dev
 - sudo apt-get install -y libpng-dev
+- sudo apt-get install -y libz-mingw-w64-dev
+- sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE
+- sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
+- sudo apt-get update
+- sudo apt install -y libpng-mingw-w64 libusb-1.0-0-mingw-w64
 - make
 before_deploy:
 - |
