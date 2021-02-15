@@ -36,12 +36,12 @@ int main(int argc, char* argv[])
   infile = fopen(argv[1], "rb");
 
   if (infile == NULL) {
-    error("cannot open input file %s", argv[2]);
+    error("cannot open input file %s", argv[1]);
   }
   fseek(infile, 120, SEEK_SET);
   outfile = fopen(argv[2], "wt");
   if (outfile == NULL) {
-    error("cannot open output file %s", argv[3]);
+    error("cannot open output file %s", argv[2]);
   }
   while (1) {
     if ((loadAddr & 0xFFFF) == 0) {

@@ -82,7 +82,7 @@ void usage(void)
   fprintf(stderr, "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
                   "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
                   "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
-                  "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr]\n");
+                  "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N]\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
@@ -109,6 +109,7 @@ void usage(void)
   fprintf(stderr, "  -d - Enable virtual D81 access\n");
   fprintf(stderr, "  -p - Force PAL video mode\n");
   fprintf(stderr, "  -n - Force NTSC video mode\n");
+  fprintf(stderr, "  -N - Disable a running cartridge, and boot to C64 mode.\n");
   fprintf(stderr, "  -F - Force reset on start\n");
   fprintf(stderr, "  -t - Type text via keyboard virtualisation.\n");
   fprintf(stderr, "  -T - As above, but also provide carriage return\n");
@@ -183,6 +184,8 @@ unsigned char screen_line_buffer[256];
 
 char* type_text = NULL;
 int type_text_cr = 0;
+
+int no_cart=0;
 
 #define READ_SECTOR_BUFFER_ADDRESS 0xFFD6c00
 #define WRITE_SECTOR_BUFFER_ADDRESS 0xFFD6c00
@@ -1189,7 +1192,7 @@ int main(int argc, char** argv)
     usage();
 
   int opt;
-  while ((opt = getopt(argc, argv, "@:14aA:B:b:c:C:d:DEFHf:jJ:Kk:Ll:MnoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
@@ -1205,6 +1208,9 @@ int main(int argc, char** argv)
       break;
     case 'A':
       set_mixer_args = optarg;
+    case 'N':
+      no_cart=1;
+      break;
     case 'X':
       hyppo_report = 1;
       break;
@@ -1524,6 +1530,35 @@ int main(int argc, char** argv)
     sleep(2);
   }
 
+  if (no_cart) {
+    char cmd[1024];
+
+    for(int i=0;i<2;i++) 
+      {
+	stop_cpu();
+	mega65_poke(0xffd37d,0x00); // disable cartridge
+	// bank ROM in
+	mega65_poke(0x0,0x37);
+	mega65_poke(0x1,0x37);
+	// The sequence below traps if an IRQ happens during the early reset sequence
+	snprintf(cmd,1024,"gfce2\r");
+	slow_write(fd,cmd,strlen(cmd));
+	snprintf(cmd,1024,"\r");
+	slow_write(fd,cmd,strlen(cmd));
+	slow_write(fd,cmd,strlen(cmd));
+	slow_write(fd,cmd,strlen(cmd));
+	slow_write(fd,cmd,strlen(cmd));
+	slow_write(fd,cmd,strlen(cmd));
+	slow_write(fd,cmd,strlen(cmd));
+	slow_write(fd,cmd,strlen(cmd));
+	slow_write(fd,cmd,strlen(cmd));
+	sprintf(cmd,1024,"gfce2\r");
+	slow_write(fd,cmd,strlen(cmd));
+	start_cpu();
+	usleep(50000);
+      }
+  } 
+  
   if (break_point != -1) {
     fprintf(stderr, "Setting CPU breakpoint at $%04x\n", break_point);
     char cmd[1024];
