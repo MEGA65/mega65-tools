@@ -185,7 +185,7 @@ unsigned char screen_line_buffer[256];
 char* type_text = NULL;
 int type_text_cr = 0;
 
-int no_cart=0;
+int no_cart = 0;
 
 #define READ_SECTOR_BUFFER_ADDRESS 0xFFD6c00
 #define WRITE_SECTOR_BUFFER_ADDRESS 0xFFD6c00
@@ -1209,7 +1209,7 @@ int main(int argc, char** argv)
     case 'A':
       set_mixer_args = optarg;
     case 'N':
-      no_cart=1;
+      no_cart = 1;
       break;
     case 'X':
       hyppo_report = 1;
@@ -1533,32 +1533,31 @@ int main(int argc, char** argv)
   if (no_cart) {
     char cmd[1024];
 
-    for(int i=0;i<2;i++) 
-      {
-	stop_cpu();
-	mega65_poke(0xffd37d,0x00); // disable cartridge
-	// bank ROM in
-	mega65_poke(0x0,0x37);
-	mega65_poke(0x1,0x37);
-	// The sequence below traps if an IRQ happens during the early reset sequence
-	snprintf(cmd,1024,"gfce2\r");
-	slow_write(fd,cmd,strlen(cmd));
-	snprintf(cmd,1024,"\r");
-	slow_write(fd,cmd,strlen(cmd));
-	slow_write(fd,cmd,strlen(cmd));
-	slow_write(fd,cmd,strlen(cmd));
-	slow_write(fd,cmd,strlen(cmd));
-	slow_write(fd,cmd,strlen(cmd));
-	slow_write(fd,cmd,strlen(cmd));
-	slow_write(fd,cmd,strlen(cmd));
-	slow_write(fd,cmd,strlen(cmd));
-	sprintf(cmd,1024,"gfce2\r");
-	slow_write(fd,cmd,strlen(cmd));
-	start_cpu();
-	usleep(50000);
-      }
-  } 
-  
+    for (int i = 0; i < 2; i++) {
+      stop_cpu();
+      mega65_poke(0xffd37d, 0x00); // disable cartridge
+      // bank ROM in
+      mega65_poke(0x0, 0x37);
+      mega65_poke(0x1, 0x37);
+      // The sequence below traps if an IRQ happens during the early reset sequence
+      snprintf(cmd, 1024, "gfce2\r");
+      slow_write(fd, cmd, strlen(cmd));
+      snprintf(cmd, 1024, "\r");
+      slow_write(fd, cmd, strlen(cmd));
+      slow_write(fd, cmd, strlen(cmd));
+      slow_write(fd, cmd, strlen(cmd));
+      slow_write(fd, cmd, strlen(cmd));
+      slow_write(fd, cmd, strlen(cmd));
+      slow_write(fd, cmd, strlen(cmd));
+      slow_write(fd, cmd, strlen(cmd));
+      slow_write(fd, cmd, strlen(cmd));
+      sprintf(cmd, 1024, "gfce2\r");
+      slow_write(fd, cmd, strlen(cmd));
+      start_cpu();
+      usleep(50000);
+    }
+  }
+
   if (break_point != -1) {
     fprintf(stderr, "Setting CPU breakpoint at $%04x\n", break_point);
     char cmd[1024];

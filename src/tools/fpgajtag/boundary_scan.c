@@ -157,8 +157,8 @@ int parse_bsdl(char* bsdl)
    So I have reduced this to fit in the 255 byte limit.
  */
 //#define BOUNDARY_PPAT INT32(0xff), REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff), REPEAT10(0xff),
-//REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff), REPEAT10(0xff),  REPEAT10(0xff),
-//REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff)
+// REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff), REPEAT10(0xff),  REPEAT10(0xff),
+// REPEAT10(0xff),  REPEAT10(0xff),  REPEAT10(0xff)
 #define BOUNDARY_PPAT                                                                                                       \
   INT32(0xff), REPEAT10(0xff), REPEAT10(0xff), REPEAT10(0xff), REPEAT10(0xff), REPEAT10(0xff), REPEAT10(0xff)
 
