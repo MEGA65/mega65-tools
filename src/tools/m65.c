@@ -122,6 +122,7 @@ void usage(void)
   fprintf(stderr, "  -S - Show the text-mode screen\n");
   fprintf(stderr, "  -Z - Zap (reconfigure) FPGA from specified hex address in flash.\n");
   fprintf(stderr, "  -@ - Load a binary file at a specific address.\n");
+  fprintf(stderr, "  -X - Show a report of current Hypervisor status.\n");
   fprintf(stderr, "  filename - Load and run this file in C64 mode before exiting.\n");
   fprintf(stderr, "\n");
   exit(-3);
