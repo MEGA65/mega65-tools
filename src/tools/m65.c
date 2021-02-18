@@ -298,11 +298,7 @@ int virtual_f011_write(int device, int track, int sector, int side)
     vf011_first_read_time = start - 1;
 
 #if 1
-#ifdef WINDOWS
-  fprintf(stderr, "T+%I64d ms : Servicing hypervisor request for F011 FDC sector write.\n", gettime_ms() - start);
-#else
   fprintf(stderr, "T+%lld ms : Servicing hypervisor request for F011 FDC sector write.\n", gettime_ms() - start);
-#endif
 #endif
 
   if (fd81 == NULL) {
