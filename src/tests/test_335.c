@@ -424,7 +424,7 @@ unsigned char led[12];
 
 void main(void)
 {
-  unsigned char playing = 0, x, y;
+  unsigned char playing = 0;
 
   asm("sei");
 

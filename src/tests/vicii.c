@@ -536,7 +536,7 @@ void d018_timing_tests(void)
   ok();
 }
 
-int main(int argc, char** argv)
+int main(void)
 {
 
   printf("%c%c"
@@ -580,4 +580,5 @@ int main(int argc, char** argv)
   printf("Testing complete.\n");
   while (1)
     continue;
+  return 0;
 }

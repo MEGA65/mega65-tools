@@ -43,25 +43,12 @@
 
 #include "m65common.h"
 
-#ifdef WINDOWS
+#ifdef WINDOWS 
 #include <winsock.h>
-
-u_long htonl(u_long x)
-{
-#if BYTE_ORDER == BIG_ENDIAN
-  return x;
-#elif BYTE_ORDER == LITTLE_ENDIAN
-  return __bswap_32(x);
-#else
-#error "What kind of system is this?"
-#endif
-}
-
-#define ntohl htonl
 #else
 #include <arpa/inet.h>
-#include <libusb.h>
 #endif
+#include <libusb.h>
 #include "util.h"
 #include "fpga.h"
 

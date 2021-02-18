@@ -1551,7 +1551,7 @@ int main(int argc, char** argv)
       slow_write(fd, cmd, strlen(cmd));
       slow_write(fd, cmd, strlen(cmd));
       slow_write(fd, cmd, strlen(cmd));
-      sprintf(cmd, 1024, "gfce2\r");
+      snprintf(cmd, 1024, "gfce2\r");
       slow_write(fd, cmd, strlen(cmd));
       start_cpu();
       usleep(50000);
