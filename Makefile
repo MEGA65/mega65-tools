@@ -130,36 +130,36 @@ $(TOOLDIR)/frame2png:	$(TOOLDIR)/frame2png.c
 
 # verbose, for 1581 format, overwrite
 $(SDCARD_DIR)/M65UTILS.D81:	$(UTILITIES) $(CBMCONVERT)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
 	mkdir -p $(SDCARD_DIR)
 	$(CBMCONVERT) -v2 -D8o $(SDCARD_DIR)/M65UTILS.D81 $(UTILITIES)
 
 # verbose, for 1581 format, overwrite
 $(SDCARD_DIR)/M65TESTS.D81:	$(TESTS) $(CBMCONVERT)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
 	mkdir -p $(SDCARD_DIR)
 	$(CBMCONVERT) -v2 -D8o $(SDCARD_DIR)/M65TESTS.D81 $(TESTS)
 
 # ============================ done moved, print-warn, clean-target
 # ophis converts the *.a65 file (assembly text) to *.prg (assembly bytes)
 %.prg:	%.a65 $(OPHIS)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $@)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 bin65/ethertest.prg:	$(UTILDIR)/ethertest.a65 $(OPHIS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 %.prg:	utilities/%.a65 $(OPHIS)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $@)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) utilities/$< -l $*.list -m $*.map -o $*.prg
 
 %.bin:	%.a65 $(OPHIS)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $@)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 %.o:	%.s $(CC65)
