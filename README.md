@@ -11,13 +11,13 @@ Tools and Utilities for the MEGA65 Retro Computers, such as:
 To build on e.g. Debian Linux, install the following packages:
 
 ```
-apt-get install git build-essential libusb-dev install libpng-dev libusb-1.0-0-dev libreadline-dev libgif-dev
+sudo apt-get install git build-essential libusb-dev install libpng-dev libusb-1.0-0-dev libreadline-dev libgif-dev
 ```
 
 If you want to cross-build the tools for Windows, you'll also need:
 
 ```
-apt-get install binutils-mingw-w64 mingw-w64-common gcc-mingw-w64 libz-mingw-w64-dev
+sudo apt-get install binutils-mingw-w64 mingw-w64-common gcc-mingw-w64 libz-mingw-w64-dev
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE
 sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
 sudo apt-get update
@@ -30,10 +30,22 @@ After cloning the repository, enter its directory and call
 make
 ```
 
-For developers that want to commit code to the repo, it's suggested you also install clang, in order to run clang-format.
+For developers that want to commit code to the repo, it's suggested you also install clang-format version 11.
 
 ```
-apt-get install clang
+sudo apt-get install clang-format-11
+sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-11 10
+sudo update-alternatives --config clang-format
+```
+
+If your official Ubuntu apt repositories only contain older versions, you can download a statically-linked version of v11 from either:
+
+- https://github.com/eozer/clang-tools-static-binaries/releases/download/master-369f669d/clang-format-11_linux-amd64
+- https://github.com/gurcei/clang-tools-static-binaries/releases/download/untagged-3be9747e6ae6df232d87/clang-format-11_linux-amd64
+
+Then do:
+```
+sudo update-alternatives --install /usr/bin/clang-format clang-format /path/to/downloaded/clang-format-11_linux-amd64 20
 ```
 
 You can then apply the enforced style by typing:
@@ -73,11 +85,16 @@ If you want to build specific tools, you can run targets like:
 - `make bin/mega65_ftp.exe`
 - `make bin/m65.exe`
 
-For developers that want to commit code to the repo, it's suggested you also install clang, in order to run clang-format.
+For developers that want to commit code to the repo, it's suggested you also install clang, in order to run clang-format (it presently provides clang-format v11).
 
 ```
 pacman -S clang
 ```
+
+If you prefer to use a statically-linked binary instead, you can download it from either:
+
+- https://github.com/eozer/clang-tools-static-binaries/releases/download/master-369f669d/clang-format-11_windows-amd64.exe
+- https://github.com/gurcei/clang-tools-static-binaries/releases/download/untagged-3cdbf8ef732ddf71ebdf/clang-format-11_windows-amd64.exe
 
 You can then apply the enforced style by typing:
 
@@ -110,3 +127,17 @@ Still a bit in flux at this stage, but there are a few individual make targets a
 
 Other tools within the suite may or may not compile with their equivalent linux targets, haven't confirmed at this stage...
 
+For developers that want to commit code to thie repo, it's suggested that you install clang-format-11.
+
+Perhaps homebrew offers an install of this (haven't checked).
+
+Alternately, you can download statically-linked binaries from either:
+
+- https://github.com/eozer/clang-tools-static-binaries/releases/download/master-369f669d/clang-format-11_macosx-amd64
+- https://github.com/gurcei/clang-tools-static-binaries/releases/download/untagged-22ae84d665118b63c4b1/clang-format-11_macosx-amd64
+
+You can then apply the enforced style by typing:
+
+```
+make format
+```

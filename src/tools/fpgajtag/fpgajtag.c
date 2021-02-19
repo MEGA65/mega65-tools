@@ -43,7 +43,7 @@
 
 #include "m65common.h"
 
-#ifdef WINDOWS 
+#ifdef WINDOWS
 #include <winsock.h>
 #else
 #include <arpa/inet.h>
