@@ -336,18 +336,10 @@ int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity)
 
               if (!count_shown) {
                 if (vcd) {
-#ifdef WINDOWS
-                  fprintf(vcd, "#%I64d\n", time_delta);
-#else
                   fprintf(vcd, "#%lld\n", time_delta);
-#endif
                 }
                 else {
-#ifdef WINDOWS
-                  printf("T+%I64dusec >>> Signal(s) changed.\n", time_delta);
-#else
                   printf("T+%lldusec >>> Signal(s) changed.\n", time_delta);
-#endif
                 }
               }
               count_shown++;

@@ -14,7 +14,8 @@ script:
 - sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
 - sudo apt-get update
 - sudo apt install -y libpng-mingw-w64 libusb-1.0-0-mingw-w64
-- make
+- sudo apt-get install -y cc65
+- make USE_LOCAL_CC65=1
 before_deploy:
 - |
   if [[ -z "$TRAVIS_TAG" ]]; then

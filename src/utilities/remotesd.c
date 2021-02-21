@@ -404,7 +404,7 @@ void main(void)
               // XXX - Just send it all in one go, since we don't buffer multiple
               // sectors
               if (job_type == 3)
-                rle_write_string(temp_sector_buffer, 0x200);
+                rle_write_string((uint32_t)temp_sector_buffer, 0x200);
               else
                 serial_write_string(temp_sector_buffer, 0x200);
               buffer_ready = 0;

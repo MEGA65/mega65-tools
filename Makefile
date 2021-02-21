@@ -7,10 +7,10 @@ COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/inc
 # -I/usr/local/Cellar/libusb/1.0.23/include/libusb-1.0/ -L/usr/local/Cellar/libusb/1.0.23/lib/libusb-1.0/
 CC=	gcc
 WINCC=	x86_64-w64-mingw32-gcc
-WINCOPT=	$(COPT) -DWINDOWS -Imingw64/include -Lmingw64/lib
+WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
 
 OPHIS=	Ophis/bin/ophis
-OPHISOPT=	-4
+OPHISOPT=	-4 --no-warn
 OPHIS_MON= Ophis/bin/ophis -c
 
 JAVA = java
@@ -20,11 +20,19 @@ VIVADO=	./vivado_wrapper
 
 ACME=	/usr/local/bin/acme
 
-CC65=  cc65/bin/cc65
-CA65=  cc65/bin/ca65 --cpu 4510
-LD65=  cc65/bin/ld65 -t none
-CL65=  cc65/bin/cl65 --config src/tests/vicii.cfg
-GHDL=  ghdl/build/bin/ghdl
+ifdef USE_LOCAL_CC65
+	# use locally installed binary (requires 'cc65,ld65,etc' to be in the $PATH)
+	CC65_PREFIX=
+else
+	# use the binary built from the submodule
+	CC65_PREFIX=$(PWD)/cc65/bin/
+endif
+
+CC65=  $(CC65_PREFIX)cc65
+CA65=  $(CC65_PREFIX)ca65 --cpu 4510
+LD65=  $(CC65_PREFIX)ld65 -t none
+CL65=  $(CC65_PREFIX)cl65 --config src/tests/vicii.cfg
+CC65_DEPEND=
 
 CBMCONVERT=	cbmconvert/cbmconvert
 
@@ -90,10 +98,12 @@ $(CBMCONVERT):
 	git submodule update
 	( cd cbmconvert && make -f Makefile.unix )
 
+ifndef USE_LOCAL_CC65
 $(CC65):
 	git submodule init
 	git submodule update
 	( cd cc65 && make -j 8 )
+endif
 
 $(OPHIS):
 	git submodule init
@@ -120,36 +130,36 @@ $(TOOLDIR)/frame2png:	$(TOOLDIR)/frame2png.c
 
 # verbose, for 1581 format, overwrite
 $(SDCARD_DIR)/M65UTILS.D81:	$(UTILITIES) $(CBMCONVERT)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
 	mkdir -p $(SDCARD_DIR)
 	$(CBMCONVERT) -v2 -D8o $(SDCARD_DIR)/M65UTILS.D81 $(UTILITIES)
 
 # verbose, for 1581 format, overwrite
 $(SDCARD_DIR)/M65TESTS.D81:	$(TESTS) $(CBMCONVERT)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
 	mkdir -p $(SDCARD_DIR)
 	$(CBMCONVERT) -v2 -D8o $(SDCARD_DIR)/M65TESTS.D81 $(TESTS)
 
 # ============================ done moved, print-warn, clean-target
 # ophis converts the *.a65 file (assembly text) to *.prg (assembly bytes)
 %.prg:	%.a65 $(OPHIS)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $@)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 bin65/ethertest.prg:	$(UTILDIR)/ethertest.a65 $(OPHIS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 %.prg:	utilities/%.a65 $(OPHIS)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $@)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) utilities/$< -l $*.list -m $*.map -o $*.prg
 
 %.bin:	%.a65 $(OPHIS)
-	$(warning =============================================================)
-	$(warning ~~~~~~~~~~~~~~~~> Making: $@)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 %.o:	%.s $(CC65)
@@ -385,7 +395,7 @@ $(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c 
 
 
 $(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -Wl,-Bstatic -lpng -lz -Wl,-Bdynamic
+	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
 $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
