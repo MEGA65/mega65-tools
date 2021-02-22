@@ -230,6 +230,7 @@ int parse_int_param(char** src, int* dest)
   while (*srcptr != ' ' && *srcptr != '\0') {
     if (*srcptr < '0' && *srcptr > '9')
       return 0;
+    srcptr++;
     cnt++;
   }
 
