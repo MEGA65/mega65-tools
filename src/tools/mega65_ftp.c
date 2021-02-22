@@ -193,12 +193,116 @@ int show_sector(unsigned int sector_num)
   return 0;
 }
 
+int parse_string_param(char** src, char* dest) {
+  int cnt = 0;
+  char* srcptr = *src;
+  char endchar = ' ';
+  if (*srcptr == '\"')
+  {
+    endchar = '\"';
+    srcptr++;
+    *src = srcptr;
+  }
+
+  while (*srcptr != endchar && *srcptr != '\0') {
+    if (*srcptr == '\0' && endchar == '\"')
+      return 0;
+    srcptr++;
+    cnt++;
+  }
+
+  strncpy(dest, *src, cnt);
+  dest[cnt] = '\0';
+
+  if (endchar == '\"')
+    srcptr++;
+
+  *src = srcptr;
+  return 1;
+}
+
+int parse_int_param(char** src, int* dest) {
+  int cnt = 0;
+  char str[128];
+  char* srcptr = *src;
+
+  while (*srcptr != ' ' && *srcptr != '\0') {
+    if (*srcptr < '0' && *srcptr > '9')
+      return 0;
+    cnt++;
+  }
+
+  strncpy(str, *src, cnt);
+  str[cnt] = '\0';
+  *dest = atoi(str);
+
+  *src = srcptr;
+  return 1;
+}
+
+int skip_whitespace(char** orig)
+{
+  char* ptrstr = *orig;
+
+  // skip any spaces in str
+  while (*ptrstr == ' ' || *ptrstr == '\t') {
+    if (*ptrstr == '\0')
+      return 0;
+    ptrstr++;
+  }
+
+  *orig = ptrstr;
+  return 1;
+}
+
 int parse_command(const char* str, const char* format, ...)
 {
   // for now, just pass params to sscanf() 
   va_list args;
   va_start(args, format);
   int ret = vsscanf(str, format, args);
+
+  // scan through str looking for '%' tokens
+  char* ptrstr = (char*)str;
+  char* ptrformat = (char*)format;
+  int cnt = 0;
+  int found;
+  while (*ptrformat != '\0') {
+    if (*ptrformat == '%') {
+      ptrformat++;
+      if (*ptrformat == 's') {
+        if (!skip_whitespace(&ptrstr))
+          break;
+        found = parse_string_param(&ptrstr, va_arg(args, char*));
+        if (found)
+          cnt++;
+        else
+          break;
+      }
+      else if (*ptrformat == 'd') {
+        if (!skip_whitespace(&ptrstr))
+          break;
+        found = parse_int_param(&ptrstr, va_arg(args, int*));
+        if (found)
+          cnt++;
+        else
+          break;
+      }
+    }
+    else if (*ptrformat != ' ')
+    {
+      if (!skip_whitespace(&ptrstr))
+        break;
+
+      if (*ptrformat != *ptrstr)
+        break;
+
+      ptrstr++;
+    }
+
+    ptrformat++;
+  }
+
   va_end(args);
   return ret;
 }

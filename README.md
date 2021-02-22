@@ -141,3 +141,26 @@ You can then apply the enforced style by typing:
 ```
 make format
 ```
+
+# Unit tests
+
+Some initial effort is underway to start providing unit tests for our tooling, starting with mega65_ftp.
+
+It presently makes use of gtest release 1.10.0.
+
+Unit tests are housed in the 'gtest/' folder.
+
+The unit test executables are housed in the 'gtest/bin' folder.
+
+E.g. to generate the executable:
+
+```
+make gtest/bin/mega65_ftp.test
+```
+
+To run the unit tests:
+
+```
+cd gtest/bin
+./mega65_ftp.test
+```
