@@ -193,12 +193,12 @@ int show_sector(unsigned int sector_num)
   return 0;
 }
 
-int parse_string_param(char** src, char* dest) {
+int parse_string_param(char** src, char* dest)
+{
   int cnt = 0;
   char* srcptr = *src;
   char endchar = ' ';
-  if (*srcptr == '\"')
-  {
+  if (*srcptr == '\"') {
     endchar = '\"';
     srcptr++;
     *src = srcptr;
@@ -221,7 +221,8 @@ int parse_string_param(char** src, char* dest) {
   return 1;
 }
 
-int parse_int_param(char** src, int* dest) {
+int parse_int_param(char** src, int* dest)
+{
   int cnt = 0;
   char str[128];
   char* srcptr = *src;
@@ -257,7 +258,6 @@ int skip_whitespace(char** orig)
 
 int parse_command(const char* str, const char* format, ...)
 {
-  // for now, just pass params to sscanf() 
   va_list args;
   va_start(args, format);
   int ret = vsscanf(str, format, args);
@@ -289,8 +289,7 @@ int parse_command(const char* str, const char* format, ...)
           break;
       }
     }
-    else if (*ptrformat != ' ')
-    {
+    else if (*ptrformat != ' ') {
       if (!skip_whitespace(&ptrstr))
         break;
 

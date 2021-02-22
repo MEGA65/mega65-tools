@@ -455,7 +455,7 @@ $(BINDIR)/vncserver:	$(TOOLDIR)/vncserver.c
 	$(CC) $(COPT) -O3 -o $(BINDIR)/vncserver $(TOOLDIR)/vncserver.c -I/usr/local/include -lvncserver -lpthread
 
 format:
-	find -iname '*.h' -o -iname '*.c' | xargs clang-format --style=file -i
+	find . -type d \( -path ./cc65 -o -path ./cbmconvert \) -prune -false -o -iname '*.h' -o -iname '*.c' -o -iname '*.cpp' | xargs clang-format --style=file -i
 
 clean:
 	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
