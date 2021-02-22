@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/time.h>
@@ -192,6 +193,16 @@ int show_sector(unsigned int sector_num)
   return 0;
 }
 
+int parse_command(const char* str, const char* format, ...)
+{
+  // for now, just pass params to sscanf() 
+  va_list args;
+  va_start(args, format);
+  int ret = vsscanf(str, format, args);
+  va_end(args);
+  return ret;
+}
+
 int execute_command(char* cmd)
 {
   unsigned int sector_num;
@@ -210,36 +221,36 @@ int execute_command(char* cmd)
     exit(0);
   }
 
-  if (sscanf(cmd, "getslot %d %s", &slot, dst) == 2) {
+  if (parse_command(cmd, "getslot %d %s", &slot, dst) == 2) {
     download_slot(slot, dst);
   }
-  else if (sscanf(cmd, "get %s %s", src, dst) == 2) {
+  else if (parse_command(cmd, "get %s %s", src, dst) == 2) {
     download_file(src, dst, 0);
   }
-  else if (sscanf(cmd, "put %s %s", src, dst) == 2) {
+  else if (parse_command(cmd, "put %s %s", src, dst) == 2) {
     upload_file(src, dst);
   }
-  else if (sscanf(cmd, "del %s", src) == 1) {
+  else if (parse_command(cmd, "del %s", src) == 1) {
     delete_file(src);
   }
-  else if (sscanf(cmd, "rename %s %s", src, dst) == 2) {
+  else if (parse_command(cmd, "rename %s %s", src, dst) == 2) {
     rename_file(src, dst);
   }
-  else if (sscanf(cmd, "sector %d", &sector_num) == 1) {
+  else if (parse_command(cmd, "sector %d", &sector_num) == 1) {
     // Clear cache to force re-reading
     sector_cache_count = 0;
     show_sector(sector_num);
   }
-  else if (sscanf(cmd, "sector $%x", &sector_num) == 1) {
+  else if (parse_command(cmd, "sector $%x", &sector_num) == 1) {
     show_sector(sector_num);
   }
-  else if (sscanf(cmd, "dir %s", src) == 1) {
+  else if (parse_command(cmd, "dir %s", src) == 1) {
     show_directory(src);
   }
   else if (!strcmp(cmd, "dir")) {
     show_directory(current_dir);
   }
-  else if (sscanf(cmd, "put %s", src) == 1) {
+  else if (parse_command(cmd, "put %s", src) == 1) {
     char* dest = src;
     // Set destination name to last element of source name, if no destination name provided
     for (int i = 0; src[i]; i++)
@@ -247,10 +258,10 @@ int execute_command(char* cmd)
         dest = &src[i + 1];
     upload_file(src, dest);
   }
-  else if (sscanf(cmd, "mkdir %s", src) == 1) {
+  else if (parse_command(cmd, "mkdir %s", src) == 1) {
     create_dir(src);
   }
-  else if ((sscanf(cmd, "chdir %s", src) == 1) || (sscanf(cmd, "cd %s", src) == 1)) {
+  else if ((parse_command(cmd, "chdir %s", src) == 1) || (parse_command(cmd, "cd %s", src) == 1)) {
     if (src[0] == '/') {
       // absolute path
       if (fat_opendir(src)) {
@@ -311,10 +322,10 @@ int execute_command(char* cmd)
         strcpy(current_dir, temp_path);
     }
   }
-  else if (sscanf(cmd, "get %s", src) == 1) {
+  else if (parse_command(cmd, "get %s", src) == 1) {
     download_file(src, src, 0);
   }
-  else if (sscanf(cmd, "clusters %s", src) == 1) {
+  else if (parse_command(cmd, "clusters %s", src) == 1) {
     download_file(src, src, 1);
   }
   else if (!strcasecmp(cmd, "help")) {
@@ -339,6 +350,7 @@ int execute_command(char* cmd)
 
 extern int debug_serial;
 
+#ifndef TESTING
 int main(int argc, char** argv)
 {
 #ifdef WINDOWS
@@ -473,6 +485,7 @@ int main(int argc, char** argv)
 
   return 0;
 }
+#endif
 
 void wait_for_sdready(void)
 {

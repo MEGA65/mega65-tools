@@ -6,6 +6,7 @@
 COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/include/libusb-1.0 -L/usr/local/lib -mno-sse3 -march=x86-64
 # -I/usr/local/Cellar/libusb/1.0.23/include/libusb-1.0/ -L/usr/local/Cellar/libusb/1.0.23/lib/libusb-1.0/
 CC=	gcc
+CXX=g++
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
 
@@ -44,6 +45,8 @@ EXAMPLEDIR=	$(SRCDIR)/examples
 UTILDIR=	$(SRCDIR)/utilities
 TESTDIR=	$(SRCDIR)/tests
 LIBEXECDIR=	libexec
+GTESTDIR=gtest
+GTESTBINDIR=$(GTESTDIR)/bin
 
 SDCARD_DIR=	sdcard-files
 
@@ -403,6 +406,9 @@ $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
 
 $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
+
+$(GTESTBINDIR)/mega65_ftp.test: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
+	$(CXX) $(COPT) -DTESTING -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
 
 $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
 	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses
