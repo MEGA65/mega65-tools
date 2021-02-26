@@ -413,6 +413,9 @@ $(GTESTBINDIR)/mega65_ftp.test: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega6
 $(GTESTBINDIR)/mega65_ftp.test.exe: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
 	$(CXX) $(WINCOPT) -DTESTING -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
 
+test: $(GTESTBINDIR)/mega65_ftp.test.exe
+	$(GTESTBINDIR)/mega65_ftp.test.exe
+
 $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
 	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses
 
