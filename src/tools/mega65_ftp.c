@@ -257,6 +257,53 @@ int skip_whitespace(char** orig)
   return 1;
 }
 
+// returns:
+// 0 = problem encountered in parsing, so bail out from the entire parsing attempt
+// 1 = parsing was successful
+//     (which means, either a format-specifier was parsed, or one wasn't found and no
+//      errors encountered)
+int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, int* pcnt)
+{
+  int found;
+  if (**pptrformat == '%') {
+    (*pptrformat)++;
+    if (**pptrformat == 's') {
+      if (!skip_whitespace(pptrstr))
+        return 0;
+      found = parse_string_param(pptrstr, va_arg(*pargs, char*));
+      if (found)
+        (*pcnt)++;
+      else
+        return 0;
+    }
+    else if (**pptrformat == 'd') {
+      if (!skip_whitespace(pptrstr))
+        return 0;
+      found = parse_int_param(pptrstr, va_arg(*pargs, int*));
+      if (found)
+        (*pcnt)++;
+      else
+        return 0;
+    }
+  }
+
+  return 1;
+}
+
+int parse_non_whitespace(char** pptrformat, char** pptrstr)
+{
+  if (**pptrformat != ' ') {
+    if (!skip_whitespace(pptrstr))
+      return 0;
+
+    if (**pptrformat != **pptrstr)
+      return 0;
+
+    (*pptrstr)++;
+  }
+  return 1;
+}
+
 int parse_command(const char* str, const char* format, ...)
 {
   va_list args;
@@ -267,38 +314,12 @@ int parse_command(const char* str, const char* format, ...)
   char* ptrstr = (char*)str;
   char* ptrformat = (char*)format;
   int cnt = 0;
-  int found;
+
   while (*ptrformat != '\0') {
-    if (*ptrformat == '%') {
-      ptrformat++;
-      if (*ptrformat == 's') {
-        if (!skip_whitespace(&ptrstr))
-          break;
-        found = parse_string_param(&ptrstr, va_arg(args, char*));
-        if (found)
-          cnt++;
-        else
-          break;
-      }
-      else if (*ptrformat == 'd') {
-        if (!skip_whitespace(&ptrstr))
-          break;
-        found = parse_int_param(&ptrstr, va_arg(args, int*));
-        if (found)
-          cnt++;
-        else
-          break;
-      }
-    }
-    else if (*ptrformat != ' ') {
-      if (!skip_whitespace(&ptrstr))
-        break;
-
-      if (*ptrformat != *ptrstr)
-        break;
-
-      ptrstr++;
-    }
+    if (!parse_format_specifier(&ptrformat, &ptrstr, &args, &cnt))
+      return 0;
+    else if (!parse_non_whitespace(&ptrformat, &ptrstr))
+      return 0;
 
     ptrformat++;
   }
