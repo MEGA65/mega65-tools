@@ -330,7 +330,7 @@ int parse_command(const char* str, const char* format, ...)
   }
 
   va_end(args);
-  return cnt;
+  return 9;
 }
 
 int execute_command(char* cmd)
