@@ -59,6 +59,10 @@ struct m65dirent {
   char d_name[FILENAME_MAX]; /* File name. */
 };
 
+#define RET_FAIL -1
+#define RET_NOT_FOUND 0
+#define RET_FOUND 1
+
 char current_dir[1024] = "/";
 
 #define SLOW_FACTOR 1
@@ -257,11 +261,6 @@ int skip_whitespace(char** orig)
   return 1;
 }
 
-// returns:
-// 0 = problem encountered in parsing, so bail out from the entire parsing attempt
-// 1 = parsing was successful
-//     (which means, either a format-specifier was parsed, or one wasn't found and no
-//      errors encountered)
 int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, int* pcnt)
 {
   int found;
@@ -269,12 +268,12 @@ int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, in
     (*pptrformat)++;
     if (**pptrformat == 's') {
       if (!skip_whitespace(pptrstr))
-        return 0;
+        return RET_FAIL;
       found = parse_string_param(pptrstr, va_arg(*pargs, char*));
       if (found)
         (*pcnt)++;
       else
-        return 0;
+        return RET_FAIL;
     }
     else if (**pptrformat == 'd') {
       if (!skip_whitespace(pptrstr))
@@ -283,11 +282,15 @@ int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, in
       if (found)
         (*pcnt)++;
       else
-        return 0;
+        return RET_FAIL;
     }
+    else
+      return RET_FAIL;
+
+    return RET_FOUND;
   }
 
-  return 1;
+  return RET_NOT_FOUND;
 }
 
 int parse_non_whitespace(char** pptrformat, char** pptrstr)
@@ -308,7 +311,6 @@ int parse_command(const char* str, const char* format, ...)
 {
   va_list args;
   va_start(args, format);
-  int ret = vsscanf(str, format, args);
 
   // scan through str looking for '%' tokens
   char* ptrstr = (char*)str;
@@ -316,16 +318,19 @@ int parse_command(const char* str, const char* format, ...)
   int cnt = 0;
 
   while (*ptrformat != '\0') {
-    if (!parse_format_specifier(&ptrformat, &ptrstr, &args, &cnt))
+    int ret = parse_format_specifier(&ptrformat, &ptrstr, &args, &cnt);
+    if (ret == RET_FAIL)
       return 0;
-    else if (!parse_non_whitespace(&ptrformat, &ptrstr))
-      return 0;
+    else if (ret == RET_NOT_FOUND) {
+      if (!parse_non_whitespace(&ptrformat, &ptrstr))
+        return 0;
+    }
 
     ptrformat++;
   }
 
   va_end(args);
-  return ret;
+  return cnt;
 }
 
 int execute_command(char* cmd)

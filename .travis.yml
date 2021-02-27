@@ -10,12 +10,14 @@ script:
 - sudo apt-get install -y libgif-dev
 - sudo apt-get install -y libpng-dev
 - sudo apt-get install -y libz-mingw-w64-dev
+- sudo apt-get install -y libgtest-dev
 - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE
 - sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
 - sudo apt-get update
 - sudo apt install -y libpng-mingw-w64 libusb-1.0-0-mingw-w64
 - sudo apt-get install -y cc65
 - make USE_LOCAL_CC65=1
+- make test
 before_deploy:
 - |
   if [[ -z "$TRAVIS_TAG" ]]; then

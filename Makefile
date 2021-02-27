@@ -47,6 +47,8 @@ TESTDIR=	$(SRCDIR)/tests
 LIBEXECDIR=	libexec
 GTESTDIR=gtest
 GTESTBINDIR=$(GTESTDIR)/bin
+# For now, disable g++ compile warnings on tests (there's so many :))
+GTESTOPTS = -w
 
 SDCARD_DIR=	sdcard-files
 
@@ -408,12 +410,15 @@ $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
 $(GTESTBINDIR)/mega65_ftp.test: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
-	$(CXX) $(COPT) -DTESTING -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
+	$(CXX) $(COPT) $(GTESTOPTS) -DTESTING -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
 
 $(GTESTBINDIR)/mega65_ftp.test.exe: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
-	$(CXX) $(WINCOPT) -DTESTING -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
+	$(CXX) $(WINCOPT) $(GTESTOPTS) -DTESTING -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
 
-test: $(GTESTBINDIR)/mega65_ftp.test.exe
+test: $(GTESTBINDIR)/mega65_ftp.test
+	$(GTESTBINDIR)/mega65_ftp.test
+
+test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe
 	$(GTESTBINDIR)/mega65_ftp.test.exe
 
 $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
