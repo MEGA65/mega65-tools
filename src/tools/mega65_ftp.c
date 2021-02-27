@@ -210,10 +210,13 @@ int parse_string_param(char** src, char* dest)
 
   while (*srcptr != endchar && *srcptr != '\0') {
     if (*srcptr == '\0' && endchar == '\"')
-      return 0;
+      return RET_NOT_FOUND;
     srcptr++;
     cnt++;
   }
+
+  if (cnt == 0)
+    return RET_NOT_FOUND;
 
   strncpy(dest, *src, cnt);
   dest[cnt] = '\0';
@@ -222,7 +225,7 @@ int parse_string_param(char** src, char* dest)
     srcptr++;
 
   *src = srcptr;
-  return 1;
+  return RET_FOUND;
 }
 
 int parse_int_param(char** src, int* dest)
@@ -233,17 +236,20 @@ int parse_int_param(char** src, int* dest)
 
   while (*srcptr != ' ' && *srcptr != '\0') {
     if (*srcptr < '0' && *srcptr > '9')
-      return 0;
+      return RET_NOT_FOUND;
     srcptr++;
     cnt++;
   }
+
+  if (cnt == 0)
+    return RET_NOT_FOUND;
 
   strncpy(str, *src, cnt);
   str[cnt] = '\0';
   *dest = atoi(str);
 
   *src = srcptr;
-  return 1;
+  return RET_FOUND;
 }
 
 int skip_whitespace(char** orig)
@@ -320,10 +326,10 @@ int parse_command(const char* str, const char* format, ...)
   while (*ptrformat != '\0') {
     int ret = parse_format_specifier(&ptrformat, &ptrstr, &args, &cnt);
     if (ret == RET_FAIL)
-      return 0;
+      return cnt;
     else if (ret == RET_NOT_FOUND) {
       if (!parse_non_whitespace(&ptrformat, &ptrstr))
-        return 0;
+        return cnt;
     }
 
     ptrformat++;

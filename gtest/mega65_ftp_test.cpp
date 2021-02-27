@@ -53,4 +53,13 @@ TEST(Mega65FtpTest, DummyCommandWithStringAndNumeric)
   EXPECT_STREQ("ABC", str);
 }
 
+TEST(Mega65FtpTest, GetCommandExpectTwoParamGivenOne)
+{
+  char strSrc[1024];
+  char strDest[1024];
+  int ret = parse_command("get TEST.D81", "get %s %s", &strSrc, &strDest);
+  ASSERT_EQ(1, ret);
+  ASSERT_STREQ("TEST.D81", strSrc);
+}
+
 } // namespace mega65_ftp
