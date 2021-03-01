@@ -834,7 +834,7 @@ void job_process_results(void)
       if (debug_rx)
         dump_bytes(0, "jobresponse", buff, b);
     for (int i = 0; i < b; i++) {
-      // Keep rolling window of most recent chars for interpretting job
+      // Keep rolling window of most recent chars for interpreting job
       // results
       if (data_byte_count) {
         if (q_rle_enable)
