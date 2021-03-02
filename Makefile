@@ -469,7 +469,7 @@ format:
 	find . -type d \( -path ./cc65 -o -path ./cbmconvert \) -prune -false -o -iname '*.h' -o -iname '*.c' -o -iname '*.cpp' | xargs clang-format --style=file -i
 
 clean:
-	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
+	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg
 
 cleangen:	clean
 
