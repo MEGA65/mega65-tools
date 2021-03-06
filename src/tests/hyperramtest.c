@@ -22,12 +22,34 @@ unsigned int i, j, k;
   0x04 = Write data fast (not currently working)
   0x08 = Read phase offset
 
+  0x10 = block_read_enable <= wdata(4);
+  0x20 = flag_prefetch <= wdata(5);
+  0x40 = enable_current_cache_line <= wdata(6);
+  0x80 = cache_enabled <= true;
+
   XXX Weirdly, the external hyperram only works stably with the cache enabled
   ($80 set), or else it gets lots of transient single byte errors.
 
+  Now, for the cache consistency bug, we get the following:
+  0x70/F0 = cache consistency bug
+  0x60 = OK
+  0x50 = Cache consistency bug
+  0x40 = OK
+  0x30 = OK
+  0x20 = OK
+  0x10 = OK
+  0x00 = OK
+
+  So the problem only occurs if block_read_enable is set.
+  The problem seems to be that we read stale block fetch data instead of recently
+  written data.
+
+  That all said, it seems that block_read_enable doesn't make much difference to
+  performance, except when copying slow to slow (its faster to copy slow to fast,
+  and then copy that from fast back to slow, than to directly copy slow to slow)
 
 */
-unsigned char fast_flags = 0x70; // 0xb0;
+unsigned char fast_flags = 0x60; 
 unsigned char slow_flags = 0x00;
 unsigned char cache_bit = 0x80; // =0x80;
 
@@ -633,7 +655,7 @@ void show_info(void)
       printf(" variable latency,");
   }
   else
-    printf("  Not detected.\n");
+    printf("  Not detected.            \n                         \n");
   printf("\n");
 }
 
