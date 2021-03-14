@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/time.h>
@@ -57,6 +58,10 @@ struct m65dirent {
   unsigned d_type;           /* Object type (digested attributes) */
   char d_name[FILENAME_MAX]; /* File name. */
 };
+
+#define RET_FAIL -1
+#define RET_NOT_FOUND 0
+#define RET_FOUND 1
 
 char current_dir[1024] = "/";
 
@@ -192,6 +197,148 @@ int show_sector(unsigned int sector_num)
   return 0;
 }
 
+int parse_string_param(char** src, char* dest)
+{
+  int cnt = 0;
+  char* srcptr = *src;
+  char endchar = ' ';
+  if (*srcptr == '\"') {
+    endchar = '\"';
+    srcptr++;
+    *src = srcptr;
+  }
+
+  while (*srcptr != endchar && *srcptr != '\0') {
+    if (*srcptr == '\0' && endchar == '\"')
+      return RET_NOT_FOUND;
+    srcptr++;
+    cnt++;
+  }
+
+  if (cnt == 0)
+    return RET_NOT_FOUND;
+
+  strncpy(dest, *src, cnt);
+  dest[cnt] = '\0';
+
+  if (endchar == '\"')
+    srcptr++;
+
+  *src = srcptr;
+  return RET_FOUND;
+}
+
+int parse_int_param(char** src, int* dest)
+{
+  int cnt = 0;
+  char str[128];
+  char* srcptr = *src;
+
+  while (*srcptr != ' ' && *srcptr != '\0') {
+    if (*srcptr < '0' && *srcptr > '9')
+      return RET_NOT_FOUND;
+    srcptr++;
+    cnt++;
+  }
+
+  if (cnt == 0)
+    return RET_NOT_FOUND;
+
+  strncpy(str, *src, cnt);
+  str[cnt] = '\0';
+  *dest = atoi(str);
+
+  *src = srcptr;
+  return RET_FOUND;
+}
+
+int skip_whitespace(char** orig)
+{
+  char* ptrstr = *orig;
+
+  // skip any spaces in str
+  while (*ptrstr == ' ' || *ptrstr == '\t') {
+    if (*ptrstr == '\0')
+      return 0;
+    ptrstr++;
+  }
+
+  *orig = ptrstr;
+  return 1;
+}
+
+int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, int* pcnt)
+{
+  int found;
+  if (**pptrformat == '%') {
+    (*pptrformat)++;
+    if (**pptrformat == 's') {
+      if (!skip_whitespace(pptrstr))
+        return RET_FAIL;
+      found = parse_string_param(pptrstr, va_arg(*pargs, char*));
+      if (found)
+        (*pcnt)++;
+      else
+        return RET_FAIL;
+    }
+    else if (**pptrformat == 'd') {
+      if (!skip_whitespace(pptrstr))
+        return 0;
+      found = parse_int_param(pptrstr, va_arg(*pargs, int*));
+      if (found)
+        (*pcnt)++;
+      else
+        return RET_FAIL;
+    }
+    else
+      return RET_FAIL;
+
+    return RET_FOUND;
+  }
+
+  return RET_NOT_FOUND;
+}
+
+int parse_non_whitespace(char** pptrformat, char** pptrstr)
+{
+  if (**pptrformat != ' ') {
+    if (!skip_whitespace(pptrstr))
+      return 0;
+
+    if (**pptrformat != **pptrstr)
+      return 0;
+
+    (*pptrstr)++;
+  }
+  return 1;
+}
+
+int parse_command(const char* str, const char* format, ...)
+{
+  va_list args;
+  va_start(args, format);
+
+  // scan through str looking for '%' tokens
+  char* ptrstr = (char*)str;
+  char* ptrformat = (char*)format;
+  int cnt = 0;
+
+  while (*ptrformat != '\0') {
+    int ret = parse_format_specifier(&ptrformat, &ptrstr, &args, &cnt);
+    if (ret == RET_FAIL)
+      return cnt;
+    else if (ret == RET_NOT_FOUND) {
+      if (!parse_non_whitespace(&ptrformat, &ptrstr))
+        return cnt;
+    }
+
+    ptrformat++;
+  }
+
+  va_end(args);
+  return cnt;
+}
+
 int execute_command(char* cmd)
 {
   unsigned int sector_num;
@@ -210,36 +357,36 @@ int execute_command(char* cmd)
     exit(0);
   }
 
-  if (sscanf(cmd, "getslot %d %s", &slot, dst) == 2) {
+  if (parse_command(cmd, "getslot %d %s", &slot, dst) == 2) {
     download_slot(slot, dst);
   }
-  else if (sscanf(cmd, "get %s %s", src, dst) == 2) {
+  else if (parse_command(cmd, "get %s %s", src, dst) == 2) {
     download_file(src, dst, 0);
   }
-  else if (sscanf(cmd, "put %s %s", src, dst) == 2) {
+  else if (parse_command(cmd, "put %s %s", src, dst) == 2) {
     upload_file(src, dst);
   }
-  else if (sscanf(cmd, "del %s", src) == 1) {
+  else if (parse_command(cmd, "del %s", src) == 1) {
     delete_file(src);
   }
-  else if (sscanf(cmd, "rename %s %s", src, dst) == 2) {
+  else if (parse_command(cmd, "rename %s %s", src, dst) == 2) {
     rename_file(src, dst);
   }
-  else if (sscanf(cmd, "sector %d", &sector_num) == 1) {
+  else if (parse_command(cmd, "sector %d", &sector_num) == 1) {
     // Clear cache to force re-reading
     sector_cache_count = 0;
     show_sector(sector_num);
   }
-  else if (sscanf(cmd, "sector $%x", &sector_num) == 1) {
+  else if (parse_command(cmd, "sector $%x", &sector_num) == 1) {
     show_sector(sector_num);
   }
-  else if (sscanf(cmd, "dir %s", src) == 1) {
+  else if (parse_command(cmd, "dir %s", src) == 1) {
     show_directory(src);
   }
   else if (!strcmp(cmd, "dir")) {
     show_directory(current_dir);
   }
-  else if (sscanf(cmd, "put %s", src) == 1) {
+  else if (parse_command(cmd, "put %s", src) == 1) {
     char* dest = src;
     // Set destination name to last element of source name, if no destination name provided
     for (int i = 0; src[i]; i++)
@@ -247,10 +394,10 @@ int execute_command(char* cmd)
         dest = &src[i + 1];
     upload_file(src, dest);
   }
-  else if (sscanf(cmd, "mkdir %s", src) == 1) {
+  else if (parse_command(cmd, "mkdir %s", src) == 1) {
     create_dir(src);
   }
-  else if ((sscanf(cmd, "chdir %s", src) == 1) || (sscanf(cmd, "cd %s", src) == 1)) {
+  else if ((parse_command(cmd, "chdir %s", src) == 1) || (parse_command(cmd, "cd %s", src) == 1)) {
     if (src[0] == '/') {
       // absolute path
       if (fat_opendir(src)) {
@@ -311,10 +458,10 @@ int execute_command(char* cmd)
         strcpy(current_dir, temp_path);
     }
   }
-  else if (sscanf(cmd, "get %s", src) == 1) {
+  else if (parse_command(cmd, "get %s", src) == 1) {
     download_file(src, src, 0);
   }
-  else if (sscanf(cmd, "clusters %s", src) == 1) {
+  else if (parse_command(cmd, "clusters %s", src) == 1) {
     download_file(src, src, 1);
   }
   else if (!strcasecmp(cmd, "help")) {
@@ -339,6 +486,7 @@ int execute_command(char* cmd)
 
 extern int debug_serial;
 
+#ifndef TESTING
 int main(int argc, char** argv)
 {
 #ifdef WINDOWS
@@ -473,6 +621,7 @@ int main(int argc, char** argv)
 
   return 0;
 }
+#endif
 
 void wait_for_sdready(void)
 {
@@ -685,7 +834,7 @@ void job_process_results(void)
       if (debug_rx)
         dump_bytes(0, "jobresponse", buff, b);
     for (int i = 0; i < b; i++) {
-      // Keep rolling window of most recent chars for interpretting job
+      // Keep rolling window of most recent chars for interpreting job
       // results
       if (data_byte_count) {
         if (q_rle_enable)

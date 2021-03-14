@@ -6,6 +6,7 @@
 COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/include/libusb-1.0 -L/usr/local/lib -mno-sse3 -march=x86-64
 # -I/usr/local/Cellar/libusb/1.0.23/include/libusb-1.0/ -L/usr/local/Cellar/libusb/1.0.23/lib/libusb-1.0/
 CC=	gcc
+CXX=g++
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
 
@@ -44,6 +45,10 @@ EXAMPLEDIR=	$(SRCDIR)/examples
 UTILDIR=	$(SRCDIR)/utilities
 TESTDIR=	$(SRCDIR)/tests
 LIBEXECDIR=	libexec
+GTESTDIR=gtest
+GTESTBINDIR=$(GTESTDIR)/bin
+# For now, disable g++ compile warnings on tests (there's so many :))
+GTESTOPTS = -w
 
 SDCARD_DIR=	sdcard-files
 
@@ -226,7 +231,7 @@ $(UTILDIR)/megaphonenorflash.prg:       $(UTILDIR)/megaphonenorflash.c $(CC65)
 $(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65)
 	git submodule init
 	git submodule update
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(CC65)
 	git submodule init
@@ -404,6 +409,18 @@ $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
 $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
+$(GTESTBINDIR)/mega65_ftp.test: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
+	$(CXX) $(COPT) $(GTESTOPTS) -DTESTING -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
+
+$(GTESTBINDIR)/mega65_ftp.test.exe: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
+	$(CXX) $(WINCOPT) $(GTESTOPTS) -DTESTING -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
+
+test: $(GTESTBINDIR)/mega65_ftp.test
+	$(GTESTBINDIR)/mega65_ftp.test
+
+test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe
+	$(GTESTBINDIR)/mega65_ftp.test.exe
+
 $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
 	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses
 
@@ -449,10 +466,10 @@ $(BINDIR)/vncserver:	$(TOOLDIR)/vncserver.c
 	$(CC) $(COPT) -O3 -o $(BINDIR)/vncserver $(TOOLDIR)/vncserver.c -I/usr/local/include -lvncserver -lpthread
 
 format:
-	find -iname '*.h' -o -iname '*.c' | xargs clang-format --style=file -i
+	find . -type d \( -path ./cc65 -o -path ./cbmconvert \) -prune -false -o -iname '*.h' -o -iname '*.c' -o -iname '*.cpp' | xargs clang-format --style=file -i
 
 clean:
-	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
+	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg
 
 cleangen:	clean
 

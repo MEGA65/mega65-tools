@@ -391,7 +391,7 @@ void read_png_file(char* file_name)
 
 int main(int argc, char** argv)
 {
-  int i, x=0, y=0;
+  int i, x = 0, y = 0;
 
   unsigned char text_colour = 1;
   unsigned char indent = 0;

@@ -612,8 +612,6 @@ int monitor_sync(void)
 
     time_t start = time(0);
 
-    int total_read = 0;
-
     while (1) {
       if (no_rxbuff)
         do_usleep(10000 * SLOW_FACTOR);
@@ -635,23 +633,19 @@ int monitor_sync(void)
       if (b > 8191)
         b = 8191;
       read_buff[b] = 0;
-      if (b > 0)
-        total_read += b;
 
       if ((time(0) - start) > 1) {
-        if (!total_read) {
-          // Seems to be locked up.
-          // It could be that someone had a half-finished s command in progress.
-          // So write 64K x 0
-          char zeroes[256];
-          bzero(zeroes, 256);
-          for (int i = 0; i < 256; i++)
-            serialport_write(fd, (unsigned char*)zeroes, 256);
+        // Seems to be locked up.
+        // It could be that someone had a half-finished s command in progress.
+        // So write 64K x 0
+        char zeroes[256];
+        bzero(zeroes, 256);
+        for (int i = 0; i < 256; i++)
+          serialport_write(fd, (unsigned char*)zeroes, 256);
 
-          slow_write_safe(fd, cmd, strlen(cmd));
+        slow_write_safe(fd, cmd, strlen(cmd));
 
-          start = time(0);
-        }
+        start = time(0);
       }
 
       for (int n = 0; n < b; n++) {
@@ -1123,6 +1117,13 @@ HANDLE open_serial_port(const char* device, uint32_t baud_rate)
     print_error(device);
     return INVALID_HANDLE_VALUE;
   }
+
+  // Consider making the serial buffers bigger? They default to 8192?
+  // - https://stackoverflow.com/questions/54313240/why-is-my-serial-read-on-windows-com-port-limited-to-8192-bytes
+  // That SO thread suggests making use of SetupComm() to specify the buffer-size you want:
+  // - https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setupcomm
+
+  SetupComm(port, 131072, 131072);
 
   // Flush away any bytes previously read or written.
   BOOL success = FlushFileBuffers(port);

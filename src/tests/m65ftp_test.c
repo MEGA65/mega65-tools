@@ -34,7 +34,7 @@ int create_file(int id, int size)
   return 0;
 }
 
-#define MAX_FILE_SIZE (1024 * 1024)
+#define MAX_FILE_SIZE (5 * 1024 * 1024)
 unsigned char buff[MAX_FILE_SIZE];
 
 int verify_file(int id, int size)
@@ -46,7 +46,7 @@ int verify_file(int id, int size)
     exit(-1);
   }
 
-  bzero(buff, MAX_FILE_SIZE);
+  memset(buff, 0, MAX_FILE_SIZE);
   int b = fread(buff, 1, MAX_FILE_SIZE, f);
   if (b != size) {
     fprintf(stderr, "ERROR: File size incorrect: Saw %d, expected %d\n", b, size);
@@ -92,12 +92,15 @@ int main(int argc, char** argv)
   char* ftp = argv[1];
 
   for (int i = 0; i < 256; i++) {
-    int size = random() % MAX_FILE_SIZE;
+    int size = ((rand() % 5) + 1) * 1024 * 1024;
+    printf("===========\n");
+    printf("TEST %d : %dMB\n", i, size / 1024 / 1024);
+    printf("===========\n");
     create_file(i, size);
-    snprintf(cmd, 1024, "%s -D -c 'put %s'", ftp, FILE_NAME);
+    snprintf(cmd, 1024, "%s -c \"put %s\"", ftp, FILE_NAME);
     system(cmd);
     unlink(FILE_NAME);
-    snprintf(cmd, 1024, "%s -D -c 'get %s'", ftp, FILE_NAME);
+    snprintf(cmd, 1024, "%s -c \"get %s\"", ftp, FILE_NAME);
     system(cmd);
     if (verify_file(i, size))
       break;
