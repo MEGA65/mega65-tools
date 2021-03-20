@@ -291,7 +291,7 @@ int virtual_f011_read(int device, int track, int sector, int side)
 int virtual_f011_write(int device, int track, int sector, int side)
 {
 
-  pending_vf011_read = 0;
+  pending_vf011_write = 0;
 
   long long start = gettime_ms();
 
@@ -339,7 +339,7 @@ int virtual_f011_write(int device, int track, int sector, int side)
   }
 
   /* signal done/result */
-  mega65_poke(0xffd3086, side & 0x7f);
+  mega65_poke(0xffd3086, side & 0x0f);
 
   timestamp_msg("");
   vf011_bytes_read += 256;
@@ -2183,16 +2183,16 @@ int main(int argc, char** argv)
         pending_vf011_device = 0;
         pending_vf011_track = recent_bytes[0] & 0x7f;
         pending_vf011_sector = recent_bytes[1] & 0x7f;
-        pending_vf011_side = recent_bytes[2] & 0x7f;
+        pending_vf011_side = recent_bytes[2] & 0x0f;
       }
       if (recent_bytes[3] == 0x5c) {
         // Handle request
         recent_bytes[3] = 0;
-        pending_vf011_read = 1;
+        pending_vf011_write = 1;
         pending_vf011_device = 0;
         pending_vf011_track = recent_bytes[0] & 0x7f;
         pending_vf011_sector = recent_bytes[1] & 0x7f;
-        pending_vf011_side = recent_bytes[2] & 0x7f;
+        pending_vf011_side = recent_bytes[2] & 0x0f;
       }
       while (pending_vf011_read || pending_vf011_write) {
         if (pending_vf011_read)

@@ -223,7 +223,7 @@ void check_for_vf011_jobs(unsigned char* read_buff, int b)
         pending_vf011_device = 0;
         pending_vf011_track = read_buff[i - 3] & 0x7f;
         pending_vf011_sector = read_buff[i - 2] & 0x7f;
-        pending_vf011_side = read_buff[i - 1] & 0x7f;
+        pending_vf011_side = read_buff[i - 1] & 0x0f;
       }
     }
     if (read_buff[i] == 0x5c) {
@@ -232,7 +232,7 @@ void check_for_vf011_jobs(unsigned char* read_buff, int b)
         pending_vf011_device = 0;
         pending_vf011_track = read_buff[i - 3] & 0x7f;
         pending_vf011_sector = read_buff[i - 2] & 0x7f;
-        pending_vf011_side = read_buff[i - 1] & 0x7f;
+        pending_vf011_side = read_buff[i - 1] & 0x0f;
       }
     }
   }
