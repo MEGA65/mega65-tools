@@ -87,6 +87,7 @@ void usage(void)
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
   fprintf(stderr, "  -b - Name of bitstream file to load.\n");
+  fprintf(stderr, "  -q - Name of bitstream file to load and then directly quit. Use this for cores other than MEGA65.\n");
   fprintf(stderr, "  -v - The location of the Vivado executable to use for -b on Windows.\n");
   fprintf(stderr, "  -K - Use DK backend for libUSB, if available\n");
   fprintf(stderr, "  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n");
@@ -169,6 +170,7 @@ char* serial_port = NULL; // XXX do a better job auto-detecting this
 char modeline_cmd[1024] = "";
 int break_point = -1;
 int jtag_only = 0;
+int bitstream_only = 0;
 uint32_t zap_addr;
 int zap = 0;
 
@@ -1189,7 +1191,7 @@ int main(int argc, char** argv)
     usage();
 
   int opt;
-  while ((opt = getopt(argc, argv, "@:14aA:B:b:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
@@ -1309,10 +1311,13 @@ int main(int argc, char** argv)
       screen_shot = 1;
       break;
     case 'b':
+    case 'q':
       bitstream = strdup(optarg);
       if (bitstream[0] == '@')
         download_bitstream();
       check_file_access(bitstream, "bitstream");
+      if (opt == 'q')
+        bitstream_only = 1;
       break;
     case 'v':
       vivado_bat = strdup(optarg);
@@ -1409,7 +1414,11 @@ int main(int argc, char** argv)
 
   // -b Load bitstream if file provided
   if (bitstream)
+  {
     load_bitstream(bitstream);
+    if (bitstream_only)
+        do_exit(0);
+  }
 
   if (virtual_f011) {
     char msg[1024];
@@ -2210,11 +2219,14 @@ int main(int argc, char** argv)
 
 void do_exit(int retval)
 {
-#ifndef WINDOWS
-  timestamp_msg("");
-  fprintf(stderr, "Background tasks may be running running. CONTROL+C to stop...\n");
-  for (int i = 0; i < thread_count; i++)
-    pthread_join(threads[i], NULL);
+#ifndef WINDOWS  
+  if (thread_count)
+  {
+    timestamp_msg("");    
+    fprintf(stderr, "Background tasks may be running running. CONTROL+C to stop...\n");
+    for (int i = 0; i < thread_count; i++)
+      pthread_join(threads[i], NULL);
+  }
 #endif
   exit(retval);
 }
