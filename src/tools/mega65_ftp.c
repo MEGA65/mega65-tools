@@ -44,6 +44,12 @@
 
 #include "m65common.h"
 
+#ifdef TESTING
+#define DIRTYMOCK(fn_name) mock_##fn_name
+#else
+#define DIRTYMOCK(fn_name) fn_name
+#endif
+
 #define SECTOR_CACHE_SIZE 4096
 int sector_cache_count = 0;
 unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
@@ -87,6 +93,7 @@ int sdhc_check(void);
 #define CACHE_NO 0
 #define CACHE_YES 1
 int read_sector(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead);
+int write_sector(const unsigned int sector_number, unsigned char* buffer);
 int load_helper(void);
 int stuff_keybuffer(char* s);
 int create_dir(char*);
@@ -1041,7 +1048,7 @@ void queue_read_mem(uint32_t mega65_address, uint32_t len)
 }
 
 // XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
-int read_sector(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead)
+int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead)
 {
   int retVal = 0;
   do {
@@ -1108,7 +1115,7 @@ int read_sector(const unsigned int sector_number, unsigned char* buffer, int use
 
 unsigned char verify[512];
 
-int write_sector(const unsigned int sector_number, unsigned char* buffer)
+int DIRTYMOCK(write_sector)(const unsigned int sector_number, unsigned char* buffer)
 {
   int retVal = 0;
   do {
@@ -2515,6 +2522,73 @@ int download_slot(int slot_number, char* dest_name)
   return retVal;
 }
 
+int safe_open_dir(void)
+{
+  if (!file_system_found)
+    open_file_system();
+  if (!file_system_found) {
+    fprintf(stderr, "ERROR: Could not open file system.\n");
+    return 0;
+  }
+
+  if (fat_opendir(current_dir)) {
+    return 0;
+  }
+
+  return 1;
+}
+
+int find_file(char* filename, struct m65dirent* de)
+{
+  while (!fat_readdir(de)) {
+    // if (de->d_name[0]) printf("%13s   %d\n",de->d_name,(int)de->d_filelen);
+    //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
+    if (!strcasecmp(de->d_name, filename)) {
+      // Found file, so will replace it
+      //	printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de->d_ino);
+      return 1;
+    }
+  }
+  if (dir_sector == -1) {
+    printf("?  FILE NOT FOUND ERROR FOR \"%s\"\n", filename);
+    return 0;
+  }
+  return 0;
+}
+
+unsigned int calc_first_cluster_of_file(void)
+{
+    return (dir_sector_buffer[dir_sector_offset + 0x1A] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1B] << 8)
+             | (dir_sector_buffer[dir_sector_offset + 0x14] << 16) | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
+}
+
+
+int is_fragmented(char* filename)
+{
+  int fragmented_flag = 0;
+
+  if (!safe_open_dir())
+    return -1;
+
+  struct m65dirent de;
+  if (!find_file(filename, &de))
+    return -1;
+
+  unsigned int first_cluster_of_file = calc_first_cluster_of_file();
+
+  unsigned int current_cluster = first_cluster_of_file;
+  int next_cluster;
+  while ((next_cluster = chained_cluster(current_cluster)) != 0xffffff8)
+  {
+    if (next_cluster != current_cluster + 1)
+      fragmented_flag = 1;
+    current_cluster = next_cluster;
+  }
+
+  return fragmented_flag;
+}
+
+
 int download_file(char* dest_name, char* local_name, int showClusters)
 {
   struct m65dirent de;
@@ -2523,42 +2597,17 @@ int download_file(char* dest_name, char* local_name, int showClusters)
 
     time_t upload_start = time(0);
 
-    if (!file_system_found)
-      open_file_system();
-    if (!file_system_found) {
-      fprintf(stderr, "ERROR: Could not open file system.\n");
-      retVal = -1;
-      break;
-    }
+    if (!safe_open_dir())
+      return -1;
 
-    if (fat_opendir(current_dir)) {
-      retVal = -1;
-      break;
-    }
     //    printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-    while (!fat_readdir(&de)) {
-      // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_filelen);
-      //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
-      if (!strcasecmp(de.d_name, dest_name)) {
-        // Found file, so will replace it
-        //	printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de.d_ino);
-        break;
-      }
-    }
-    if (dir_sector == -1) {
-      printf("?  FILE NOT FOUND ERROR FOR \"%s\"\n", dest_name);
-      retVal = -1;
-      break;
-    }
 
-    // Read out the first cluster. If zero, then we need to allocate a first cluster.
-    // After that, we can allocate and chain clusters in a constant manner
-    unsigned int first_cluster_of_file = (dir_sector_buffer[dir_sector_offset + 0x1A] << 0)
-                                       | (dir_sector_buffer[dir_sector_offset + 0x1B] << 8)
-                                       | (dir_sector_buffer[dir_sector_offset + 0x14] << 16)
-                                       | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
+    if (!find_file(dest_name, &de))
+      return -1;
 
-    // Now write the file out sector by sector, and allocate new clusters as required
+    unsigned int first_cluster_of_file = calc_first_cluster_of_file();
+
+    // Now write the file to local disk sector by sector
     int remaining_bytes = de.d_filelen;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
