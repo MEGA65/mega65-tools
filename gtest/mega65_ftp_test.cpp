@@ -191,7 +191,7 @@ void delete_local_file(const char* name)
   remove(name);
 }
 
-TEST(Mega65FtpTest, PutCommandWritesD81ToContiguousClusters)
+TEST(Mega65FtpTest, PutCommandWritesFileToContiguousClusters)
 {
   init_sdcard_data();
 

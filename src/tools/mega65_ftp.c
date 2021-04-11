@@ -2055,11 +2055,8 @@ int upload_file(char* name, char* dest_name)
     if (!first_cluster_of_file) {
       //      printf("File currently has no first cluster allocated.\n");
 
-      int a_cluster;
-      if (is_d81_file(dest_name))
-        a_cluster = find_contiguous_clusters(st.st_size / (512 * sectors_per_cluster));
-      else
-        a_cluster = find_free_cluster(0);
+      int a_cluster = find_contiguous_clusters(st.st_size / (512 * sectors_per_cluster));
+
       if (!a_cluster) {
         printf("ERROR: Failed to find a free cluster.\n");
         retVal = -1;
