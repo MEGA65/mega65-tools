@@ -50,8 +50,8 @@
 #define DIRTYMOCK(fn_name) fn_name
 #endif
 
-#define BOOL  int
-#define TRUE  1
+#define BOOL int
+#define TRUE 1
 #define FALSE 0
 
 #define SECTOR_CACHE_SIZE 4096
@@ -1648,12 +1648,12 @@ BOOL is_free_cluster(unsigned int cluster)
   int i, o;
   i = cluster / (512 / 4);
   o = cluster % (512 / 4) * 4;
-  
+
   if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
     printf("ERROR: Failed to read sector $%x of first FAT\n", i);
     exit(-1);
   }
-  
+
   if (!(fat_sector[o] | fat_sector[o + 1] | fat_sector[o + 2] | fat_sector[o + 3])) {
     return TRUE;
   }
@@ -1718,7 +1718,7 @@ unsigned int find_contiguous_clusters(unsigned int total_clusters)
     start_cluster = find_free_cluster(start_cluster);
 
     for (cnt = 1; cnt < total_clusters; cnt++) {
-      if (!is_free_cluster(start_cluster+cnt)) {
+      if (!is_free_cluster(start_cluster + cnt)) {
         is_contiguous = FALSE;
         break;
       }
@@ -2534,8 +2534,8 @@ BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
 
 unsigned int calc_first_cluster_of_file(void)
 {
-    return (dir_sector_buffer[dir_sector_offset + 0x1A] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1B] << 8)
-             | (dir_sector_buffer[dir_sector_offset + 0x14] << 16) | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
+  return (dir_sector_buffer[dir_sector_offset + 0x1A] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1B] << 8)
+       | (dir_sector_buffer[dir_sector_offset + 0x14] << 16) | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
 }
 
 BOOL create_directory_entry_for_file(char* filename)
@@ -2590,13 +2590,12 @@ BOOL create_directory_entry_for_file(char* filename)
 
 char* get_file_extension(char* filename)
 {
-  int i = strlen(filename)-1;
-  do
-  {
-  char *c = filename + i;
-  if (*c == '.')
-    return c;
-  i--;
+  int i = strlen(filename) - 1;
+  do {
+    char* c = filename + i;
+    if (*c == '.')
+      return c;
+    i--;
   } while (i >= 0);
 
   return NULL;
@@ -2629,8 +2628,7 @@ int is_fragmented(char* filename)
 
   unsigned int current_cluster = first_cluster_of_file;
   int next_cluster;
-  while ((next_cluster = chained_cluster(current_cluster)) != 0xffffff8)
-  {
+  while ((next_cluster = chained_cluster(current_cluster)) != 0xffffff8) {
     if (next_cluster != current_cluster + 1)
       fragmented_flag = 1;
     current_cluster = next_cluster;
@@ -2638,7 +2636,6 @@ int is_fragmented(char* filename)
 
   return fragmented_flag;
 }
-
 
 int download_file(char* dest_name, char* local_name, int showClusters)
 {

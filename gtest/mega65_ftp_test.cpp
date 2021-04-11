@@ -12,8 +12,8 @@ int is_fragmented(char* filename);
 #define MBR_SIZE SECTOR_SIZE
 #define SECTORS_PER_CLUSTER 8
 #define CLUSTER_SIZE (SECTOR_SIZE * SECTORS_PER_CLUSTER)
-#define PARTITION1_CLUSTER_COUNT  16
-#define PARTITION1_START (1*SECTOR_SIZE)
+#define PARTITION1_CLUSTER_COUNT 16
+#define PARTITION1_START (1 * SECTOR_SIZE)
 #define PARTITION1_SIZE (PARTITION1_CLUSTER_COUNT * CLUSTER_SIZE)
 #define SDSIZE (MBR_SIZE + PARTITION1_SIZE)
 
@@ -24,9 +24,9 @@ void init_sdcard_data(void)
   // MBR
   // ===
   // - Describe the 1st (and only) partition
-  sdcard[0x1be] = 0x80; // active/bootable partition
-  sdcard[0x1c2] = 0x0b; // fat32 (chs)
-  *((unsigned int*)&sdcard[0x1c6]) = 0x01; // first sector in partition
+  sdcard[0x1be] = 0x80;                                                              // active/bootable partition
+  sdcard[0x1c2] = 0x0b;                                                              // fat32 (chs)
+  *((unsigned int*)&sdcard[0x1c6]) = 0x01;                                           // first sector in partition
   *((unsigned int*)&sdcard[0x1ca]) = PARTITION1_CLUSTER_COUNT * SECTORS_PER_CLUSTER; // sector count
 
   // PARTITION1
@@ -35,21 +35,20 @@ void init_sdcard_data(void)
   // -----------
   sdcard[PARTITION1_START + 0x1fe] = 0x55; // magic marker
   sdcard[PARTITION1_START + 0x1ff] = 0xaa;
-  sdcard[PARTITION1_START + 0x0c] = 0x02;  // bytes per logical sector (0x200 = 512 bytes)
-  sdcard[PARTITION1_START + 0x0e] = 0x01;  // no# of reserved sectors (includes bootsector + fsinfo_sector)
-  sdcard[PARTITION1_START + 0x10] = 0x02;  // number of FATs (2)
-  sdcard[PARTITION1_START + 0x0d] = 0x08;  // sectors per cluster (8)
+  sdcard[PARTITION1_START + 0x0c] = 0x02; // bytes per logical sector (0x200 = 512 bytes)
+  sdcard[PARTITION1_START + 0x0e] = 0x01; // no# of reserved sectors (includes bootsector + fsinfo_sector)
+  sdcard[PARTITION1_START + 0x10] = 0x02; // number of FATs (2)
+  sdcard[PARTITION1_START + 0x0d] = 0x08; // sectors per cluster (8)
   *((unsigned int*)&sdcard[PARTITION1_START + 0x20]) = PARTITION1_SIZE / SECTOR_SIZE; // total logical sectors
-  *((unsigned int*)&sdcard[PARTITION1_START + 0x24]) = 1; // sectors per fat
-  *((unsigned int*)&sdcard[PARTITION1_START + 0x2c]) = 2; // Cluster no# of root-directory start
+  *((unsigned int*)&sdcard[PARTITION1_START + 0x24]) = 1;                             // sectors per fat
+  *((unsigned int*)&sdcard[PARTITION1_START + 0x2c]) = 2;                             // Cluster no# of root-directory start
 
   // NOTE: For now, I'll ignore the fsinfo_sector, pretend it doesn't exist, and see if I get away with it
-  
+
   // 2 FAT TABLES
   // ============
   int offset = PARTITION1_START + SECTOR_SIZE;
-  for (int k = 0; k < 2; k++)
-  {
+  for (int k = 0; k < 2; k++) {
     sdcard[offset + 0x00] = 0xf8;
     sdcard[offset + 0x01] = 0xff;
     sdcard[offset + 0x02] = 0xff;
@@ -63,7 +62,6 @@ void init_sdcard_data(void)
     // jump to next sector / fat table and repeat this data
     offset += SECTOR_SIZE;
   }
-
 
   // DIRECTORY ENTRIES
   // =================
@@ -80,7 +78,7 @@ void init_sdcard_data(void)
   sdcard[offset + 0x08] = ' ';
   sdcard[offset + 0x09] = ' ';
   sdcard[offset + 0x0a] = ' ';
-  sdcard[offset + 0x0b] = 0x08;   // file attribute (0x08 = volume label)
+  sdcard[offset + 0x0b] = 0x08; // file attribute (0x08 = volume label)
 }
 
 // my read/write sector mock functions
@@ -90,9 +88,8 @@ int read_sector(const unsigned int sector_number, unsigned char* buffer, int use
   if (sector_number >= SDSIZE / 512)
     return -1;
 
-  for (int k = 0; k < SECTOR_SIZE; k++)
-  {
-    buffer[k] = sdcard[sector_number*SECTOR_SIZE + k];
+  for (int k = 0; k < SECTOR_SIZE; k++) {
+    buffer[k] = sdcard[sector_number * SECTOR_SIZE + k];
   }
   return 0;
 }
@@ -102,13 +99,11 @@ int write_sector(const unsigned int sector_number, unsigned char* buffer)
   if (sector_number >= SDSIZE / 512)
     return -1;
 
-  for (int k = 0; k < SECTOR_SIZE; k++)
-  {
-    sdcard[sector_number*SECTOR_SIZE + k] = buffer[k];
+  for (int k = 0; k < SECTOR_SIZE; k++) {
+    sdcard[sector_number * SECTOR_SIZE + k] = buffer[k];
   }
   return 0;
 }
-
 
 // my tests
 namespace mega65_ftp {
@@ -171,12 +166,10 @@ TEST(Mega65FtpTest, GetCommandExpectTwoParamGivenOne)
 }
 
 // TODO: Ponder making use of fixtures one day, if I see a common setup/teardown pattern in several tests
-class Mega65FtpTestFixture : public ::testing::Test
-{
-protected:
+class Mega65FtpTestFixture : public ::testing::Test {
+  protected:
   void SetUp() override
   {
-
   }
 
   void TearDown() override
@@ -204,13 +197,13 @@ TEST(Mega65FtpTest, PutCommandWritesD81ToContiguousClusters)
 
   // sector = 512 bytes
   // cluster = 8 sectors = 8 x 512 = 4096 bytes (4kb)
-  char *file4kb = "4kbtest.tmp";
-  char *file8kb = "8kbtest.d81";
+  char* file4kb = "4kbtest.tmp";
+  char* file8kb = "8kbtest.d81";
   generate_dummy_file(file4kb, 4096);
   generate_dummy_file(file8kb, 8192);
 
   // upload three 4kb files, consuming the clusters this way:
-  // 
+  //
   // CLUSTER       2          3          4          5          6      ...
   //         +----------+----------+----------+----------+----------+-----
   //         | 4KB1.TMP | 4KB2.TMP | 4BK3.TMP |    ---   |    ---   | ...

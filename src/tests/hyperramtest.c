@@ -49,7 +49,7 @@ unsigned int i, j, k;
   and then copy that from fast back to slow, than to directly copy slow to slow)
 
 */
-unsigned char fast_flags = 0x60; 
+unsigned char fast_flags = 0x60;
 unsigned char slow_flags = 0x00;
 unsigned char cache_bit = 0x80; // =0x80;
 
