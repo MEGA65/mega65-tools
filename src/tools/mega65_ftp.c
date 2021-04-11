@@ -2129,9 +2129,6 @@ int upload_file(char* name, char* dest_name)
       unsigned char buffer[512];
       bzero(buffer, 512);
       int bytes = fread(buffer, 1, 512, f);
-      if (bytes != 512) {
-        fprintf(stderr, "ERROR: Short read: Only got %d bytes\n", bytes);
-      }
       sector_number = partition_start + first_cluster_sector + (sectors_per_cluster * (file_cluster - first_cluster))
                     + sector_in_cluster;
       if (0)
