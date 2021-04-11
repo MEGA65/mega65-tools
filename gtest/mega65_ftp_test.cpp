@@ -204,7 +204,7 @@ TEST(Mega65FtpTest, PutCommandWritesD81ToContiguousClusters)
 
   // sector = 512 bytes
   // cluster = 8 sectors = 8 x 512 = 4096 bytes (4kb)
-  char *file4kb = "4kbtest.d81";
+  char *file4kb = "4kbtest.tmp";
   char *file8kb = "8kbtest.d81";
   generate_dummy_file(file4kb, 4096);
   generate_dummy_file(file8kb, 8192);
@@ -213,28 +213,28 @@ TEST(Mega65FtpTest, PutCommandWritesD81ToContiguousClusters)
   // 
   // CLUSTER       2          3          4          5          6      ...
   //         +----------+----------+----------+----------+----------+-----
-  //         | 4KB1.D81 | 4KB2.D81 | 4BK3.D81 |    ---   |    ---   | ...
+  //         | 4KB1.TMP | 4KB2.TMP | 4BK3.TMP |    ---   |    ---   | ...
   //         +----------+----------+----------+----------+----------+-----
-  upload_file(file4kb, "4kb1.d81");
-  upload_file(file4kb, "4kb2.d81");
-  upload_file(file4kb, "4kb3.d81");
+  upload_file(file4kb, "4kb1.tmp");
+  upload_file(file4kb, "4kb2.tmp");
+  upload_file(file4kb, "4kb3.tmp");
 
   // make a single cluster gap in the fat table
   // CLUSTER       2          3          4          5          6      ...
   //         +----------+----------+----------+----------+----------+-----
-  //         | 4KB1.D81 |    ---   | 4BK3.D81 |    ---   |    ---   | ...
+  //         | 4KB1.TMP |    ---   | 4BK3.TMP |    ---   |    ---   | ...
   //         +----------+----------+----------+----------+----------+-----
-  delete_file("4kb2.d81");
+  delete_file("4kb2.tmp");
 
   // write a two cluster file
   // CLUSTER       2          3          4          5          6      ...
   //         +----------+----------+----------+----------+----------+-----
-  //         | 4KB1.D81 |    ---   | 4BK3.D81 |     8KBTEST.D81     | ...
+  //         | 4KB1.TMP |    ---   | 4BK3.TMP |     8KBTEST.D81     | ...
   //         +----------+----------+----------+----------+----------+-----
   upload_file(file8kb, file8kb);
 
-  ASSERT_EQ(0, is_fragmented("4kb1.d81"));
-  ASSERT_EQ(0, is_fragmented("4kb3.d81"));
+  ASSERT_EQ(0, is_fragmented("4kb1.tmp"));
+  ASSERT_EQ(0, is_fragmented("4kb3.tmp"));
   ASSERT_EQ(0, is_fragmented(file8kb));
 
   // cleanup
