@@ -45,7 +45,7 @@
 #include "m65common.h"
 
 #ifdef TESTING
-#define DIRTYMOCK(fn_name) mock_##fn_name
+#define DIRTYMOCK(fn_name) real_##fn_name
 #else
 #define DIRTYMOCK(fn_name) fn_name
 #endif
@@ -502,8 +502,7 @@ int execute_command(char* cmd)
 
 extern int debug_serial;
 
-#ifndef TESTING
-int main(int argc, char** argv)
+int DIRTYMOCK(main)(int argc, char** argv)
 {
 #ifdef WINDOWS
   // working around mingw64-stdout line buffering issue with advice suggested here:
@@ -637,7 +636,6 @@ int main(int argc, char** argv)
 
   return 0;
 }
-#endif
 
 void wait_for_sdready(void)
 {
