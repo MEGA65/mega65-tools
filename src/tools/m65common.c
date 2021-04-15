@@ -212,6 +212,7 @@ int pending_vf011_device = 0;
 int pending_vf011_track = 0;
 int pending_vf011_sector = 0;
 int pending_vf011_side = 0;
+unsigned char recent_bytes[4] = { 0, 0, 0, 0 };
 
 void check_for_vf011_jobs(unsigned char* read_buff, int b)
 {
@@ -293,6 +294,12 @@ void purge_and_check_for_vf011_jobs(int stopP)
       check_for_vf011_jobs(read_buff, b);
 
       for (int i = 0; i < b; i++) {
+        recent_bytes[0] = recent_bytes[1];
+        recent_bytes[1] = recent_bytes[2];
+        recent_bytes[2] = recent_bytes[3];
+        recent_bytes[3] = read_buff[i];
+      }
+      for (int i = 0; i < b; i++) {
         recent[0] = recent[1];
         recent[1] = recent[2];
         recent[2] = read_buff[i];
@@ -335,6 +342,7 @@ int stop_cpu(void)
   fprintf(stderr, "Stopping CPU\n");
   if (no_rxbuff)
     do_usleep(50000);
+  cpu_stopped = 1;
   slow_write_safe(fd, "t1\r", 3);
   purge_and_check_for_vf011_jobs(1);
   return 0;
