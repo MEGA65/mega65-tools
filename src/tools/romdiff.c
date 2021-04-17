@@ -3,15 +3,21 @@
 #include <unistd.h>
 #include <strings.h>
 
-#define FILE_SIZE 128*1024
+//#define FILE_SIZE 128*1024
 // Use just a little part for testing
-//#define FILE_SIZE 4*1024
+#define FILE_SIZE 8*1024
 
 unsigned char ref[FILE_SIZE];
 unsigned char new[FILE_SIZE];
 unsigned char diff[4*FILE_SIZE];
 int diff_len=0;
 unsigned char out[2*FILE_SIZE];
+#define OUT_LITERAL1 0x01
+#define OUT_EXACT_MATCH 0x02
+#define OUT_APPROX_PATCH 0x03
+#define OUT_APPROX_MATCH 0x04
+
+unsigned char out_origin[FILE_SIZE];
 
 int costs[FILE_SIZE];
 int next_pos[FILE_SIZE];
@@ -23,14 +29,17 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
   int out_ofs=0;
   for(int ofs=0;ofs<diff_len;)
     {
-
-      if (0) fprintf(stderr,"ofs=%d : %02x %02x %02x %02x %02x ... vs out_ofs=%d : %02x %02x %02x %02x %02x (n=%d)\n",
-		     ofs,diff[ofs+0],diff[ofs+1],diff[ofs+2],diff[ofs+3],diff[ofs+4],
-		     out_ofs,tokens[out_ofs][0],tokens[out_ofs][1],tokens[out_ofs][2],tokens[out_ofs][3],tokens[out_ofs][4],
-		     token_lens[out_ofs]
-		     )
-	       ;
-
+      int bad=0;
+      for(int i=0;i<token_lens[out_ofs];i++)
+	if (diff[ofs+i]!=tokens[out_ofs][i]) bad++;
+      if (bad) {      
+	fprintf(stderr,"ofs=%d : %02x %02x %02x %02x %02x ... vs out_ofs=%d : %02x %02x %02x %02x %02x (n=%d)\n",
+		ofs,diff[ofs+0],diff[ofs+1],diff[ofs+2],diff[ofs+3],diff[ofs+4],
+		out_ofs,tokens[out_ofs][0],tokens[out_ofs][1],tokens[out_ofs][2],tokens[out_ofs][3],tokens[out_ofs][4],
+		token_lens[out_ofs]
+		)
+	  ;
+      }
       
       if (out_ofs>=FILE_SIZE) {
 	fprintf(stderr,"End of output produced early after ingesting %d bytes of the %d byte stream.\n",
@@ -39,8 +48,8 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
       }
       if (diff[ofs]==0x00) {
 	// Single byte literal
-	// XXX Not yet used
 	out[out_ofs]=ref[out_ofs]^diff[ofs+1];
+	out_origin[out_ofs]=OUT_LITERAL1;
 	out_ofs++;
 	ofs+=2;
       } else if (diff[ofs]==0x01) {
@@ -59,6 +68,8 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
 	bcopy(&ref[addr],&out[out_ofs],count);
 	//	fprintf(stderr,"Copying %d EXACT match bytes from $%05x to $%05x\n",
 	//		count,addr,out_ofs);
+	for(int i=0;i<count;i++) out_origin[out_ofs+i]=OUT_EXACT_MATCH;
+	  
 	out_ofs+=count;
       } else {
 	// Approximate match of 1 -- 64 bytes
@@ -76,11 +87,14 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
 	int bitmap_ofs=ofs;
 	ofs+=bitmap_len;
 	// Patch any mis-matched bytes
-	for(int i=0;i<count;i++)
+	for(int i=0;i<count;i++) {
 	  if (diff[bitmap_ofs+(i>>3)]&(1<<(i&7))) {
 	    out[out_ofs+i]^=diff[ofs];
+	    out_origin[out_ofs+i]=OUT_APPROX_PATCH;
 	    ofs++;
-	  }
+	  } else
+	    out_origin[out_ofs+i]=OUT_APPROX_MATCH;
+	}	    
 	out_ofs+=count;
       }
     }
@@ -93,6 +107,16 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
     return 0;
 }
 
+char *describe_origin(unsigned char o)
+{
+  switch(o) {
+  case OUT_LITERAL1: return "LITERAL BYTE";
+  case OUT_EXACT_MATCH: return "EXACT MATCH";
+  case OUT_APPROX_MATCH: return "APPROX MATCHING BYTE";
+  case OUT_APPROX_PATCH: return "APPROX PATCH BYTE";
+  default: return "UNKNOWN";
+  }
+}
 
 int main(int argc,char **argv)
 {
@@ -298,6 +322,12 @@ int main(int argc,char **argv)
 
   if (bcmp(out,new,FILE_SIZE)) {
     fprintf(stderr,"ERROR: Verify error while testing encoded data stream.\n");
+    for(int i=0;i<FILE_SIZE;i++) {
+      if (out[i]!=new[i]) {
+	fprintf(stderr,"  mismatch at $%05x: saw $%02x, but should be $%02x, origin=%s\n",
+		i,out[i],new[i],describe_origin(out_origin[i]));
+      }
+    }
   }
   
   f=fopen("decoded.bin","wb");
