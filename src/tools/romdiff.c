@@ -3,9 +3,11 @@
 #include <unistd.h>
 #include <strings.h>
 
-//#define FILE_SIZE 128*1024
+#define FILE_SIZE 128*1024
 // Use just a little part for testing
-#define FILE_SIZE 8*1024
+//#define FILE_SIZE 8*1024
+
+#define EFFORT (FILE_SIZE*1.0*FILE_SIZE)/2.0
 
 unsigned char ref[FILE_SIZE];
 unsigned char new[FILE_SIZE];
@@ -125,6 +127,9 @@ int main(int argc,char **argv)
     exit(-1);
   }
 
+  fprintf(stderr,"Generating patch of %s, using %s as the reference.\n",
+	  argv[2],argv[1]);
+  
   // Reset dynamic programming grid
   for(int i=0;i<FILE_SIZE;i++) {
     costs[i]=999999999;
@@ -172,11 +177,20 @@ int main(int argc,char **argv)
   */    
 
   int output_size_so_far=0;
+
+  long long effort_done=0;
   
   for(int i=(FILE_SIZE-1);i>=0;i--) {
     // Calculate cost of single byte
-    fprintf(stderr,"\r$%05x : %d bytes (%.1f%%)       ",
-	    FILE_SIZE-i,output_size_so_far,output_size_so_far*100.0/(FILE_SIZE-i));
+
+    double progress=effort_done/(EFFORT);
+    progress*=100;
+    
+    fprintf(stderr,"\r$%05x : %d bytes (%.1f%% of original size) : %.1f%% done.        ",
+	    FILE_SIZE-i,output_size_so_far,output_size_so_far*100.0/(FILE_SIZE-i),progress);
+
+    effort_done+=i;
+    
     fflush(stderr);
 
     
