@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <strings.h>
+#include <ctype.h>
 
 #define FILE_SIZE 128*1024
 // Use just a little part for testing
@@ -119,6 +120,21 @@ char *describe_origin(unsigned char o)
   default: return "UNKNOWN";
   }
 }
+
+char normalised[256];
+char *normalise(char *s)
+{
+  int ofs=0;
+  for(int i=0;s[i];i++) {
+    if (s[i]=='/'||s[i]=='\\') ofs=0;
+    else {
+      normalised[ofs++]=toupper(s[i]);
+    }
+  }
+  normalised[ofs]=0;
+  return normalised;
+}
+
 
 int main(int argc,char **argv)
 {
@@ -329,6 +345,14 @@ int main(int argc,char **argv)
     fprintf(stderr,"ERROR: Could not write to output file '%s'\n",argv[3]);
     exit(-3);
   }
+  // Write header and reference file name
+  unsigned char header[256];
+  bzero(header,256);
+  snprintf((char *)header,256,"MEGA65ROMPATCH01.00");
+  snprintf((char *)&header[32],256,"%s",normalise(argv[1]));
+  snprintf((char *)&header[32+64],256,"%s",normalise(argv[2]));
+  fwrite(header,256,1,f);
+  // Write diff  
   fwrite(diff,diff_len,1,f);
   fclose(f);
   
@@ -349,6 +373,7 @@ int main(int argc,char **argv)
     fprintf(stderr,"ERROR: Could not write to decode test file 'decoded.bin'\n");
     exit(-3);
   }
+  // Write byte stream for diff
   fwrite(out,FILE_SIZE,1,f);
   fclose(f); 
   
