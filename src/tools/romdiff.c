@@ -256,7 +256,7 @@ int main(int argc,char **argv)
 		tokens[i][3+(l>>3)]|=(1<<(l&7));
 		// Copy literals from reference
 		// We XOR so that there is no copyright material leaked
-		tokens[i][token_lens[i]++]=ref[i+l]^new[i+l];
+		tokens[i][token_lens[i]++]=ref[j+l]^new[i+l];
 		diffs_hit++;
 		//		fprintf(stderr,"(%d, i=%d,j=%d, l=%d, r=%02x, n=%02x)",l,i,j,l,ref[j+l],new[i+l]);
 	      }
