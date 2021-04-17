@@ -40,8 +40,9 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
       if (diff[ofs]==0x00) {
 	// Single byte literal
 	// XXX Not yet used
-	fprintf(stderr,"ERROR: Unsupported token $00 encountered\n");
-	exit(-3);
+	out[out_ofs]=ref[out_ofs]^diff[ofs+1];
+	out_ofs++;
+	ofs+=2;
       } else if (diff[ofs]==0x01) {
 	// Double byte literal
 	// XXX Not yet used
@@ -265,6 +266,8 @@ int main(int argc,char **argv)
   fclose(f);
   
   decode_diff(ref,diff,diff_len,out);
+
+
   
   return 0;
   
