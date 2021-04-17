@@ -24,12 +24,12 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
   for(int ofs=0;ofs<diff_len;)
     {
 
-      fprintf(stderr,"ofs=%d : %02x %02x %02x %02x %02x ... vs out_ofs=%d : %02x %02x %02x %02x %02x (n=%d)\n",
-	      ofs,diff[ofs+0],diff[ofs+1],diff[ofs+2],diff[ofs+3],diff[ofs+4],
-	      out_ofs,tokens[out_ofs][0],tokens[out_ofs][1],tokens[out_ofs][2],tokens[out_ofs][3],tokens[out_ofs][4],
-	      token_lens[out_ofs]
-	      )
-	;
+      if (0) fprintf(stderr,"ofs=%d : %02x %02x %02x %02x %02x ... vs out_ofs=%d : %02x %02x %02x %02x %02x (n=%d)\n",
+		     ofs,diff[ofs+0],diff[ofs+1],diff[ofs+2],diff[ofs+3],diff[ofs+4],
+		     out_ofs,tokens[out_ofs][0],tokens[out_ofs][1],tokens[out_ofs][2],tokens[out_ofs][3],tokens[out_ofs][4],
+		     token_lens[out_ofs]
+		     )
+	       ;
 
       
       if (out_ofs>=FILE_SIZE) {
@@ -57,8 +57,8 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
 	addr|=(diff[ofs+2])<<8;
 	ofs+=3;
 	bcopy(&ref[addr],&out[out_ofs],count);
-	fprintf(stderr,"Copying %d EXACT match bytes from $%05x to $%05x\n",
-		count,addr,out_ofs);
+	//	fprintf(stderr,"Copying %d EXACT match bytes from $%05x to $%05x\n",
+	//		count,addr,out_ofs);
 	out_ofs+=count;
       } else {
 	// Approximate match of 1 -- 64 bytes
@@ -71,8 +71,8 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
 	addr|=(diff[ofs+2])<<8;
 	ofs+=3;
 	bcopy(&ref[addr],&out[out_ofs],count);
-	fprintf(stderr,"Copying %d approx match bytes from $%05x to $%05x\n",
-		count,addr,out_ofs);
+	//	fprintf(stderr,"Copying %d approx match bytes from $%05x to $%05x\n",
+	//		count,addr,out_ofs);
 	int bitmap_ofs=ofs;
 	ofs+=bitmap_len;
 	// Patch any mis-matched bytes
@@ -177,42 +177,65 @@ int main(int argc,char **argv)
 	//	if (best_len==64) break;
       }
 
+#if 0
+      fprintf(stderr,"new[i]=%02x, ref[j]=%02x, ",
+	      new[i],ref[j]);
+      fprintf(stderr,"new[i+mlen=%d]=%02x, ref[j+mlen=%d]=%02x, i=%d,j=%d,mlen=%d\n",
+	      i+mlen,new[i+mlen],j+mlen,ref[j+mlen],i,j,mlen);
+#endif
+      
       // Also model approximate matches
       if (mlen>0) {
 	int diffs=0;
 	int enc_len=3;
+	//	fprintf(stderr,"\n3+");
+	enc_len+=(mlen>>3);
+	if (mlen&7) enc_len++;
+	//	fprintf(stderr,"%d+",enc_len-3);
 	for(int k=mlen;k<64&&(i+k)<FILE_SIZE&&(j+k)<FILE_SIZE;k++) {
 	  if (new[i+k]!=ref[j+k]) {
 	    diffs++;
 	    enc_len++;
+	    //fprintf(stderr,"d(%d)",k);
 	  }
-	  if ((k&7)==1) enc_len++;
+	  if ((k&7)==0) {
+	    enc_len++;
+	    // fprintf(stderr,".<%d>",k);
+	  }
 	  
 	  if ((enc_len+costs[i+k])<costs[i]) {
 	    fprintf(stderr,"$%05x -> $%05x : mlen=%d, approx_len=%d, src_addr=$%05x, diffs=%d, cost=%d, old cost=%d\n",
 		    i,i+k,mlen,k,j,diffs,enc_len+costs[i+k],costs[i]);
 	    // Approximate match helps here
 	    costs[i]=costs[i+k]+enc_len;
-	    next_pos[i]=i+k;
-	    tokens[i][0]=0x80+ ((k - 1)<<1) + (j>>16);
+	    next_pos[i]=i+k+1;
+	    tokens[i][0]=0x80+ ((k + 1 - 1)<<1) + (j>>16);
 	    tokens[i][1]=j>>0;
 	    tokens[i][2]=j>>8;
 	    token_lens[i]=3;
 
 	    // Setup bitmap for diffs
-	    int bitmap_len=k/8;	    
-	    if (k&7) bitmap_len++;
+	    int bitmap_len=(k+1)/8;	    
+	    if ((k+1)&7) bitmap_len++;
 	    for(int n=0;n<bitmap_len;n++) tokens[i][3+n]=0x00;
 	    token_lens[i]+=bitmap_len;
 	    // Now write diffs
-	    for(int l=0;l<k;l++) {
-	      if (ref[i+l]!=new[j+l]) {
+	    int diffs_hit=0;
+	    for(int l=0;l<=k;l++) {
+	      if (ref[j+l]!=new[i+l]) {
 		// Set bitmap bit
 		tokens[i][3+(l>>3)]|=(1<<(l&7));
 		// Copy literals from reference
 		// We XOR so that there is no copyright material leaked
 		tokens[i][token_lens[i]++]=ref[i+l]^new[i+l];
+		diffs_hit++;
+		//		fprintf(stderr,"(%d, i=%d,j=%d, l=%d, r=%02x, n=%02x)",l,i,j,l,ref[j+l],new[i+l]);
 	      }
+	    }
+	    if (enc_len!=token_lens[i]) {
+	      fprintf(stderr,"ERROR: Modeled cost of %d for %d bytes, but incurred cost of %d bytes. Bitmap len=%d, diffs_hit=%d\n",
+		      enc_len,k+1,token_lens[i],bitmap_len,diffs_hit);
+	      exit(-1);
 	    }
 	  }
 	}
@@ -267,7 +290,17 @@ int main(int argc,char **argv)
   
   decode_diff(ref,diff,diff_len,out);
 
-
+  if (bcmp(out,new,FILE_SIZE)) {
+    fprintf(stderr,"ERROR: Verify error while testing encoded data stream.\n");
+  }
+  
+  f=fopen("decoded.bin","wb");
+  if (!f) {
+    fprintf(stderr,"ERROR: Could not write to decode test file 'decoded.bin'\n");
+    exit(-3);
+  }
+  fwrite(out,FILE_SIZE,1,f);
+  fclose(f); 
   
   return 0;
   
