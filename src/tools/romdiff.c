@@ -24,7 +24,8 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
   for(int ofs=0;ofs<diff_len;ofs++)
     {
       if (out_ofs>=FILE_SIZE) {
-	fprintf(stderr,"End of output produced.\n");
+	fprintf(stderr,"End of output produced early after ingesting %d bytes of the %d byte stream.\n",
+		ofs,diff_len);
 	return 0;
       }
       if (diff[ofs]==0x00) {
@@ -47,7 +48,7 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
 	out_ofs+=count;
       } else {
 	// Approximate match of 1 -- 64 bytes
-	int count=(diff[ofs]-2)>>1;
+	int count=((diff[ofs]&0x7f)-2)>>1;
 	int addr=diff[ofs]&1;
 	int bitmap_len=count>>3;
 	if (count&0x7) bitmap_len++;
@@ -69,7 +70,13 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
 	out_ofs+=count;
       }
     }
-  return 0;
+
+  if (out_ofs!=FILE_SIZE) {
+    fprintf(stderr,"Ran out of input stream after writing %d bytes\n",
+	    out_ofs);
+    return -1;
+  } else 
+    return 0;
 }
 
 
@@ -174,8 +181,8 @@ int main(int argc,char **argv)
 	    costs[i]=costs[i+k]+enc_len;
 	    next_pos[i]=i+k;
 	    tokens[i][0]=0x80+ ((mlen - 1)<<1) + (best_addr>>16);
-	    tokens[i][1]=best_addr>>8;
-	    tokens[i][2]=best_addr>>0;
+	    tokens[i][1]=best_addr>>0;
+	    tokens[i][2]=best_addr>>8;
 	    token_lens[i]=3;
 
 	    // Setup bitmap for diffs
@@ -207,8 +214,8 @@ int main(int argc,char **argv)
 	else costs[i]=costs[i+len]+3;
 	next_pos[i]=i+len;
 	tokens[i][0]=0x02 + ((len - 1)<<1) + (best_addr>>16);
-	tokens[i][1]=best_addr>>8;
-	tokens[i][2]=best_addr>>0;
+	tokens[i][1]=best_addr>>0;
+	tokens[i][2]=best_addr>>8;
 	token_lens[i]=3;      
       }
     }
@@ -236,6 +243,14 @@ int main(int argc,char **argv)
   }
   fprintf(stderr,"ROM encoded using %d steps. Output stream = %d bytes.\n",steps,diff_len);
 
+  f=fopen(argv[3],"wb");
+  if (!f) {
+    fprintf(stderr,"ERROR: Could not write to output file '%s'\n",argv[3]);
+    exit(-3);
+  }
+  fwrite(diff,diff_len,1,f);
+  fclose(f);
+  
   decode_diff(ref,diff,diff_len,out);
   
   return 0;
