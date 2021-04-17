@@ -368,15 +368,6 @@ int main(int argc,char **argv)
     }
   }
   
-  f=fopen("decoded.bin","wb");
-  if (!f) {
-    fprintf(stderr,"ERROR: Could not write to decode test file 'decoded.bin'\n");
-    exit(-3);
-  }
-  // Write byte stream for diff
-  fwrite(out,FILE_SIZE,1,f);
-  fclose(f); 
-  
   return 0;
   
 }
