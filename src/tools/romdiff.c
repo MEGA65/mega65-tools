@@ -21,8 +21,17 @@ int token_lens[FILE_SIZE];
 int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned char *out)  
 {
   int out_ofs=0;
-  for(int ofs=0;ofs<diff_len;ofs++)
+  for(int ofs=0;ofs<diff_len;)
     {
+
+      fprintf(stderr,"ofs=%d : %02x %02x %02x %02x %02x ... vs out_ofs=%d : %02x %02x %02x %02x %02x (n=%d)\n",
+	      ofs,diff[ofs+0],diff[ofs+1],diff[ofs+2],diff[ofs+3],diff[ofs+4],
+	      out_ofs,tokens[out_ofs][0],tokens[out_ofs][1],tokens[out_ofs][2],tokens[out_ofs][3],tokens[out_ofs][4],
+	      token_lens[out_ofs]
+	      )
+	;
+
+      
       if (out_ofs>=FILE_SIZE) {
 	fprintf(stderr,"End of output produced early after ingesting %d bytes of the %d byte stream.\n",
 		ofs,diff_len);
@@ -31,12 +40,16 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
       if (diff[ofs]==0x00) {
 	// Single byte literal
 	// XXX Not yet used
+	fprintf(stderr,"ERROR: Unsupported token $00 encountered\n");
+	exit(-3);
       } else if (diff[ofs]==0x01) {
 	// Double byte literal
 	// XXX Not yet used
+	fprintf(stderr,"ERROR: Unsupported token $01 encountered\n");
+	exit(-3);
       } else if (diff[ofs]<0x80) {
 	// Exact match of 1 -- 63 bytes
-	int count=(diff[ofs]-2)>>1;
+	int count=(diff[ofs]-2)>>1; count++;
 	int addr=diff[ofs]&1;
 	addr<<=16;
 	addr|=(diff[ofs+1]);
@@ -48,7 +61,7 @@ int decode_diff(unsigned char *ref,unsigned char *diff,int diff_len,unsigned cha
 	out_ofs+=count;
       } else {
 	// Approximate match of 1 -- 64 bytes
-	int count=((diff[ofs]&0x7f)-2)>>1;
+	int count=((diff[ofs]&0x7f))>>1; count++;
 	int addr=diff[ofs]&1;
 	int bitmap_len=count>>3;
 	if (count&0x7) bitmap_len++;
@@ -132,12 +145,13 @@ int main(int argc,char **argv)
     $80-$FF $xx $xx <bitmap> <replacement bytes> = Approximate match 1 to 64 bytes.  Followed by bitmap of which bytes
               need to be replaced, followed by the byte values to replace
   */    
-
+  
   for(int i=(FILE_SIZE-1);i>=0;i--) {
     // Calculate cost of single byte
     //    fprintf(stderr,"\r$%05x",i);
     //    fflush(stderr);
 
+    
     // Try encoding the byte as an XOR literal
     if (i==(FILE_SIZE-1)) costs[i]=2;
     else costs[i]=costs[i+1]+2;
@@ -150,7 +164,7 @@ int main(int argc,char **argv)
     int best_addr=0;
     for(int j=0;j<FILE_SIZE;j++) {
       int mlen=0;
-      while(mlen<64) {
+      while(mlen<62) {
 	if (i+mlen>=FILE_SIZE) break;
 	if (j+mlen>=FILE_SIZE) break;
 	if (new[i+mlen]!=ref[j+mlen]) break;
@@ -159,8 +173,7 @@ int main(int argc,char **argv)
       if (mlen>best_len) {
 	best_len=mlen;
 	best_addr=j;
-	// Can't get better
-	if (best_len==64) break;
+	//	if (best_len==64) break;
       }
 
       // Also model approximate matches
@@ -175,14 +188,14 @@ int main(int argc,char **argv)
 	  if ((k&7)==1) enc_len++;
 	  
 	  if ((enc_len+costs[i+k])<costs[i]) {
-	    fprintf(stderr,"$%05x -> $%05x : mlen=%d, approx_len=%d, diffs=%d, cost=%d, old cost=%d\n",
-		    i,i+k,mlen,k,diffs,enc_len+costs[i+k],costs[i]);
+	    fprintf(stderr,"$%05x -> $%05x : mlen=%d, approx_len=%d, src_addr=$%05x, diffs=%d, cost=%d, old cost=%d\n",
+		    i,i+k,mlen,k,j,diffs,enc_len+costs[i+k],costs[i]);
 	    // Approximate match helps here
 	    costs[i]=costs[i+k]+enc_len;
 	    next_pos[i]=i+k;
-	    tokens[i][0]=0x80+ ((mlen - 1)<<1) + (best_addr>>16);
-	    tokens[i][1]=best_addr>>0;
-	    tokens[i][2]=best_addr>>8;
+	    tokens[i][0]=0x80+ ((k - 1)<<1) + (j>>16);
+	    tokens[i][1]=j>>0;
+	    tokens[i][2]=j>>8;
 	    token_lens[i]=3;
 
 	    // Setup bitmap for diffs
@@ -194,7 +207,7 @@ int main(int argc,char **argv)
 	    for(int l=0;l<k;l++) {
 	      if (ref[i+l]!=new[j+l]) {
 		// Set bitmap bit
-		tokens[i][2+(l>>3)]|=(1<<(l&7));
+		tokens[i][3+(l>>3)]|=(1<<(l&7));
 		// Copy literals from reference
 		// We XOR so that there is no copyright material leaked
 		tokens[i][token_lens[i]++]=ref[i+l]^new[i+l];
