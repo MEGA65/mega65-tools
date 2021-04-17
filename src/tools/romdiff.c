@@ -3,9 +3,9 @@
 #include <unistd.h>
 #include <strings.h>
 
-// #define FILE_SIZE 128*1024
+#define FILE_SIZE 128*1024
 // Use just a little part for testing
-#define FILE_SIZE 4*1024
+//#define FILE_SIZE 4*1024
 
 unsigned char ref[FILE_SIZE];
 unsigned char new[FILE_SIZE];
@@ -146,11 +146,14 @@ int main(int argc,char **argv)
     $80-$FF $xx $xx <bitmap> <replacement bytes> = Approximate match 1 to 64 bytes.  Followed by bitmap of which bytes
               need to be replaced, followed by the byte values to replace
   */    
+
+  int output_size_so_far=0;
   
   for(int i=(FILE_SIZE-1);i>=0;i--) {
     // Calculate cost of single byte
-    //    fprintf(stderr,"\r$%05x",i);
-    //    fflush(stderr);
+    fprintf(stderr,"\r$%05x : %d bytes (%.1f%%)       ",
+	    FILE_SIZE-i,output_size_so_far,output_size_so_far*100.0/(FILE_SIZE-i));
+    fflush(stderr);
 
     
     // Try encoding the byte as an XOR literal
@@ -204,8 +207,8 @@ int main(int argc,char **argv)
 	  }
 	  
 	  if ((enc_len+costs[i+k])<costs[i]) {
-	    fprintf(stderr,"$%05x -> $%05x : mlen=%d, approx_len=%d, src_addr=$%05x, diffs=%d, cost=%d, old cost=%d\n",
-		    i,i+k,mlen,k,j,diffs,enc_len+costs[i+k],costs[i]);
+	    if (0) fprintf(stderr,"$%05x -> $%05x : mlen=%d, approx_len=%d, src_addr=$%05x, diffs=%d, cost=%d, old cost=%d\n",
+			   i,i+k,mlen,k,j,diffs,enc_len+costs[i+k],costs[i]);
 	    // Approximate match helps here
 	    costs[i]=costs[i+k]+enc_len;
 	    next_pos[i]=i+k+1;
@@ -214,6 +217,8 @@ int main(int argc,char **argv)
 	    tokens[i][2]=j>>8;
 	    token_lens[i]=3;
 
+	    output_size_so_far=costs[i];
+	    
 	    // Setup bitmap for diffs
 	    int bitmap_len=(k+1)/8;	    
 	    if ((k+1)&7) bitmap_len++;
@@ -245,17 +250,18 @@ int main(int argc,char **argv)
     
     for(int len=1;len<=best_len;len++) {
       if (costs[i]>(costs[i+len]+3)) {
-	fprintf(stderr,"$%05x -> $%05x : mlen=%d, exact, cost=%d, old cost=%d\n",
-		i,i+len,len,(i+len<FILE_SIZE)?costs[i+len]+3:3,costs[i]);
+	if (0) fprintf(stderr,"$%05x -> $%05x : mlen=%d, exact, cost=%d, old cost=%d\n",
+		       i,i+len,len,(i+len<FILE_SIZE)?costs[i+len]+3:3,costs[i]);
 	if (i+len==FILE_SIZE) costs[i]=3;
 	else costs[i]=costs[i+len]+3;
 	next_pos[i]=i+len;
 	tokens[i][0]=0x02 + ((len - 1)<<1) + (best_addr>>16);
 	tokens[i][1]=best_addr>>0;
 	tokens[i][2]=best_addr>>8;
-	token_lens[i]=3;      
+	token_lens[i]=3;
       }
     }
+    output_size_so_far=costs[i];	    
   }
 
   
