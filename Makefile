@@ -62,6 +62,7 @@ SDCARD_DIR=	sdcard-files
 #
 UTILITIES=	$(B65DIR)/ethertest.prg \
 		$(B65DIR)/etherload.prg \
+		$(B65DIR)/rompatch.prg \
 		$(B65DIR)/cartload.prg
 
 TESTS=		$(TESTDIR)/ascii.prg \
@@ -270,6 +271,11 @@ $(B65DIR)/cartload.prg:       $(UTILDIR)/cartload.c $(CC65)
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
+$(B65DIR)/rompatch.prg:       $(UTILDIR)/rompatch.c $(CC65)
+	git submodule init
+	git submodule update
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
 $(EXAMPLEDIR)/raycaster.prg:       $(EXAMPLEDIR)/raycaster.c $(CC65)
 	git submodule init
 	git submodule update
@@ -363,7 +369,7 @@ $(BINDIR)/pngprepare:	$(TOOLDIR)/pngprepare/pngprepare.c Makefile
 	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/pngprepare $(TOOLDIR)/pngprepare/pngprepare.c -lpng
 
 $(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
-	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
+	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
 
 
 $(BINDIR)/giftotiles:	$(TOOLDIR)/pngprepare/giftotiles.c Makefile
