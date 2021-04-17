@@ -77,6 +77,7 @@ TOOLS=	$(BINDIR)/etherload \
 	$(BINDIR)/m65 \
 	$(BINDIR)/mega65_ftp \
 	$(BINDIR)/monitor_save \
+	$(BINDIR)/romdiff \
 	$(BINDIR)/pngprepare \
 	$(BINDIR)/giftotiles \
 	$(BINDIR)/m65ftp_test \
@@ -360,6 +361,10 @@ $(BINDIR)/charrom.bin:	$(BINDIR)/pngprepare $(ASSETS)/8x8font.png
 # c-code that makes an executable that processes images, and can make a vhdl file
 $(BINDIR)/pngprepare:	$(TOOLDIR)/pngprepare/pngprepare.c Makefile
 	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/pngprepare $(TOOLDIR)/pngprepare/pngprepare.c -lpng
+
+$(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
+	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
+
 
 $(BINDIR)/giftotiles:	$(TOOLDIR)/pngprepare/giftotiles.c Makefile
 	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/giftotiles $(TOOLDIR)/pngprepare/giftotiles.c -lgif
