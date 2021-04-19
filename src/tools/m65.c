@@ -1413,11 +1413,10 @@ int main(int argc, char** argv)
     usage();
 
   // -b Load bitstream if file provided
-  if (bitstream)
-  {
+  if (bitstream) {
     load_bitstream(bitstream);
     if (bitstream_only)
-        do_exit(0);
+      do_exit(0);
   }
 
   if (virtual_f011) {
@@ -2219,10 +2218,9 @@ int main(int argc, char** argv)
 
 void do_exit(int retval)
 {
-#ifndef WINDOWS  
-  if (thread_count)
-  {
-    timestamp_msg("");    
+#ifndef WINDOWS
+  if (thread_count) {
+    timestamp_msg("");
     fprintf(stderr, "Background tasks may be running running. CONTROL+C to stop...\n");
     for (int i = 0; i < thread_count; i++)
       pthread_join(threads[i], NULL);
