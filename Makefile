@@ -409,17 +409,31 @@ $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
 $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
-$(GTESTBINDIR)/mega65_ftp.test: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
-	$(CXX) $(COPT) $(GTESTOPTS) -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
+define LINUX_AND_MINGW_GTEST_TARGETS
+$(1): $(2)
+	$$(CXX) $$(COPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) -lreadline -lncurses -lgtest_main -lgtest -lpthread
 
-$(GTESTBINDIR)/mega65_ftp.test.exe: $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
-	$(CXX) $(WINCOPT) $(GTESTOPTS) -Iinclude -o $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
+$(1).exe: $(2)
+	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) -lreadline -lncurses -lgtest_main -lgtest -lpthread
+endef
 
-test: $(GTESTBINDIR)/mega65_ftp.test
+# Gives two targets of:
+# - gtest/bin/mega65_ftp.test
+# - gtest/bin/mega65_ftp.test.exe
+$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c Makefile))
+
+# Gives two targets of:
+# - gtest/bin/bit2core.test
+# - gtest/bin/bit2core.test.exe
+$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/bit2core.test, $(GTESTDIR)/bit2core_test.cpp $(TOOLDIR)/bit2core.c $(TOOLDIR)/version.c))
+
+test: $(GTESTBINDIR)/mega65_ftp.test $(GTESTBINDIR)/bit2core.test
 	$(GTESTBINDIR)/mega65_ftp.test
+	$(GTESTBINDIR)/bit2core.test
 
-test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe
+test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTBINDIR)/bit2core.test.exe
 	$(GTESTBINDIR)/mega65_ftp.test.exe
+	$(GTESTBINDIR)/bit2core.test.exe
 
 $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c
 	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c -lreadline -lncurses
@@ -442,10 +456,10 @@ $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 # arg2 = pre-requisites
 define LINUX_AND_MINGW_TARGETS
 $(1): $(2)
-	$$(CC) -g -Wall -o $$@ $$(filter %.c,$$^)
+	$$(CC) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
 $(1).exe: $(2)
-	$$(WINCC) $$(WINCOPT) -g -Wall -o $$@ $$(filter %.c,$$^)
+	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 endef
 
 # Creates 2 targets:
