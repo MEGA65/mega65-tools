@@ -3,6 +3,8 @@
 #include <string.h>
 #include <strings.h>
 
+extern const char *version_string;
+
 #define MAX_MB 8
 #define BYTES_IN_MEGABYTE (1024 * 1024)
 #define MAGIC_STR "MEGA65BITSTREAM0"
@@ -77,11 +79,13 @@ void show_mega65_target_name_list(void)
 
 void show_help(void)
 {
-  fprintf(stderr, "MEGA65 bitstream to core file converter v0.0.5.\n"
+  fprintf(stderr, "MEGA65 bitstream to core file converter\n"
                   "---------------------------------------\n"
+                  "Version: %s\n\n" 
                   "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor>\n"
                   "\n"
-                  "Note: 1st argument specifies your Mega65 target name, which can be either:\n\n");
+                  "Note: 1st argument specifies your Mega65 target name, which can be either:\n\n",
+                  version_string);
 
   show_mega65_target_name_list();
 }

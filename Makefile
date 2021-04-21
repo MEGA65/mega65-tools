@@ -436,11 +436,22 @@ $(BINDIR)/mega65_ftp.osx:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c Makefil
 $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile 
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
 
-$(BINDIR)/bit2core:	$(TOOLDIR)/bit2core.c Makefile 
-	$(CC) -g -Wall -o $(BINDIR)/bit2core $(TOOLDIR)/bit2core.c
 
-$(BINDIR)/bit2core.exe:	$(TOOLDIR)/bit2core.c Makefile 
-	$(WINCC) $(WINCOPT) -g -Wall -o $(BINDIR)/bit2core.exe $(TOOLDIR)/bit2core.c
+# Create targets for binary (linux) and binary.exe (mingw) easily, minimising repetition
+# arg1 = target name (without .exe)
+# arg2 = pre-requisites
+define LINUX_AND_MINGW_TARGETS
+$(1): $(2)
+	$$(CC) -g -Wall -o $$@ $$(filter %.c,$$^)
+
+$(1).exe: $(2)
+	$$(WINCC) $$(WINCOPT) -g -Wall -o $$@ $$(filter %.c,$$^)
+endef
+
+# Creates 2 targets:
+# - bin/bit2core (for linux)
+# - bin/bit2core.exe (for mingw)
+$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c $(TOOLDIR)/version.c Makefile))
 
 $(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile 
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
