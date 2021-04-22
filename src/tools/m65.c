@@ -351,6 +351,17 @@ int virtual_f011_write(int device, int track, int sector, int side)
   return 0;
 }
 
+uint32_t uint32_from_buf(unsigned char *b,int ofs)
+{
+  uint32_t v=0;
+  v=b[ofs+0];
+  v|=(b[ofs+1]<<8);
+  v|=(b[ofs+2]<<16);
+  v|=(b[ofs+3]<<24);
+  return v;
+}
+
+
 void show_hyppo_report(void)
 {
   // Buffer starats at $BC00 in HYPPO
@@ -360,7 +371,9 @@ void show_hyppo_report(void)
   // $BF00 - $BFFF = ZP
 
   unsigned char syspart_buffer[0x40];
+  unsigned char disktable_buffer[0x100];
 
+  fetch_ram(0xfffbb00, 0x100, disktable_buffer);
   fetch_ram(0xfffbbc0, 0x40, syspart_buffer);
   fetch_ram(0xfffbc00, 0x400, hyppo_buffer);
   printf("HYPPO status:\n");
@@ -413,6 +426,24 @@ void show_hyppo_report(void)
     //	   hyppo_buffer[fd_o+14],hyppo_buffer[fd_o+13]);
   }
 
+  printf("Disk Table:\n");
+  printf("  Disk# Start     Size       FS FAT_Len   SysLen Rsv RootDir Clusters  CSz #FATs Cluster0\n");
+  for(int disk=0;disk<6;disk++) {
+    printf("   #%d   $%08x $%08x  %02x $%08x $%04x  %02x  $%04x   $%08x %02x  %02x    $%08x\n",
+	   disk,
+	   uint32_from_buf(disktable_buffer,disk*32+0),
+	   uint32_from_buf(disktable_buffer,disk*32+4),
+	   (int)disktable_buffer[disk*32+8],
+	   uint32_from_buf(disktable_buffer,disk*32+9),
+	   uint32_from_buf(disktable_buffer,disk*32+0x0d)&0xffff,
+	   (int)disktable_buffer[disk*32+0x0f],
+	   uint32_from_buf(disktable_buffer,disk*32+0x10)&0xffff,
+	   uint32_from_buf(disktable_buffer,disk*32+0x12),
+	   (int)disktable_buffer[disk*32+0x16],
+	   (int)disktable_buffer[disk*32+0x17],
+	   uint32_from_buf(disktable_buffer,disk*32+0x18)
+	   );
+  }
   printf("Current file descriptor # = $%02x\n", hyppo_buffer[0xf4]);
   printf("Current file descriptor offset = $%02x\n", hyppo_buffer[0xf5]);
   printf("Dos error code = $%02x\n", hyppo_buffer[0xf6]);
