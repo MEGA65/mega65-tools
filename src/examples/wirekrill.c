@@ -240,15 +240,19 @@ void main(void)
 
   while (1) {
     // Check for new packets
-    while (PEEK(0xD6E1) & 0x20) // Packet received
+    if (PEEK(0xD6E1) & 0x20) // Packet received
     {
       // Pop a frame from the buffer list
       POKE(0xD6E1, 0x01);
       POKE(0xD6E1, 0x03);
+      POKE(0xD6E1, 0x01);
       lcopy(0xFFDE800L, (long)frame_buffer, 0x0800);
       lfill((long)msg,0,160);
       len=frame_buffer[0] + ((frame_buffer[1] & 0xf) << 8);
-      snprintf(msg, 160, "Ethernet Frame #%d",++frame_count);
+      snprintf(msg, 160, "Ethernet Frame #%d", // (CPU buffer=%d, ETH buffer=%d, rotates=%d)",
+	       ++frame_count // ,(PEEK(0xD6EF)>>0)&3,(PEEK(0xD6EF)>>2)&3,(PEEK(0xD6EF)>>4)&0xf
+	       
+	       );
       println_text80(1,msg);
       
       snprintf(msg, 160, "  %02x:%02x:%02x:%02x:%02x:%02x > %02x:%02x:%02x:%02x:%02x:%02x : len=%d($%x), rxerr=%c",
