@@ -63,6 +63,7 @@ SDCARD_DIR=	sdcard-files
 UTILITIES=	$(B65DIR)/ethertest.prg \
 		$(B65DIR)/etherload.prg \
 		$(B65DIR)/rompatch.prg \
+		$(B65DIR)/wirekrill.prg \
 		$(B65DIR)/cartload.prg
 
 TESTS=		$(TESTDIR)/ascii.prg \
@@ -261,7 +262,7 @@ $(TESTDIR)/r3_production_test.prg:       $(TESTDIR)/r3_production_test.c $(CC65)
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
-$(EXAMPLEDIR)/wirekrill.prg:       $(EXAMPLEDIR)/wirekrill.c $(CC65)
+$(B65DIR)/wirekrill.prg:       $(EXAMPLEDIR)/wirekrill.c $(CC65)
 	git submodule init
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
