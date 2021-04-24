@@ -190,8 +190,8 @@ unsigned char safe_char(unsigned char in)
   return in;
 }
 
-unsigned short mdio0=0, mdio1=0, last_mdio0=0, last_mdio1=0;
-unsigned char phy,last_frame_num=0;
+unsigned short mdio0=0, mdio1=0, last_mdio0=0, last_mdio1=0,frame_count=0;
+unsigned char phy,last_frame_num=0,show_hex=0;
 
 void main(void)
 {
@@ -248,37 +248,63 @@ void main(void)
       lcopy(0xFFDE800L, (long)frame_buffer, 0x0800);
       lfill((long)msg,0,160);
       len=frame_buffer[0] + ((frame_buffer[1] & 0xf) << 8);
-      snprintf(msg, 160, "%02x:%02x:%02x:%02x:%02x:%02x > %02x:%02x:%02x:%02x:%02x:%02x : len=%d($%x), rxerr=%c",
+      snprintf(msg, 160, "Ethernet Frame #%d",++frame_count);
+      println_text80(1,msg);
+      
+      snprintf(msg, 160, "  %02x:%02x:%02x:%02x:%02x:%02x > %02x:%02x:%02x:%02x:%02x:%02x : len=%d($%x), rxerr=%c",
 	       frame_buffer[8], frame_buffer[9], frame_buffer[10], frame_buffer[11], frame_buffer[12], frame_buffer[13],
 	       frame_buffer[2], frame_buffer[3], frame_buffer[4], frame_buffer[5], frame_buffer[6], frame_buffer[7],
 	       len,len, (frame_buffer[1] & 0x80) ? 'Y' : 'N');
       println_text80(13,msg);
-      for(i=0;i<256&&i<len;i+=16) {
-	lfill((long)msg,0,160);
-	snprintf(msg,160,"  %04x: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x  %c%c%c%c%c%c%c%c%c%c%c%c%c%c",
-		 i,
-		 frame_buffer[14+i],frame_buffer[15+i],frame_buffer[16+i],frame_buffer[17+i],
-		 frame_buffer[18+i],frame_buffer[19+i],frame_buffer[20+i],frame_buffer[21+i],
-		 frame_buffer[22+i],frame_buffer[23+i],frame_buffer[24+i],frame_buffer[25+i],
-		 frame_buffer[26+i],frame_buffer[27+i],frame_buffer[28+i],frame_buffer[29+i],
-		 
-		 safe_char(frame_buffer[14+i]),
-		 safe_char(frame_buffer[15+i]),
-		 safe_char(frame_buffer[16+i]),
-		 safe_char(frame_buffer[17+i]),
-		 safe_char(frame_buffer[18+i]),
-		 safe_char(frame_buffer[19+i]),
-		 safe_char(frame_buffer[20+i]),
-		 safe_char(frame_buffer[21+i]),
-		 safe_char(frame_buffer[22+i]),
-		 safe_char(frame_buffer[23+i]),
-		 safe_char(frame_buffer[24+i]),
-		 safe_char(frame_buffer[25+i]),
-		 safe_char(frame_buffer[26+i]),
-		 safe_char(frame_buffer[27+i]),
-		 safe_char(frame_buffer[28+i]),
-		 safe_char(frame_buffer[29+i]));
-	println_text80(14,msg);
+      show_hex=1;
+      if (frame_buffer[16]==0x45) {
+	// IPv4
+	snprintf(msg, 160, "  IPv4: %d.%d.%d.%d -> %d.%d.%d.%d",
+		 frame_buffer[28+0],frame_buffer[28+1],frame_buffer[28+2],frame_buffer[28+3],
+		 frame_buffer[32+0],frame_buffer[32+1],frame_buffer[32+2],frame_buffer[32+3]);
+	println_text80(13,msg);
+	if (frame_buffer[16+9]==0x01) {
+	  // ICMP
+	  if (frame_buffer[16+20]==0x08) {
+	    // PING
+	    snprintf(msg, 160,"  ICMP: Echo request, id=%d, seq=%d",
+		     frame_buffer[16+20+5]+(frame_buffer[16+20+4]<<8),
+		     frame_buffer[16+20+7]+(frame_buffer[16+20+6]<<8));
+	    println_text80(13,msg);
+	    show_hex=0;
+	  }
+	}
+      }
+
+      
+      if (show_hex) {
+	for(i=0;i<256&&i<len;i+=16) {
+	  lfill((long)msg,0,160);
+	  snprintf(msg,160,"       %04x: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x  %c%c%c%c%c%c%c%c%c%c%c%c%c%c",
+		   i,
+		   frame_buffer[14+i],frame_buffer[15+i],frame_buffer[16+i],frame_buffer[17+i],
+		   frame_buffer[18+i],frame_buffer[19+i],frame_buffer[20+i],frame_buffer[21+i],
+		   frame_buffer[22+i],frame_buffer[23+i],frame_buffer[24+i],frame_buffer[25+i],
+		   frame_buffer[26+i],frame_buffer[27+i],frame_buffer[28+i],frame_buffer[29+i],
+		   
+		   safe_char(frame_buffer[14+i]),
+		   safe_char(frame_buffer[15+i]),
+		   safe_char(frame_buffer[16+i]),
+		   safe_char(frame_buffer[17+i]),
+		   safe_char(frame_buffer[18+i]),
+		   safe_char(frame_buffer[19+i]),
+		   safe_char(frame_buffer[20+i]),
+		   safe_char(frame_buffer[21+i]),
+		   safe_char(frame_buffer[22+i]),
+		   safe_char(frame_buffer[23+i]),
+		   safe_char(frame_buffer[24+i]),
+		   safe_char(frame_buffer[25+i]),
+		   safe_char(frame_buffer[26+i]),
+		   safe_char(frame_buffer[27+i]),
+		   safe_char(frame_buffer[28+i]),
+		   safe_char(frame_buffer[29+i]));
+	  println_text80(14,msg);
+	}
       }
     }
 
