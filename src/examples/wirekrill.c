@@ -26,6 +26,38 @@ void wait_10ms(void)
   }
 }
 
+unsigned short mdio_read_register(unsigned char addr, unsigned char reg)
+{
+  unsigned short result = 0,r1=1,r2=2,r3=3;
+  unsigned char i;
+
+  // Require several consecutive identical reads to debounce
+  while(result!=r1||r1!=r2||r2!=r3) {
+    r3=r2;
+    r2=r1;
+    r1=result;
+    
+    // Use new MIIM interface
+    POKE(0xD6e6L, (reg & 0x1f) + ((addr & 7) << 5));
+    // Reading takes a little while...
+    for (result = 0; result < 32000; result++)
+      continue;
+    result = PEEK(0xD6E7L);
+    result |= PEEK(0xD6E8L) << 8;
+  }
+  
+  return result;
+}
+
+#define TEST(reg, v, bit, desc)                                                                                              \
+  {                                                                                                                         \
+    if (v & (1 << bit)) {						\
+      snprintf(msg,160,"   MDIO $%x.%x : %s", reg, bit, desc);			\
+      println_text80(8,msg); \
+    } \
+  }
+
+
 unsigned char free_buffers = 0;
 unsigned char last_free_buffers = 0;
 
@@ -158,6 +190,9 @@ unsigned char safe_char(unsigned char in)
   return in;
 }
 
+unsigned short mdio0=0, mdio1=0, last_mdio0=0, last_mdio1=0;
+unsigned char phy,last_frame_num=0;
+
 void main(void)
 {
   unsigned short len;
@@ -170,20 +205,42 @@ void main(void)
 
   clear_text80();
   
-  println_text80(1,"WireKrill 0.0 Network Analyser.");
+  println_text80(1,"WireKrill 0.0.1 Network Analyser.");
   println_text80(1,"(C) Paul Gardner-Stephen, 2020-2021.");
 
   // Clear reset on ethernet controller
-  POKE(0xD6E0, 0x01);
+  POKE(0xD6E0, 0x00);
   POKE(0xD6E0, 0x03);
 
   // No promiscuous mode, ignore corrupt packets, accept broadcast and multicast
   // default RX and TX phase adjust.
   POKE(0xD6E5, 0x30);
 
+
+  // Reset ethernet 
+  POKE(0xd6e0,0);
+  POKE(0xd6e0,3);
+  POKE(0xd6e1,3);
+  POKE(0xd6e1,0);
+
+  // Accept broadcast and multicast frames, and enable promiscuous mode
+  POKE(0xD6E5,0x30);
+
+  // Find PHY for MDIO access, and select register 1 that has the signals we really care about
+  for (phy = 0; phy != 0x20; phy++)
+    if (mdio_read_register(phy, 1) != 0xffff)
+      break;
+  if (phy == 0x20) {
+    println_text80(7,"WARNING: Could not find PHY address.");
+  }
+  snprintf(msg,160,"Network PHY is at MDIO address $%x", phy);
+  println_text80(1,msg);
+
+  
+
   while (1) {
     // Check for new packets
-    if (PEEK(0xD6E1) & 0x20) // Packet received
+    while (PEEK(0xD6E1) & 0x20) // Packet received
     {
       // Pop a frame from the buffer list
       POKE(0xD6E1, 0x01);
@@ -224,5 +281,50 @@ void main(void)
 	println_text80(14,msg);
       }
     }
+
+    // Periodically ask for update to MDIO register read
+    if (PEEK(0xD7FA)!=last_frame_num) {
+      last_frame_num=PEEK(0xD7FA);
+      POKE(0xD6E6L,1);
+    }
+    
+    // Report MDIO changes
+    mdio1 = PEEK(0xD6E7L);
+    mdio1 |= PEEK(0xD6E8L) << 8;
+    // Work around bug where MDIO register 1 some times reads shifted by one bit
+    if ((mdio1&0xf000)==0xf000) mdio1=last_mdio1;
+    if ((mdio1!=last_mdio1)) {
+      
+      //      TEST(1, mdio1, 15, "T4 capable");
+      //      TEST(1, mdio1, 14, "100TX FD capable");
+      //      TEST(1, mdio1, 13, "100TX HD capable");
+      //      TEST(1, mdio1, 12, "10T FD capable");
+      //      TEST(1, mdio1, 11, "10T HD capable");
+      //      TEST(1, mdio1, 6, "Preamble suppression");
+      if ((mdio1^last_mdio1)&(1<<5)) {
+	if (mdio1&(1<<5)) println_text80(5,"PHY: Auto-negotiation completee");
+	else println_text80(7,"PHY: Auto-negotiation in progress");	
+      }
+      if ((mdio1^last_mdio1)&(1<<2)) {
+	if (mdio1&(1<<2)) println_text80(5,"PHY: Link is up");
+	else println_text80(2,"PHY: Link DOWN");
+      }
+      
+      //      TEST(1, mdio1, 5, "Auto-neg complete");
+      //      TEST(1, mdio1, 4, "Remote fault");
+      //      TEST(1, mdio1, 3, "Can auto-neg");
+      
+      //      TEST(1, mdio1, 2, "Link is up");
+      //      TEST(1, mdio1, 1, "Jabber detected");
+      //      TEST(1, mdio1, 0, "Supports ex-cap regs");
+
+      last_mdio0=mdio0;
+      last_mdio1=mdio1;
+    }
+
+  
+
+  
+    
   }
 }
