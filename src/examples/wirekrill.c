@@ -191,7 +191,7 @@ unsigned char safe_char(unsigned char in)
 }
 
 unsigned short mdio0=0, mdio1=0, last_mdio0=0, last_mdio1=0,frame_count=0;
-unsigned char phy,last_frame_num=0,show_hex=0;
+unsigned char phy,last_frame_num=0,show_hex=0,last_d6ef=0;
 
 void main(void)
 {
@@ -239,6 +239,17 @@ void main(void)
   
 
   while (1) {
+
+    if (PEEK(0xD6EF)!=last_d6ef) {
+      last_d6ef=PEEK(0xD6EF);
+      snprintf(msg,160,"#$%02x : $D6EF change: CPU buffer=%d, ETH buffer=%d, toggles=%d, rotates=%d",
+	       PEEK(0xD7FA),
+	       (PEEK(0xD6EF)>>0)&3,(PEEK(0xD6EF)>>2)&3,
+	       (PEEK(0xD6EF)>>6)&3,
+	       (PEEK(0xD6EF)>>4)&0x3);
+      println_text80(1,msg);
+    }
+    
     // Check for new packets
     if (PEEK(0xD6E1) & 0x20) // Packet received
     {
@@ -249,10 +260,7 @@ void main(void)
       lcopy(0xFFDE800L, (long)frame_buffer, 0x0800);
       lfill((long)msg,0,160);
       len=frame_buffer[0] + ((frame_buffer[1] & 0xf) << 8);
-      snprintf(msg, 160, "Ethernet Frame #%d", // (CPU buffer=%d, ETH buffer=%d, rotates=%d)",
-	       ++frame_count // ,(PEEK(0xD6EF)>>0)&3,(PEEK(0xD6EF)>>2)&3,(PEEK(0xD6EF)>>4)&0xf
-	       
-	       );
+      snprintf(msg, 160, "#$%02x : Ethernet Frame #%d",PEEK(0xD7FA),++frame_count);
       println_text80(1,msg);
       
       snprintf(msg, 160, "  %02x:%02x:%02x:%02x:%02x:%02x > %02x:%02x:%02x:%02x:%02x:%02x : len=%d($%x), rxerr=%c",
@@ -275,7 +283,7 @@ void main(void)
 		     frame_buffer[16+20+5]+(frame_buffer[16+20+4]<<8),
 		     frame_buffer[16+20+7]+(frame_buffer[16+20+6]<<8));
 	    println_text80(13,msg);
-	    show_hex=0;
+	    //	    show_hex=0;
 	  }
 	}
       }
