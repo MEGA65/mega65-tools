@@ -98,7 +98,7 @@ TEST_F(Bit2coreTestFixture, ShouldAddModelIdIntoHeader)
 TEST_F(Bit2coreTestFixture, ShouldFailIfFpgaPartDoesNotSuitM65Target)
 {
   generate_dummy_bit_file("foo.bit", "nexys4");
-  int exitcode = call_bit2core_with_args("nexys4", "foo.bit", "foo.cor");
+  int exitcode = call_bit2core_with_args("wukonga100t", "foo.bit", "foo.cor");
   ASSERT_EQ(-4, exitcode);
 }
 
