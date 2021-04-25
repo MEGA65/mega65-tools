@@ -1845,12 +1845,14 @@ int main(int argc, char** argv)
 
     while (!filename_matches) {
 
-      if (saw_c64_mode)
+      if (saw_c64_mode) {
 	// Assume LOAD vector in C64 mode is fixed
         load_routine_addr = 0xf4a5;
+	fprintf(stderr,"NOTE: Assuming LOAD routine at $F4A5 for C64 mode\n");
+      }
       else {
 	unsigned char vectorbuff[2];
-	fetch_ram(0x777FFD6,2,vectorbuff);
+	fetch_ram(0x3FFD6,2,vectorbuff);
 	load_routine_addr = vectorbuff[0]+(vectorbuff[1]<<8);
 	fprintf(stderr,"NOTE: LOAD vector from ROM is $%04x\n",load_routine_addr);
       }
@@ -2171,6 +2173,17 @@ int main(int argc, char** argv)
       slow_write(fd, cmd, strlen(cmd));
       monitor_sync();
 
+      // Set end of memory pointer
+      {
+	int top_of_mem_ptr_addr=0x2d;
+	if (saw_c65_mode) top_of_mem_ptr_addr=0x82;
+	unsigned char load_addr_bytes[2];
+	load_addr_bytes[0]=load_addr;
+	load_addr_bytes[1]=load_addr>>8;
+	push_ram(top_of_mem_ptr_addr,2,load_addr_bytes);
+	fprintf(stderr,"NOTE: Storing end of program pointer at $%x\n",top_of_mem_ptr_addr);
+      }
+      
       // We need to set X and Y to load address before
       // returning: LDX #$ll / LDY #$yy / CLC / RTS
       sprintf(cmd, "s380 a2 %x a0 %x 18 60\r", load_addr & 0xff, (load_addr >> 8) & 0xff);
