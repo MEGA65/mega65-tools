@@ -1846,7 +1846,14 @@ int main(int argc, char** argv)
     while (!filename_matches) {
 
       if (saw_c64_mode)
+	// Assume LOAD vector in C64 mode is fixed
         load_routine_addr = 0xf4a5;
+      else {
+	unsigned char vectorbuff[2];
+	fetch_ram(0x777FFD6,2,vectorbuff);
+	load_routine_addr = vectorbuff[0]+(vectorbuff[1]<<8);
+	fprintf(stderr,"NOTE: LOAD vector from ROM is $%04x\n",load_routine_addr);
+      }
       // Type LOAD command and set breakpoint to catch the ROM routine
       // when it executes.
       breakpoint_set(load_routine_addr);
