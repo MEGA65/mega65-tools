@@ -70,11 +70,11 @@ extern int log_depth;
 #include "ftdi.h"
 #else
 #define MPSSE_WRITE_NEG 0x01 /* Write TDI/DO on negative TCK/SK edge*/
-#define MPSSE_BITMODE 0x02 /* Write bits, not bytes */
-#define MPSSE_READ_NEG 0x04 /* Sample TDO/DI on negative TCK/SK edge */
-#define MPSSE_LSB 0x08 /* LSB first */
-#define MPSSE_DO_WRITE 0x10 /* Write TDI/DO */
-#define MPSSE_DO_READ 0x20 /* Read TDO/DI */
+#define MPSSE_BITMODE 0x02   /* Write bits, not bytes */
+#define MPSSE_READ_NEG 0x04  /* Sample TDO/DI on negative TCK/SK edge */
+#define MPSSE_LSB 0x08       /* LSB first */
+#define MPSSE_DO_WRITE 0x10  /* Write TDI/DO */
+#define MPSSE_DO_READ 0x20   /* Read TDO/DI */
 #define MPSSE_WRITE_TMS 0x40 /* Write TMS/CS */
 #define SET_BITS_LOW 0x80
 #define SET_BITS_HIGH 0x82

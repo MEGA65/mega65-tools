@@ -40,13 +40,10 @@ short x, y, z;
 short a1, a2, a3;
 unsigned char n = 0;
 
-
 void main(void)
 {
 
   m65_io_enable();
 
-  printf("%c%cMEGA65 ROM Patch Loader v0.1\n",0x93,0x05);
-
-
+  printf("%c%cMEGA65 ROM Patch Loader v0.1\n", 0x93, 0x05);
 }

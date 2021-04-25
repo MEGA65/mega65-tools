@@ -708,11 +708,13 @@ void test_speed(void)
   printf("%c", 0x93);
   while (1) {
 
-    if (PEEK(0xD610)==0x38) {
-	    fast_flags^=0x01;
-	    slow_flags^=0x01;
-	    POKE(0xD610,0);
-    } else if (PEEK(0xD610)) break;
+    if (PEEK(0xD610) == 0x38) {
+      fast_flags ^= 0x01;
+      slow_flags ^= 0x01;
+      POKE(0xD610, 0);
+    }
+    else if (PEEK(0xD610))
+      break;
 
     printf("%c", 0x13);
     show_info();
@@ -744,7 +746,7 @@ void test_speed(void)
     // Hyperram fast transactions
     lpoke(0xbfffff2, fast_flags | cache_bit);
 
-    printf("%cInternal Slow RAM @%dMHz:%c\n", 0x12, fast_flags&1?80:40, 0x92);
+    printf("%cInternal Slow RAM @%dMHz:%c\n", 0x12, fast_flags & 1 ? 80 : 40, 0x92);
 
     while (PEEK(0xD012) != 0x20)
       while (PEEK(0xD011) & 0x80)
@@ -793,7 +795,7 @@ void test_speed(void)
     // Hyperram slow transactions
     lpoke(0xbfffff2, slow_flags | cache_bit);
 
-    printf("%cTrapdoor Slow RAM @%dMHz:%c\n", 0x12, fast_flags&1?80:40, 0x92);
+    printf("%cTrapdoor Slow RAM @%dMHz:%c\n", 0x12, fast_flags & 1 ? 80 : 40, 0x92);
 
     if (upper_addr <= 0x8800000)
       printf("  Not detected.\n");
@@ -855,7 +857,7 @@ void main(void)
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
 
-  POKE(0x286,0x0E);
+  POKE(0x286, 0x0E);
   printf("%c", 0x93);
 
   setup_hyperram();
@@ -886,10 +888,10 @@ void main(void)
            "5 - Test cache consistency cases\n"
            "6 - Probe RAM timings\n"
            "7 - Test chipset DMA\n"
-	   "8 - Select %d MHz command mode.\n"
+           "8 - Select %d MHz command mode.\n"
            "\n"
            "Press RUN/STOP to return to menu from\nany test.\n",
-	   fast_flags&0x01?40:80);
+        fast_flags & 0x01 ? 40 : 80);
 
     while (!PEEK(0xD610))
       continue;
@@ -925,9 +927,9 @@ void main(void)
     case '7':
       test_chipsetdma();
       break;
-    case '8': 
-      fast_flags^=0x01;
-      slow_flags^=0x01;
+    case '8':
+      fast_flags ^= 0x01;
+      slow_flags ^= 0x01;
       break;
     }
 
