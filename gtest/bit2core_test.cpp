@@ -10,7 +10,7 @@ extern int BITSTREAM_HEADER_FPGA_PART_LOC;
 // my tests
 namespace bit2core {
 
-void call_bit2core_with_args(char* m65targetname, char* bitfile, char* corfile)
+int call_bit2core_with_args(char* m65targetname, char* bitfile, char* corfile)
 {
   char *argv[] = {
     "bit2core",
@@ -21,7 +21,7 @@ void call_bit2core_with_args(char* m65targetname, char* bitfile, char* corfile)
     corfile,
     NULL
   };
-  real_main(6, argv);
+  return real_main(6, argv);
 }
 
 void generate_dummy_bit_file(const char* name, const char* m65targetname)
@@ -54,9 +54,29 @@ int extract_model_id_from_core_file(const char* name)
   return ret;
 }
 
+class Bit2coreTestFixture : public ::testing::Test {
+  protected:
+  void SetUp() override
+  {
+    // suppress the chatty output
+    ::testing::internal::CaptureStderr();
+    ::testing::internal::CaptureStdout();
+  }
 
-TEST(Bit2coreTest, ShouldAddModelIdIntoHeader)
+  void TearDown() override
+  {
+    testing::internal::GetCapturedStderr();
+    testing::internal::GetCapturedStdout();
+
+    // cleanup to remove the dummy .bit and .cor files
+    remove("foo.bit");
+    remove("foo.cor");
+  }
+};
+
+TEST_F(Bit2coreTestFixture, ShouldAddModelIdIntoHeader)
 {
+
   char m65targetnames[][80] = {
     "mega65r1", "mega65r2", "mega65r3", "megaphoner1", "nexys4", "nexys4ddr", "nexys4ddrwidget", "wukonga100t"
   };
@@ -73,10 +93,13 @@ TEST(Bit2coreTest, ShouldAddModelIdIntoHeader)
 
     ASSERT_EQ(expected_model_id, actual_model_id);
   }
+}
 
-  // cleanup to remove the dummy .bit and .cor files
-  remove("foo.bit");
-  remove("foo.cor");
+TEST_F(Bit2coreTestFixture, ShouldFailIfFpgaPartDoesNotSuitM65Target)
+{
+  generate_dummy_bit_file("foo.bit", "nexys4");
+  int exitcode = call_bit2core_with_args("nexys4", "foo.bit", "foo.cor");
+  ASSERT_EQ(-4, exitcode);
 }
 
 }

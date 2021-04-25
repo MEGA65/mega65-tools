@@ -193,6 +193,10 @@ void delete_local_file(const char* name)
 
 TEST(Mega65FtpTest, PutCommandWritesFileToContiguousClusters)
 {
+  // suppress the chatty output
+  ::testing::internal::CaptureStderr();
+  ::testing::internal::CaptureStdout();
+
   init_sdcard_data();
 
   // sector = 512 bytes
