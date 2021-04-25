@@ -165,18 +165,6 @@ TEST(Mega65FtpTest, GetCommandExpectTwoParamGivenOne)
   ASSERT_STREQ("TEST.D81", strSrc);
 }
 
-// TODO: Ponder making use of fixtures one day, if I see a common setup/teardown pattern in several tests
-class Mega65FtpTestFixture : public ::testing::Test {
-  protected:
-  void SetUp() override
-  {
-  }
-
-  void TearDown() override
-  {
-  }
-};
-
 void generate_dummy_file(const char* name, int size)
 {
   FILE* f = fopen(name, "wb");
@@ -191,16 +179,38 @@ void delete_local_file(const char* name)
   remove(name);
 }
 
-TEST(Mega65FtpTest, PutCommandWritesFileToContiguousClusters)
+class Mega65FtpTestFixture : public ::testing::Test {
+  protected:
+  char* file4kb = "4kbtest.tmp";
+  char* file8kb = "8kbtest.d81";
+
+  void SetUp() override
+  {
+    // suppress the chatty output
+    ::testing::internal::CaptureStderr();
+    ::testing::internal::CaptureStdout();
+
+    generate_dummy_file(file4kb, 4096);
+    generate_dummy_file(file8kb, 8192);
+  }
+
+  void TearDown() override
+  {
+    testing::internal::GetCapturedStderr();
+    testing::internal::GetCapturedStdout();
+
+    // cleanup
+    delete_local_file(file4kb);
+    delete_local_file(file8kb);
+  }
+};
+
+TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
 {
   init_sdcard_data();
 
   // sector = 512 bytes
   // cluster = 8 sectors = 8 x 512 = 4096 bytes (4kb)
-  char* file4kb = "4kbtest.tmp";
-  char* file8kb = "8kbtest.d81";
-  generate_dummy_file(file4kb, 4096);
-  generate_dummy_file(file8kb, 8192);
 
   // upload three 4kb files, consuming the clusters this way:
   //
@@ -229,10 +239,6 @@ TEST(Mega65FtpTest, PutCommandWritesFileToContiguousClusters)
   ASSERT_EQ(0, is_fragmented("4kb1.tmp"));
   ASSERT_EQ(0, is_fragmented("4kb3.tmp"));
   ASSERT_EQ(0, is_fragmented(file8kb));
-
-  // cleanup
-  delete_local_file(file4kb);
-  delete_local_file(file8kb);
 }
 
 } // namespace mega65_ftp

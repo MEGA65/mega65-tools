@@ -43,12 +43,7 @@
 #include <stdio.h>
 
 #include "m65common.h"
-
-#ifdef TESTING
-#define DIRTYMOCK(fn_name) real_##fn_name
-#else
-#define DIRTYMOCK(fn_name) fn_name
-#endif
+#include "dirtymock.h"
 
 #define BOOL int
 #define TRUE 1
