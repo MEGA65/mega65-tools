@@ -4,7 +4,7 @@
 #include <strings.h>
 #include "dirtymock.h"
 
-extern const char *version_string;
+extern const char* version_string;
 
 #define MAX_MB 8
 #define BYTES_IN_MEGABYTE (1024 * 1024)
@@ -44,7 +44,7 @@ static int m65targetgroup_count = sizeof(m65targetgroups) / sizeof(m65target_inf
 
 typedef struct {
   char name[MAX_M65_TARGET_NAME_LEN];
-  int  model_id;
+  int model_id;
 } m65target_to_model_id;
 
 // clang-format off
@@ -75,11 +75,9 @@ int get_model_id(const char* m65targetname)
 }
 
 #pragma pack(push, 1)
-typedef union
-{
+typedef union {
   char data[CORE_HEADER_SIZE];
-  struct
-  {
+  struct {
     char magic[16];
     char core_name[32];
     char core_version[32];
@@ -88,7 +86,6 @@ typedef union
   };
 } header_info;
 #pragma pack(pop)
-
 
 void split_out_and_print_m65target_names(m65target_info* m65target)
 {
@@ -114,13 +111,14 @@ void show_mega65_target_name_list(void)
 
 void show_help(void)
 {
-  fprintf(stderr, "MEGA65 bitstream to core file converter\n"
-                  "---------------------------------------\n"
-                  "Version: %s\n\n" 
-                  "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor>\n"
-                  "\n"
-                  "Note: 1st argument specifies your Mega65 target name, which can be either:\n\n",
-                  version_string);
+  fprintf(stderr,
+      "MEGA65 bitstream to core file converter\n"
+      "---------------------------------------\n"
+      "Version: %s\n\n"
+      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor>\n"
+      "\n"
+      "Note: 1st argument specifies your Mega65 target name, which can be either:\n\n",
+      version_string);
 
   show_mega65_target_name_list();
 }
@@ -234,7 +232,8 @@ int check_bitstream_file(m65target_info* m65target, int bit_size)
   return 0;
 }
 
-void write_core_file(const int bit_size, const char* core_name, const char* core_version, const char* m65target_name, const char* core_filename)
+void write_core_file(const int bit_size, const char* core_name, const char* core_version, const char* m65target_name,
+    const char* core_filename)
 {
   FILE* of = fopen(core_filename, "wb");
   if (!of) {
@@ -247,7 +246,7 @@ void write_core_file(const int bit_size, const char* core_name, const char* core
 
   memset(header_block.data, 0, CORE_HEADER_SIZE);
 
-  for(int i = 0; i<16; i++)
+  for (int i = 0; i < 16; i++)
     header_block.magic[i] = MAGIC_STR[i];
 
   strcpy(header_block.core_name, core_name);

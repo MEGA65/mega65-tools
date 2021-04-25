@@ -12,15 +12,7 @@ namespace bit2core {
 
 int call_bit2core_with_args(char* m65targetname, char* bitfile, char* corfile)
 {
-  char *argv[] = {
-    "bit2core",
-    m65targetname,
-    bitfile,
-    "core_name_field",
-    "core_version_field",
-    corfile,
-    NULL
-  };
+  char* argv[] = { "bit2core", m65targetname, bitfile, "core_name_field", "core_version_field", corfile, NULL };
   return real_main(6, argv);
 }
 
@@ -77,9 +69,8 @@ class Bit2coreTestFixture : public ::testing::Test {
 TEST_F(Bit2coreTestFixture, ShouldAddModelIdIntoHeader)
 {
 
-  char m65targetnames[][80] = {
-    "mega65r1", "mega65r2", "mega65r3", "megaphoner1", "nexys4", "nexys4ddr", "nexys4ddrwidget", "wukonga100t"
-  };
+  char m65targetnames[][80] = { "mega65r1", "mega65r2", "mega65r3", "megaphoner1", "nexys4", "nexys4ddr", "nexys4ddrwidget",
+    "wukonga100t" };
   int m65target_cnt = sizeof(m65targetnames) / sizeof(m65targetnames[0]);
 
   for (int k = 0; k < m65target_cnt; k++) {

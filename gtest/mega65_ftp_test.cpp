@@ -180,7 +180,7 @@ void delete_local_file(const char* name)
 }
 
 class Mega65FtpTestFixture : public ::testing::Test {
-protected:
+  protected:
   char* file4kb = "4kbtest.tmp";
   char* file8kb = "8kbtest.d81";
 
