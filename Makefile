@@ -376,6 +376,9 @@ $(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
 $(BINDIR)/romdiff.exe:	$(TOOLDIR)/romdiff.c Makefile
 	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/romdiff.exe $(TOOLDIR)/romdiff.c -Wl,-Bstatic -Wl,-Bdynamic
 
+$(BINDIR)/romdiff.osx:	$(TOOLDIR)/romdiff.c Makefile
+	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -o $(BINDIR)/romdiff.osx $(TOOLDIR)/romdiff.c
+
 $(BINDIR)/giftotiles:	$(TOOLDIR)/pngprepare/giftotiles.c Makefile
 	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/giftotiles $(TOOLDIR)/pngprepare/giftotiles.c -lgif
 
