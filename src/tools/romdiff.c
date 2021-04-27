@@ -5,6 +5,25 @@
 #include <strings.h>
 #include <ctype.h>
 
+#ifdef WINDOWS
+#define bzero(b, len) (memset((b), '\0', (len)), (void)0)
+#define bcopy(b1, b2, len) (memmove((b2), (b1), (len)), (void)0)
+void do_usleep(__int64 usec);
+#else
+#include <termios.h>
+void do_usleep(unsigned long usec);
+#endif
+
+#ifdef __APPLE__
+#include <sys/ioctl.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/serial/IOSerialKeys.h>
+#include <IOKit/serial/ioss.h>
+#include <IOKit/IOBSD.h>
+#endif
+
+
 #define FILE_SIZE 128 * 1024
 // Use just a little part for testing
 //#define FILE_SIZE 8*1024
@@ -423,7 +442,7 @@ int main(int argc, char** argv)
 
   decode_diff(ref, diff, diff_len, out);
 
-  if (bcmp(out, new, FILE_SIZE)) {
+  if (memcmp(out, new, FILE_SIZE)) {
     fprintf(stderr, "ERROR: Verify error while testing encoded data stream.\n");
     for (int i = 0; i < FILE_SIZE; i++) {
       if (out[i] != new[i]) {

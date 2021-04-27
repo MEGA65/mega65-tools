@@ -88,7 +88,8 @@ TOOLS=	$(BINDIR)/etherload \
 	$(BINDIR)/m65.exe \
 	$(BINDIR)/mega65_ftp.exe \
 	$(BINDIR)/bit2core.exe \
-	$(BINDIR)/bit2mcs.exe
+	$(BINDIR)/bit2mcs.exe \
+	$(BINDIR)/romdiff.exe
 
 SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
@@ -372,6 +373,8 @@ $(BINDIR)/pngprepare:	$(TOOLDIR)/pngprepare/pngprepare.c Makefile
 $(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
 	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
 
+$(BINDIR)/romdiff.exe:	$(TOOLDIR)/romdiff.c Makefile
+	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/romdiff.exe $(TOOLDIR)/romdiff.c -Wl,-Bstatic -Wl,-Bdynamic
 
 $(BINDIR)/giftotiles:	$(TOOLDIR)/pngprepare/giftotiles.c Makefile
 	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/giftotiles $(TOOLDIR)/pngprepare/giftotiles.c -lgif
