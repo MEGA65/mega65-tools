@@ -359,7 +359,7 @@ void main(void)
       print_text(0,line_num++,2,msg);
       errors++;
     if (line_num>=23) {
-	print_text(0,line_num,2,"TOO MANY ERRORS: Aborting");
+	print_text(0,line_num,8,"TOO MANY ERRORS: Aborting");
 	while(1) continue;
       }
     }
