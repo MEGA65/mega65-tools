@@ -21,6 +21,7 @@ unsigned short errors=0;
 unsigned char line_num=5;
 
 struct test {
+  unsigned char rmw;
   unsigned char opcode;
   unsigned char instruction[5];
   unsigned long val1;
@@ -30,12 +31,33 @@ struct test {
 
 struct test tests[]=
   {
-   {0x6d,"ADC",0x12345678,0x0000000,0x12345678},
-   {0x6d,"ADC",0x12345678,0x0000001,0x12345679},
-   {0x6d,"ADC",0x12345678,0x0000100,0x12345778},
-   {0x6d,"ADC",0x12345678,0x0000101,0x12345779},
-   {0x6d,"ADC",0x12345678,0x00000FF,0x12345777},
-   {0x00,"END",0,0,0}
+   // ADC - Check carry chain works properly
+   {0,0x6d,"ADC",0x12345678,0x00000000,0x12345678},
+   {0,0x6d,"ADC",0x12345678,0x00000001,0x12345679},
+   {0,0x6d,"ADC",0x12345678,0x00000100,0x12345778},
+   {0,0x6d,"ADC",0x12345678,0x00000101,0x12345779},
+   {0,0x6d,"ADC",0x12345678,0x000000FF,0x12345777},
+   {0,0x6d,"ADC",0x12345678,0x0000FF00,0x12355578},
+   {0,0x6d,"ADC",0x12345678,0x0DCBA989,0x20000001},
+   // EOR 
+   {0,0x4d,"EOR",0x12345678,0x12340000,0x00005678},
+   {0,0x4d,"EOR",0x12345678,0x00005678,0x12340000},
+   // AND 
+   {0,0x2d,"AND",0x12345678,0x0000FFFF,0x00005678},
+   {0,0x2d,"AND",0x12345678,0xFFFF0000,0x12340000},
+   // ORA 
+   {0,0x2d,"AND",0x12340000,0x00005678,0x00000000},
+   {0,0x2d,"AND",0x12345600,0x00005678,0x00005600},
+   // INC
+   {1,0xEE,"INC",0,0x12345678,0x12345679},
+   {1,0xEE,"INC",0,0x00000000,0x00000001},
+   {1,0xEE,"INC",0,0x00FFFFFF,0x01000000},
+   // DEC
+   {1,0xCE,"DEC",0,0x12345678,0x12345677},
+   {1,0xCE,"DEC",0,0x00000000,0xFFFFFFFF},
+   {1,0xCE,"DEC",0,0x00FFFFFF,0x00FFFFFE},
+   
+   {0,0x00,"END",0,0,0}
   };
 
 unsigned short abs2(signed short s)
@@ -190,7 +212,7 @@ int count;
 unsigned char buffer[512];
 
 // Use tape buffer for code snippets
-unsigned char *code_buf=0x340;
+unsigned char *code_buf=(unsigned char *)0x340;
 
   /* Setup our code snippet:
      SEI
@@ -321,17 +343,22 @@ void main(void)
   // Run each test
   for(i=0;tests[i].opcode;i++) {
     expected= tests[i].expected;
+    // Setup input values
     *(unsigned long*)0x380 = tests[i].val1;
     *(unsigned long*)0x384 = tests[i].val2;
+    
     code_buf[INSTRUCTION_OFFSET]=tests[i].opcode;
     __asm__ ( "jsr $0340");
-    result_q= *(unsigned long*)0x388;
+    if (tests[i].rmw) result_q= *(unsigned long*)0x384;
+    else result_q= *(unsigned long*)0x388;
     if (result_q!=expected) {
-      snprintf(msg,64,"Test #%d failed: $%02X:%s: Saw=$%08lx",
-	       i,0x6D,"ADC",expected,result_q);
+      snprintf(msg,64,"FAIL:#%d:$%02X:%s",
+	       (int)i,(int)tests[i].opcode,tests[i].instruction);
+      print_text(0,line_num++,2,msg);
+      snprintf(msg,64,"     Expect=$%08lx, Saw=$%08lx",expected,result_q);
+      print_text(0,line_num++,2,msg);
       errors++;
-      print_text(0,line_num++,14,msg);
-      if (line_num>=23) {
+    if (line_num>=23) {
 	print_text(0,line_num,2,"TOO MANY ERRORS: Aborting");
 	while(1) continue;
       }
