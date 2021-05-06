@@ -1,9 +1,38 @@
 #include <stdio.h>
+#ifndef NATIVE_TEST
 #include <memory.h>
 #include <targets.h>
 #include <time.h>
 
 struct m65_tm tm;
+#else
+#include <strings.h>
+#include <string.h>
+#define POKE(X,Y)
+// Make PEEK(0xD6E1) always indicate that a packet is always ready to be received
+#define PEEK(X) 0x20
+
+void lcopy(long src, long dst, int count)
+{
+  if (src==0xFFDE800L) {
+    // Read next packet from pcap file
+  } else
+    bcopy((void *)src,(void *)dst,count);
+}
+
+void lpoke(long addr,int val) {
+  // Ignore POKEs to upper memory
+}
+
+void lfill(long addr,int val,int count) {
+  // Ignore POKEs to upper memory
+}
+
+int lpeek(long addr) {
+  return 0;
+}
+#endif
+
 
 void m65_io_enable(void)
 {
@@ -29,7 +58,6 @@ void wait_10ms(void)
 unsigned short mdio_read_register(unsigned char addr, unsigned char reg)
 {
   unsigned short result = 0, r1 = 1, r2 = 2, r3 = 3;
-  unsigned char i;
 
   // Require several consecutive identical reads to debounce
   while (result != r1 || r1 != r2 || r2 != r3) {
@@ -194,7 +222,11 @@ unsigned char safe_char(unsigned char in)
 unsigned short mdio0 = 0, mdio1 = 0, last_mdio0 = 0, last_mdio1 = 0, frame_count = 0;
 unsigned char phy, last_frame_num = 0, show_hex = 0, last_d6ef = 0;
 
+#ifdef NATIVE_TEST
+int main(int argc, char **argv)
+#else
 void main(void)
+#endif
 {
   unsigned short len;
 
@@ -266,7 +298,7 @@ void main(void)
       show_hex = 1;
       if (frame_buffer[16] == 0x45) {
         // IPv4
-        snprintf(msg, 160, "  IPv4: %d.%d.%d.%d -> %d.%d.%d.%d", frame_buffer[28 + 0], frame_buffer[28 + 1],
+        snprintf(msg, 160, "  IPv4: %d.%d.%d.%d -> %d.%d.%d.%d", frame_buffer[2 + 14 + 12 + 0], frame_buffer[28 + 1],
             frame_buffer[28 + 2], frame_buffer[28 + 3], frame_buffer[32 + 0], frame_buffer[32 + 1], frame_buffer[32 + 2],
             frame_buffer[32 + 3]);
         println_text80(13, msg);
@@ -288,8 +320,9 @@ void main(void)
           lfill((long)msg, 0, 160);
           snprintf(msg, 160,
               "       %04x: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x  "
-              "%c%c%c%c%c%c%c%c%c%c%c%c%c%c",
-              i, frame_buffer[14 + i], frame_buffer[15 + i], frame_buffer[16 + i], frame_buffer[17 + i],
+              "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",
+              i,
+		   frame_buffer[14 + i], frame_buffer[15 + i], frame_buffer[16 + i], frame_buffer[17 + i],
               frame_buffer[18 + i], frame_buffer[19 + i], frame_buffer[20 + i], frame_buffer[21 + i], frame_buffer[22 + i],
               frame_buffer[23 + i], frame_buffer[24 + i], frame_buffer[25 + i], frame_buffer[26 + i], frame_buffer[27 + i],
               frame_buffer[28 + i], frame_buffer[29 + i],
@@ -350,4 +383,8 @@ void main(void)
       last_mdio1 = mdio1;
     }
   }
+
+#ifdef NATIVE_TEST
+  return 0;
+#endif
 }
