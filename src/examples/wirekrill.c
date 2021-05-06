@@ -8,6 +8,11 @@ struct m65_tm tm;
 #else
 #include <strings.h>
 #include <string.h>
+#include <pcap/pcap.h>
+#include <stdlib.h>
+
+pcap_t *p=NULL;
+
 #define POKE(X,Y)
 // Make PEEK(0xD6E1) always indicate that a packet is always ready to be received
 #define PEEK(X) 0x20
@@ -16,8 +21,16 @@ void lcopy(long src, long dst, int count)
 {
   if (src==0xFFDE800L) {
     // Read next packet from pcap file
-  } else
+    struct pcap_pkthdr h;    
+
+    char *packet=pcap_next(p,&h);
+    if (!packet) exit(0);
+    ((char *)dst)[0]=h.len;
+    ((char *)dst)[1]=h.len>>8;
+    bcopy(packet,(void *)dst + 2,count-1);
+  } else {
     bcopy((void *)src,(void *)dst,count);
+  }
 }
 
 void lpoke(long addr,int val) {
@@ -200,6 +213,15 @@ void println_text80(unsigned char colour,char *msg)
 {
   fprintf(stdout,"%s\n",msg);
 }
+
+
+unsigned char safe_char(unsigned char in)
+{
+  if (in>=' '&&in<0x7d) return in;
+  return 0x2e;
+
+}
+
 #else
 void clear_text80(void)
 {
@@ -220,7 +242,7 @@ void println_text80(unsigned char colour, char* msg)
   if (text_row < 49)
     text_row++;
 }
-#endif
+
 
 unsigned char safe_char(unsigned char in)
 {
@@ -230,15 +252,32 @@ unsigned char safe_char(unsigned char in)
   return in;
 }
 
+#endif
+
+
 unsigned short mdio0 = 0, mdio1 = 0, last_mdio0 = 0, last_mdio1 = 0, frame_count = 0;
 unsigned char phy, last_frame_num = 0, show_hex = 0, last_d6ef = 0;
 
 #ifdef NATIVE_TEST
 int main(int argc, char **argv)
+{
+  if (argc!=2) {
+    fprintf(stderr,"usage: wirekrill <file.pcap>\n");
+    exit(-1);
+  }
+  
+  char errbuf[8192];
+  p=pcap_open_offline(argv[1],errbuf);
+  if (!p) {
+    fprintf(stderr,"ERROR: Failed to open PCAP capture file '%s'\nPCAP said: %s\n",
+	    argv[1],errbuf);
+    exit(-1);
+  }
+
 #else
 void main(void)
-#endif
 {
+#endif
   unsigned short len;
 
   POKE(0x0286, 0x01);
