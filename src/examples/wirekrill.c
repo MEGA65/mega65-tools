@@ -191,6 +191,16 @@ void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* 
 
 unsigned char text_row = 0;
 
+#ifdef NATIVE_TEST
+void clear_text80(void)
+{
+}
+
+void println_text80(unsigned char colour,char *msg)
+{
+  fprintf(stdout,"%s\n",msg);
+}
+#else
 void clear_text80(void)
 {
   lfill(0xc000, 4000, 0x20);
@@ -210,6 +220,7 @@ void println_text80(unsigned char colour, char* msg)
   if (text_row < 49)
     text_row++;
 }
+#endif
 
 unsigned char safe_char(unsigned char in)
 {
