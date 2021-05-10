@@ -202,6 +202,21 @@ void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* 
   }
 }
 
+//this should print the decimal version of an arbitrary number of bytes
+//probably already something in c stdlib or this repo but i couldnt find anything
+int to_decimal(unsigned char* src, int bytes)
+{
+	int out = 0;
+	int i;
+	int x;
+	for(i = 0; i < bytes; i++)
+	{
+		x = src[bytes - i - 1];
+		out |= (x << (8 * i));
+	}
+	return out;
+}
+
 unsigned char text_row = 0;
 
 #ifdef NATIVE_TEST
@@ -363,6 +378,18 @@ void main(void)
             //	    show_hex=0;
           }
         }
+	else if(frame_buffer[16 + 9] == 0x11)//UDP
+	{
+		printf("\tUDP Protocol:\n");
+		//udp contains a source port
+		printf("\t\tsource port was byte pair %02x %02x which is %d\n", frame_buffer[36], frame_buffer[37], to_decimal(&frame_buffer[36], 2));
+		//a destination port
+		printf("\t\tdestination port was byte pair %02x %02x which is %d\n", frame_buffer[38], frame_buffer[39], to_decimal(&frame_buffer[38], 2));
+		//length
+		printf("\t\tlength of message was byte pair %02x %02x which is %d\n", frame_buffer[40], frame_buffer[41], to_decimal(&frame_buffer[40], 2));
+		//checksum
+		printf("\t\tchecksum was byte pair %02x %02x which is %d\n", frame_buffer[42], frame_buffer[43], to_decimal(&frame_buffer[42], 2));	
+	}
       }
 
       if (show_hex) {
