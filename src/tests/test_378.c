@@ -1,5 +1,5 @@
 /*
-  Issue #342: Fix use of alternate palette
+  Issue #378: Q virtual instruction problems
 */
 
 #include <stdio.h>
