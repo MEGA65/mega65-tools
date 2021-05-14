@@ -436,6 +436,11 @@ void format_track(unsigned char track_number)
 {
   // First seek to the correct track
 
+  // Connect to real floppy drive
+  while(!(lpeek(0xffd36a1L) & 1)) {
+    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+  }
+  
   // Floppy motor on
   POKE(0xD080, 0x68);
 
@@ -458,8 +463,178 @@ void format_track(unsigned char track_number)
     print_text(0, 24, 7, peak_msg);
     continue;
   }
+
   
   print_text(0, 0, 7, "Formatting track...");
+
+  // Don't proceed without user's concent to ruin the disk in the drive
+  print_text(0, 1, 2, "Insert sacraficial disk, then press *");
+  while(PEEK(0xD610)!='*') {
+    if (PEEK(0xD610)) {
+      POKE(0xD610,0);
+      return;
+    }
+  }
+
+  POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+  
+  // Seek to track 0
+  while(!(PEEK(0xD082)&0x01)) {
+    POKE(0xD081,0x10);
+    usleep(20000);
+
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+    
+  }
+
+  // Seek to the requested track
+
+  
+  
+  
+  /*
+    From the C65 Specifications Manual:
+
+    Write Track Unbuffered
+
+           write FF hex to clock register
+           issue "write track unbuffered" command
+           write FF hex to data register
+           wait for first DRQ flag
+           write A1 hex to data register
+           write FB hex to clock register
+           wait for next DRQ flag
+           write A1 hex to data register
+           wait for next DRQ flag
+           write A1 hex to data register
+           wait for next DRQ flag
+           write FF hex to clock register
+     loop: write data byte to the data register
+           check BUSY flag for completion
+           wait for next DRQ flag
+           go to loop
+
+Formatting a track
+
+     In order to be able to read or write sectored data on a diskette,
+the diskette MUST be properly formatted. If, for any reason, marks are
+missing  or  have  improper  clocks,  track,  sector,  side, or length
+information are incorrect,  or the CRC bytes are in error, any attempt
+to  perform  a  sectored read or write operation will terminate with a
+RNF error.
+
+     Formatting  a  track  is  simply  writing a track with a strictly
+specified  series  of  bytes.  A  given  track must be divided into an
+integer number of sectors,  which are 128,  256,  512,  or  1024 bytes
+long.  Each  sector  must  consist  of  the following information. All
+clocks, are FF hex, where not specified.  Data and clock values are in
+hexadecimal  notation.  Fill  any left-over bytes in the track with 4E
+data.
+
+  quan      data/clock      description
+  ----      ----------      -----------
+    12      00              gap 3*
+    3       A1/FB           Marks
+            FE              Header mark
+            (track)         Track number
+            (side)          Side number
+            (sector)        Sector number
+            (length)        Sector Length (0=128,1=256,2=512,3=1024)
+
+    2       (crc)           CRC bytes
+    23      4E              gap 2
+    12      00              gap 2
+    3       A1/FB           Marks
+            FB              Data mark
+ 128,
+    256,
+    512, or
+    1024    00              Data bytes (consistent with length)
+    2       (crc)           CRC bytes
+    24      4E              gap 3*
+
+    * you may reduce the size of gap 3 to increase diskette capacity,
+      however the sizes shown are suggested.
+
+
+Generating the CRC
+
+     The  CRC  is a sixteen bit value that must be generated serially,
+one  bit  at  a  time.  Think of it as a 16 bit shift register that is
+broken in two places. To CRC a byte of data, you must do the following
+eight  times,  (once  for each bit) beginning with the MSB or bit 7 of
+the input byte.
+
+     1. Take the exclusive OR of the MSB of the input byte and CRC
+        bit 15. Call this INBIT.
+     2. Shift the entire 16 bit CRC left (toward MSB) 1 bit position,
+        shifting a 0 into CRC bit 0.
+     3. If INBIT is a 1, toggle CRC bits 0, 5, and 12.
+
+     To  Generate a CRC value for a header,  or for a data field,  you
+must  first  initialize the CRC to all 1's (FFFF hex).  Be sure to CRC
+all bytes of the header or data field, beginning with the first of the
+three  A1  marks,  and ending with the before the two CRC bytes.  Then
+output  the  most  significant CRC byte (bits 8-15) and then the least
+significant CRC byte  (bits 7-0).  You may also CRC the two CRC bytes.
+If you do, the final CRC value should be 0.
+
+     Shown below is an example of code required to CRC bytes of data.
+;
+; CRC a byte. Assuming byte to CRC in accumulator and cumulative
+;             CRC value in CRC (lsb) and CRC+1 (msb).
+
+        CRCBYTE LDX  #8          ; CRC eight bits
+                STA  TEMP
+        CRCLOOP ASL  TEMP        ; shift bit into carry
+                JSR  CRCBIT      ; CRC it
+                DEX
+                BNE  CRCLOOP
+                RTS
+
+;
+; CRC a bit. Assuming bit to CRC in carry, and cumulative CRC
+;            value in CRC (lsb) and CRC+1 (msb).
+
+       CRCBIT   ROR
+                EOR CRC+1       ; MSB contains INBIT
+                PHP
+                ASL CRC
+                ROL CRC+1       ; shift CRC word
+                PLP
+                BPL RTS
+                LDA CRC         ; toggle bits 0, 5, and 12 if INBIT is 1.
+                EOR #$21
+                STA CRC
+                LDA CRC+1
+                EOR #$10
+                STA CRC+1
+       RTS      RTS
+
+       
+
+       From a practical perspective, we need to wait for the index pulse to
+       pass, as the write gate gets cleared by edges on it.
+
+       Then we can schedule an unbuffered format operation, and start feeding
+       the appropriate data to the clock and data byte registers, interlocked
+       by the DRQ signal.
+	   
+  */
+
+  // Wait for index sensor
+  //  while(1) POKE(0xD020,PEEK(0xD6A0)>>7);
+  
+  while(1) {
+    POKE(0xD020,PEEK(0xD083)&4);
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+  }
+  
+  while(PEEK(0xD083)&0x04) continue;
+  while(!(PEEK(0xD083)&0x04)) continue;
+  
   while(1) continue;
 }
 
@@ -483,6 +658,9 @@ void main(void)
     POKE(0xD062, 0);
     POKE(0xD011, 0x1b);
 
+    // XXX For development, always start this immediately
+    format_track(39);
+    
     printf("%cMEGA65 Floppy Test Utility.\n\n", 0x93);
 
     printf("1. MFM Histogram and seeking tests.\n");
