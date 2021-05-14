@@ -432,6 +432,37 @@ void read_all_sectors()
   }
 }
 
+void format_track(unsigned char track_number)
+{
+  // First seek to the correct track
+
+  // Floppy motor on
+  POKE(0xD080, 0x68);
+
+  // Enable auto-tracking
+  POKE(0xD689, PEEK(0xD689) & 0xEF);
+
+  // Map FDC sector buffer, not SD sector buffer
+  POKE(0xD689, PEEK(0xD689) & 0x7f);
+
+  // Disable matching on any sector, use real drive
+  POKE(0xD6A1, 0x01);
+
+  graphics_mode();
+  graphics_clear_double_buffer();
+  activate_double_buffer();
+
+  // Wait until busy flag clears
+  while (PEEK(0xD082) & 0x80) {
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+    continue;
+  }
+  
+  print_text(0, 0, 7, "Formatting track...");
+  while(1) continue;
+}
+
 void main(void)
 {
   // Fast CPU, M65 IO
@@ -439,6 +470,11 @@ void main(void)
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
 
+  // Black background, white text
+  POKE(0x286,1);
+  POKE(0xD020,0);
+  POKE(0xD021,0);
+  
   while (1) {
     POKE(0xD054, 0);
     POKE(0xD031, 0);
@@ -451,6 +487,7 @@ void main(void)
 
     printf("1. MFM Histogram and seeking tests.\n");
     printf("2. Test all sectors on disk.\n");
+    printf("3. Test formatting new directory track.\n");
 
     while (!PEEK(0xD610))
       continue;
@@ -462,6 +499,10 @@ void main(void)
     case '2':
       POKE(0xD610, 0);
       read_all_sectors();
+      break;
+    case '3':
+      POKE(0xD610,0);
+      format_track(39);
       break;
     }
   }
