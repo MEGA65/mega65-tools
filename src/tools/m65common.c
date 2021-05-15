@@ -1112,7 +1112,13 @@ void print_error(const char* context)
 // baud rate.  Returns a handle on success, or INVALID_HANDLE_VALUE on failure.
 HANDLE open_serial_port(const char* device, uint32_t baud_rate)
 {
-  HANDLE port = CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  // COM10+ need to have \\.\ added to the front
+  // (see https://support.microsoft.com/en-us/topic/howto-specify-serial-ports-larger-than-com9-db9078a5-b7b6-bf00-240f-f749ebfd913e
+  // and https://github.com/MEGA65/mega65-tools/issues/48)
+  char device_with_prefix[8192];
+  snprintf(device_with_prefix,8192,"\\\\.\\%s",device);
+  
+  HANDLE port = CreateFileA(device_with_prefix, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
   if (port == INVALID_HANDLE_VALUE) {
     print_error(device);
     return INVALID_HANDLE_VALUE;
