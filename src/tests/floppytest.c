@@ -479,6 +479,7 @@ void format_track(unsigned char track_number)
   POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
   
   // Seek to track 0
+  print_text(0, 2, 15, "Seeking to track 0");
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
     usleep(20000);
@@ -489,9 +490,19 @@ void format_track(unsigned char track_number)
   }
 
   // Seek to the requested track
+  print_text(0, 3, 15, "Seeking to target track");
+  for(i=0;i<track_number;i++) {
+    POKE(0xD081,0x18);
+    usleep(20000);
+    
+  }
+  
+  // Wait for index sensor
+  print_text(0, 4, 7, "Waiting for index sensor to pass by");
+  while(PEEK(0xD083)&0x04) continue;
+  while(!(PEEK(0xD083)&0x04)) continue;
 
-  
-  
+  // OK: Now we are ready to do things
   
   /*
     From the C65 Specifications Manual:
@@ -622,20 +633,8 @@ If you do, the final CRC value should be 0.
        by the DRQ signal.
 	   
   */
+   
 
-  // Wait for index sensor
-  //  while(1) POKE(0xD020,PEEK(0xD6A0)>>7);
-  
-  while(1) {
-    POKE(0xD020,PEEK(0xD083)&4);
-    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-    print_text(0, 24, 7, peak_msg);
-  }
-  
-  while(PEEK(0xD083)&0x04) continue;
-  while(!(PEEK(0xD083)&0x04)) continue;
-  
-  while(1) continue;
 }
 
 void main(void)
