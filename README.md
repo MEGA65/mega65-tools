@@ -11,7 +11,7 @@ Tools and Utilities for the MEGA65 Retro Computers, such as:
 To build on e.g. Debian Linux, install the following packages:
 
 ```
-sudo apt-get install git build-essential libusb-dev install libpng-dev libusb-1.0-0-dev libreadline-dev libgif-dev
+sudo apt-get install git build-essential libusb-dev libpng-dev libusb-1.0-0-dev libreadline-dev libgif-dev
 ```
 
 If you want to cross-build the tools for Windows, you'll also need:
