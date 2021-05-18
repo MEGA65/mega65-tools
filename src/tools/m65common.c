@@ -44,7 +44,7 @@
 #endif
 
 #ifdef WINDOWS
-#include <Winsock2.h>
+#include <winsock2.h>
 #include <ws2tcpip.h>
 #else
 #include <netdb.h>
