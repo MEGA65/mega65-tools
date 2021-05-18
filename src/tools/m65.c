@@ -1807,7 +1807,7 @@ int main(int argc, char** argv)
     stop_cpu();
     do_screen_shot();
     start_cpu();
-    exit(0);
+    do_exit(0);
   }
 
   if (filename) {
@@ -2256,7 +2256,6 @@ int main(int argc, char** argv)
       continue;
     }
   }
-
   do_exit(0);
 }
 
@@ -2270,5 +2269,7 @@ void do_exit(int retval)
       pthread_join(threads[i], NULL);
   }
 #endif
+  close_tcp_port();
+
   exit(retval);
 }

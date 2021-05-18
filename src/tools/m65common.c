@@ -45,6 +45,7 @@
 
 #ifdef WINDOWS
 #include <Winsock2.h>
+#include <ws2tcpip.h>
 #else
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -118,7 +119,7 @@ int cpu_stopped = 0;
 int new_monitor = 1;
 
 #ifdef WINDOWS
-PORT_TYPE fd = INVALID_HANDLE_VALUE;
+PORT_TYPE fd = { WINPORT_TYPE_INVALID, INVALID_HANDLE_VALUE, INVALID_SOCKET };
 #else
 PORT_TYPE fd = -1;
 #endif
@@ -1193,8 +1194,7 @@ HANDLE open_serial_port(const char* device, uint32_t baud_rate)
   return port;
 }
 
-// Writes bytes to the serial port, returning 0 on success and -1 on failure.
-int do_serial_port_write(HANDLE port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+int win_serial_port_write(HANDLE port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
 {
   DWORD offset = 0;
   DWORD written;
@@ -1226,12 +1226,40 @@ int do_serial_port_write(HANDLE port, uint8_t* buffer, size_t size, const char* 
   return size;
 }
 
+int win_tcp_write(SOCKET sock, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+{
+  if (debug_serial) {
+    fprintf(stderr, "%s:%d:%s(): ", file, line, func);
+    dump_bytes(0, "tcp write (windows)", buffer, size);
+  }
+
+  int iResult = send(sock, (char*)buffer, size, 0);
+  if (iResult == SOCKET_ERROR) {
+    printf("send failed with error: %d\n", WSAGetLastError());
+    closesocket(sock);
+    WSACleanup();
+    exit(1);
+  }
+  int count = iResult;
+  return count;
+}
+
+// Writes bytes to the serial port, returning 0 on success and -1 on failure.
+int do_serial_port_write(WINPORT port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+{
+  if (port.type == WINPORT_TYPE_FILE) 
+    return win_serial_port_write(port.fdfile, buffer, size, func, file, line);
+  else if (port.type == WINPORT_TYPE_SOCK)
+    return win_tcp_write(port.fdsock, buffer, size, func, file, line);
+  return 0;
+}
+
 // Reads bytes from the serial port.
 // Returns after all the desired bytes have been read, or if there is a
 // timeout or other error.
 // Returns the number of bytes successfully read into the buffer, or -1 if
 // there was an error reading.
-SSIZE_T do_serial_port_read(HANDLE port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+SSIZE_T win_serial_port_read(HANDLE port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
 {
   DWORD received = 0;
   //  printf("Calling ReadFile(%I64d)\n",size);
@@ -1249,6 +1277,45 @@ SSIZE_T do_serial_port_read(HANDLE port, uint8_t* buffer, size_t size, const cha
   }
   //  printf("  ReadFile() returned. Received %ld bytes\n",received);
   return received;
+}
+
+SSIZE_T win_tcp_read(SOCKET sock, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+{
+  // check if any bytes available yet, if not, exit early
+  unsigned long l;
+  ioctlsocket(sock, FIONREAD, &l);
+  if (l == 0)
+    return 0;
+
+  int iResult = recv(sock, (char*)buffer, size, 0);
+  if (iResult == 0) {
+    printf("recv: Connection closed.\n");
+    exit(1);
+  }
+  else if (iResult < 0) {
+    printf("recv failed with error: %d\n", WSAGetLastError());
+    exit(1);
+  }
+
+  int count = iResult;
+  if (last_read_count || count) {
+    if (debug_serial) {
+      fprintf(stderr, "%s:%d:%s():", file, line, func);
+      dump_bytes(0, "tcp read (windows)", buffer, count);
+    }
+  }
+  last_read_count = count;
+  return count;
+}
+
+
+SSIZE_T do_serial_port_read(WINPORT port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+{
+  if (port.type == WINPORT_TYPE_FILE) 
+    return win_serial_port_read(port.fdfile, buffer, size, func, file, line);
+  else if (port.type == WINPORT_TYPE_SOCK)
+    return win_tcp_read(port.fdsock, buffer, size, func, file, line);
+  return 0;
 }
 
 #else
@@ -1366,80 +1433,159 @@ void set_serial_speed(int fd, int serial_speed)
 #endif
 
 /*
-	borrowed from: https://www.binarytides.com/hostname-to-ip-address-c-sockets-linux/
-	Get ip from domain name
+        borrowed from: https://www.binarytides.com/hostname-to-ip-address-c-sockets-linux/
+        Get ip from domain name
  */
 
-int hostname_to_ip(char * hostname , char* ip)
+int hostname_to_ip(char* hostname, char* ip)
 {
-	struct hostent *he;
-	struct in_addr **addr_list;
-	int i;
-		
-	if ( (he = gethostbyname( hostname ) ) == NULL) 
-	{
-		// get the host info
-		herror("gethostbyname");
-		return 1;
-	}
+  struct hostent* he;
+  struct in_addr** addr_list;
+  int i;
 
-	addr_list = (struct in_addr **) he->h_addr_list;
-	
-	for(i = 0; addr_list[i] != NULL; i++) 
-	{
-		//Return the first one;
-		strcpy(ip , inet_ntoa(*addr_list[i]) );
-		return 0;
-	}
-	
-	return 1;
+  if ((he = gethostbyname(hostname)) == NULL) {
+    // get the host info
+#ifndef WINDOWS
+    herror("gethostbyname");
+#endif
+    return 1;
+  }
+
+  addr_list = (struct in_addr**)he->h_addr_list;
+
+  for (i = 0; addr_list[i] != NULL; i++) {
+    // Return the first one;
+    strcpy(ip, inet_ntoa(*addr_list[i]));
+    return 0;
+  }
+
+  return 1;
 }
 
+#ifdef WINDOWS
 int open_tcp_port(char* portname)
 {
-	char hostname[128] = "localhost";
-	int port = 4510;  // assume a default port of 4510
-	if (portname[3] == '#') // did user provide a hostname and port number?
-	{
-		sscanf(&portname[4], "%s:%d", hostname, &port);
-	}
+  char hostname[128] = "localhost";
+  char port[128] = "4510";        // assume a default port of 4510
+  if (portname[3] == '#') // did user provide a hostname and port number?
+  {
+    sscanf(&portname[4], "%s:%s", hostname, port);
+  }
 
-	struct sockaddr_in sock_st;
-	fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (fd < 0) {
-		error_message("error %d creating tcp/ip socket: %s\n", errno, strerror (errno));
-		return 0;
-	}
+  fd.type = WINPORT_TYPE_SOCK;
 
-	char ip[100];
-	
-	hostname_to_ip(hostname , ip);
-	printf("%s resolved to %s" , hostname , ip);
+  WSADATA wsaData;
+  struct addrinfo *result = NULL,
+                  *ptr = NULL,
+                  hints;
+  int iResult;
+  iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
+  if (iResult != 0) {
+    printf("WSAStartup failed with error: %d\n", iResult);
+    exit(1);
+  }
+    memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
 
-	sock_st.sin_addr.s_addr = inet_addr(ip);
-	sock_st.sin_family = AF_INET;
-	sock_st.sin_port = htons(port);
+  iResult = getaddrinfo(hostname, port, &hints, &result);
+  if (iResult != 0) {
+    printf("getaddrinfo failed with error %d\n", iResult);
+    WSACleanup();
+    exit(1);
+  }
 
-	if (connect(fd, (struct sockaddr*)&sock_st, sizeof(sock_st)) < 0)
-	{
-		error_message("error %d connecting to tcp/ip socket %s:%d: %s\n", errno, hostname, port, strerror (errno));
-		close(fd);
-		return 0;
-	}
+  // attempt to connect to an address until one succeeds
+  for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+    fd.fdsock = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+    if (fd.fdsock == INVALID_SOCKET) {
+			printf("socket failed with error: %d\n", WSAGetLastError());
+			WSACleanup();
+			return 1;
+    }
+    iResult = connect(fd.fdsock, ptr->ai_addr, (int)ptr->ai_addrlen);
+    if (iResult == SOCKET_ERROR) { 
+      closesocket(fd.fdsock);
+      fd.fdsock = INVALID_SOCKET;
+      continue;
+    }
+    break;
+  }
 
-	return 1;
+  freeaddrinfo(result);
+
+  if (fd.fdsock == INVALID_SOCKET) {
+    printf("Unable to connect to server!\n");
+    WSACleanup();
+    exit(1);
+  }
+
+  return 1;
 }
 
-void open_the_serial_port(char *serial_port)
+void close_tcp_port(void)
+{
+  if (fd.fdsock != INVALID_SOCKET) {
+    closesocket(fd.fdsock);
+    WSACleanup();
+  }
+}
+
+#else // linux/mac-osx
+int open_tcp_port(char* portname)
+{
+  char hostname[128] = "localhost";
+  int port = 4510;        // assume a default port of 4510
+  if (portname[3] == '#') // did user provide a hostname and port number?
+  {
+    sscanf(&portname[4], "%s:%d", hostname, &port);
+  }
+
+  struct sockaddr_in sock_st;
+
+  fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (fd < 0) {
+    printf("error %d creating tcp/ip socket: %s\n", errno, strerror(errno));
+    return 0;
+  }
+
+  char ip[100];
+
+  hostname_to_ip(hostname, ip);
+  printf("%s resolved to %s", hostname, ip);
+
+  sock_st.sin_addr.s_addr = inet_addr(ip);
+  sock_st.sin_family = AF_INET;
+  sock_st.sin_port = htons(port);
+
+  if (connect(fd, (struct sockaddr*)&sock_st, sizeof(sock_st)) < 0) {
+    printf("error %d connecting to tcp/ip socket %s:%d: %s\n", errno, hostname, port, strerror(errno));
+    close(fd);
+    return 0;
+  }
+
+  return 1;
+}
+
+void close_tcp_port(void)
+{
+  // TODO: do I need to do any nice closing of the socket in linux too?
+}
+
+#endif
+
+void open_the_serial_port(char* serial_port)
 {
   if (!strncasecmp(serial_port, "tcp", 3)) {
     open_tcp_port(serial_port);
     return;
   }
 #ifdef WINDOWS
-  fd=open_serial_port(serial_port,2000000);
-  if (fd==INVALID_HANDLE_VALUE) {
-    fprintf(stderr,"Could not open serial port '%s'\n",serial_port);
+  fd.type = WINPORT_TYPE_FILE;
+  fd.fdfile = open_serial_port(serial_port, 2000000);
+  if (fd.fdfile == INVALID_HANDLE_VALUE) {
+    fprintf(stderr, "Could not open serial port '%s'\n", serial_port);
     exit(-1);
   }
 
