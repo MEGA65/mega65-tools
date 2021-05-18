@@ -1247,7 +1247,7 @@ int win_tcp_write(SOCKET sock, uint8_t* buffer, size_t size, const char* func, c
 // Writes bytes to the serial port, returning 0 on success and -1 on failure.
 int do_serial_port_write(WINPORT port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
 {
-  if (port.type == WINPORT_TYPE_FILE) 
+  if (port.type == WINPORT_TYPE_FILE)
     return win_serial_port_write(port.fdfile, buffer, size, func, file, line);
   else if (port.type == WINPORT_TYPE_SOCK)
     return win_tcp_write(port.fdsock, buffer, size, func, file, line);
@@ -1308,10 +1308,9 @@ SSIZE_T win_tcp_read(SOCKET sock, uint8_t* buffer, size_t size, const char* func
   return count;
 }
 
-
 SSIZE_T do_serial_port_read(WINPORT port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
 {
-  if (port.type == WINPORT_TYPE_FILE) 
+  if (port.type == WINPORT_TYPE_FILE)
     return win_serial_port_read(port.fdfile, buffer, size, func, file, line);
   else if (port.type == WINPORT_TYPE_SOCK)
     return win_tcp_read(port.fdsock, buffer, size, func, file, line);
@@ -1466,8 +1465,8 @@ int hostname_to_ip(char* hostname, char* ip)
 int open_tcp_port(char* portname)
 {
   char hostname[128] = "localhost";
-  char port[128] = "4510";        // assume a default port of 4510
-  if (portname[3] == '#') // did user provide a hostname and port number?
+  char port[128] = "4510"; // assume a default port of 4510
+  if (portname[3] == '#')  // did user provide a hostname and port number?
   {
     sscanf(&portname[4], "%s:%s", hostname, port);
   }
@@ -1475,16 +1474,14 @@ int open_tcp_port(char* portname)
   fd.type = WINPORT_TYPE_SOCK;
 
   WSADATA wsaData;
-  struct addrinfo *result = NULL,
-                  *ptr = NULL,
-                  hints;
+  struct addrinfo *result = NULL, *ptr = NULL, hints;
   int iResult;
-  iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
+  iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
   if (iResult != 0) {
     printf("WSAStartup failed with error: %d\n", iResult);
     exit(1);
   }
-    memset(&hints, 0, sizeof(hints));
+  memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = IPPROTO_TCP;
@@ -1500,12 +1497,12 @@ int open_tcp_port(char* portname)
   for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
     fd.fdsock = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
     if (fd.fdsock == INVALID_SOCKET) {
-			printf("socket failed with error: %d\n", WSAGetLastError());
-			WSACleanup();
-			return 1;
+      printf("socket failed with error: %d\n", WSAGetLastError());
+      WSACleanup();
+      return 1;
     }
     iResult = connect(fd.fdsock, ptr->ai_addr, (int)ptr->ai_addrlen);
-    if (iResult == SOCKET_ERROR) { 
+    if (iResult == SOCKET_ERROR) {
       closesocket(fd.fdsock);
       fd.fdsock = INVALID_SOCKET;
       continue;
