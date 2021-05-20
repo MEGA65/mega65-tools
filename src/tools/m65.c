@@ -57,6 +57,8 @@ extern int pending_vf011_side;
 
 extern int debug_serial;
 
+extern unsigned char recent_bytes[4];
+
 int osk_enable = 0;
 
 int not_already_loaded = 1;
@@ -280,7 +282,9 @@ int virtual_f011_read(int device, int track, int sector, int side)
   }
 
   /* signal done/result */
+  stop_cpu();
   mega65_poke(0xffd3086, side & 0x7f);
+  start_cpu();
 
   timestamp_msg("");
   vf011_bytes_read += 256;
@@ -341,7 +345,9 @@ int virtual_f011_write(int device, int track, int sector, int side)
   }
 
   /* signal done/result */
+  stop_cpu();
   mega65_poke(0xffd3086, side & 0x0f);
+  start_cpu();
 
   timestamp_msg("");
   vf011_bytes_read += 256;
@@ -2213,12 +2219,12 @@ int main(int argc, char** argv)
 
   // XXX - loop for virtualisation, JTAG boundary scanning etc
 
-  unsigned char recent_bytes[4] = { 0, 0, 0, 0 };
 
   if (virtual_f011) {
     fprintf(stderr, "Entering virtualised F011 wait loop...\n");
     while (1) {
       unsigned char buff[8192];
+
       int b = serialport_read(fd, buff, 8192);
       if (b > 0)
         dump_bytes(2, "VF011 wait", buff, b);
