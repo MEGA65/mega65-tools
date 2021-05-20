@@ -1207,8 +1207,35 @@ int check_file_access(char* file, char* purpose)
 
 extern const char* version_string;
 
+char *test_states[16]={
+		       "START",
+		       " SKIP",
+		       " PASS",
+		       " FAIL",
+		       "ERROR",
+		       "C#$05",
+		       "C#$06",
+		       "C#$07",
+		       "C#$08",
+		       "C#$09",
+		       "C#$0A",
+		       "C#$0B",
+		       "C#$0C",
+		       "C#$0D",
+		       "C#$0E",
+		       " DONE"
+};
+
 void unit_test_log(unsigned char bytes[4],int argc,char **argv)
 {
+  int test_issue=bytes[0]+(bytes[1]<<8);
+  int test_sub=bytes[2];
+
+  //  dump_bytes(0,"bytes",bytes,4);
+  
+  fprintf(stderr,"%s: Issue#%d, Test #%d\n",
+	  test_states[bytes[3]-0xf0],test_issue,test_sub);
+  
   switch(bytes[3]) {
   case 0xf0: // Starting a test
     break;
@@ -1219,6 +1246,10 @@ void unit_test_log(unsigned char bytes[4],int argc,char **argv)
   case 0xf3: // Test failure (ie test ran, but detected failure of test condition)
     break;
   case 0xf4: // Error trying to run test
+    break;
+  case 0xff: // Last test complete
+    fprintf(stderr,">>> Terminating after completion of last test.\n");
+    do_exit(0);
     break;
   }
   
@@ -2253,8 +2284,7 @@ int main(int argc, char** argv)
       unsigned char buff[8192];
 
       int b = serialport_read(fd, buff, 8192);
-      if (b > 0)
-        dump_bytes(2, "VF011 wait", buff, b);
+      // if (b > 0) dump_bytes(2, "VF011 wait", buff, b);
       for (int i = 0; i < b; i++) {
         recent_bytes[0] = recent_bytes[1];
         recent_bytes[1] = recent_bytes[2];

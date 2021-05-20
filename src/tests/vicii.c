@@ -26,8 +26,42 @@
 #include <string.h>
 #include <stdint.h>
 
+// Which issue number are we testing
+#define ISSUE_NUM 132
+
+unsigned char sub_test=0;
+
 #define POKE(a, v) *((uint8_t*)a) = (uint8_t)v
 #define PEEK(a) ((uint8_t)(*((uint8_t*)a)))
+
+#define TEST_START 0xf0
+#define TEST_SKIP 0xf1
+#define TEST_PASS 0xf2
+#define TEST_FAIL 0xf6
+#define TEST_ERROR 0xf4
+#define TEST_DONEALL 0xff
+
+unsigned char a_char;
+void unit_test_report(unsigned short issue, unsigned char sub,unsigned char status)
+{
+  a_char=issue&0xff;
+  __asm__("LDA %v", a_char);
+  __asm__("STA $D643");
+  __asm__("NOP");
+  a_char=issue>>8;
+  __asm__("LDA %v", a_char);
+  __asm__("STA $D643");
+  __asm__("NOP");
+  a_char=sub;
+ __asm__("LDA %v", a_char);
+  __asm__("STA $D643");
+  __asm__("NOP");
+  a_char=status;
+  __asm__("LDA %v", a_char);
+  __asm__("STA $D643");
+  __asm__("NOP");
+  
+}
 
 void sprite_setxy(uint8_t sprite, uint16_t x, uint16_t y)
 {
@@ -100,16 +134,40 @@ void wait_for_vsync(void)
     continue;
 }
 
-void fatal(void)
+void start(void)
 {
-  sprites_on(0);
-  while (1)
-    continue;
+  printf("\n%c%cSTART %c\n", 0x91, 30, 5);
+  unit_test_report(ISSUE_NUM,sub_test,TEST_START);
 }
+
 
 void ok(void)
 {
   printf("\n%c%cPASS %c\n", 0x91, 30, 5);
+  unit_test_report(ISSUE_NUM,sub_test,TEST_PASS);
+  sub_test++;
+}
+
+void fail(char *m)
+{
+  printf("\n%c%FAIL %c%s\n", 0x1C, 30, 5,m);
+  unit_test_report(ISSUE_NUM,sub_test,TEST_FAIL);
+  sub_test++;
+}
+
+void done(void)
+{
+  printf("\n%c%DONE %c\n", 0x1C, 30, 5);
+  unit_test_report(ISSUE_NUM,sub_test,TEST_DONEALL);
+  sub_test++;
+}
+
+void fatal(void)
+{
+  done();
+  sprites_on(0);
+  while (1)
+    continue;
 }
 
 uint8_t screen_buffer[1024];
@@ -218,7 +276,7 @@ void sweep_sprite_from_bottom_to_top(uint16_t y_high, uint16_t y_low, uint8_t bl
 void check_sprite_contact(uint16_t expected_first, uint16_t expected_last)
 {
   if (first_contact != expected_first || last_contact != expected_last) {
-    printf("\nFAIL: Wrong sprite position/dimensions.\n");
+    fail("Wrong sprite position/dimensions");
     if (first_contact != expected_first) {
       printf("* First contact should be at $%x.\n"
              "  On this machine it is at $%x\n",
@@ -365,7 +423,7 @@ void sprite_sprite_collide_tests(void)
   if (!v)
     ok();
   else {
-    printf("\nFAIL: Collisions detected with no sprites active.\n");
+    fail("Collisions detected with no sprites active");
     fatal();
   }
 
@@ -382,14 +440,16 @@ void sprite_sprite_collide_tests(void)
     ok();
   }
   else {
-    printf("\nFAIL: *$D01E != $03 (sprite 0 and 1 collision). Instead saw $%x\n", v);
+    fail("*$D01E != $03 after sprite 0 and 1 collision");
+    //    printf("\nFAIL: *$D01E != $03 (sprite 0 and 1 collision). Instead saw $%x\n", v);
     fatal();
-  }
+  } 
   printf("     Reading $D01E clears collisions");
   if (!v)
     ok();
   else {
-    printf("\nFAIL: Reading $D01E does not clear sprite:sprite collisions.\n");
+    fail("Reading $D01E does not clear sprite:sprite collisions");
+    //    printf("\nFAIL: Reading $D01E does not clear sprite:sprite collisions.\n");
     fatal();
   }
   printf("     X MSB separates sprites");
@@ -404,7 +464,8 @@ void sprite_sprite_collide_tests(void)
   if (!v)
     ok();
   else {
-    printf("\nFAIL: Collisions detected with sprites separated by 256 pixels ($D01E=$%x)\n", v);
+    fail("Sprites separated by 256 pixels collide");
+    //    printf("\nFAIL: Collisions detected with sprites separated by 256 pixels ($D01E=$%x)\n", v);
     fatal();
   }
   printf("     Sprites don't collide in border");
@@ -419,7 +480,8 @@ void sprite_sprite_collide_tests(void)
   if (!v)
     ok();
   else {
-    printf("\nFAIL: *$D01E != $00: Saw $%x\n", v);
+    fail("*$D01E != $00");
+    // printf("\nFAIL: *$D01E != $00: Saw $%x\n", v);
     fatal();
   }
 }
@@ -474,11 +536,13 @@ void d018_timing_tests(void)
   if (v != 0x01) {
     restore_screen();
     sprites_on(0);
+    fail("Changing $D018 at raster 57 should switch first row to alternate screen, but original screen appeared "
+           "to be there");
     printf("\nFAIL: Changing $D018 at raster 57 should switch first row to alternate screen, but original screen appeared "
            "to be there.\n");
     printf("\nFAIL: *$D01F != $01: Saw $%x\n", v);
     fatal();
-  }
+  } else ok();
 
   // Set raster interrupt for raster 58, and do the same
   POKE(0xD012U, 58);
@@ -493,11 +557,13 @@ void d018_timing_tests(void)
   if (v != 0x01) {
     restore_screen();
     sprites_on(0);
-    printf("\nFAIL: Changing $D018 at raster 58 should switch first row to alternate screen, but original screen appeared "
-           "to be there.\n");
-    printf("\nFAIL: *$D01F != $01: Saw $%x\n", v);
+    fail("Changing $D018 at raster 58 should switch first row to alternate screen, but original screen appeared "
+           "to be there");
+    //    printf("\nFAIL: Changing $D018 at raster 58 should switch first row to alternate screen, but original screen appeared "
+    // "to be there.\n");
+    //     printf("\nFAIL: *$D01F != $01: Saw $%x\n", v);
     fatal();
-  }
+  } else ok();
 
   // Set raster interrupt for raster 51, and this should now be too late
   POKE(0xD012U, 59);
@@ -512,11 +578,13 @@ void d018_timing_tests(void)
   if (v != 0x00) {
     restore_screen();
     sprites_on(0);
-    printf("\nFAIL: Changing $D018 at raster 59 should NOT switch first row to alternate screen, but alternate screen "
-           "appeared to be there.\n");
-    printf("\nFAIL: *$D01F != $00: Saw $%x\n", v);
-    fatal();
-  }
+    fail("Changing $D018 at raster 59 should NOT switch first row to alternate screen, but alternate screen "
+	 "appeared to be there");
+    // printf("\nFAIL: Changing $D018 at raster 59 should NOT switch first row to alternate screen, but alternate screen "
+    //           "appeared to be there.\n");
+    //    printf("\nFAIL: *$D01F != $00: Saw $%x\n", v);
+    fatal(); 
+  } else ok();
 
   // All done, restore IRQ etc
   __asm__("sei");
@@ -541,11 +609,15 @@ int main(void)
 
   printf("%c%c"
          "M.E.G.A.65 VIC-II Test Programme\n"
-         "(C) Paul Gardner-Stephen, 2017-2018\n"
+         "(C) Paul Gardner-Stephen, 2017-2021\n"
          "GNU General Public License v3 or newer.\n"
          "\n",
       0x93, 5);
 
+  // Enable MEGA65 IO to support MEGA65 unit test framework
+  POKE(0xD02F,0x47);
+  POKE(0xD02F,0x53);
+  
   // Prepare sprites
   setup();
 
