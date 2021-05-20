@@ -37,7 +37,7 @@ unsigned char sub_test=0;
 #define TEST_START 0xf0
 #define TEST_SKIP 0xf1
 #define TEST_PASS 0xf2
-#define TEST_FAIL 0xf6
+#define TEST_FAIL 0xf3
 #define TEST_ERROR 0xf4
 #define TEST_DONEALL 0xff
 
