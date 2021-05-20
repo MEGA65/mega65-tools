@@ -29,14 +29,14 @@ void get_interval(void)
 
 void graphics_clear_screen(void)
 {
-  lfill(0x40000, 0, 32768);
-  lfill(0x48000, 0, 32768);
+  lfill(0x40000L, 0, 32768);
+  lfill(0x48000L, 0, 32768);
 }
 
 void graphics_clear_double_buffer(void)
 {
-  lfill(0x50000, 0, 32768);
-  lfill(0x58000, 0, 32768);
+  lfill(0x50000L, 0, 32768);
+  lfill(0x58000L, 0, 32768);
 }
 
 void graphics_mode(void)
@@ -631,10 +631,105 @@ If you do, the final CRC value should be 0.
        Then we can schedule an unbuffered format operation, and start feeding
        the appropriate data to the clock and data byte registers, interlocked
        by the DRQ signal.
+
+       See also the wttrk routine from dos.src of C65 ROM source code.
 	   
   */
-   
 
+  // Clock byte = $FF
+  POKE(0xD088,0xFF);
+  // Data byte = $00 (first of 12 post-index gap bytes)
+  POKE(0xD087,0x00);
+  
+  // Begin unbuffered write
+  POKE(0xD081,0xA1);  
+  
+  // Write 12 gap bytes
+  for(i=0;i<12;i++) {
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD087,0x00);
+    // Bump border colour, so that we know we are alive
+    POKE(0xD020,PEEK(0xD020)+1);
+  }
+
+  // Write 3 sync bytes
+  for(i=0;i<3;i++) {
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD088,0xFB);
+    POKE(0xD087,0xA1);
+    // Bump border colour, so that we know we are alive
+    POKE(0xD020,PEEK(0xD020)+1);
+  }
+
+  // Header mark
+  while(!(PEEK(0xD082)&0x40)) continue;
+  POKE(0xD088,0xFE); POKE(0xD087,0xFF);
+
+  // Track number
+  while(!(PEEK(0xD082)&0x40)) continue;
+  POKE(0xD088,track_number); POKE(0xD087,0xFF);
+
+  // Side number
+  while(!(PEEK(0xD082)&0x40)) continue;
+  POKE(0xD088,0x80); POKE(0xD087,0xFF);
+
+  // Sector number
+  while(!(PEEK(0xD082)&0x40)) continue;
+  POKE(0xD088,0x80); POKE(0xD087,0xFF);  
+
+  // Sector length
+  while(!(PEEK(0xD082)&0x40)) continue;
+  POKE(0xD088,0x02); POKE(0xD087,0xFF);  
+
+  // Sector header CRC
+  // XXX how do we calculate these?
+  while(!(PEEK(0xD082)&0x40)) continue;
+  POKE(0xD088,0x00); POKE(0xD087,0xFF);  
+  while(!(PEEK(0xD082)&0x40)) continue;
+  POKE(0xD088,0x00); POKE(0xD087,0xFF);
+
+  // 23 gap bytes
+  for (i=0;i<23;i++) {
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD088,0x4E); POKE(0xD087,0xFF);
+  }
+
+  // 12 gap bytes
+  for (i=0;i<12;i++) {
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD088,0x00); POKE(0xD087,0xFF);
+  }
+
+  // Write 3 sync bytes
+  for(i=0;i<3;i++) {
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD088,0xFB);
+    POKE(0xD087,0xA1);
+    // Bump border colour, so that we know we are alive
+    POKE(0xD020,PEEK(0xD020)+1);
+  }
+
+  // Data mark
+  while(!(PEEK(0xD082)&0x40)) continue;
+  POKE(0xD088,0xFB); POKE(0xD087,0xFF);
+
+  // Data bytes
+  for (i=0;i<512;i++) {
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD088,0x00); POKE(0xD087,0xFF);
+  }
+
+  // 24 gap bytes
+  for (i=0;i<23;i++) {
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD088,0x4E); POKE(0xD087,0xFF);
+  }
+
+  while(1) {
+    POKE(0xD020,PEEK(0xD020)+1);
+  }
+  
+  
 }
 
 void main(void)
