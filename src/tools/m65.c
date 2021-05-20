@@ -2225,9 +2225,13 @@ int main(int argc, char** argv)
 
   // XXX - loop for virtualisation, JTAG boundary scanning etc
 
-
-  if (virtual_f011) {
-    fprintf(stderr, "Entering virtualised F011 wait loop...\n");
+  unsigned char recent_bytes[4] = { 0, 0, 0, 0 };
+  
+  if (virtual_f011||unit_test_mode) {
+    if (virtual_f011)
+      fprintf(stderr, "Entering virtualised F011 wait loop...\n");
+    if (unit_test_mode)
+      fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
     while (1) {
       unsigned char buff[8192];
 
@@ -2239,24 +2243,25 @@ int main(int argc, char** argv)
         recent_bytes[1] = recent_bytes[2];
         recent_bytes[2] = recent_bytes[3];
         recent_bytes[3] = buff[i];
-      }
-      if (recent_bytes[3] == '!') {
-        // Handle request
-        recent_bytes[3] = 0;
-        pending_vf011_read = 1;
-        pending_vf011_device = 0;
-        pending_vf011_track = recent_bytes[0] & 0x7f;
-        pending_vf011_sector = recent_bytes[1] & 0x7f;
-        pending_vf011_side = recent_bytes[2] & 0x0f;
-      }
-      if (recent_bytes[3] == 0x5c) {
-        // Handle request
-        recent_bytes[3] = 0;
-        pending_vf011_write = 1;
-        pending_vf011_device = 0;
-        pending_vf011_track = recent_bytes[0] & 0x7f;
-        pending_vf011_sector = recent_bytes[1] & 0x7f;
-        pending_vf011_side = recent_bytes[2] & 0x0f;
+
+	if (recent_bytes[3] == '!') {
+	  // Handle request
+	  recent_bytes[3] = 0;
+	  pending_vf011_read = 1;
+	  pending_vf011_device = 0;
+	  pending_vf011_track = recent_bytes[0] & 0x7f;
+	  pending_vf011_sector = recent_bytes[1] & 0x7f;
+	  pending_vf011_side = recent_bytes[2] & 0x0f;
+	}
+	if (recent_bytes[3] == 0x5c) {
+	  // Handle request
+	  recent_bytes[3] = 0;
+	  pending_vf011_write = 1;
+	  pending_vf011_device = 0;
+	  pending_vf011_track = recent_bytes[0] & 0x7f;
+	  pending_vf011_sector = recent_bytes[1] & 0x7f;
+	  pending_vf011_side = recent_bytes[2] & 0x0f;
+	}
       }
       while (pending_vf011_read || pending_vf011_write) {
         if (pending_vf011_read)
