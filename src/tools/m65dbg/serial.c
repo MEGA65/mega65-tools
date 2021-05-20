@@ -137,7 +137,11 @@ bool serialOpen(char* portname)
     int port = 4510;  // assume a default port of 4510
     if (portname[3] == '#') // did user provide a hostname and port number?
     {
-      sscanf(&portname[4], "%s:%d", hostname, &port);
+      sscanf(&portname[4], "%[^:]:%d", hostname, &port);
+    }
+    else if (portname[3] == '\\' && portname[4] == '#')
+    {
+      sscanf(&portname[5], "%[^:]:%d", hostname, &port);
     }
 
     struct sockaddr_in sock_st;
