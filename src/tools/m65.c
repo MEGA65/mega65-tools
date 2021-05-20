@@ -63,6 +63,8 @@ int osk_enable = 0;
 
 int not_already_loaded = 1;
 
+int unit_test_mode=0;
+
 int halt = 0;
 
 int usedk = 0;
@@ -84,48 +86,49 @@ void usage(void)
   fprintf(stderr, "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
                   "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
                   "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
-                  "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N]\n");
-  fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
-  fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
-  fprintf(stderr, "       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
+                  "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] [-u]\n");
+  fprintf(stderr, "  -@ - Load a binary file at a specific address.\n");
+  fprintf(stderr, "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n");
+  fprintf(stderr, "  -4 - Switch to C64 mode before exiting.\n");
+  fprintf(stderr, "  -A - Set audio coefficient(s) xx (and optionally to yy) to ppp percent of maximum volume.\n");
+  fprintf(stderr, "  -a - Read and display audio cross-bar mixer status.\n");
+  fprintf(stderr, "  -B - Set a breakpoint on synchronising, and then immediately exit.\n");
   fprintf(stderr, "  -b - Name of bitstream file to load.\n");
-  fprintf(stderr, "  -q - Name of bitstream file to load and then directly quit. Use this for cores other than MEGA65.\n");
-  fprintf(stderr, "  -v - The location of the Vivado executable to use for -b on Windows.\n");
-  fprintf(stderr, "  -K - Use DK backend for libUSB, if available\n");
-  fprintf(stderr, "  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n");
-  fprintf(stderr, "       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
-                  "             for the bitstream, and @issue/tag for HYPPO.\n");
+  fprintf(stderr, "  -C - Character ROM file to preload.\n");
+  fprintf(stderr, "  -c - Colour RAM contents to preload.\n");
+  fprintf(stderr, "  -d - Enable virtual D81 access\n");
+  fprintf(stderr, "  -E - Enable streaming of video via ethernet.\n");
+  fprintf(stderr, "  -F - Force reset on start\n");
+  fprintf(stderr, "  -f - Specify which FPGA to reconfigure when calling fpgajtag\n");
+  fprintf(stderr, "  -H - Halt CPU after loading ROMs.\n");
   fprintf(stderr, "  -J - Do JTAG boundary scan of attached FPGA, using the provided XDC and BSDL files.\n");
   fprintf(stderr, "       A sensitivity list can also be provided, to restrict the set of signals monitored.\n");
   fprintf(stderr, "       This will likely be required when producing VCD files, as they can only log ~80 signals.\n");
   fprintf(stderr, "  -j   Do JTAG operation(s), and nothing else.\n");
-  fprintf(stderr, "  -V - Write JTAG change log to VCD file, instead of to stdout.\n");
-  fprintf(stderr, "  -R - ROM file to preload at $20000-$3FFFF.\n");
-  fprintf(stderr, "  -U - Flash menu file to preload at $50000-$57FFF.\n");
-  fprintf(stderr, "  -C - Character ROM file to preload.\n");
-  fprintf(stderr, "  -c - Colour RAM contents to preload.\n");
-  fprintf(stderr, "  -4 - Switch to C64 mode before exiting.\n");
-  fprintf(stderr, "  -H - Halt CPU after loading ROMs.\n");
-  fprintf(stderr, "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n");
-  fprintf(stderr, "  -r - Automatically RUN programme after loading.\n");
-  fprintf(stderr, "  -o - Enable on-screen keyboard\n");
-  fprintf(stderr, "  -d - Enable virtual D81 access\n");
-  fprintf(stderr, "  -p - Force PAL video mode\n");
-  fprintf(stderr, "  -n - Force NTSC video mode\n");
-  fprintf(stderr, "  -N - Disable a running cartridge, and boot to C64 mode.\n");
-  fprintf(stderr, "  -F - Force reset on start\n");
-  fprintf(stderr, "  -t - Type text via keyboard virtualisation.\n");
-  fprintf(stderr, "  -T - As above, but also provide carriage return\n");
-  fprintf(stderr, "  -B - Set a breakpoint on synchronising, and then immediately exit.\n");
-  fprintf(stderr, "  -a - Read and display audio cross-bar mixer status.\n");
-  fprintf(stderr, "  -A - Set audio coefficient(s) xx (and optionally to yy) to ppp percent of maximum volume.\n");
-  fprintf(stderr, "  -E - Enable streaming of video via ethernet.\n");
+  fprintf(stderr, "  -K - Use DK backend for libUSB, if available\n");
+  fprintf(stderr, "  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n");
+  fprintf(stderr, "       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
+                  "             for the bitstream, and @issue/tag for HYPPO.\n");
   fprintf(stderr, "  -L - Enable streaming of CPU instruction log via ethernet.\n");
-  fprintf(stderr, "  -f - Specify which FPGA to reconfigure when calling fpgajtag\n");
+  fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
+  fprintf(stderr, "  -o - Enable on-screen keyboard\n");
+  fprintf(stderr, "  -N - Disable a running cartridge, and boot to C64 mode.\n");
+  fprintf(stderr, "  -n - Force NTSC video mode\n");
+  fprintf(stderr, "  -p - Force PAL video mode\n");
+  fprintf(stderr, "  -q - Name of bitstream file to load and then directly quit. Use this for cores other than MEGA65.\n");
+  fprintf(stderr, "  -R - ROM file to preload at $20000-$3FFFF.\n");
+  fprintf(stderr, "  -r - Automatically RUN programme after loading.\n");
   fprintf(stderr, "  -S - Show the text-mode screen\n");
-  fprintf(stderr, "  -Z - Zap (reconfigure) FPGA from specified hex address in flash.\n");
-  fprintf(stderr, "  -@ - Load a binary file at a specific address.\n");
+  fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
+  fprintf(stderr, "       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
+  fprintf(stderr, "  -T - As above, but also provide carriage return\n");
+  fprintf(stderr, "  -t - Type text via keyboard virtualisation.\n");
+  fprintf(stderr, "  -U - Flash menu file to preload at $50000-$57FFF.\n");
+  fprintf(stderr, "  -u - Enable unit test mode: m65 does not terminate until it receives a response from a unit test.\n");
+  fprintf(stderr, "  -v - The location of the Vivado executable to use for -b on Windows.\n");
+  fprintf(stderr, "  -V - Write JTAG change log to VCD file, instead of to stdout.\n");
   fprintf(stderr, "  -X - Show a report of current Hypervisor status.\n");
+  fprintf(stderr, "  -Z - Zap (reconfigure) FPGA from specified hex address in flash.\n");
   fprintf(stderr, "  filename - Load and run this file in C64 mode before exiting.\n");
   fprintf(stderr, "\n");
   exit(-3);
@@ -1220,7 +1223,7 @@ int main(int argc, char** argv)
     usage();
 
   int opt;
-  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:U:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:uU:v:V:XZ:?")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
@@ -1372,6 +1375,9 @@ int main(int argc, char** argv)
       type_text = strdup(optarg);
       if (opt == 'T')
         type_text_cr = 1;
+      break;
+    case 'u':
+      unit_test_mode=1;
       break;
     default: /* '?' */
       usage();
