@@ -711,7 +711,12 @@ void load_ca65_list(const char* fname, FILE* f)
     if (starts_with(line, "Current file:"))
     {
       // Retrieve the current file/module that was assembled
-      strcpy(current_module, strchr(line, ':') + 2);
+      if (strchr(line, '/') != NULL)  // truncate a relative location like 'src/utilities/remotesd.s'?
+      {
+        strcpy(current_module, strrchr(line, '/') + 1);
+      }
+      else
+        strcpy(current_module, strchr(line, ':') + 2);
       current_module[strlen(current_module)-1] = '\0';
       current_module[strlen(current_module)-1] = 'o';
       current_segment[0] = '\0';
@@ -1063,7 +1068,7 @@ void cmdRawHelp(void)
          "i - irq command - (for masking interrupts)\n"
          "# - trap command - trigger a trap?\n"
          "E - flag break command - allows breaking on particular CPU flag settings\n"
-         "L - load mem command - ?\n"
+         "l<addr28> <addr16> - load mem command (28-bit start address, lower 16-bits of end address, then feed in raw bytes)\n"
          "N - step over (xemu only)\n"
   );
 }
