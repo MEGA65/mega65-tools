@@ -1207,6 +1207,23 @@ int check_file_access(char* file, char* purpose)
 
 extern const char* version_string;
 
+void unit_test_log(unsigned char bytes[4],int argc,char **argv)
+{
+  switch(bytes[3]) {
+  case 0xf0: // Starting a test
+    break;
+  case 0xf1: // Skipping a test
+    break;
+  case 0xf2: // Test pass
+    break;
+  case 0xf3: // Test failure (ie test ran, but detected failure of test condition)
+    break;
+  case 0xf4: // Error trying to run test
+    break;
+  }
+  
+}
+
 int main(int argc, char** argv)
 {
   start_time = time(0);
@@ -2244,6 +2261,11 @@ int main(int argc, char** argv)
         recent_bytes[2] = recent_bytes[3];
         recent_bytes[3] = buff[i];
 
+	if (recent_bytes[3] >= 0xf0) {
+	  // Unit test start
+	  unit_test_log(recent_bytes,argc,argv);
+	}
+	
 	if (recent_bytes[3] == '!') {
 	  // Handle request
 	  recent_bytes[3] = 0;
