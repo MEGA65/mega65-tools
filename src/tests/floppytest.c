@@ -496,14 +496,7 @@ void format_track(unsigned char track_number)
     usleep(20000);
     
   }
-  
-  // Wait for index sensor
-  print_text(0, 4, 7, "Waiting for index sensor to pass by");
-  while(PEEK(0xD083)&0x04) continue;
-  while(!(PEEK(0xD083)&0x04)) continue;
 
-  // OK: Now we are ready to do things
-  
   /*
     From the C65 Specifications Manual:
 
