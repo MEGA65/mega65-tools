@@ -974,8 +974,8 @@ reg_data get_regs(void)
   char* line;
   serialWrite("r\n");
   serialRead(inbuf, BUFSIZE);
-  line = strstr(inbuf+2, "\n") + 1;
-  sscanf(line,"%04X %02X %02X %02X %02X %02X %04X %04X %04X",
+  line = strstr(inbuf+2, "\n") + 2;
+  sscanf(line,"%08X %02X %02X %02X %02X %02X %04X %04X %04X",
     &reg.pc, &reg.a, &reg.x, &reg.y, &reg.z, &reg.b, &reg.sp, &reg.mapl, &reg.maph);
 
   return reg;
