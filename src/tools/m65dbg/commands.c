@@ -49,6 +49,9 @@ bool fastmode = false; // switch for slow (2,000,000bps) and fast (4,000,000bps)
 bool ctrlcflag = false; // a flag to keep track of whether ctrl-c was caught
 int  traceframe = 0;  // tracks which frame within the backtrace
 
+int dis_offs = 0;
+int dis_scope = 10;
+
 type_command_details command_details[] =
 {
   { "?", cmdRawHelp, NULL, "Shows help information for raw/native monitor commands" },
@@ -90,6 +93,8 @@ type_command_details command_details[] =
   { "ftp", cmdFtp, NULL, "FTP access to SD-card" },
   { "petscii", cmdPetscii, "0/1", "In dump commands, respect petscii screen codes" },
   { "fastmode", cmdFastMode, "0/1", "Used to quickly switch between 2,000,000bps (slow-mode: default) or 4,000,000bps (fast-mode: used in ftp-mode)" },
+  { "scope", cmdScope, "<int>", "the scope-size of the listing to show alongside the disassembly" },
+  { "offs", cmdOffs, "<int>", "the offset of the listing to show alongside the disassembly" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -924,7 +929,7 @@ void show_location(type_fileloc* fl)
   while (!feof(f))
   {
     fgets(line, 1024, f);
-    if (cnt >= (fl->lineno - 10) && cnt <= (fl->lineno + 10) )
+    if (cnt >= (fl->lineno - dis_scope + dis_offs) && cnt <= (fl->lineno + dis_scope + dis_offs) )
     {
       if (cnt == fl->lineno)
       {
@@ -2417,6 +2422,32 @@ void cmdFastMode(void)
 
   printf(" - fastmode is turned %s.\n", fastmode ? "on" : "off");
 #endif
+}
+
+void cmdScope(void)
+{
+  char* token = strtok(NULL, " ");
+
+  if (token == NULL)
+    return;
+  sscanf(token, "%d", &dis_scope);
+
+  if (autocls)
+    cmdClearScreen();
+  cmdDisassemble();
+}
+
+void cmdOffs(void)
+{
+  char* token = strtok(NULL, " ");
+
+  if (token == NULL)
+    return;
+  sscanf(token, "%d", &dis_offs);
+
+  if (autocls)
+    cmdClearScreen();
+  cmdDisassemble();
 }
 
 void cmdSymbolValue(void)

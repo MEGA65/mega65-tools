@@ -44,6 +44,8 @@ void cmdType(void);
 void cmdFtp(void);
 void cmdPetscii(void);
 void cmdFastMode(void);
+void cmdScope(void);
+void cmdOffs(void);
 int  cmdGetCmdCount(void);
 char* cmdGetCmdName(int idx);
 
