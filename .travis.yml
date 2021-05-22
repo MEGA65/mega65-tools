@@ -9,6 +9,7 @@ script:
 - sudo apt-get install -y libusb-1.0-0-dev
 - sudo apt-get install -y libgif-dev
 - sudo apt-get install -y libpng-dev
+- sudo apt-get install -y mingw-w64-common
 - sudo apt-get install -y libz-mingw-w64-dev
 - sudo apt-get install -y libgtest-dev
 - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE

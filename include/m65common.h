@@ -1,10 +1,24 @@
+#ifndef M65COMMON_H
+#define M65COMMON_H
 
 #ifdef WINDOWS
 #include <windows.h>
 #define SSIZE_T SIZE_T
-#define PORT_TYPE HANDLE
-SSIZE_T do_serial_port_read(HANDLE port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line);
-int do_serial_port_write(HANDLE port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line);
+
+#define WINPORT_TYPE_INVALID -1
+#define WINPORT_TYPE_FILE 0
+#define WINPORT_TYPE_SOCK 1
+typedef struct {
+  int type; // 0 = file, 1 = socket
+  HANDLE fdfile;
+  SOCKET fdsock;
+} WINPORT;
+
+#define PORT_TYPE WINPORT
+
+SSIZE_T do_serial_port_read(WINPORT port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line);
+int do_serial_port_write(WINPORT port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line);
+
 #else
 #define SSIZE_T size_t
 #define PORT_TYPE int
@@ -55,6 +69,7 @@ void set_serial_speed(int fd, int serial_speed);
 #endif
 void open_the_serial_port(char* serial_port);
 int switch_to_c64mode(void);
+void close_tcp_port(void);
 
 #ifdef WINDOWS
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
@@ -79,3 +94,5 @@ extern PORT_TYPE fd;
 extern int serial_speed;
 extern int saw_c64_mode;
 extern int saw_c65_mode;
+
+#endif // M65COMMON_H

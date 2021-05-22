@@ -933,8 +933,8 @@ int do_screen_shot(void)
   fclose(f);
 
   printf("Wrote screen capture to %s...\n", filename);
-  start_cpu();
-  exit(0);
+  // start_cpu();
+  // exit(0);
 
   return 0;
 }
