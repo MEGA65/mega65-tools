@@ -1,8 +1,7 @@
 /*
-  Drive error LED should blink RED, but drive motor light should stay green.
-
-  Also verify that we can set all LED colours
+  Issue #390 - VIC-IV pixel RGB read-back
 */
+#define ISSUE_NUM 390
 
 #include <stdio.h>
 #include <string.h>
@@ -14,6 +13,8 @@
 #include <fileio.h>
 #include <random.h>
 #include <tests.h>
+
+unsigned char sub=0;
 
 char msg[64 + 1];
 
@@ -422,6 +423,26 @@ unsigned char nyblswap(unsigned char c)
 }
 
 unsigned char led[12];
+unsigned char red,green,blue;
+unsigned char frame_num;
+
+void read_pixel(short x,short y,unsigned char *red,unsigned char *green,unsigned char *blue)
+{
+  // Select (128,128) as pixel to read back
+  POKE(0xD07D,x);
+  POKE(0xD07E,y);
+  POKE(0xD07F,(x>>8)+((y>>8)<<4));
+
+  // Wait at least one whole frame
+  frame_num=PEEK(0xD7FA); while(PEEK(0xD7FA)==frame_num) continue;
+  frame_num=PEEK(0xD7FA); while(PEEK(0xD7FA)==frame_num) continue;
+
+  POKE(0xD07C,0x52); *red=PEEK(0xD07D);
+  POKE(0xD07C,0x92); *green=PEEK(0xD07D);
+  POKE(0xD07C,0xD2); *blue=PEEK(0xD07D);
+}
+  
+
 
 void main(void)
 {
@@ -457,9 +478,58 @@ void main(void)
 
   print_text(0, 0, 1, "Issue #390 - VIC-IV Pixel read-back");
 
-  // Select (128,128) as pixel to read back
-  POKE(0xD07D,0x80);
-  POKE(0xD07E,0x80);
-  POKE(0xD07F,0x00);
+  // Check a background pixel
+  read_pixel(0x80,0x80,&red,&green,&blue);
+  snprintf(msg,64,"Background Pixel @ (128,128)=#%02x%02x%02x",red,green,blue);
+  print_text(0,2,14,msg);
+
+  if (red==0x50&&green==0x50&&blue==0x50) unit_test_report(ISSUE_NUM,sub++,TEST_PASS);
+  else  unit_test_report(ISSUE_NUM,sub++,TEST_FAIL);
+  
+  // Now move to a character pixel
+  read_pixel(0x80,0x74,&red,&green,&blue);
+  snprintf(msg,64,"White Char Pixel @ (0x80,0x74)=#%02x%02x%02x",red,green,blue);
+  print_text(0,3,14,msg);
+
+  if (red==0xF0&&green==0xF0&&blue==0xF0) unit_test_report(ISSUE_NUM,sub++,TEST_PASS);
+  else  unit_test_report(ISSUE_NUM,sub++,TEST_FAIL);
+
+  // And now one that has different values in each of the RGB channels
+  read_pixel(0x80,0x8c,&red,&green,&blue);
+  snprintf(msg,64,"Light Blue Pixel @ (0x80,0x8C)=#%02x%02x%02x",red,green,blue);
+  print_text(0,4,14,msg);
+
+  if (red==0x90&&green==0x90&&blue==0xF0) unit_test_report(ISSUE_NUM,sub++,TEST_PASS);
+  else  unit_test_report(ISSUE_NUM,sub++,TEST_FAIL);
+  
+  // Now change the colour of that pixel and read it again
+  POKE(0xd8a5,8);
+  read_pixel(0x80,0x8c,&red,&green,&blue);
+  snprintf(msg,64,"Orange Char Pixel @ (0x80,0x8C)=#%02x%02x%02x",red,green,blue);
+  print_text(0,5,14,msg);
+
+  if (red==0xf0&&green==0x60&&blue==0x00) unit_test_report(ISSUE_NUM,sub++,TEST_PASS);
+  else  unit_test_report(ISSUE_NUM,sub++,TEST_FAIL);
+
+  // Now put a sprite there
+  POKE(0xD015,0x01);
+  POKE(0xD000,0x20);
+  POKE(0xD001,0x40);
+  POKE(0xD027,0x0d); // light green
+  POKE(0x7F8,0x3c0/0x40); // Sprite in the cassette buffer
+  lfill(0x3c0,0xff,0x40); // solid sprite
+
+  read_pixel(0x80,0x8c,&red,&green,&blue);
+  snprintf(msg,64,"Sprite Pixel @ (0x80,0x8C)=#%02x%02x%02x",red,green,blue);
+  print_text(0,6,14,msg);
+
+  if (red==0x90&&green==0xf0&&blue==0x90) unit_test_report(ISSUE_NUM,sub++,TEST_PASS);
+  else  unit_test_report(ISSUE_NUM,sub++,TEST_FAIL);
+
+  // Hide sprite again
+  POKE(0xD015,0);
+  
+  // Report completion of tests
+  unit_test_report(ISSUE_NUM,sub++,TEST_DONEALL);
   
 }
