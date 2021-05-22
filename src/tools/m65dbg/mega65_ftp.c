@@ -98,6 +98,8 @@ void show_cluster(void);
 void dump_sectors(void);
 void restore_sectors(void);
 void show_secinfo(void);
+void show_mbrinfo(void);
+void show_vbrinfo(void);
 void poke_sector(void);
 int show_directory(char *path);
 int rename_file(char *name,char *dest_name);
@@ -464,6 +466,10 @@ int execute_command(char *cmd)
     restore_sectors();
   } else if (!strcmp(cmd, "secinfo")) {
     show_secinfo();
+  } else if (!strcmp(cmd, "mbrinfo")) {
+    show_mbrinfo();
+  } else if (!strcmp(cmd, "vbrinfo")) {
+    show_vbrinfo();
   } else if (sscanf(cmd, "poke %d %d %d", &poke_secnum, &poke_offset, &poke_value)==3) {
     poke_sector();
   } else if (!strcasecmp(cmd,"help")) {
@@ -481,6 +487,8 @@ int execute_command(char *cmd)
     printf("secdump <filename> <startsec> <count> - dump the specified sector range to a file.\n");
     printf("secrestore <filename> <startsec> - restore a dumped file back into the specified sector area.\n");
     printf("secinfo - lists the locations of various useful sectors, for easy reference.\n");
+    printf("mbrinfo - lists the partitions specified in the MBR (sector 0)\n");
+    printf("vbrinfo - lists the VBR details of the main Mega65 partition\n");
     printf("poke <sector> <offset> <val> - poke a value into a sector, at the desired offset.\n");
     printf("exit - leave this programme.\n");
     printf("quit - leave this programme.\n");
@@ -1781,6 +1789,104 @@ void show_secinfo(void)
   printf("% 8d : 2nd FAT (backup)\n", abs_fat2_sector);
   printf("% 8d : cluster #2 (root-directory table)\n", abs_cluster2_sector);
   printf("\n");
+}
+
+void show_vbrinfo(void)
+{
+  unsigned char sector[512];
+  if (!file_system_found) open_file_system();
+  if (read_sector(partition_start,sector,0))
+  {
+    printf("Failed to read sector %d...\n", partition_start);
+    return;
+  }
+
+  printf("OEM Name=\"%c%c%c%c%c%c%c%c\"\n",
+      sector[0x03], sector[0x04], sector[0x05], sector[0x06],
+      sector[0x07], sector[0x08], sector[0x09], sector[0x0A]);
+  printf("FAT32 Extended BIOS Parameter Block:\n");
+  printf("{\n");
+  printf("  DOS 3.31 BPB\n");
+  printf("  {\n");
+  printf("    DOS 2.0 BPB\n");
+  printf("    {\n");
+  printf("      Bytes per logical sector = %d\n", *(unsigned short*)&sector[0x0B]);
+  printf("      Logical sectors per cluster = %d\n", sector[0x0D]);
+  printf("      Count of reserved logical sectors before 1st FAT = %d\n", *(unsigned short*)&sector[0x0E]);
+  printf("      Number of FATs = %d\n", sector[0x10]);
+  printf("      Max no# of FAT12/16 root dir entries = %d\n", *(unsigned short*)&sector[0x11]);
+  printf("      Total logical sector (0 for FAT32) = %d\n", *(unsigned short*)&sector[0x13]);
+  printf("      Media Descriptor = 0x%02X\n", sector[0x15]);
+  printf("      Logical sectors per FAT (0 for FAT32) = %d\n", *(unsigned short*)&sector[0x16]);
+  printf("    }\n");
+  printf("    Physical sectors per track (for INT 13h CHS geometry) = %d\n", *(unsigned short*)&sector[0x18]);
+  printf("    Number of heads (for disks with INT 13h CHS geometry) = %d\n", *(unsigned short*)&sector[0x1A]);
+  printf("    Count of hidden sectors preceding the partition of this FAT volume = %d\n", *(unsigned int*)&sector[0x1C]);
+  printf("    Total logical sectors (if greater than 65535) = %d\n", *(unsigned int*)&sector[0x20]);
+  printf("  }\n");
+  printf("  Logical sectors per FAT = %d\n", *(unsigned int*)&sector[0x24]);
+  printf("  Drive description / mirroring flags = 0x%02X 0x%02X\n", sector[0x28], sector[0x29]);
+  printf("  Version = 0x%02X 0x%02X\n", sector[0x2A], sector[0x2B]);
+  printf("  Cluster number of root directory start = %d\n", *(unsigned int*)&sector[0x2C]);
+  printf("  Logical sector number of FS Information Sector = %d\n", *(unsigned short*)&sector[0x30]);
+  printf("  First logical sector number of copy of 3 FAT boot sectors = %d\n", *(unsigned short*)&sector[0x32]);
+  printf("  Cf. 0x024 for FAT12/FAT16 (Physical Drive Number) = 0x%02X\n", sector[0x40]);
+  printf("  Cf. 0x025 for FAT12/FAT16 (Used for various purposes; see FAT12/FAT16) = 0x%02X\n", sector[0x41]);
+  printf("  Cf. 0x026 for FAT12/FAT16 (Extended boot signature, 0x29) = 0x%02X\n", sector[0x42]);
+  printf("  Cf. 0x027 for FAT12/FAT16 (Volume ID) = %02X %02X %02X %02X\n", sector[0x43], sector[0x44], sector[0x45], sector[0x46]);
+  printf("  Cf. 0x02B for FAT12/FAT16 (Volume Label) = %c%c%c%c%c%c%c%c%c%c%c\n",
+      sector[0x47], sector[0x48], sector[0x49], sector[0x4a],
+      sector[0x4b], sector[0x4c], sector[0x4d], sector[0x4e],
+      sector[0x4f], sector[0x50], sector[0x51]);
+  printf("  Cf. 0x036 for FAT12/FAT16 (File system type) = %c%c%c%c%c%c%c%c\n",
+      sector[0x52], sector[0x53], sector[0x54], sector[0x55],
+      sector[0x56], sector[0x57], sector[0x58], sector[0x59]);
+  printf("}\n");
+
+  printf("\n");
+}
+
+void show_mbrinfo(void)
+{
+  unsigned char sector[512];
+  if (!file_system_found) open_file_system();
+  if (read_sector(0,sector,0))
+  {
+    printf("Failed to read sector 0...\n");
+    return;
+  }
+
+  int pt_ofs=0x1be;
+  int part_cnt = 0;
+
+  for (int part_id = 0; part_id < 4; part_id++)
+  {
+    if (sector[pt_ofs+0x04] == 0x00) // is partition-type 0? (unused)
+      continue;
+
+    printf("Partition %d\n", part_id);
+    printf("-----------\n");
+    if (sector[pt_ofs] == 0x80)
+      printf("- active/bootable partition\n");
+    printf("- Partition type = 0x%02X\n", sector[pt_ofs+0x04]);
+    int c = sector[pt_ofs+0x03] + (sector[pt_ofs+0x02] & 0xC0) << 2;
+    int h = sector[pt_ofs+0x02] & 0x3F;
+    int s = sector[pt_ofs+0x01];
+    printf("- First sector chs: cylinder = %d, head = %d, sector = %d\n", c, h, s);
+    c = sector[pt_ofs+0x07] + (sector[pt_ofs+0x06] & 0xC0) << 2;
+    h = sector[pt_ofs+0x06] & 0x3F;
+    s = sector[pt_ofs+0x05];
+    printf("- Last sector chs: cylinder = %d, head = %d, sector = %d\n", c, h, s);
+    printf("- First sector LBA: %d\n", *(unsigned int*)&sector[pt_ofs+0x08]);
+    printf("- Number of sectors: %d\n", *(unsigned int*)&sector[pt_ofs+0x0C]);
+    
+    part_cnt++;
+    printf("\n");
+
+    pt_ofs += 16;
+  }
+  if (part_cnt == 0)
+    printf("No partitions found!\n\n");
 }
 
 int rename_file(char *name,char *dest_name)
