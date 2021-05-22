@@ -1086,52 +1086,32 @@ int detect_mode(void)
 
   //  printf("$D030 = $%02X\n",mem_buff[0]);
   if (mem_buff[0]==0x64) {
-    // Probably C65 mode
-    int in_range=0;
-    // Allow more tries to allow more time for ROM checksum to finish
-    // or boot attempt from floppy to finish
-    for (int i=0;i<10;i++) {
-      int pc=get_pc();
-      if (pc>=0xe1a0&&pc<=0xe1b4) in_range++; else {
-        // C65 ROM does checksum, so wait a while if it is in that range
-        if (pc>=0xb000&&pc<0xc000) sleep(1);
-        // Or booting from internal drive is also slow
-        if (pc>=0x9c00&&pc<0x9d00) sleep(1);
-        // Or something else it does while booting
-        if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
-        else {
-          //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
-          do_usleep(100000);
-        }
-      }
-    }
-    if (in_range>3) {
-      // We are in C65 BASIC main loop, so assume it is C65 mode
-      saw_c65_mode=1;
+    saw_c65_mode = 1;
+    fprintf(stderr, "In C65 Mode.\n");
+    return 0;
+  }
+
+  // Use screen address to guess mode
+  fetch_ram(0xffd3060, 3, mem_buff);
+  if (mem_buff[1] == 0x04) {
+    printf("Screen is at $0400\n");
+    // check $01 port value
+    fetch_ram(0x7770001, 1, mem_buff);
+    printf("Port $01 contains $%02x\n", mem_buff[0]);
+    if ((mem_buff[0] & 0xf) == 0x07) {
+      saw_c64_mode = 1;
       timestamp_msg("");
-      fprintf(stderr,"CPU in C65 BASIC 10 main loop.\n");
-      return 0;
-    }
-  } else if (mem_buff[0]==0x00) {
-    // Probably C64 mode
-    int in_range=0;
-    for (int i=0;i<5;i++) {
-      int pc=get_pc();
-      // XXX Might not work with OpenROMs?
-      if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;
-      else {
-        //	printf("Odd PC=$%04x\n",pc);
-        usleep(100000);
-      }
-    }
-    if (in_range>3) {
-      // We are in C64 BASIC main loop, so assume it is C65 mode
-      saw_c64_mode=1;
-      timestamp_msg("");
-      fprintf(stderr,"CPU in C64 BASIC 2 main loop.\n");
+      fprintf(stderr, "In C64 Mode.\n");
       return 0;
     }
   }
+  if (mem_buff[1] == 0x08) {
+    saw_c65_mode = 1;
+    timestamp_msg("");
+    fprintf(stderr, "In C65 Mode.\n");
+    return 0;
+  }
+
   printf("Could not determine C64/C65/MEGA65 mode.\n");
   return 1;
 }
