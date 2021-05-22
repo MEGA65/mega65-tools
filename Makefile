@@ -73,7 +73,8 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_334.prg \
 		$(TESTDIR)/test_335.prg \
 		$(TESTDIR)/test_342.prg \
-		$(TESTDIR)/test_378.prg
+		$(TESTDIR)/test_378.prg \
+		$(TESTDIR)/test_390.prg
 
 TOOLDIR=	$(SRCDIR)/tools
 TOOLS=	$(BINDIR)/etherload \
@@ -202,6 +203,10 @@ $(TESTDIR)/test_342.prg:       $(TESTDIR)/test_342.c $(CC65)
 $(TESTDIR)/test_378.prg:       $(TESTDIR)/test_378.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
+$(TESTDIR)/test_390.prg:       $(TESTDIR)/test_390.c $(CC65)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
+$(TESTDIR)/test_332.prg:       $(TESTDIR)/test_332.c $(CC65)
 $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -Iinclude/ -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
