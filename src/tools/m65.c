@@ -1206,6 +1206,48 @@ int check_file_access(char* file, char* purpose)
   return 0;
 }
 
+
+void check_for_vf011_requests()
+{
+
+  if (!virtual_f011) {
+    return;
+  }
+
+  if (recent_bytes[3] == '!') {
+    // Handle request
+    recent_bytes[3] = 0;
+    pending_vf011_read = 1;
+    pending_vf011_device = 0;
+    pending_vf011_track = recent_bytes[0] & 0x7f;
+    pending_vf011_sector = recent_bytes[1] & 0x7f;
+    pending_vf011_side = recent_bytes[2] & 0x0f;
+  }
+  if (recent_bytes[3] == 0x5c) {
+    // Handle request
+    recent_bytes[3] = 0;
+    pending_vf011_write = 1;
+    pending_vf011_device = 0;
+    pending_vf011_track = recent_bytes[0] & 0x7f;
+    pending_vf011_sector = recent_bytes[1] & 0x7f;
+    pending_vf011_side = recent_bytes[2] & 0x0f;
+  }
+}
+
+void handle_vf011_requests()
+{
+  if (!virtual_f011) {
+    return;
+  }
+
+  while (pending_vf011_read || pending_vf011_write) {
+    if (pending_vf011_read)
+      virtual_f011_read(pending_vf011_device, pending_vf011_track, pending_vf011_sector, pending_vf011_side);
+    if (pending_vf011_write)
+      virtual_f011_write(pending_vf011_device, pending_vf011_track, pending_vf011_sector, pending_vf011_side);
+  }
+}
+
 extern const char* version_string;
 
 char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", "C#$06", "C#$07", "C#$08", "C#$09", "C#$0A",
@@ -1214,7 +1256,6 @@ char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", 
 char msgbuf[160];
 char testname[160];
 unsigned char inbuf[8192];
-
 
 void unit_test_log(unsigned char bytes[4])
 {
@@ -1265,7 +1306,7 @@ void enterTestMode()
   while (1) {
 
     int b = serialport_read(fd, inbuf, 8192);
- 
+
     for (int i = 0; i < b; i++) {
 
       // message receive mode: fill message buffer until end of string is reached
@@ -1293,7 +1334,10 @@ void enterTestMode()
         recent_bytes[1] = recent_bytes[2];
         recent_bytes[2] = recent_bytes[3];
         recent_bytes[3] = inbuf[i];
+        check_for_vf011_requests();
       }
+      handle_vf011_requests();
+      
 
       // check if we should receive a string
       if (!receiveString) {
@@ -1314,6 +1358,7 @@ void enterTestMode()
     }
   }
 }
+
 
 int main(int argc, char** argv)
 {
@@ -2350,32 +2395,10 @@ int main(int argc, char** argv)
         recent_bytes[1] = recent_bytes[2];
         recent_bytes[2] = recent_bytes[3];
         recent_bytes[3] = buff[i];
+        check_for_vf011_requests();
+      }
 
-        if (recent_bytes[3] == '!') {
-          // Handle request
-          recent_bytes[3] = 0;
-          pending_vf011_read = 1;
-          pending_vf011_device = 0;
-          pending_vf011_track = recent_bytes[0] & 0x7f;
-          pending_vf011_sector = recent_bytes[1] & 0x7f;
-          pending_vf011_side = recent_bytes[2] & 0x0f;
-        }
-        if (recent_bytes[3] == 0x5c) {
-          // Handle request
-          recent_bytes[3] = 0;
-          pending_vf011_write = 1;
-          pending_vf011_device = 0;
-          pending_vf011_track = recent_bytes[0] & 0x7f;
-          pending_vf011_sector = recent_bytes[1] & 0x7f;
-          pending_vf011_side = recent_bytes[2] & 0x0f;
-        }
-      }
-      while (pending_vf011_read || pending_vf011_write) {
-        if (pending_vf011_read)
-          virtual_f011_read(pending_vf011_device, pending_vf011_track, pending_vf011_sector, pending_vf011_side);
-        if (pending_vf011_write)
-          virtual_f011_write(pending_vf011_device, pending_vf011_track, pending_vf011_sector, pending_vf011_side);
-      }
+      handle_vf011_requests();
 
       continue;
     }
