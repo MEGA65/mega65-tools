@@ -63,7 +63,7 @@ int osk_enable = 0;
 
 int not_already_loaded = 1;
 
-int unit_test_mode=0;
+int unit_test_mode = 0;
 
 int halt = 0;
 
@@ -83,10 +83,11 @@ void do_exit(int retval);
 void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool.\n");
-  fprintf(stderr, "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
-                  "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
-                  "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
-                  "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] [-u]\n");
+  fprintf(stderr,
+      "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
+      "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
+      "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
+      "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] [-u]\n");
   fprintf(stderr, "  -@ - Load a binary file at a specific address.\n");
   fprintf(stderr, "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n");
   fprintf(stderr, "  -4 - Switch to C64 mode before exiting.\n");
@@ -1205,38 +1206,72 @@ int check_file_access(char* file, char* purpose)
   return 0;
 }
 
+
+void check_for_vf011_requests()
+{
+
+  if (!virtual_f011) {
+    return;
+  }
+
+  if (recent_bytes[3] == '!') {
+    // Handle request
+    recent_bytes[3] = 0;
+    pending_vf011_read = 1;
+    pending_vf011_device = 0;
+    pending_vf011_track = recent_bytes[0] & 0x7f;
+    pending_vf011_sector = recent_bytes[1] & 0x7f;
+    pending_vf011_side = recent_bytes[2] & 0x0f;
+  }
+  if (recent_bytes[3] == 0x5c) {
+    // Handle request
+    recent_bytes[3] = 0;
+    pending_vf011_write = 1;
+    pending_vf011_device = 0;
+    pending_vf011_track = recent_bytes[0] & 0x7f;
+    pending_vf011_sector = recent_bytes[1] & 0x7f;
+    pending_vf011_side = recent_bytes[2] & 0x0f;
+  }
+}
+
+void handle_vf011_requests()
+{
+  if (!virtual_f011) {
+    return;
+  }
+
+  while (pending_vf011_read || pending_vf011_write) {
+    if (pending_vf011_read)
+      virtual_f011_read(pending_vf011_device, pending_vf011_track, pending_vf011_sector, pending_vf011_side);
+    if (pending_vf011_write)
+      virtual_f011_write(pending_vf011_device, pending_vf011_track, pending_vf011_sector, pending_vf011_side);
+  }
+}
+
 extern const char* version_string;
 
-char *test_states[16]={
-		       "START",
-		       " SKIP",
-		       " PASS",
-		       " FAIL",
-		       "ERROR",
-		       "C#$05",
-		       "C#$06",
-		       "C#$07",
-		       "C#$08",
-		       "C#$09",
-		       "C#$0A",
-		       "C#$0B",
-		       "C#$0C",
-		       "C#$0D",
-		       "C#$0E",
-		       " DONE"
-};
+char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", "C#$06", "C#$07", "C#$08", "C#$09", "C#$0A",
+  "C#$0B", "C#$0C", "  LOG", " NAME", " DONE" };
 
-void unit_test_log(unsigned char bytes[4],int argc,char **argv)
+char msgbuf[160];
+char testname[160];
+unsigned char inbuf[8192];
+
+void unit_test_log(unsigned char bytes[4])
 {
-  int test_issue=bytes[0]+(bytes[1]<<8);
-  int test_sub=bytes[2];
+  int test_issue = bytes[0] + (bytes[1] << 8);
+  int test_sub = bytes[2];
 
-  //  dump_bytes(0,"bytes",bytes,4);
-  
-  fprintf(stderr,"%s: Issue#%d, Test #%d\n",
-	  test_states[bytes[3]-0xf0],test_issue,test_sub);
-  
-  switch(bytes[3]) {
+  // dump_bytes(0, "bytes", bytes, 4);
+
+  // log test name if we have one
+  if (testname[0]) {
+    fprintf(stderr, "%s: ", testname);
+  }
+
+  fprintf(stderr, "%s (Issue#%d, Test #%d)\n", test_states[bytes[3] - 0xf0], test_issue, test_sub);
+
+  switch (bytes[3]) {
   case 0xf0: // Starting a test
     break;
   case 0xf1: // Skipping a test
@@ -1247,13 +1282,83 @@ void unit_test_log(unsigned char bytes[4],int argc,char **argv)
     break;
   case 0xf4: // Error trying to run test
     break;
+  case 0xfd: // Log message
+    break;
+  case 0xfe: // Set name of current test
+    break;
   case 0xff: // Last test complete
-    fprintf(stderr,">>> Terminating after completion of last test.\n");
+    fprintf(stderr, ">>> Terminating after completion of last test.\n");
     do_exit(0);
     break;
   }
-  
 }
+
+void enterTestMode()
+{
+
+  unsigned char receiveString;
+  int currentMessagePos;
+
+  fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
+  testname[0] = 0; // initialize test name with empty string
+  receiveString = 0;
+
+  while (1) {
+
+    int b = serialport_read(fd, inbuf, 8192);
+
+    for (int i = 0; i < b; i++) {
+
+      // message receive mode: fill message buffer until end of string is reached
+      if (receiveString) {
+        msgbuf[currentMessagePos] = inbuf[i];
+
+        // (ugly workaround: use pound sign as string end marker, because zeroes
+        // sometimes get corrupted when using the serial line...)
+        if (msgbuf[currentMessagePos] == 92) {
+          msgbuf[currentMessagePos] = 0;
+          receiveString = 0;
+          if (recent_bytes[3] == 0xfd) { // log message to console
+            fprintf(stderr, "%s\n", msgbuf);
+          }
+          else if (recent_bytes[3] == 0xfe) { // set current test name
+            strncpy(testname, msgbuf, 160);
+          }
+          bzero(recent_bytes, 4);
+        }
+
+        currentMessagePos++;
+      }
+      else {
+        recent_bytes[0] = recent_bytes[1];
+        recent_bytes[1] = recent_bytes[2];
+        recent_bytes[2] = recent_bytes[3];
+        recent_bytes[3] = inbuf[i];
+        check_for_vf011_requests();
+      }
+      handle_vf011_requests();
+      
+
+      // check if we should receive a string
+      if (!receiveString) {
+        if (recent_bytes[3] == 0xfe || recent_bytes[3] == 0xfd) {
+          // receive message
+          receiveString = 1;
+          currentMessagePos = 0;
+        }
+      }
+
+      // not receiving a string? handle unit test token if needed
+      if (!receiveString) {
+        if (recent_bytes[3] >= 0xf0) {
+          // handle unit test token
+          unit_test_log(recent_bytes);
+        }
+      }
+    }
+  }
+}
+
 
 int main(int argc, char** argv)
 {
@@ -1425,7 +1530,7 @@ int main(int argc, char** argv)
         type_text_cr = 1;
       break;
     case 'u':
-      unit_test_mode=1;
+      unit_test_mode = 1;
       break;
     default: /* '?' */
       usage();
@@ -2271,15 +2376,15 @@ int main(int argc, char** argv)
     }
   }
 
+  if (unit_test_mode) {
+    enterTestMode();
+  }
+
   // XXX - loop for virtualisation, JTAG boundary scanning etc
 
-  unsigned char recent_bytes[4] = { 0, 0, 0, 0 };
-  
-  if (virtual_f011||unit_test_mode) {
-    if (virtual_f011)
-      fprintf(stderr, "Entering virtualised F011 wait loop...\n");
-    if (unit_test_mode)
-      fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
+  if (virtual_f011) {
+    fprintf(stderr, "Entering virtualised F011 wait loop...\n");
+
     while (1) {
       unsigned char buff[8192];
 
@@ -2290,37 +2395,10 @@ int main(int argc, char** argv)
         recent_bytes[1] = recent_bytes[2];
         recent_bytes[2] = recent_bytes[3];
         recent_bytes[3] = buff[i];
+        check_for_vf011_requests();
+      }
 
-	if (recent_bytes[3] >= 0xf0) {
-	  // Unit test start
-	  unit_test_log(recent_bytes,argc,argv);
-	}
-	
-	if (recent_bytes[3] == '!') {
-	  // Handle request
-	  recent_bytes[3] = 0;
-	  pending_vf011_read = 1;
-	  pending_vf011_device = 0;
-	  pending_vf011_track = recent_bytes[0] & 0x7f;
-	  pending_vf011_sector = recent_bytes[1] & 0x7f;
-	  pending_vf011_side = recent_bytes[2] & 0x0f;
-	}
-	if (recent_bytes[3] == 0x5c) {
-	  // Handle request
-	  recent_bytes[3] = 0;
-	  pending_vf011_write = 1;
-	  pending_vf011_device = 0;
-	  pending_vf011_track = recent_bytes[0] & 0x7f;
-	  pending_vf011_sector = recent_bytes[1] & 0x7f;
-	  pending_vf011_side = recent_bytes[2] & 0x0f;
-	}
-      }
-      while (pending_vf011_read || pending_vf011_write) {
-        if (pending_vf011_read)
-          virtual_f011_read(pending_vf011_device, pending_vf011_track, pending_vf011_sector, pending_vf011_side);
-        if (pending_vf011_write)
-          virtual_f011_write(pending_vf011_device, pending_vf011_track, pending_vf011_sector, pending_vf011_side);
-      }
+      handle_vf011_requests();
 
       continue;
     }
