@@ -63,7 +63,7 @@ int osk_enable = 0;
 
 int not_already_loaded = 1;
 
-int unit_test_mode=0;
+int unit_test_mode = 0;
 
 int halt = 0;
 
@@ -83,10 +83,11 @@ void do_exit(int retval);
 void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool.\n");
-  fprintf(stderr, "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
-                  "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
-                  "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
-                  "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] [-u]\n");
+  fprintf(stderr,
+      "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
+      "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
+      "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
+      "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] [-u]\n");
   fprintf(stderr, "  -@ - Load a binary file at a specific address.\n");
   fprintf(stderr, "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n");
   fprintf(stderr, "  -4 - Switch to C64 mode before exiting.\n");
@@ -1207,53 +1208,13 @@ int check_file_access(char* file, char* purpose)
 
 extern const char* version_string;
 
-char* test_states[16] = { 
-  "START", 
-  " SKIP", 
-  " PASS", 
-  " FAIL", 
-  "ERROR", 
-  "C#$05", 
-  "C#$06", 
-  "C#$07", 
-  "C#$08", 
-  "C#$09", 
-  "C#$0A",
-  "C#$0B", 
-  "C#$0C", 
-  "  LOG",    /* log message */ 
-  " NAME",    /* set current test name */
-  " DONE" 
-  };
+char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", "C#$06", "C#$07", "C#$08", "C#$09", "C#$0A",
+  "C#$0B", "C#$0C", "  LOG", " NAME", " DONE" };
 
-char msgbuf[32];
-char testname[32];
+char msgbuf[160];
+char testname[160];
 unsigned char inbuf[8192];
 
-void get_msg()
-{
-
-  char* current;
-  int i;
-
-  current = msgbuf;
-
-  while (1) {
-
-    int b = serialport_read(fd, inbuf, 8192);
-
-    for (i = 0; i < b; ++i) {
-      *current = inbuf[i];
-      if (*current==92) {
-        // ugly workaround: use pound sign as string end marker, because zeroes
-        // sometimes get corrupted when using the serial line...
-        *current = 0;
-        return;
-      }
-      current++;
-    }
-  }
-}
 
 void unit_test_log(unsigned char bytes[4])
 {
@@ -1264,7 +1225,7 @@ void unit_test_log(unsigned char bytes[4])
 
   // log test name if we have one
   if (testname[0]) {
-    fprintf(stderr, "%s - ",testname);
+    fprintf(stderr, "%s: ", testname);
   }
 
   fprintf(stderr, "%s (Issue#%d, Test #%d)\n", test_states[bytes[3] - 0xf0], test_issue, test_sub);
@@ -1281,13 +1242,8 @@ void unit_test_log(unsigned char bytes[4])
   case 0xf4: // Error trying to run test
     break;
   case 0xfd: // Log message
-    get_msg();
-    fprintf(stderr, "%s\n",msgbuf);
     break;
   case 0xfe: // Set name of current test
-    get_msg();
-    strncpy(testname,msgbuf,32);
-    fprintf(stderr, "set test name to %s\n", testname);
     break;
   case 0xff: // Last test complete
     fprintf(stderr, ">>> Terminating after completion of last test.\n");
@@ -1299,28 +1255,65 @@ void unit_test_log(unsigned char bytes[4])
 void enterTestMode()
 {
 
-  fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
+  unsigned char receiveString;
+  int currentMessagePos;
 
-  testname[0]=0; // initialize test name with empty string
+  fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
+  testname[0] = 0; // initialize test name with empty string
+  receiveString = 0;
 
   while (1) {
 
     int b = serialport_read(fd, inbuf, 8192);
-
+ 
     for (int i = 0; i < b; i++) {
-      recent_bytes[0] = recent_bytes[1];
-      recent_bytes[1] = recent_bytes[2];
-      recent_bytes[2] = recent_bytes[3];
-      recent_bytes[3] = inbuf[i];
 
-      if (recent_bytes[3] >= 0xf0) {
-        // Unit test start
-        unit_test_log(recent_bytes);
+      // message receive mode: fill message buffer until end of string is reached
+      if (receiveString) {
+        msgbuf[currentMessagePos] = inbuf[i];
+
+        // (ugly workaround: use pound sign as string end marker, because zeroes
+        // sometimes get corrupted when using the serial line...)
+        if (msgbuf[currentMessagePos] == 92) {
+          msgbuf[currentMessagePos] = 0;
+          receiveString = 0;
+          if (recent_bytes[3] == 0xfd) { // log message to console
+            fprintf(stderr, "%s\n", msgbuf);
+          }
+          else if (recent_bytes[3] == 0xfe) { // set current test name
+            strncpy(testname, msgbuf, 160);
+          }
+          bzero(recent_bytes, 4);
+        }
+
+        currentMessagePos++;
+      }
+      else {
+        recent_bytes[0] = recent_bytes[1];
+        recent_bytes[1] = recent_bytes[2];
+        recent_bytes[2] = recent_bytes[3];
+        recent_bytes[3] = inbuf[i];
+      }
+
+      // check if we should receive a string
+      if (!receiveString) {
+        if (recent_bytes[3] == 0xfe || recent_bytes[3] == 0xfd) {
+          // receive message
+          receiveString = 1;
+          currentMessagePos = 0;
+        }
+      }
+
+      // not receiving a string? handle unit test token if needed
+      if (!receiveString) {
+        if (recent_bytes[3] >= 0xf0) {
+          // handle unit test token
+          unit_test_log(recent_bytes);
+        }
       }
     }
   }
 }
-
 
 int main(int argc, char** argv)
 {
@@ -1492,7 +1485,7 @@ int main(int argc, char** argv)
         type_text_cr = 1;
       break;
     case 'u':
-      unit_test_mode=1;
+      unit_test_mode = 1;
       break;
     default: /* '?' */
       usage();
@@ -2338,7 +2331,7 @@ int main(int argc, char** argv)
     }
   }
 
-   if (unit_test_mode) {
+  if (unit_test_mode) {
     enterTestMode();
   }
 
