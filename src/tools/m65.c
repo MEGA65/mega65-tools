@@ -48,6 +48,10 @@
 
 #include "m65common.h"
 
+#define UT_TIMEOUT 10
+
+#define UT_RES_TIMEOUT 127
+
 extern int pending_vf011_read;
 extern int pending_vf011_write;
 extern int pending_vf011_device;
@@ -88,50 +92,52 @@ void usage(void)
       "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
       "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
       "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] [-u]\n");
-  fprintf(stderr, "  -@ - Load a binary file at a specific address.\n");
-  fprintf(stderr, "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n");
-  fprintf(stderr, "  -4 - Switch to C64 mode before exiting.\n");
-  fprintf(stderr, "  -A - Set audio coefficient(s) xx (and optionally to yy) to ppp percent of maximum volume.\n");
-  fprintf(stderr, "  -a - Read and display audio cross-bar mixer status.\n");
-  fprintf(stderr, "  -B - Set a breakpoint on synchronising, and then immediately exit.\n");
-  fprintf(stderr, "  -b - Name of bitstream file to load.\n");
-  fprintf(stderr, "  -C - Character ROM file to preload.\n");
-  fprintf(stderr, "  -c - Colour RAM contents to preload.\n");
-  fprintf(stderr, "  -d - Enable virtual D81 access\n");
-  fprintf(stderr, "  -E - Enable streaming of video via ethernet.\n");
-  fprintf(stderr, "  -F - Force reset on start\n");
-  fprintf(stderr, "  -f - Specify which FPGA to reconfigure when calling fpgajtag\n");
-  fprintf(stderr, "  -H - Halt CPU after loading ROMs.\n");
-  fprintf(stderr, "  -J - Do JTAG boundary scan of attached FPGA, using the provided XDC and BSDL files.\n");
-  fprintf(stderr, "       A sensitivity list can also be provided, to restrict the set of signals monitored.\n");
-  fprintf(stderr, "       This will likely be required when producing VCD files, as they can only log ~80 signals.\n");
-  fprintf(stderr, "  -j   Do JTAG operation(s), and nothing else.\n");
-  fprintf(stderr, "  -K - Use DK backend for libUSB, if available\n");
-  fprintf(stderr, "  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n");
-  fprintf(stderr, "       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
-                  "             for the bitstream, and @issue/tag for HYPPO.\n");
-  fprintf(stderr, "  -L - Enable streaming of CPU instruction log via ethernet.\n");
-  fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
-  fprintf(stderr, "  -o - Enable on-screen keyboard\n");
-  fprintf(stderr, "  -N - Disable a running cartridge, and boot to C64 mode.\n");
-  fprintf(stderr, "  -n - Force NTSC video mode\n");
-  fprintf(stderr, "  -p - Force PAL video mode\n");
-  fprintf(stderr, "  -q - Name of bitstream file to load and then directly quit. Use this for cores other than MEGA65.\n");
-  fprintf(stderr, "  -R - ROM file to preload at $20000-$3FFFF.\n");
-  fprintf(stderr, "  -r - Automatically RUN programme after loading.\n");
-  fprintf(stderr, "  -S - Show the text-mode screen\n");
-  fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
-  fprintf(stderr, "       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n");
-  fprintf(stderr, "  -T - As above, but also provide carriage return\n");
-  fprintf(stderr, "  -t - Type text via keyboard virtualisation.\n");
-  fprintf(stderr, "  -U - Flash menu file to preload at $50000-$57FFF.\n");
-  fprintf(stderr, "  -u - Enable unit test mode: m65 does not terminate until it receives a response from a unit test.\n");
-  fprintf(stderr, "  -v - The location of the Vivado executable to use for -b on Windows.\n");
-  fprintf(stderr, "  -V - Write JTAG change log to VCD file, instead of to stdout.\n");
-  fprintf(stderr, "  -X - Show a report of current Hypervisor status.\n");
-  fprintf(stderr, "  -Z - Zap (reconfigure) FPGA from specified hex address in flash.\n");
-  fprintf(stderr, "  filename - Load and run this file in C64 mode before exiting.\n");
-  fprintf(stderr, "\n");
+
+  fprintf(stderr, "  -@ - Load a binary file at a specific address.\n"
+                  "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n"
+                  "  -4 - Switch to C64 mode before exiting.\n"
+                  "  -A - Set audio coefficient(s) xx (and optionally to yy) to ppp percent of maximum volume.\n"
+                  "  -a - Read and display audio cross-bar mixer status.\n"
+                  "  -B - Set a breakpoint on synchronising, and then immediately exit.\n"
+                  "  -b - Name of bitstream file to load.\n"
+                  "  -C - Character ROM file to preload.\n"
+                  "  -c - Colour RAM contents to preload.\n"
+                  "  -d - Enable virtual D81 access\n"
+                  "  -E - Enable streaming of video via ethernet.\n"
+                  "  -F - Force reset on start\n"
+                  "  -f - Specify which FPGA to reconfigure when calling fpgajtag\n"
+                  "  -H - Halt CPU after loading ROMs.\n"
+                  "  -J - Do JTAG boundary scan of attached FPGA, using the provided XDC and BSDL files.\n"
+                  "       A sensitivity list can also be provided, to restrict the set of signals monitored.\n"
+                  "       This will likely be required when producing VCD files, as they can only log ~80 signals.\n"
+                  "  -j   Do JTAG operation(s), and nothing else.\n"
+                  "  -K - Use DK backend for libUSB, if available\n"
+                  "  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n"
+                  "       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
+                  "             for the bitstream, and @issue/tag for HYPPO.\n"
+                  "  -L - Enable streaming of CPU instruction log via ethernet.\n"
+                  "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n"
+                  "  -N - Disable a running cartridge, and boot to C64 mode.\n"
+                  "  -n - Force NTSC video mode\n"
+                  "  -o - Enable on-screen keyboard\n"
+                  "  -p - Force PAL video mode\n"
+                  "  -q - Name of bitstream file to load and then directly quit. Use this for cores other than MEGA65.\n"
+                  "  -R - ROM file to preload at $20000-$3FFFF.\n"
+                  "  -r - Automatically RUN programme after loading.\n"
+                  "  -S - Show the text-mode screen\n"
+                  "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n"
+                  "       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n"
+                  "  -T - As above, but also provide carriage return\n"
+                  "  -t - Type text via keyboard virtualisation.\n"
+                  "  -U - Flash menu file to preload at $50000-$57FFF.\n"
+                  "  -u - Enable unit test mode: m65 does not terminate until it receives a response from a unit test.\n"
+                  "  -v - The location of the Vivado executable to use for -b on Windows.\n"
+                  "  -w - Write (or append) unit test results to a logfile\n"
+                  "  -V - Write JTAG change log to VCD file, instead of to stdout.\n"
+                  "  -X - Show a report of current Hypervisor status.\n"
+                  "  -Z - Zap (reconfigure) FPGA from specified hex address in flash.\n"
+                  "  filename - Load and run this file before exiting.\n"
+                  "\n");
   exit(-3);
 }
 
@@ -162,6 +168,7 @@ int virtual_f011 = 0;
 char* d81file = NULL;
 char* filename = NULL;
 char* romfile = NULL;
+char* logfile = NULL;
 char* flashmenufile = NULL;
 char* charromfile = NULL;
 char* colourramfile = NULL;
@@ -1206,7 +1213,6 @@ int check_file_access(char* file, char* purpose)
   return 0;
 }
 
-
 void check_for_vf011_requests()
 {
 
@@ -1256,20 +1262,45 @@ char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", 
 char msgbuf[160];
 char testname[160];
 unsigned char inbuf[8192];
+unsigned int failcount;
+FILE* logPtr;
 
 void unit_test_log(unsigned char bytes[4])
 {
   int test_issue = bytes[0] + (bytes[1] << 8);
   int test_sub = bytes[2];
+  char outstring[255];
+  char temp[255];
+
+  time_t currentTime;
+  char* ts;
 
   // dump_bytes(0, "bytes", bytes, 4);
 
-  // log test name if we have one
-  if (testname[0]) {
-    fprintf(stderr, "%s: ", testname);
-  }
+  bzero(outstring, 255);
 
-  fprintf(stderr, "%s (Issue#%d, Test #%d)\n", test_states[bytes[3] - 0xf0], test_issue, test_sub);
+  currentTime = time(NULL);
+  ts = asctime(localtime(&currentTime));
+  ts[strlen(ts) - 1] = 0;
+  strcat(outstring, ts);
+
+  sprintf(temp, " %s (Issue#%04d, Test #%03d", test_states[bytes[3] - 0xf0], test_issue, test_sub);
+  strcat(outstring, temp);
+
+  // append current test name if we have one
+  if (testname[0]) {
+    sprintf(temp, " - %s)", testname);
+  }
+  else {
+    sprintf(temp, ")");
+  }
+  strcat(outstring, temp);
+
+  fprintf(stderr, "%s\n", outstring);
+  if (logPtr) {
+    fprintf(logPtr, "%s\n", outstring);
+    fflush(logPtr);
+  }
 
   switch (bytes[3]) {
   case 0xf0: // Starting a test
@@ -1279,8 +1310,10 @@ void unit_test_log(unsigned char bytes[4])
   case 0xf2: // Test pass
     break;
   case 0xf3: // Test failure (ie test ran, but detected failure of test condition)
+    failcount++;
     break;
   case 0xf4: // Error trying to run test
+    failcount++;
     break;
   case 0xfd: // Log message
     break;
@@ -1288,7 +1321,11 @@ void unit_test_log(unsigned char bytes[4])
     break;
   case 0xff: // Last test complete
     fprintf(stderr, ">>> Terminating after completion of last test.\n");
-    do_exit(0);
+    if (logPtr) {
+      fprintf(logPtr, ">>> Terminating after completion of last test.\n");
+      fclose(logPtr);
+    }
+    do_exit(failcount);
     break;
   }
 }
@@ -1298,12 +1335,33 @@ void enterTestMode()
 
   unsigned char receiveString;
   int currentMessagePos;
+  time_t currentTime;
+  char* ts;
 
   fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
   testname[0] = 0; // initialize test name with empty string
   receiveString = 0;
+  failcount = 0;
+  logPtr = NULL;
 
-  while (1) {
+  currentTime = time(NULL);
+
+  if (logfile) {
+
+    logPtr = fopen(logfile, "a");
+    if (!logPtr) {
+      fprintf(stderr, "could not open logfile %s for appending. aborting\n", logfile);
+      exit(127);
+    }
+
+    ts = asctime(localtime(&currentTime));
+    ts[strlen(ts) - 1] = 0;
+
+    fprintf(stderr, "logging test results in %s\n", logfile);
+    fprintf(logPtr, "\n>>> begin testing %s; FILE: %s\n", ts, filename);
+  }
+
+  while (time(NULL) - currentTime < UT_TIMEOUT) {
 
     int b = serialport_read(fd, inbuf, 8192);
 
@@ -1320,6 +1378,9 @@ void enterTestMode()
           receiveString = 0;
           if (recent_bytes[3] == 0xfd) { // log message to console
             fprintf(stderr, "%s\n", msgbuf);
+            if (logPtr) {
+              fprintf(logPtr, "%s\n", msgbuf);
+            }
           }
           else if (recent_bytes[3] == 0xfe) { // set current test name
             strncpy(testname, msgbuf, 160);
@@ -1337,7 +1398,6 @@ void enterTestMode()
         check_for_vf011_requests();
       }
       handle_vf011_requests();
-      
 
       // check if we should receive a string
       if (!receiveString) {
@@ -1351,14 +1411,27 @@ void enterTestMode()
       // not receiving a string? handle unit test token if needed
       if (!receiveString) {
         if (recent_bytes[3] >= 0xf0) {
-          // handle unit test token
+          // handle unit test token and update time
+          currentTime = time(NULL);
           unit_test_log(recent_bytes);
         }
       }
     }
   }
-}
 
+  if (testname[0]) {
+    fprintf(stderr, "%s: ", testname);
+    if (logPtr) {
+      fprintf(logPtr, "%s: ", testname);
+    }
+  }
+  fprintf(stderr, "timeout encountered while running tests. aborting.\n");
+  if (logPtr) {
+    fprintf(logPtr, "timeout encountered while running tests. aborting.\n");
+    fclose(logPtr);
+  }
+  do_exit(UT_RES_TIMEOUT);
+}
 
 int main(int argc, char** argv)
 {
@@ -1376,7 +1449,7 @@ int main(int argc, char** argv)
     usage();
 
   int opt;
-  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:uU:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:uU:v:V:w:XZ:?")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
@@ -1516,6 +1589,9 @@ int main(int argc, char** argv)
       break;
     case 'V':
       set_vcd_file(optarg);
+      break;
+    case 'w':
+      logfile = strdup(optarg);
       break;
     case 'k':
       hyppo = strdup(optarg);
@@ -2411,12 +2487,11 @@ void do_exit(int retval)
 #ifndef WINDOWS
   if (thread_count) {
     timestamp_msg("");
-    fprintf(stderr, "Background tasks may be running running. CONTROL+C to stop...\n");
+    fprintf(stderr, "Background tasks may be running. CONTROL+C to stop...\n");
     for (int i = 0; i < thread_count; i++)
       pthread_join(threads[i], NULL);
   }
 #endif
   close_tcp_port();
-
   exit(retval);
 }
