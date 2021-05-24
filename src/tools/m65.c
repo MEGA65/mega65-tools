@@ -1337,7 +1337,7 @@ void enterTestMode()
 
     logPtr = fopen(logfile, "a");
     if (!logPtr) {
-      fprintf(stderr, "could not open logfile %s for reading. aborting\n", logfile);
+      fprintf(stderr, "could not open logfile %s for appending. aborting\n", logfile);
       exit(127);
     }
 
