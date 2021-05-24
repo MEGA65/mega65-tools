@@ -48,6 +48,11 @@
 
 #include "m65common.h"
 
+#define UT_TIMEOUT 10
+
+#define UT_RES_TIMEOUT 127
+
+
 extern int pending_vf011_read;
 extern int pending_vf011_write;
 extern int pending_vf011_device;
@@ -1206,7 +1211,6 @@ int check_file_access(char* file, char* purpose)
   return 0;
 }
 
-
 void check_for_vf011_requests()
 {
 
@@ -1256,6 +1260,7 @@ char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", 
 char msgbuf[160];
 char testname[160];
 unsigned char inbuf[8192];
+unsigned int failcount;
 
 void unit_test_log(unsigned char bytes[4])
 {
@@ -1279,8 +1284,10 @@ void unit_test_log(unsigned char bytes[4])
   case 0xf2: // Test pass
     break;
   case 0xf3: // Test failure (ie test ran, but detected failure of test condition)
+    failcount++;
     break;
   case 0xf4: // Error trying to run test
+    failcount++;
     break;
   case 0xfd: // Log message
     break;
@@ -1288,7 +1295,7 @@ void unit_test_log(unsigned char bytes[4])
     break;
   case 0xff: // Last test complete
     fprintf(stderr, ">>> Terminating after completion of last test.\n");
-    do_exit(0);
+    do_exit(failcount);
     break;
   }
 }
@@ -1298,12 +1305,16 @@ void enterTestMode()
 
   unsigned char receiveString;
   int currentMessagePos;
+  time_t currentTime;
 
   fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
   testname[0] = 0; // initialize test name with empty string
   receiveString = 0;
+  failcount = 0;
 
-  while (1) {
+  currentTime = time(NULL);
+
+  while (time(NULL) - currentTime < UT_TIMEOUT) {
 
     int b = serialport_read(fd, inbuf, 8192);
 
@@ -1337,7 +1348,6 @@ void enterTestMode()
         check_for_vf011_requests();
       }
       handle_vf011_requests();
-      
 
       // check if we should receive a string
       if (!receiveString) {
@@ -1351,14 +1361,20 @@ void enterTestMode()
       // not receiving a string? handle unit test token if needed
       if (!receiveString) {
         if (recent_bytes[3] >= 0xf0) {
-          // handle unit test token
+          // handle unit test token and update time
+          currentTime = time(NULL);
           unit_test_log(recent_bytes);
         }
       }
     }
   }
-}
 
+  if (testname[0]) {
+    fprintf(stderr, "%s: ", testname);
+  }
+  fprintf(stderr, "timeout encountered while running tests. aborting.\n");
+  do_exit(UT_RES_TIMEOUT);
+}
 
 int main(int argc, char** argv)
 {
@@ -2411,12 +2427,11 @@ void do_exit(int retval)
 #ifndef WINDOWS
   if (thread_count) {
     timestamp_msg("");
-    fprintf(stderr, "Background tasks may be running running. CONTROL+C to stop...\n");
+    fprintf(stderr, "Background tasks may be running. CONTROL+C to stop...\n");
     for (int i = 0; i < thread_count; i++)
       pthread_join(threads[i], NULL);
   }
 #endif
   close_tcp_port();
-
   exit(retval);
 }
