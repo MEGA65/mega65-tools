@@ -460,6 +460,17 @@ void main(void)
 		  }
 		  putchar('\n');
     }
+    else if(frame_buffer[start_of_protocol_header + 0] == 'G' &&
+    frame_buffer[start_of_protocol_header + 1] == 'E' &&
+    frame_buffer[start_of_protocol_header + 2] == 'T')
+    {
+      printf("HTTP: Get\n");
+      for(i = 4; frame_buffer[start_of_protocol_header + i] != ' '; i++)
+      {
+        putchar(frame_buffer[start_of_protocol_header + i]);
+      }
+      putchar('\n');
+    }
 
 	}
 	else if(frame_buffer[16 + 9] == 0x11)//UDP
