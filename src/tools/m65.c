@@ -1270,22 +1270,35 @@ void unit_test_log(unsigned char bytes[4])
   int test_issue = bytes[0] + (bytes[1] << 8);
   int test_sub = bytes[2];
   char outstring[255];
+  char temp[255];
+
+  time_t currentTime;
+  char* ts;
 
   // dump_bytes(0, "bytes", bytes, 4);
 
-  // log test name if we have one
+  bzero(outstring, 255);
+
+  currentTime = time(NULL);
+  ts = asctime(localtime(&currentTime));
+  ts[strlen(ts) - 1] = 0;
+  strcat(outstring, ts);
+
+  sprintf(temp, " %s (Issue#%04d, Test #%03d", test_states[bytes[3] - 0xf0], test_issue, test_sub);
+  strcat(outstring, temp);
+
+  // append current test name if we have one
   if (testname[0]) {
-    fprintf(stderr, "%s: ", testname);
-    if (logPtr) {
-      fprintf(logPtr, "%s: ", testname);
-    }
+    sprintf(temp, " - %s)", testname);
   }
+  else {
+    sprintf(temp, ")");
+  }
+  strcat(outstring, temp);
 
-  sprintf(outstring, "%s (Issue#%d, Test #%d)\n", test_states[bytes[3] - 0xf0], test_issue, test_sub);
-
-  fprintf(stderr, "%s", outstring);
+  fprintf(stderr, "%s\n", outstring);
   if (logPtr) {
-    fprintf(logPtr, "%s", outstring);
+    fprintf(logPtr, "%s\n", outstring);
     fflush(logPtr);
   }
 
@@ -1323,7 +1336,7 @@ void enterTestMode()
   unsigned char receiveString;
   int currentMessagePos;
   time_t currentTime;
-  char *ts;
+  char* ts;
 
   fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
   testname[0] = 0; // initialize test name with empty string
@@ -1342,10 +1355,10 @@ void enterTestMode()
     }
 
     ts = asctime(localtime(&currentTime));
-    ts[strlen(ts)-1] = 0;
+    ts[strlen(ts) - 1] = 0;
 
     fprintf(stderr, "logging test results in %s\n", logfile);
-    fprintf(logPtr, "\n>>> begin testing %s; FILE: %s\n",ts,filename);
+    fprintf(logPtr, "\n>>> begin testing %s; FILE: %s\n", ts, filename);
   }
 
   while (time(NULL) - currentTime < UT_TIMEOUT) {
