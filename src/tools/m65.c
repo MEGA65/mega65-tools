@@ -132,6 +132,7 @@ void usage(void)
                   "  -U - Flash menu file to preload at $50000-$57FFF.\n"
                   "  -u - Enable unit test mode: m65 does not terminate until it receives a response from a unit test.\n"
                   "  -v - The location of the Vivado executable to use for -b on Windows.\n"
+                  "  -w - Write (or append) unit test results to a logfile\n"
                   "  -V - Write JTAG change log to VCD file, instead of to stdout.\n"
                   "  -X - Show a report of current Hypervisor status.\n"
                   "  -Z - Zap (reconfigure) FPGA from specified hex address in flash.\n"
@@ -167,6 +168,7 @@ int virtual_f011 = 0;
 char* d81file = NULL;
 char* filename = NULL;
 char* romfile = NULL;
+char* logfile = NULL;
 char* flashmenufile = NULL;
 char* charromfile = NULL;
 char* colourramfile = NULL;
@@ -1261,20 +1263,31 @@ char msgbuf[160];
 char testname[160];
 unsigned char inbuf[8192];
 unsigned int failcount;
+FILE* logPtr;
 
 void unit_test_log(unsigned char bytes[4])
 {
   int test_issue = bytes[0] + (bytes[1] << 8);
   int test_sub = bytes[2];
+  char outstring[255];
 
   // dump_bytes(0, "bytes", bytes, 4);
 
   // log test name if we have one
   if (testname[0]) {
     fprintf(stderr, "%s: ", testname);
+    if (logPtr) {
+      fprintf(logPtr, "%s: ", testname);
+    }
   }
 
-  fprintf(stderr, "%s (Issue#%d, Test #%d)\n", test_states[bytes[3] - 0xf0], test_issue, test_sub);
+  sprintf(outstring, "%s (Issue#%d, Test #%d)\n", test_states[bytes[3] - 0xf0], test_issue, test_sub);
+
+  fprintf(stderr, "%s", outstring);
+  if (logPtr) {
+    fprintf(logPtr, "%s", outstring);
+    fflush(logPtr);
+  }
 
   switch (bytes[3]) {
   case 0xf0: // Starting a test
@@ -1295,6 +1308,10 @@ void unit_test_log(unsigned char bytes[4])
     break;
   case 0xff: // Last test complete
     fprintf(stderr, ">>> Terminating after completion of last test.\n");
+    if (logPtr) {
+      fprintf(logPtr, ">>> Terminating after completion of last test.\n");
+      fclose(logPtr);
+    }
     do_exit(failcount);
     break;
   }
@@ -1306,13 +1323,30 @@ void enterTestMode()
   unsigned char receiveString;
   int currentMessagePos;
   time_t currentTime;
+  char *ts;
 
   fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
   testname[0] = 0; // initialize test name with empty string
   receiveString = 0;
   failcount = 0;
+  logPtr = NULL;
 
   currentTime = time(NULL);
+
+  if (logfile) {
+
+    logPtr = fopen(logfile, "a");
+    if (!logPtr) {
+      fprintf(stderr, "could not open logfile %s for reading. aborting\n", logfile);
+      exit(127);
+    }
+
+    ts = asctime(localtime(&currentTime));
+    ts[strlen(ts)-1] = 0;
+
+    fprintf(stderr, "logging test results in %s\n", logfile);
+    fprintf(logPtr, "\n>>> begin testing %s; FILE: %s\n",ts,filename);
+  }
 
   while (time(NULL) - currentTime < UT_TIMEOUT) {
 
@@ -1331,6 +1365,9 @@ void enterTestMode()
           receiveString = 0;
           if (recent_bytes[3] == 0xfd) { // log message to console
             fprintf(stderr, "%s\n", msgbuf);
+            if (logPtr) {
+              fprintf(logPtr, "%s\n", msgbuf);
+            }
           }
           else if (recent_bytes[3] == 0xfe) { // set current test name
             strncpy(testname, msgbuf, 160);
@@ -1371,8 +1408,15 @@ void enterTestMode()
 
   if (testname[0]) {
     fprintf(stderr, "%s: ", testname);
+    if (logPtr) {
+      fprintf(logPtr, "%s: ", testname);
+    }
   }
   fprintf(stderr, "timeout encountered while running tests. aborting.\n");
+  if (logPtr) {
+    fprintf(logPtr, "timeout encountered while running tests. aborting.\n");
+    fclose(logPtr);
+  }
   do_exit(UT_RES_TIMEOUT);
 }
 
@@ -1392,7 +1436,7 @@ int main(int argc, char** argv)
     usage();
 
   int opt;
-  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:uU:v:V:XZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:uU:v:V:w:XZ:?")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
@@ -1532,6 +1576,9 @@ int main(int argc, char** argv)
       break;
     case 'V':
       set_vcd_file(optarg);
+      break;
+    case 'w':
+      logfile = strdup(optarg);
       break;
     case 'k':
       hyppo = strdup(optarg);
