@@ -294,6 +294,10 @@ void main(void)
 {
 #endif
   unsigned short len;
+  //since the start of the header varies depending on whether the IPv4 options field is present
+	unsigned short start_of_protocol_header;
+  //looping
+  int i;
 
   POKE(0x0286, 0x01);
 
@@ -322,9 +326,6 @@ void main(void)
 
   // Accept broadcast and multicast frames, and enable promiscuous mode
   POKE(0xD6E5, 0x30);
-
-	//since the start of the header varies depending on whether the IPv4 options field is present
-	unsigned int start_of_protocol_header;
 
   // Find PHY for MDIO access, and select register 1 that has the signals we really care about
   for (phy = 0; phy != 0x20; phy++)
@@ -453,6 +454,11 @@ void main(void)
     frame_buffer[start_of_protocol_header + 3] == 'T')
     {
       printf("HTTP: Post\n");
+		  for(i = 5; frame_buffer[start_of_protocol_header + i] != ' '; i++)
+		  {
+			  putchar(frame_buffer[start_of_protocol_header + i]);
+		  }
+		  putchar('\n');
     }
 
 	}
