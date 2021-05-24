@@ -26,8 +26,8 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "../../../mega65-libc/cc65/include/tests.h"
-#include "../../../mega65-libc/cc65/src/tests.c"
+#include "../mega65-libc/cc65/include/tests.h"
+#include "../mega65-libc/cc65/src/tests.c"
 
 // Which issue number are we testing
 #define ISSUE_NUM 132
