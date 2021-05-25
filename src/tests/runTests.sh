@@ -1,15 +1,25 @@
-#!/bin/sh
+#!/bin/bash
 
 # very simple test runner: find all *.prg files in the current directory
 # and run them.
 #
 # todo: 
-# - detect c64 or c65 mode programs
 # - adapt existing tests to make them aware of the test framework (ugh...)
 
-for file in *.prg; do 
+c64runopts="-Fur4"
+c65runopts="-Fur"
+
+for file in *.prg; do
     if [ -f "$file" ]; then 
-        echo "$file" 
-        ../../bin/m65 -Fur4 $file -w ./tests.log
+        addr=$(hexdump -n 2-x $file -e '"%02X"')
+        if [[ "$addr" == "801" ]]; then 
+          opts=$c64runopts
+        elif [[ "$addr" == "2001" ]]; then 
+          opts=$c65runopts
+        else
+          echo "ERROR: unknown start addresss in file $file"
+          exit -1
+        fi
+        ../../bin/m65 $opts $file -w ./tests.log
     fi 
 done
