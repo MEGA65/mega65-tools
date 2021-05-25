@@ -1608,6 +1608,7 @@ void open_the_serial_port(char* serial_port)
   fd.fdfile = open_serial_port(serial_port, 2000000);
   if (fd.fdfile == INVALID_HANDLE_VALUE) {
     fprintf(stderr, "Could not open serial port '%s'\n", serial_port);
+    fprintf(stderr, "  (could the port be in use by another application?)\n");
     exit(-1);
   }
 
