@@ -364,6 +364,13 @@ int execute_command(char* cmd)
   if ((!strcmp(cmd, "exit")) || (!strcmp(cmd, "quit"))) {
     printf("Reseting MEGA65 and exiting.\n");
 
+    //for (int i = 0; i < sector_cache_count; i++)
+    //{
+    //  char secname[128];
+    //  sprintf(secname, "\nSector %d:\n", sector_cache_sectors[i]);
+    //  dump_bytes(0, secname, sector_cache[i], 512);
+    //}
+
     restart_hyppo();
     exit(0);
   }
@@ -887,18 +894,21 @@ void job_process_results(void)
             }
           }
         }
+        // NOTE: the tricky '%n' specifier at the end.
+        // It's the count of the number of characters of the format string already processed by the function
         fn = sscanf((char*)recent, "FTJOBDATR:%x:%x:%n", &j_addr, &transfer_size, &n);
         if (fn == 2) {
           if (debug_rx)
-            printf("Spotted job data: Reading $%x bytes of raw data, offset %d,"
-                   " %02x %02x\n",
-                transfer_size, n, recent[n], recent[n + 1]);
+            // note that we're hoping that recent[n] and onwards contain the bytes immediately *after* 'FTJOBDATR:%x:%x:'
+            printf("Spotted job data: Reading $%x bytes of raw data (j_addr=$%04X) (offset %d, %02x %02x)\n",
+                   transfer_size, j_addr, n, recent[n], recent[n + 1]);
           q_rle_count = 0;
           q_raw_count = 0;
           q_rle_enable = 0;
           data_byte_count = transfer_size;
           // printf("data_byte_count=0x%X\n", data_byte_count);
           // Don't forget to process the bytes we have already injested
+          // I.e., don't accidentally miss any initial data-bytes that were on the tail-end of this 'JTJOBDATR:%x:%x:' string
           for (int k = n; k <= 30; k++) {
             if (data_byte_count) {
               queue_data_decode_raw(recent[k]);
@@ -1089,6 +1099,13 @@ int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buff
       //      printf("Sector $%08x:\n",sector_number+n);
       //      dump_bytes(3,"read sector",buffer,512);
 
+      //if (sector_number + n == 2623)
+      //{
+      //  char secname[128];
+      //  sprintf(secname, "\nSector %d:\n", sector_number + n);
+      //  dump_bytes(0, secname, buffer, 512);
+      //}
+
       // Store in cache / update cache
       int i;
       for (i = 0; i < sector_cache_count; i++)
@@ -1101,6 +1118,7 @@ int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buff
           sector_cache_count = i + 1;
       }
       else {
+        //printf("SECTOR CACHE OVERFLOW!\n");
         execute_write_queue();
         sector_cache_count = 0;
       }
@@ -1477,6 +1495,8 @@ int chain_cluster(unsigned int cluster, unsigned int next_cluster)
     int fat_sector_offset = (cluster * 4) & 0x1FF;
     if (fat_sector_num >= sectors_per_fat) {
       printf("ERROR: cluster number too large.\n");
+      //printf("  (fat_sector_num >= sectors_per_fat)\n"
+      //       "   (%d >= %d)\n", fat_sector_num, sectors_per_fat);
       retVal = -1;
       break;
     }
@@ -2641,6 +2661,7 @@ int download_file(char* dest_name, char* local_name, int showClusters)
     }
 
     unsigned int first_cluster_of_file = calc_first_cluster_of_file();
+    //printf("first cluster=%08X\n", first_cluster_of_file);
 
     // Now write the file to local disk sector by sector
     int remaining_bytes = de.d_filelen;
@@ -2666,6 +2687,7 @@ int download_file(char* dest_name, char* local_name, int showClusters)
         // If we are currently the last cluster, then allocate a new one, and chain it in
 
         int next_cluster = chained_cluster(file_cluster);
+        //printf("next_cluster=%08X\n", next_cluster);
         if (next_cluster == 0 || next_cluster >= 0xffffff8) {
           printf("\n?  PREMATURE END OF FILE ERROR\n");
           if (f)

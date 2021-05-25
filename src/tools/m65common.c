@@ -57,6 +57,7 @@
 #define SLOW_FACTOR2 1
 
 int debug_serial = 0;
+int xemu_flag = 0;
 
 #ifdef WINDOWS
 #include <windows.h>
@@ -135,6 +136,11 @@ void timestamp_msg(char* msg)
 
 int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* file, const int line)
 {
+  // NOTE: if we're connecting to xemu, slow down the speed of commands sent to
+  // its uart monitor, as it can't handle too many of them in quick succession
+  //if (xemu_flag)
+  //  usleep(200000);
+
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
   int i;
@@ -352,7 +358,7 @@ int stop_cpu(void)
   if (no_rxbuff)
     do_usleep(50000);
   cpu_stopped = 1;
-  slow_write_safe(fd, "t1\r", 3);
+  slow_write(fd, "t1\r", 3);
   purge_and_check_for_vf011_jobs(1);
   return 0;
 }
@@ -565,6 +571,10 @@ int rxbuff_detect(void)
     If detected, this means that we can send commands a lot faster.
   */
   unsigned char read_buff[8192];
+
+  // If running with xemu, assume no rxbuff available (for now)
+  if (xemu_flag)
+    return !no_rxbuff;
 
   monitor_sync();
   // Send two commands one after the other with no delay.
@@ -1546,6 +1556,7 @@ void close_tcp_port(void)
 #else // linux/mac-osx
 int open_tcp_port(char* portname)
 {
+  //xemu_flag = 1;
   char hostname[128] = "localhost";
   int port = 4510;        // assume a default port of 4510
   if (portname[3] == '#') // did user provide a hostname and port number?
