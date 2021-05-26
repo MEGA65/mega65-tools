@@ -181,10 +181,11 @@ sendstring:
     inz
     jmp sendstring
 sent:
+    lda #92
+    jsr sendbyte
     rts
 
 sendbyte:
-    jsr $ffd2
     sta $d643       ; hypervisor call: put A on serial line
     nop
     rts
