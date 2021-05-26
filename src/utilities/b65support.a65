@@ -1,9 +1,9 @@
     ;
-    ; *********************************************
-    ; * BASIC10/65 support for unit testing       *
-    ; * (w) ubik, 05-2021                         *
-    ; * with very special thanks to Bit Shifter   *
-    ; *********************************************
+    ; **********************************************
+    ; ** BASIC10/65 support for unit testing       *
+    ; ** (w) ubik, 05-2021                         *
+    ; ** with very special thanks to Bit Shifter   *
+    ; **********************************************
     ;
     ; usage:
     ;
@@ -36,6 +36,8 @@
     ;
     ; All calls return the current sub issue number or ?ILLEGAL QUANTITY ERROR in
     ; case of calling an invalid command.
+    ;
+    ; See "379-attic-ram.prg" for an example how to use this from BASIC65.
 
 
 
