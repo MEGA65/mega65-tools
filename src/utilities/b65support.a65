@@ -119,9 +119,8 @@ ustring:
     cmp #'D             ; "D" - done
     beq uDone
 illegal:
-    ldx #14
+    ldx #14             ; "illegal quantity"
     jmp (ierror)
-    rts
 
 settestname:
     lda #$fe            ; $fe = send current test name
