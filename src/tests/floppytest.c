@@ -497,6 +497,9 @@ void format_track(unsigned char track_number)
     
   }
 
+  print_text(0, 4, 15, "Press any key to start formatting");
+  while(!PEEK(0xD610)) continue;
+  POKE(0xD610,0);  
   /*
     From the C65 Specifications Manual:
 
