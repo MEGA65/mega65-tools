@@ -44,8 +44,20 @@ void press_key(void)
       POKE(0xD610, 0);
 }
 
-uint8_t c, j, z, pl, job_type, pause_flag=0;
+uint8_t c, j, z, pl, job_type, pause_flag=0, xemu_flag=0;
 uint16_t i, job_type_addr;
+
+void check_xemu_flag(void)
+{
+  if (PEEK(0xD632) == 0x58 /* 'X' */ &&
+      PEEK(0xD633) == 0x65 /* 'e' */ &&
+      PEEK(0xD634) == 0x6D /* 'm' */ &&
+      PEEK(0xD635) == 0x75 /* 'u' */) {
+    printf("Xemu detected!\n");
+    xemu_flag = 1;
+  }
+}
+
 void serial_write_string(uint8_t* m, uint16_t len)
 {
 
@@ -246,6 +258,19 @@ void rle_finalise(void)
   }
 }
 
+void wait_for_sdcard_to_go_busy(void)
+{
+  if (xemu_flag) {
+    // pause a little here, to permit xemu to echo the last command back to mega65_ftp
+    for (aa = 0; aa < 20; aa++)
+      continue;
+  }
+  else {
+    while (!(PEEK(0xD680) & 0x03))
+      continue;
+  }
+}
+
 void main(void)
 {
   unsigned char jid;
@@ -261,6 +286,8 @@ void main(void)
   POKE(204, 0x80);
 
   printf("%cMEGA65 File Transfer helper.\n", 0x93);
+
+  check_xemu_flag();
 
   last_advertise_time = 0;
 
@@ -281,8 +308,10 @@ void main(void)
       job_count = PEEK(0xC000);
 
       // pause a little here, to permit xemu to echo the last command back to mega65_ftp
-      for (aa = 0; aa < 30000; aa++)
-        continue;
+      if (xemu_flag) {
+        for (aa = 0; aa < 30000; aa++)
+          continue;
+      }
 
 #if DEBUG
       printf("\n\n\nReceived list of %d jobs.\n", job_count);
@@ -295,18 +324,28 @@ void main(void)
         job_type = PEEK(job_type_addr);
         printf("job_type=0x%02x\n", job_type);
         switch (job_type) {
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // ??
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x00:
           job_addr++;
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Terminate
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0xFF:
-          // Terminate
           __asm__("jmp 58552");
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Write sector
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x02:
         case 0x05: // multi write first
         case 0x06: // multi write middle
         case 0x07: // multi write end
-          // Write sector
           job_addr++;
           buffer_address = *(uint32_t*)job_addr;
           job_addr += 4;
@@ -332,17 +371,18 @@ void main(void)
           if (job_type == 0x07)
             POKE(0xD680, 0x06);
 
-          // Wait for SD to go busy
-          //while (!(PEEK(0xD680) & 0x03))
-          //  continue;
+          wait_for_sdcard_to_go_busy();
 
           // Wait for SD to read and fiddle border colour to show we are alive
           while (PEEK(0xD680) & 0x03)
             POKE(0xD020, PEEK(0xD020) + 1);
 
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Read sector
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x01:
-          // Read sector
           job_addr++;
           buffer_address = *(uint32_t*)job_addr;
           job_addr += 4;
@@ -356,9 +396,7 @@ void main(void)
           *(uint32_t*)0xD681 = sector_number;
           POKE(0xD680, 0x02);
 
-          // Wait for SD to go busy
-          while (!(PEEK(0xD680) & 0x03))
-            continue;
+          wait_for_sdcard_to_go_busy();
 
           // Wait for SD to read and fiddle border colour to show we are alive
           while (PEEK(0xD680) & 0x03)
@@ -374,9 +412,12 @@ void main(void)
 #endif
 
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Read sectors and stream
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x03: // 0x03 == with RLE
         case 0x04: // 0x04 == no RLE
-          // Read sectors and stream
           job_addr++;
           sector_count = *(uint16_t*)job_addr;
           job_addr += 2;
@@ -422,18 +463,8 @@ void main(void)
                 sector_count--;
 
                 POKE(0xD680, 0x02);
-                // Wait for SD card to go busy
-                //while (!(PEEK(0xD680) & 0x03)) {
-                //  continue;
-                //}
-                //__asm__("NOP");
-                //__asm__("NOP");
-                //__asm__("NOP");
-                //__asm__("NOP");
-                //__asm__("NOP");
-                //__asm__("NOP");
-                //__asm__("NOP");
-                //__asm__("NOP");
+
+                wait_for_sdcard_to_go_busy();
 
                 sector_number++;
               }
@@ -495,8 +526,10 @@ void main(void)
 
           break;
 
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Send block of memory
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x11:
-          // Send block of memory
           job_addr++;
           buffer_address = *(uint32_t*)job_addr;
           job_addr += 4;
@@ -524,6 +557,8 @@ void main(void)
 #endif
 
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
 
         default:
           job_addr = 0xd000;
