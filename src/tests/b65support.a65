@@ -1,0 +1,193 @@
+    ;
+    ; *********************************************
+    ; * BASIC10/65 support for unit testing       *
+    ; * (w) ubik, 05-2021                         *
+    ; * with very special thanks to Bit Shifter   *
+    ; *********************************************
+    ;
+    ; usage:
+    ;
+    ; SYS $1600             
+    ;   initialize the helper routines
+    ;
+    ; A=USR(<issueNum>)
+    ;   prepare new test with number <issueNum>       
+    ;   set current issue number and reset subissue number to 0
+    ;
+    ; A=USR("=<testName>")
+    ;   set test name and send test start signal
+    ;   example: A=USR("=VIC-III") 
+    ;       sets the test name to 'VIC-III' and signals the 
+    ;       host computer that the test has started.
+    ;
+    ; A=USR("/<logMessage>)
+    ;   sends a log message to the host computer
+    ;
+    ; A=USR("P")
+    ;   sends the 'passed' signal to the host computer
+    ;   and increases the sub issue number
+    ;
+    ; A=USR("F")
+    ;   sends the 'test failed' signal to the host computer
+    ;   and increases the sub issue number
+    ;
+    ; A=USR("D")
+    ;   sends the 'test done' signal to the host computer 
+    ;
+    ; All calls return the current sub issue number or ?ILLEGAL QUANTITY ERROR in
+    ; case of calling an invalid command.
+
+
+
+    .alias valtyp   $0f         ; 0=numeric, $FF=string
+    .alias intflag  $10         ; bit 7 = integer(1) 
+    .alias frestr   $5871
+    .alias sngflt   $5610
+    .alias givayf   $7f03
+    .alias primm    $ff7d       ; print immediate
+
+    .alias ierror   $0300       ; print error vector
+
+    .alias strptr   $b1         ; 32 bit pointer for strings
+
+    .org $15fe                  ; start at $1600
+    .byte $00,$16               ; load addr
+
+init:
+	lda #$47                    ; enable vic-iv 
+	sta $d02f
+	lda #$53
+	sta $d02f
+    ldx #<usr                   ; set USR vector
+    ldy #>usr
+    stx $02f8
+    sty $02f9
+    jsr primm
+    .byte "MEGA65 UNIT TEST SUPPORT INSTALLED",0
+    rts
+
+usr:
+    lda valtyp
+    cmp #$ff
+    beq ustring
+
+    ; 
+    ; USR() called with number: 
+    ; Initialize issue number, zero subissue
+    ;
+
+    jsr $7f00           ; facc -> int
+    ldx $66             ; get integer
+    ldy $67             ; 
+    ldz #$00
+    stx currentIssue    ; save for later
+    sty currentIssue+1  
+    stz subIssue
+    jmp bye
+
+    ; 
+    ; USR() called with string: Parse test cmds 
+    ;
+
+ustring:
+    jsr frestr          ; clean up
+    lda #01             ; variables in bank 1
+    ldz #00
+    ldx $64             ; adr lo
+    ldy $65             ; adr hi
+    stx strptr
+    sty strptr+1
+    sta strptr+2
+    stz strptr+3
+
+    ; parse first character
+    ldz #00
+    nop
+    lda (strptr),z
+    inz
+    cmp #$3d            ; "=" - set test name
+    beq settestname
+    cmp #$2f            ; "/" - log message
+    beq logmessage    
+
+    ldx $63             ; when not logging or setting test name...
+    cpx #1              ; ...only single characters are allowed
+    bne illegal
+    cmp #'P             ; "P" - pass
+    beq uPass
+    cmp #'F             ; "F" - fail
+    beq uFail
+    cmp #'D             ; "D" - done
+    beq uDone
+illegal:
+    ldx #14
+    jmp (ierror)
+    rts
+
+settestname:
+    lda #$fe            ; $fe = send current test name
+    jsr sendtoken
+    jsr sendstring
+    lda #$f0            ; $f0 = begin test
+    jsr sendtoken
+    jmp bye
+
+logmessage:
+    lda #$fd            ; $fd = log message
+    jsr sendtoken
+    jsr sendstring
+    jmp bye
+
+uPass:
+    lda #$f2
+    jsr sendtoken
+    inc subIssue
+    jmp bye
+
+uFail:
+    lda #$f3
+    jsr sendtoken
+    inc subIssue
+    jmp bye
+
+uDone:
+    lda #$ff
+    jsr sendtoken
+
+bye:
+    lda #00
+    ldy subIssue        ; return current subissue
+    jsr givayf
+    rts
+
+sendtoken:              ; send test token in A
+    pha
+    lda currentIssue
+    jsr sendbyte
+    lda currentIssue+1
+    jsr sendbyte
+    lda subIssue
+    jsr sendbyte
+    pla
+    jsr sendbyte
+    rts
+
+sendstring:
+    cpz $63             ; length of string
+    beq sent
+    nop
+    lda (strptr),z
+    jsr sendbyte
+    inz
+    jmp sendstring
+sent:
+    rts
+
+sendbyte:
+    jsr $ffd2
+    sta $d643       ; hypervisor call: put A on serial line
+    nop
+    rts
+
+.space currentIssue 2
+.space subIssue 1
