@@ -50,6 +50,7 @@
 
 #define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
+#define DEBUG 0 // change to 1 later to debug
 
 #ifdef WINDOWS
 #include <windows.h>
@@ -273,7 +274,7 @@ int slow_write(PORT_TYPE fd,char *d,int l)
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
   int i;
-#if 0
+#if DEBUG
   printf("\nWriting ");
   for(i=0;i<l;i++)
   {
@@ -281,7 +282,7 @@ int slow_write(PORT_TYPE fd,char *d,int l)
   }
   printf("\n");
   char line[1024];
-  fgets(line,1024,stdin);
+  //fgets(line,1024,stdin);
 #endif
 
   for(i=0;i<l;i++)
@@ -522,7 +523,12 @@ int dump_bytes(int col, char *msg,unsigned char *bytes,int length)
   for(int i=0;i<length;i+=16) {
     print_spaces(stderr,col);
     printf("%04X: ",i);
-    for(int j=0;j<16;j++) if (i+j<length) printf(" %02X",bytes[i+j]); else printf("   ");
+    for(int j=0;j<16;j++)
+    {
+      if (j == 8)
+        printf(" "); // add an extra space after the 8th byte, for easier readability
+      if (i+j<length) printf(" %02X",bytes[i+j]); else printf("   ");
+    }
     printf(" | ");
     for(int j=0;j<16;j++) if (i+j<length) {
       if (bytes[i+j]>=0x20&&bytes[i+j]<0x7f) {
@@ -1352,7 +1358,6 @@ void do_type_text(char *type_text)
 
           case 0x06:  // CTRL-F = trigger freeze menu
             printf("\nfreezing...\n");
-            char scmd[10];
             slow_write(fd,"sffd3615 52 7f 7f \n",19);   // hold down restore
             sleep(1);
             slow_write(fd,"sffd3615 7f 7f 7f \n",19);   // release down restore

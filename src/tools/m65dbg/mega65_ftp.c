@@ -78,7 +78,7 @@ static const int B4000000 = 4000000;
 #endif
 
 #ifdef __CYGWIN__
-#define USLEEP_LCMD 8
+#define USLEEP_LCMD 300
 #else
 #define USLEEP_LCMD 4
 #endif
@@ -231,6 +231,7 @@ void usage_ftp(void)
 
 int slow_write_ftp(int fd,char *d,int l,int preWait)
 {
+  //printf("slow_write_ftp(%s)...\n", d);
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
   //  printf("Writing [%s]\n",d);
@@ -247,6 +248,7 @@ int slow_write_ftp(int fd,char *d,int l,int preWait)
     if (d[i]<' ') { usleep(2000); } else usleep(0);
   }
   tcdrain(fd);
+  //printf("slow_write_ftp finished\n");
   return 0;
 }
 
@@ -653,9 +655,14 @@ int sdhc_check(void)
 
   sdhc=-1;
 
+  //printf("sdhc_check()...\n");
+
   int r0=read_sector(0,buffer,1);
+  //printf("r0=%d\n",r0);
   int r1=read_sector(1,buffer,1);
+  //printf("r1=%d\n",r1);
   int r200=read_sector(0x200,buffer,1);
+  //printf("r200=%d\n",r200);
   //  printf("%d %d %d\n",r0,r1,r200);
   if (r0||r200) {
     fprintf(stderr,"Could not detect SD/SDHC card\n");
@@ -792,6 +799,7 @@ void queue_add_job(uint8_t *j,int len)
 
 void job_process_results(void)
 {
+  printf("job_process_results()...\n");
   long long now =gettime_us();
   queue_read_len=0;
   uint8_t buff[8192];
@@ -868,7 +876,7 @@ void queue_execute(void)
   sprintf(cmd,"sc000 %x\r",queue_jobs);
   slow_write_ftp(fd,cmd,strlen(cmd),0);
   long long end = gettime_us();
-  //  printf("%lld Executing queued jobs (took %lld us to dispatch)\n",end-start_usec,end-start);
+    printf("%lld Executing queued jobs (took %lld us to dispatch)\n",end-start_usec,end-start);
 
   job_process_results();
   queue_addr=0xc001;
@@ -1023,11 +1031,14 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
     // Request multiple sectors at once to make it more efficient
     int batch_read_size=16;
 
+    printf("queueing read sectors...\n");
     for(int n=0;n<batch_read_size;n++)
       queue_read_sector(sector_number+n,0x40000+(n<<9));
     queue_read_mem(0x40000,512*batch_read_size);
+    printf("executing queue...\n");
     queue_execute();
 
+    printf("get read data...\n");
     for(int n=0;n<batch_read_size;n++) {
       bcopy(&queue_read_data[n<<9],buffer,512);
       //      printf("Sector $%08x:\n",sector_number+n);
@@ -1068,6 +1079,7 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
       //      if (b) dump_bytes(3,"write_sector() flush data",cmd,b);
     }
 
+    printf("queueing write sectors...\n");
     queue_write_sector(sector_number,buffer);
 
     // Store in cache / update cache
