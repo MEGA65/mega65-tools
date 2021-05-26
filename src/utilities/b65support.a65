@@ -43,8 +43,6 @@
 
     .alias valtyp   $0f         ; 0=numeric, $FF=string
     .alias intflag  $10         ; bit 7 = integer(1) 
-    .alias frestr   $5871
-    .alias sngflt   $5610
     .alias givayf   $7f03
     .alias primm    $ff7d       ; print immediate
 
@@ -92,7 +90,6 @@ usr:
     ;
 
 ustring:
-    jsr frestr          ; clean up
     lda #01             ; variables in bank 1
     ldz #00
     ldx $64             ; adr lo
