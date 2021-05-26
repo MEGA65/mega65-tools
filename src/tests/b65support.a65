@@ -63,7 +63,7 @@ init:
     stx $02f8
     sty $02f9
     jsr primm
-    .byte "MEGA65 UNIT TEST SUPPORT INSTALLED",0
+    .byte "MEGA65 UNIT TEST SUPPORT INSTALLED",13,0
     rts
 
 usr:
