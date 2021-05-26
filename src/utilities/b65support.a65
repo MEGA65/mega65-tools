@@ -56,10 +56,10 @@
     .byte $00,$16               ; load addr
 
 init:
-	lda #$47                    ; enable vic-iv 
-	sta $d02f
-	lda #$53
-	sta $d02f
+    lda #$47                    ; enable vic-iv 
+    sta $d02f
+    lda #$53
+    sta $d02f
     ldx #<usr                   ; set USR vector
     ldy #>usr
     stx $02f8
