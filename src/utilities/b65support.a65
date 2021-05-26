@@ -164,9 +164,9 @@ bye:
 
 sendtoken:              ; send test token in A
     pha
-    lda currentIssue
-    jsr sendbyte
     lda currentIssue+1
+    jsr sendbyte
+    lda currentIssue
     jsr sendbyte
     lda subIssue
     jsr sendbyte
