@@ -5,7 +5,6 @@
 extern int real_main(int argc, char** argv);
 extern int get_model_id(const char* m65targetname);
 extern char* find_fpga_part_from_m65targetname(const char* m65targetname);
-extern int BITSTREAM_HEADER_FPGA_PART_LOC;
 
 // my tests
 namespace bit2core {
@@ -21,17 +20,36 @@ void generate_dummy_bit_file(const char* name, const char* m65targetname)
   char* fpga_part = find_fpga_part_from_m65targetname(m65targetname);
 
   FILE* f = fopen(name, "wb");
+  // write xilinx magic header
+  fputc(0x00, f);
+  fputc(0x09, f);
+  fprintf(f, "%c%c%c%c%c%c%c%c", 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0);
+  fputc(0x00, f);
+
+  // magic char 'a'
+  fputc(0x00, f);
+  fputc(0x01, f);
+  fputc('a', f);
+
+  // design name
+  fputc(0x00, f);
+  fputc(0x07, f);
+  fprintf(f, "abc123");
+  fputc(0x00, f);
+
+  // magic char 'b'
+  fputc('b', f);
+
+  // fpga part-id
+  int len = strlen(fpga_part)+1;
+  fputc((len >> 8) & 0xff, f);
+  fputc(len & 0xff, f);
+  fprintf(f, fpga_part);
+  fputc(0x00, f);
+
+  // put some extra/random stuff at the end of this
   for (int i = 0; i < 10000; i++) {
-    // inject fpga-part string at appropriate location
-    if (i >= BITSTREAM_HEADER_FPGA_PART_LOC && i <= BITSTREAM_HEADER_FPGA_PART_LOC + strlen(fpga_part)) {
-      int pos = i - BITSTREAM_HEADER_FPGA_PART_LOC;
-      if (pos < strlen(fpga_part))
-        fputc(fpga_part[pos], f);
-      else
-        fputc('\0', f);
-    }
-    else
-      fputc(i % 256, f);
+    fputc(i % 256, f);
   }
   fclose(f);
 }

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -19,7 +20,6 @@ extern const char* version_string;
 #define ARG_COREPATH argv[5]
 
 #define CORE_HEADER_SIZE 4096
-int BITSTREAM_HEADER_FPGA_PART_LOC = 0x4C;
 
 static unsigned char bitstream_data[MAX_MB * BYTES_IN_MEGABYTE];
 
@@ -177,9 +177,125 @@ void show_warning_if_multiple_m65targets(m65target_info* m65target)
   }
 }
 
+void xilinx_error_exit(int fieldid, char* str, ...)
+{
+  va_list args;
+  va_start(args, str);
+  vprintf("ERROR: Xilinx header - Field %d - %s\n", args);
+
+  va_end(args);
+  exit(-1);
+}
+
+void assert_field_length_equals(int fieldid, short int expected, short int actual)
+{
+  if (actual != expected)
+    xilinx_error_exit(fieldid, "has incorrect length of 0x%02X (expected 0x%02X)", actual, expected);
+}
+
+void assert_magic_char_equals(int fieldid, char expected, char actual)
+{
+  if (actual != expected)
+    xilinx_error_exit(fieldid, "has incorrect magic char of '%c' (expected '%c')", actual, expected);
+}
+
+// NOTE: set expected to 0x00 if you don't want to test actual value against expected
+int get_field_length(unsigned char** ptr, int* fieldid, short int expected)
+{
+  int fieldlength = ((int)**(ptr) << 8) + (int)*(*(ptr) + 1); // big-endian
+  if (expected != 0x00)
+    assert_field_length_equals(*fieldid, expected, fieldlength);
+  *ptr += 2;
+
+  return fieldlength;
+}
+
+void check_magic_header_field(unsigned char** ptr, int* fieldid, unsigned char* expected)
+{
+  int fieldlength = get_field_length(ptr, fieldid, 0x09);
+  unsigned char* actual = *ptr;
+  if (memcmp(expected, *ptr, fieldlength) != 0) {
+    xilinx_error_exit(*fieldid,
+        "Xilinx header - Field %d - has invalid magic header\n"
+        "  expected: [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X]\n",
+        "    actual: [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X]", expected[0], expected[1], expected[2],
+        expected[3], expected[4], expected[5], expected[6], expected[7], expected[8], expected[9], actual[0], actual[1],
+        actual[2], actual[3], actual[4], actual[5], actual[6], actual[7], actual[8], actual[9]);
+  }
+  printf("Xilinx header - Field %d - verified ok (magic header)\n", *fieldid);
+
+  *ptr += fieldlength;
+  *fieldid = *fieldid + 1;
+}
+
+char check_magic_char(unsigned char** ptr, int* fieldid, char expected)
+{
+  get_field_length(ptr, fieldid, 0x01);
+  unsigned char actual = **ptr;
+
+  assert_magic_char_equals(*fieldid, expected, actual);
+
+  return actual;
+}
+
+char check_magic_char_field(unsigned char** ptr, int* fieldid, char expected)
+{
+  char actual = check_magic_char(ptr, fieldid, expected);
+
+  printf("Xilinx header - Field %d - verified ok (char='%c')\n", *fieldid, actual);
+
+  *ptr = *ptr + 1;
+  *fieldid = *fieldid + 1;
+
+  return actual;
+}
+
+char* check_string_field(unsigned char** ptr, int* fieldid)
+{
+  int fieldlength = get_field_length(ptr, fieldid, 0x00);
+  char* actual = (char*)*ptr;
+  if ((*ptr)[fieldlength - 1] != 0)
+    xilinx_error_exit(*fieldid, "failed to find null terminator in string");
+  else
+    printf("Xilinx header - Field %d - verified ok (\"%s\")\n", *fieldid, actual);
+
+  *ptr += fieldlength;
+  *fieldid = *fieldid + 1;
+
+  return actual;
+}
+
+char* locate_fpga_part_id_in_bitstream(unsigned char* bitstream)
+{
+  // based on description of xilinx file format at:
+  // - http://www.pldtool.com/pdf/fmt_xilinxbit.pdf
+  unsigned char* ptr = bitstream;
+  int fieldid = 1;
+
+  // xilinx magic header
+  unsigned char expected_magic_header[] = { 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x00 };
+  check_magic_header_field(&ptr, &fieldid, expected_magic_header);
+
+  // letter 'a'
+  check_magic_char_field(&ptr, &fieldid, 'a');
+
+  // design name
+  check_string_field(&ptr, &fieldid);
+
+  // letter 'b'
+  char actual = *ptr;
+  assert_magic_char_equals(fieldid, 'b', actual);
+  ptr++;
+
+  // fpga part id
+  char* fpga_part_id = check_string_field(&ptr, &fieldid);
+
+  return fpga_part_id;
+}
+
 int check_bitstream_header_has_suitable_fpga_part_for_m65target(m65target_info* m65target, unsigned char* bitstream)
 {
-  char* fpga_part = (char*)&bitstream[BITSTREAM_HEADER_FPGA_PART_LOC];
+  char* fpga_part = locate_fpga_part_id_in_bitstream(bitstream);
 
   m65target_info* discovered_m65target = find_m65targetinfo_from_fpga_part(fpga_part);
 
