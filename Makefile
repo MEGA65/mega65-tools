@@ -64,6 +64,7 @@ UTILITIES=	$(B65DIR)/ethertest.prg \
 		$(B65DIR)/etherload.prg \
 		$(B65DIR)/rompatch.prg \
 		$(B65DIR)/wirekrill.prg \
+		$(B65DIR)/b65support.bin \
 		$(B65DIR)/cartload.prg
 
 TESTS=		$(TESTDIR)/ascii.prg \
@@ -160,6 +161,7 @@ $(SDCARD_DIR)/M65TESTS.D81:	$(TESTS) $(CBMCONVERT)
 	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
+
 bin65/ethertest.prg:	$(UTILDIR)/ethertest.a65 $(OPHIS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
@@ -178,6 +180,9 @@ bin65/ethertest.prg:	$(UTILDIR)/ethertest.a65 $(OPHIS)
 
 $(UTILDIR)/mega65_config.o:      $(UTILDIR)/mega65_config.s $(UTILDIR)/mega65_config.inc $(CC65)
 	$(CA65) $< -l $*.list
+
+bin65/b65support.bin:	$(UTILDIR)/b65support.a65 $(OPHIS)
+	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.bin
 
 $(TESTDIR)/vicii.prg:       $(TESTDIR)/vicii.c $(TESTDIR)/vicii_asm.s $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/vicii_asm.s
