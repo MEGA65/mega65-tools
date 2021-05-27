@@ -1609,6 +1609,7 @@ void open_the_serial_port(char* serial_port)
   if (fd.fdfile == INVALID_HANDLE_VALUE) {
     fprintf(stderr, "Could not open serial port '%s'\n", serial_port);
     fprintf(stderr, "  (could the port be in use by another application?)\n");
+    fprintf(stderr, "  (could the usb cable be disconnected or faulty?)\n");
     exit(-1);
   }
 

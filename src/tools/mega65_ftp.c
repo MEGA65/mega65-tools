@@ -168,9 +168,12 @@ unsigned char syspart_configsector[512];
 int sd_status_fresh = 0;
 unsigned char sd_status[16];
 
+extern const char* version_string;
+
 void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
+  fprintf(stderr, "version: %s\n\n", version_string);
   fprintf(stderr, "usage: mega65_ftp [-l <serial port>] [-s <230400|2000000|4000000>]  [-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
