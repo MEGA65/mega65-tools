@@ -449,7 +449,7 @@ $(1): $(2)
 	$$(CXX) $$(COPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) -lreadline -lncurses -lgtest_main -lgtest -lpthread
 
 $(1).exe: $(2)
-	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) -lreadline -lncurses -lgtest_main -lgtest -lpthread
+	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) -lreadline -lncurses -lgtest_main -lgtest -lpthread -Wl,-Bstatic -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
 endef
 
 # Gives two targets of:
