@@ -149,6 +149,7 @@ uFail:
     jmp bye
 
 uDone:
+    dec subIssue
     lda #$ff
     jsr sendtoken
 
