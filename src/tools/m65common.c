@@ -139,7 +139,7 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
   // NOTE: if we're connecting to xemu, slow down the speed of commands sent to
   // its uart monitor, as it can't handle too many of them in quick succession
   //if (xemu_flag)
-  //  usleep(200000);
+  //  usleep(500000);
 
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
@@ -173,6 +173,10 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
       w = do_serial_port_write(fd, (unsigned char*)&d[i], 1, func, file, line);
     }
   }
+  // NOTE: if we're connecting to xemu, slow down the speed of commands sent to
+  // its uart monitor, as it can't handle too many of them in quick succession
+  //if (xemu_flag)
+  //  usleep(500000);
   return 0;
 }
 
@@ -819,6 +823,7 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
 
   char cmd[8192];
   for (unsigned int offset = 0; offset < count;) {
+    //printf("%d / %d\n", offset, count);
     int b = count - offset;
     // Limit to same 64KB slab
     if (b > (0xffff - ((address + offset) & 0xffff)))
@@ -841,6 +846,8 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       slow_write_safe(fd, cmd, strlen(cmd));
       if (no_rxbuff)
         do_usleep(1000 * SLOW_FACTOR);
+      if (xemu_flag)
+        do_usleep(5000 * SLOW_FACTOR);
       int n = b;
       unsigned char* p = &buffer[offset];
       while (n > 0) {
@@ -853,6 +860,12 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
           do_usleep(1000 * SLOW_FACTOR);
       }
     }
+
+    // for xemu_flag, try add a pause between successive 'l' commands
+    // to see if it helps with stalling issues
+    //if (xemu_flag)
+    //  do_usleep(5000 * SLOW_FACTOR);
+
     wait_for_prompt();
     offset += b;
   }
@@ -891,8 +904,10 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
     while (addr != end_addr) {
       snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
       int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
-      if (b < 0)
+      if (b <= 0)
         b = 0;
+      //else
+      //  printf("%s\n", read_buff);
       if ((ofs + b) > 8191)
         b = 8191 - ofs;
       //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
@@ -902,7 +917,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       if (s && (strlen(s) >= 42)) {
         char b = s[42];
         s[42] = 0;
-        if (0) {
+        if (1) {
           printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
         }
         s[42] = b;
@@ -1556,7 +1571,7 @@ void close_tcp_port(void)
 #else // linux/mac-osx
 int open_tcp_port(char* portname)
 {
-  //xemu_flag = 1;
+  xemu_flag = 1;
   char hostname[128] = "localhost";
   int port = 4510;        // assume a default port of 4510
   if (portname[3] == '#') // did user provide a hostname and port number?

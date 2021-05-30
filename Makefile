@@ -8,7 +8,7 @@ COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/inc
 CC=	gcc
 CXX=g++
 WINCC=	x86_64-w64-mingw32-gcc
-WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
+WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1 -Llibusb-1.0.24/build/libusb/.libs/ -L/mingw64/lib
 
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
@@ -249,7 +249,7 @@ $(UTILDIR)/megaphonenorflash.prg:       $(UTILDIR)/megaphonenorflash.c $(CC65)
 $(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65)
 	git submodule init
 	git submodule update
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(CC65)
 	git submodule init
