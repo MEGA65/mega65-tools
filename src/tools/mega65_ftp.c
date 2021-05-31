@@ -367,13 +367,6 @@ int execute_command(char* cmd)
   if ((!strcmp(cmd, "exit")) || (!strcmp(cmd, "quit"))) {
     printf("Reseting MEGA65 and exiting.\n");
 
-    //for (int i = 0; i < sector_cache_count; i++)
-    //{
-    //  char secname[128];
-    //  sprintf(secname, "\nSector %d:\n", sector_cache_sectors[i]);
-    //  dump_bytes(0, secname, sector_cache[i], 512);
-    //}
-
     restart_hyppo();
     exit(0);
   }
@@ -1102,13 +1095,6 @@ int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buff
       //      printf("Sector $%08x:\n",sector_number+n);
       //      dump_bytes(3,"read sector",buffer,512);
 
-      //if (sector_number + n == 2623)
-      //{
-      //  char secname[128];
-      //  sprintf(secname, "\nSector %d:\n", sector_number + n);
-      //  dump_bytes(0, secname, buffer, 512);
-      //}
-
       // Store in cache / update cache
       int i;
       for (i = 0; i < sector_cache_count; i++)
@@ -1121,7 +1107,6 @@ int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buff
           sector_cache_count = i + 1;
       }
       else {
-        //printf("SECTOR CACHE OVERFLOW!\n");
         execute_write_queue();
         sector_cache_count = 0;
       }
@@ -1498,8 +1483,6 @@ int chain_cluster(unsigned int cluster, unsigned int next_cluster)
     int fat_sector_offset = (cluster * 4) & 0x1FF;
     if (fat_sector_num >= sectors_per_fat) {
       printf("ERROR: cluster number too large.\n");
-      //printf("  (fat_sector_num >= sectors_per_fat)\n"
-      //       "   (%d >= %d)\n", fat_sector_num, sectors_per_fat);
       retVal = -1;
       break;
     }
@@ -2664,7 +2647,6 @@ int download_file(char* dest_name, char* local_name, int showClusters)
     }
 
     unsigned int first_cluster_of_file = calc_first_cluster_of_file();
-    //printf("first cluster=%08X\n", first_cluster_of_file);
 
     // Now write the file to local disk sector by sector
     int remaining_bytes = de.d_filelen;
@@ -2690,7 +2672,6 @@ int download_file(char* dest_name, char* local_name, int showClusters)
         // If we are currently the last cluster, then allocate a new one, and chain it in
 
         int next_cluster = chained_cluster(file_cluster);
-        //printf("next_cluster=%08X\n", next_cluster);
         if (next_cluster == 0 || next_cluster >= 0xffffff8) {
           printf("\n?  PREMATURE END OF FILE ERROR\n");
           if (f)

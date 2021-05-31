@@ -823,7 +823,6 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
 
   char cmd[8192];
   for (unsigned int offset = 0; offset < count;) {
-    //printf("%d / %d\n", offset, count);
     int b = count - offset;
     // Limit to same 64KB slab
     if (b > (0xffff - ((address + offset) & 0xffff)))
@@ -917,7 +916,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       if (s && (strlen(s) >= 42)) {
         char b = s[42];
         s[42] = 0;
-        if (1) {
+        if (0) {
           printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
         }
         s[42] = b;
