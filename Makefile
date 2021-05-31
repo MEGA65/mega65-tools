@@ -455,7 +455,7 @@ endef
 # Gives two targets of:
 # - gtest/bin/mega65_ftp.test
 # - gtest/bin/mega65_ftp.test.exe
-$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c Makefile))
+$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c Makefile))
 
 # Gives two targets of:
 # - gtest/bin/bit2core.test
