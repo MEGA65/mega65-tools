@@ -24,8 +24,8 @@
 
 // Slight delay between chars for old HYPPO versions that lack ready check on serial write
 #define SERIAL_DELAY
-// #define SERIAL_DELAY for(aa=0;aa!=5;aa++) continue;
-uint8_t aa;
+//#define SERIAL_DELAY for(aa=0;aa!=5;aa++) continue;
+uint16_t aa;
 // Write a char to the serial monitor interface
 #define SERIAL_WRITE(the_char)                                                                                              \
   {                                                                                                                         \
@@ -34,23 +34,55 @@ uint8_t aa;
     __asm__("NOP");                                                                                                         \
   }
 
-uint8_t c, j, pl, job_type;
+void press_key(void)
+{
+  POKE(0xD610, 0);
+  // wait for a key to be pressed
+  printf("press a key to continue...\n");
+  while (!PEEK(0xD610))
+    continue;
+  POKE(0xD610, 0);
+}
+
+uint8_t c, j, z, pl, job_type, pause_flag = 0, xemu_flag = 0;
 uint16_t i, job_type_addr;
+
+void check_xemu_flag(void)
+{
+  if (!(PEEK(0xD60F) & 0x20)) {
+    printf("Xemu detected!\n");
+    xemu_flag = 1;
+  }
+}
+
 void serial_write_string(uint8_t* m, uint16_t len)
 {
-  for (i = 0; i < len;) {
-    if (len - i > 255)
-      pl = 255;
-    else
-      pl = len - i;
-    i += pl;
-    for (j = 0; j < pl; j++) {
-      c = *m;
-      m++;
-      SERIAL_DELAY;
-      SERIAL_WRITE(c);
+
+  for (i = 0; i < len; i++) {
+    SERIAL_DELAY;
+    c = *m;
+    m++;
+    SERIAL_DELAY;
+    SERIAL_WRITE(c);
+    // printf("%02X", c);
+    if (pause_flag) {
+      //#if DEBUG > 1
+      if (i < 368) {
+        printf("%02X", c);
+        if (((i + 5) % 4) == 0)
+          printf(" ");
+        if (((i + 17) % 16) == 0)
+          printf("\n");
+      }
+      //#endif
     }
+    if (pause_flag)
+      press_key();
   }
+
+#if DEBUG > 1
+  press_key();
+#endif
 }
 
 uint16_t last_advertise_time, current_time;
@@ -102,6 +134,7 @@ void rle_write_string(uint32_t buffer_address, uint32_t transfer_size)
 
     for (bo = 0; bo < block_len; bo++) {
 #if DEBUG > 1
+      // wait for a key to be pressed
       printf("olen=%d, rle_count=%d, last=$%02x, byte=$%02x\n", olen, rle_count, last_value, local_buffer[iofs]);
       while (!PEEK(0xD610))
         continue;
@@ -222,6 +255,21 @@ void rle_finalise(void)
   }
 }
 
+void wait_for_sdcard_to_go_busy(void)
+{
+  if (xemu_flag) {
+    // Pause a little here, to permit xemu to echo the last command back to mega65_ftp.
+    // This need came about due to xemu presently completing SD card jobs instantaneously,
+    // and thus never goes busy.
+    for (aa = 0; aa < 20; aa++)
+      continue;
+  }
+  else {
+    while (!(PEEK(0xD680) & 0x03))
+      continue;
+  }
+}
+
 void main(void)
 {
   unsigned char jid;
@@ -238,6 +286,8 @@ void main(void)
 
   printf("%cMEGA65 File Transfer helper.\n", 0x93);
 
+  check_xemu_flag();
+
   last_advertise_time = 0;
 
   // Clear communications area
@@ -248,15 +298,22 @@ void main(void)
     current_time = *(uint16_t*)0xDC08;
     if (current_time != last_advertise_time) {
       // Announce our protocol version
-      serial_write_string("\nmega65ft1.0\n\r", 14);
+      // serial_write_string("\nmega65ft1.0\n\r", 14);
       last_advertise_time = current_time;
     }
 
     if (PEEK(0xC000)) {
       // Perform one or more jobs
       job_count = PEEK(0xC000);
+
+      // pause a little here, to permit xemu to echo the last command back to mega65_ftp
+      if (xemu_flag) {
+        for (aa = 0; aa < 30000; aa++)
+          continue;
+      }
+
 #if DEBUG
-      printf("Received list of %d jobs.\n", job_count);
+      printf("\n\n\nReceived list of %d jobs.\n", job_count);
 #endif
       job_addr = 0xc001;
       for (jid = 0; jid < job_count; jid++) {
@@ -264,19 +321,30 @@ void main(void)
           break;
         job_type_addr = job_addr;
         job_type = PEEK(job_type_addr);
+        // printf("job_type=0x%02x\n", job_type);
         switch (job_type) {
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // ??
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x00:
           job_addr++;
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Terminate
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0xFF:
-          // Terminate
           __asm__("jmp 58552");
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Write sector
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x02:
         case 0x05: // multi write first
         case 0x06: // multi write middle
         case 0x07: // multi write end
-          // Write sector
           job_addr++;
           buffer_address = *(uint32_t*)job_addr;
           job_addr += 4;
@@ -302,17 +370,18 @@ void main(void)
           if (job_type == 0x07)
             POKE(0xD680, 0x06);
 
-          // Wait for SD to go busy
-          while (!(PEEK(0xD680) & 0x03))
-            continue;
+          wait_for_sdcard_to_go_busy();
 
           // Wait for SD to read and fiddle border colour to show we are alive
           while (PEEK(0xD680) & 0x03)
             POKE(0xD020, PEEK(0xD020) + 1);
 
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Read sector
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x01:
-          // Read sector
           job_addr++;
           buffer_address = *(uint32_t*)job_addr;
           job_addr += 4;
@@ -326,9 +395,7 @@ void main(void)
           *(uint32_t*)0xD681 = sector_number;
           POKE(0xD680, 0x02);
 
-          // Wait for SD to go busy
-          while (!(PEEK(0xD680) & 0x03))
-            continue;
+          wait_for_sdcard_to_go_busy();
 
           // Wait for SD to read and fiddle border colour to show we are alive
           while (PEEK(0xD680) & 0x03)
@@ -344,14 +411,23 @@ void main(void)
 #endif
 
           break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Read sectors and stream
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x03: // 0x03 == with RLE
         case 0x04: // 0x04 == no RLE
-          // Read sectors and stream
           job_addr++;
           sector_count = *(uint16_t*)job_addr;
           job_addr += 2;
           sector_number = *(uint32_t*)job_addr;
           job_addr += 4;
+
+#if DEBUG > 1
+          printf("sector_count = %d\n", sector_count);
+          printf("sector_number = $%08lx (%ld)\n", sector_number, sector_number);
+          press_key();
+#endif
 
           // Begin with no bytes to send
           buffer_ready = 0;
@@ -365,10 +441,15 @@ void main(void)
             snprintf(msg, 80, "ftjobdata:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
           else
             snprintf(msg, 80, "ftjobdatr:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
+#if DEBUG > 1
+          printf("%s\n", msg);
+          press_key();
+#endif
           serial_write_string(msg, strlen(msg));
 
           while (sector_count || buffer_ready || read_pending) {
-            if (sector_count && (!read_pending))
+            if (sector_count && (!read_pending)) {
+              // if sd-card is not busy, then do this stuff
               if (!(PEEK(0xD680) & 0x03)) {
                 // Schedule reading of next sector
 
@@ -381,13 +462,12 @@ void main(void)
                 sector_count--;
 
                 POKE(0xD680, 0x02);
-                // Wait for SD card to go busy
-                while (!(PEEK(0xD680) & 0x03)) {
-                  continue;
-                }
+
+                wait_for_sdcard_to_go_busy();
 
                 sector_number++;
               }
+            }
             if (read_pending && (!buffer_ready)) {
 
               // Read is complete, now queue it for sending back
@@ -395,12 +475,24 @@ void main(void)
                 // Sector has been read. Copy it to a local buffer for sending,
                 // so that we can send it while reading the next sector
                 lcopy(0xffd6e00, (long)&temp_sector_buffer[0], 0x200);
+                // if (sector_number-1 == 2623)
+                //{
+                //  //pause_flag = 1;
+                //  for (z = 0; z < 16*8; z++)
+                //  {
+                //    if ( (z % 8) == 0)
+                //      printf(" ");
+                //    if ( (z % 16) == 0 )
+                //      printf("\n");
+                //    printf("%02X", temp_sector_buffer[z]);
+                //  }
+                //}
+
                 read_pending = 0;
                 buffer_ready = 1;
               }
             }
             if (buffer_ready) {
-
               // XXX - Just send it all in one go, since we don't buffer multiple
               // sectors
               if (job_type == 3)
@@ -408,14 +500,17 @@ void main(void)
               else
                 serial_write_string(temp_sector_buffer, 0x200);
               buffer_ready = 0;
+              pause_flag = 0;
             }
-          }
+          } // end while we have sectors to send
 
           if (job_type == 3)
             rle_finalise();
 
 #if DEBUG
-          printf("$%04x : Read sector $%08lx into mem $%07lx\n", *(uint16_t*)0xDC08, sector_number, buffer_address);
+          sector_number = *(uint32_t*)(job_addr - 4);
+          sector_count = *(uint16_t*)(job_addr - 6);
+          printf("$%04x : Completed read sector $%08lx (count=%d)\n", *(uint16_t*)0xDC08, sector_number, sector_count);
 #endif
 
           snprintf(msg, 80, "ftjobdone:%04x:\n\r", job_type_addr);
@@ -427,8 +522,10 @@ void main(void)
 
           break;
 
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Send block of memory
+        // - - - - - - - - - - - - - - - - - - - - -
         case 0x11:
-          // Send block of memory
           job_addr++;
           buffer_address = *(uint32_t*)job_addr;
           job_addr += 4;
@@ -456,6 +553,8 @@ void main(void)
 #endif
 
           break;
+
+          // - - - - - - - - - - - - - - - - - - - - -
 
         default:
           job_addr = 0xd000;

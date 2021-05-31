@@ -168,9 +168,12 @@ unsigned char syspart_configsector[512];
 int sd_status_fresh = 0;
 unsigned char sd_status[16];
 
+extern const char* version_string;
+
 void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
+  fprintf(stderr, "version: %s\n\n", version_string);
   fprintf(stderr, "usage: mega65_ftp [-l <serial port>] [-s <230400|2000000|4000000>]  [-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
@@ -887,18 +890,21 @@ void job_process_results(void)
             }
           }
         }
+        // NOTE: the tricky '%n' specifier at the end.
+        // It's the count of the number of characters of the format string already processed by the function
         fn = sscanf((char*)recent, "FTJOBDATR:%x:%x:%n", &j_addr, &transfer_size, &n);
         if (fn == 2) {
           if (debug_rx)
-            printf("Spotted job data: Reading $%x bytes of raw data, offset %d,"
-                   " %02x %02x\n",
-                transfer_size, n, recent[n], recent[n + 1]);
+            // note that we're hoping that recent[n] and onwards contain the bytes immediately *after* 'FTJOBDATR:%x:%x:'
+            printf("Spotted job data: Reading $%x bytes of raw data (j_addr=$%04X) (offset %d, %02x %02x)\n", transfer_size,
+                j_addr, n, recent[n], recent[n + 1]);
           q_rle_count = 0;
           q_raw_count = 0;
           q_rle_enable = 0;
           data_byte_count = transfer_size;
           // printf("data_byte_count=0x%X\n", data_byte_count);
           // Don't forget to process the bytes we have already injested
+          // I.e., don't accidentally miss any initial data-bytes that were on the tail-end of this 'JTJOBDATR:%x:%x:' string
           for (int k = n; k <= 30; k++) {
             if (data_byte_count) {
               queue_data_decode_raw(recent[k]);

@@ -57,6 +57,7 @@
 #define SLOW_FACTOR2 1
 
 int debug_serial = 0;
+int xemu_flag = 0;
 
 #ifdef WINDOWS
 #include <windows.h>
@@ -352,7 +353,7 @@ int stop_cpu(void)
   if (no_rxbuff)
     do_usleep(50000);
   cpu_stopped = 1;
-  slow_write_safe(fd, "t1\r", 3);
+  slow_write(fd, "t1\r", 3);
   purge_and_check_for_vf011_jobs(1);
   return 0;
 }
@@ -565,6 +566,10 @@ int rxbuff_detect(void)
     If detected, this means that we can send commands a lot faster.
   */
   unsigned char read_buff[8192];
+
+  // If running with xemu, assume no rxbuff available (for now)
+  if (xemu_flag)
+    return !no_rxbuff;
 
   monitor_sync();
   // Send two commands one after the other with no delay.
@@ -831,6 +836,8 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       slow_write_safe(fd, cmd, strlen(cmd));
       if (no_rxbuff)
         do_usleep(1000 * SLOW_FACTOR);
+      if (xemu_flag)
+        do_usleep(5000 * SLOW_FACTOR);
       int n = b;
       unsigned char* p = &buffer[offset];
       while (n > 0) {
@@ -881,8 +888,10 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
     while (addr != end_addr) {
       snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
       int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
-      if (b < 0)
+      if (b <= 0)
         b = 0;
+      // else
+      //   printf("%s\n", read_buff);
       if ((ofs + b) > 8191)
         b = 8191 - ofs;
       //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
@@ -1130,12 +1139,14 @@ void print_error(const char* context)
 HANDLE open_serial_port(const char* device, uint32_t baud_rate)
 {
   // COM10+ need to have \\.\ added to the front
-  // (see https://support.microsoft.com/en-us/topic/howto-specify-serial-ports-larger-than-com9-db9078a5-b7b6-bf00-240f-f749ebfd913e
+  // (see
+  // https://support.microsoft.com/en-us/topic/howto-specify-serial-ports-larger-than-com9-db9078a5-b7b6-bf00-240f-f749ebfd913e
   // and https://github.com/MEGA65/mega65-tools/issues/48)
   char device_with_prefix[8192];
-  snprintf(device_with_prefix,8192,"\\\\.\\%s",device);
-  
-  HANDLE port = CreateFileA(device_with_prefix, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  snprintf(device_with_prefix, 8192, "\\\\.\\%s", device);
+
+  HANDLE port = CreateFileA(
+      device_with_prefix, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
   if (port == INVALID_HANDLE_VALUE) {
     print_error(device);
     return INVALID_HANDLE_VALUE;
@@ -1546,6 +1557,7 @@ void close_tcp_port(void)
 #else // linux/mac-osx
 int open_tcp_port(char* portname)
 {
+  xemu_flag = 1;
   char hostname[128] = "localhost";
   int port = 4510;        // assume a default port of 4510
   if (portname[3] == '#') // did user provide a hostname and port number?
@@ -1597,6 +1609,8 @@ void open_the_serial_port(char* serial_port)
   fd.fdfile = open_serial_port(serial_port, 2000000);
   if (fd.fdfile == INVALID_HANDLE_VALUE) {
     fprintf(stderr, "Could not open serial port '%s'\n", serial_port);
+    fprintf(stderr, "  (could the port be in use by another application?)\n");
+    fprintf(stderr, "  (could the usb cable be disconnected or faulty?)\n");
     exit(-1);
   }
 

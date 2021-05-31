@@ -1439,7 +1439,7 @@ int main(int argc, char** argv)
 
   fprintf(stderr,
       "MEGA65 Cross-Platform tool.\n"
-      "version: %s\n",
+      "version: %s\n\n",
       version_string);
 
   timestamp_msg("");
