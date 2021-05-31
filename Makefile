@@ -8,7 +8,7 @@ COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/inc
 CC=	gcc
 CXX=g++
 WINCC=	x86_64-w64-mingw32-gcc
-WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1 -Llibusb-1.0.24/build/libusb/.libs/ -L/mingw64/lib
+WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
 
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
