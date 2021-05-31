@@ -258,7 +258,9 @@ void rle_finalise(void)
 void wait_for_sdcard_to_go_busy(void)
 {
   if (xemu_flag) {
-    // pause a little here, to permit xemu to echo the last command back to mega65_ftp
+    // Pause a little here, to permit xemu to echo the last command back to mega65_ftp.
+    // This need came about due to xemu presently completing SD card jobs instantaneously,
+    // and thus never goes busy.
     for (aa = 0; aa < 20; aa++)
       continue;
   }
