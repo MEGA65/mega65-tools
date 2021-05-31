@@ -381,23 +381,23 @@ USB_INFO* fpgausb_init(void)
     exit(-1);
   }
 
-#ifdef LIOBUSB_OPTION_USE_USBDK
+  //#ifdef LIOBUSB_OPTION_USE_USBDK
   if (usedk) {
     printf("Requesting to use USBDK backend.\n");
     int res = libusb_set_option(usb_context, LIBUSB_OPTION_USE_USBDK);
     if (res < 0) {
-      printf("WARNING: Failed to switch to USEDK backend: %s\n", libusb_strerror(open_result));
+      printf("WARNING: Failed to switch to USEDK backend: %s\n", libusb_strerror(res));
     }
   }
-#else
+  //#else
   // #warning No USBDK support in libusb
-#endif
+  //#endif
 
   while ((dev = device_list[i++])) {
     struct libusb_device_descriptor desc;
     if (libusb_get_device_descriptor(dev, &desc) < 0)
       continue;
-    //	fprintf(stderr,"USB device %04x:%04x\n",desc.idVendor,desc.idProduct);
+    fprintf(stderr, "USB device %04x:%04x\n", desc.idVendor, desc.idProduct);
     if (desc.idVendor == 0x403
         && (desc.idProduct == 0x6001 || desc.idProduct == 0x6010 || desc.idProduct == 0x6011
             || desc.idProduct == 0x6014)) { /* Xilinx */
@@ -408,8 +408,9 @@ USB_INFO* fpgausb_init(void)
       usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
       int open_result = libusb_open(dev, &usbhandle);
       if (open_result < 0) {
-        printf("ERROR: Could not open USB device: Error code %d\n", open_result);
-        printf("       libusb says: %s\n", libusb_strerror(open_result));
+        fprintf(stderr, "ERROR: Could not open USB device: Error code %d\n", open_result);
+        fprintf(stderr, "       libusb says: %s\n", libusb_strerror(open_result));
+        exit(1);
       }
       else {
         if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {

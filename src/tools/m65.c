@@ -1126,6 +1126,7 @@ void load_bitstream(char* bitstream)
 
           timestamp_msg("");
           fprintf(stderr, "Detected FPGA ID %x from bitstream file.\n", fpga_id);
+          break;
         }
       }
       fclose(f);
@@ -1638,14 +1639,13 @@ int main(int argc, char** argv)
 
           timestamp_msg("");
           fprintf(stderr, "Detected FPGA ID %x from bitstream file.\n", fpga_id);
+          break;
         }
       }
       fclose(f);
     }
     fprintf(stderr, "INFO: Using fpga_id %x\n", fpga_id);
-#ifndef WINDOWS
     init_fpgajtag(NULL, bitstream, fpga_id);
-#endif
   }
 
 #ifdef WINDOWS
