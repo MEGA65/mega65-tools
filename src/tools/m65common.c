@@ -136,11 +136,6 @@ void timestamp_msg(char* msg)
 
 int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* file, const int line)
 {
-  // NOTE: if we're connecting to xemu, slow down the speed of commands sent to
-  // its uart monitor, as it can't handle too many of them in quick succession
-  // if (xemu_flag)
-  //   usleep(500000);
-
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
   int i;
@@ -173,10 +168,6 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
       w = do_serial_port_write(fd, (unsigned char*)&d[i], 1, func, file, line);
     }
   }
-  // NOTE: if we're connecting to xemu, slow down the speed of commands sent to
-  // its uart monitor, as it can't handle too many of them in quick succession
-  // if (xemu_flag)
-  //   usleep(500000);
   return 0;
 }
 
@@ -859,12 +850,6 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
           do_usleep(1000 * SLOW_FACTOR);
       }
     }
-
-    // for xemu_flag, try add a pause between successive 'l' commands
-    // to see if it helps with stalling issues
-    // if (xemu_flag)
-    //   do_usleep(5000 * SLOW_FACTOR);
-
     wait_for_prompt();
     offset += b;
   }

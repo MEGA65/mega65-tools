@@ -465,9 +465,6 @@ void main(void)
 
                 sector_number++;
               }
-              // add a delay here, to give xemu time to copy across the sector
-              // for (aa = 0; aa < 1000; aa++)
-              //  continue;
             }
             if (read_pending && (!buffer_ready)) {
 
