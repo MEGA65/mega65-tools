@@ -896,8 +896,8 @@ void job_process_results(void)
         if (fn == 2) {
           if (debug_rx)
             // note that we're hoping that recent[n] and onwards contain the bytes immediately *after* 'FTJOBDATR:%x:%x:'
-            printf("Spotted job data: Reading $%x bytes of raw data (j_addr=$%04X) (offset %d, %02x %02x)\n",
-                   transfer_size, j_addr, n, recent[n], recent[n + 1]);
+            printf("Spotted job data: Reading $%x bytes of raw data (j_addr=$%04X) (offset %d, %02x %02x)\n", transfer_size,
+                j_addr, n, recent[n], recent[n + 1]);
           q_rle_count = 0;
           q_raw_count = 0;
           q_rle_enable = 0;

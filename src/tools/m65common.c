@@ -138,8 +138,8 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
 {
   // NOTE: if we're connecting to xemu, slow down the speed of commands sent to
   // its uart monitor, as it can't handle too many of them in quick succession
-  //if (xemu_flag)
-  //  usleep(500000);
+  // if (xemu_flag)
+  //   usleep(500000);
 
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
@@ -175,8 +175,8 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
   }
   // NOTE: if we're connecting to xemu, slow down the speed of commands sent to
   // its uart monitor, as it can't handle too many of them in quick succession
-  //if (xemu_flag)
-  //  usleep(500000);
+  // if (xemu_flag)
+  //   usleep(500000);
   return 0;
 }
 
@@ -862,8 +862,8 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
 
     // for xemu_flag, try add a pause between successive 'l' commands
     // to see if it helps with stalling issues
-    //if (xemu_flag)
-    //  do_usleep(5000 * SLOW_FACTOR);
+    // if (xemu_flag)
+    //   do_usleep(5000 * SLOW_FACTOR);
 
     wait_for_prompt();
     offset += b;
@@ -905,8 +905,8 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
       if (b <= 0)
         b = 0;
-      //else
-      //  printf("%s\n", read_buff);
+      // else
+      //   printf("%s\n", read_buff);
       if ((ofs + b) > 8191)
         b = 8191 - ofs;
       //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
@@ -1154,12 +1154,14 @@ void print_error(const char* context)
 HANDLE open_serial_port(const char* device, uint32_t baud_rate)
 {
   // COM10+ need to have \\.\ added to the front
-  // (see https://support.microsoft.com/en-us/topic/howto-specify-serial-ports-larger-than-com9-db9078a5-b7b6-bf00-240f-f749ebfd913e
+  // (see
+  // https://support.microsoft.com/en-us/topic/howto-specify-serial-ports-larger-than-com9-db9078a5-b7b6-bf00-240f-f749ebfd913e
   // and https://github.com/MEGA65/mega65-tools/issues/48)
   char device_with_prefix[8192];
-  snprintf(device_with_prefix,8192,"\\\\.\\%s",device);
-  
-  HANDLE port = CreateFileA(device_with_prefix, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  snprintf(device_with_prefix, 8192, "\\\\.\\%s", device);
+
+  HANDLE port = CreateFileA(
+      device_with_prefix, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
   if (port == INVALID_HANDLE_VALUE) {
     print_error(device);
     return INVALID_HANDLE_VALUE;

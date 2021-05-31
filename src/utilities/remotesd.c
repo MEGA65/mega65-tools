@@ -36,23 +36,20 @@ uint16_t aa;
 
 void press_key(void)
 {
-      POKE(0xD610, 0);
-      // wait for a key to be pressed
-      printf("press a key to continue...\n");
-      while (!PEEK(0xD610))
-        continue;
-      POKE(0xD610, 0);
+  POKE(0xD610, 0);
+  // wait for a key to be pressed
+  printf("press a key to continue...\n");
+  while (!PEEK(0xD610))
+    continue;
+  POKE(0xD610, 0);
 }
 
-uint8_t c, j, z, pl, job_type, pause_flag=0, xemu_flag=0;
+uint8_t c, j, z, pl, job_type, pause_flag = 0, xemu_flag = 0;
 uint16_t i, job_type_addr;
 
 void check_xemu_flag(void)
 {
-  if (PEEK(0xD632) == 0x58 /* 'X' */ &&
-      PEEK(0xD633) == 0x65 /* 'e' */ &&
-      PEEK(0xD634) == 0x6D /* 'm' */ &&
-      PEEK(0xD635) == 0x75 /* 'u' */) {
+  if (!(PEEK(0xD60F) & 0x20)) {
     printf("Xemu detected!\n");
     xemu_flag = 1;
   }
@@ -62,25 +59,25 @@ void serial_write_string(uint8_t* m, uint16_t len)
 {
 
   for (i = 0; i < len; i++) {
-      SERIAL_DELAY;
-      c = *m;
-      m++;
-      SERIAL_DELAY;
-      SERIAL_WRITE(c);
-      //printf("%02X", c);
-if (pause_flag)
-{
-//#if DEBUG > 1
-      if (i < 368)
-      {
-      printf("%02X", c);
-      if (((i+5)%4) == 0) printf(" ");
-      if (((i+17)%16) == 0) printf("\n");
+    SERIAL_DELAY;
+    c = *m;
+    m++;
+    SERIAL_DELAY;
+    SERIAL_WRITE(c);
+    // printf("%02X", c);
+    if (pause_flag) {
+      //#if DEBUG > 1
+      if (i < 368) {
+        printf("%02X", c);
+        if (((i + 5) % 4) == 0)
+          printf(" ");
+        if (((i + 17) % 16) == 0)
+          printf("\n");
       }
-//#endif
-}
-      if (pause_flag)
-        press_key();
+      //#endif
+    }
+    if (pause_flag)
+      press_key();
   }
 
 #if DEBUG > 1
@@ -299,7 +296,7 @@ void main(void)
     current_time = *(uint16_t*)0xDC08;
     if (current_time != last_advertise_time) {
       // Announce our protocol version
-      //serial_write_string("\nmega65ft1.0\n\r", 14);
+      // serial_write_string("\nmega65ft1.0\n\r", 14);
       last_advertise_time = current_time;
     }
 
@@ -322,7 +319,7 @@ void main(void)
           break;
         job_type_addr = job_addr;
         job_type = PEEK(job_type_addr);
-        printf("job_type=0x%02x\n", job_type);
+        // printf("job_type=0x%02x\n", job_type);
         switch (job_type) {
 
         // - - - - - - - - - - - - - - - - - - - - -
@@ -424,7 +421,7 @@ void main(void)
           sector_number = *(uint32_t*)job_addr;
           job_addr += 4;
 
-#if DEBUG>1
+#if DEBUG > 1
           printf("sector_count = %d\n", sector_count);
           printf("sector_number = $%08lx (%ld)\n", sector_number, sector_number);
           press_key();
@@ -442,7 +439,7 @@ void main(void)
             snprintf(msg, 80, "ftjobdata:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
           else
             snprintf(msg, 80, "ftjobdatr:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
-#if DEBUG>1
+#if DEBUG > 1
           printf("%s\n", msg);
           press_key();
 #endif
@@ -469,7 +466,7 @@ void main(void)
                 sector_number++;
               }
               // add a delay here, to give xemu time to copy across the sector
-              //for (aa = 0; aa < 1000; aa++)
+              // for (aa = 0; aa < 1000; aa++)
               //  continue;
             }
             if (read_pending && (!buffer_ready)) {
@@ -479,7 +476,7 @@ void main(void)
                 // Sector has been read. Copy it to a local buffer for sending,
                 // so that we can send it while reading the next sector
                 lcopy(0xffd6e00, (long)&temp_sector_buffer[0], 0x200);
-                //if (sector_number-1 == 2623)
+                // if (sector_number-1 == 2623)
                 //{
                 //  //pause_flag = 1;
                 //  for (z = 0; z < 16*8; z++)
@@ -512,8 +509,8 @@ void main(void)
             rle_finalise();
 
 #if DEBUG
-          sector_number = *(uint32_t*)(job_addr-4);
-          sector_count = *(uint16_t*)(job_addr-6);
+          sector_number = *(uint32_t*)(job_addr - 4);
+          sector_count = *(uint16_t*)(job_addr - 6);
           printf("$%04x : Completed read sector $%08lx (count=%d)\n", *(uint16_t*)0xDC08, sector_number, sector_count);
 #endif
 
@@ -558,7 +555,7 @@ void main(void)
 
           break;
 
-        // - - - - - - - - - - - - - - - - - - - - -
+          // - - - - - - - - - - - - - - - - - - - - -
 
         default:
           job_addr = 0xd000;
