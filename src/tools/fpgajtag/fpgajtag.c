@@ -785,9 +785,14 @@ void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idc
       // Iterate through /sys/bus/usb-serial/devices to see if any of the entries there have
       // symlinks that make sense for this device bus and port number.
 #ifdef WINDOWS
-      printf("I'm on windows, and don't (yet) know how to work out the COMx: path.\n");
+      // NOTE: I don't think fpgajtag really needs to know the Windows COM port number, so let's skip this
+      // if (!serial_port)
+      // {
+      //   printf("On Windows, please specify COM port for your JTAG connection via the -l argument\n");
+      //   printf("E.g.: m65 -l COM9 -b mybitstream.bit\n");
       printf("In case it helps: bus=%d, port=%d\n", bus, port);
-      break;
+      //   exit(-1);
+      // }
 #else
       {
         DIR* d = opendir("/sys/bus/usb-serial/devices");

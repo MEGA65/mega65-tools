@@ -74,7 +74,6 @@ static void openlogfile(void);
 
 #include "dumpdata.h"
 
-FILE* logfile;
 int usb_bcddevice;
 uint8_t bitswap[256];
 int last_read_data_length;
@@ -386,11 +385,11 @@ USB_INFO* fpgausb_init(void)
     printf("Requesting to use USBDK backend.\n");
     int res = libusb_set_option(usb_context, LIBUSB_OPTION_USE_USBDK);
     if (res < 0) {
-      printf("WARNING: Failed to switch to USEDK backend: %s\n", libusb_strerror(open_result));
+      printf("WARNING: Failed to switch to USEDK backend: %s\n", libusb_strerror(res));
     }
   }
 #else
-  // #warning No USBDK support in libusb
+//#warning No USBDK support in libusb
 #endif
 
   while ((dev = device_list[i++])) {
@@ -408,8 +407,9 @@ USB_INFO* fpgausb_init(void)
       usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
       int open_result = libusb_open(dev, &usbhandle);
       if (open_result < 0) {
-        printf("ERROR: Could not open USB device: Error code %d\n", open_result);
-        printf("       libusb says: %s\n", libusb_strerror(open_result));
+        fprintf(stderr, "ERROR: Could not open USB device: Error code %d\n", open_result);
+        fprintf(stderr, "       libusb says: %s\n", libusb_strerror(open_result));
+        exit(1);
       }
       else {
         if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
@@ -615,7 +615,11 @@ uint32_t read_inputfile(const char* filename)
   if (!filename)
     return -1;
   if (strcmp(filename, "-")) {
+#ifdef WINDOWS
+    inputfd = open(filename, O_RDONLY | O_BINARY);
+#else
     inputfd = open(filename, O_RDONLY);
+#endif
     if (inputfd == -1) {
       printf("fpgajtag: Unable to open file '%s'\n", filename);
       exit(-1);
