@@ -127,8 +127,8 @@ void usage(void)
                   "  -S - Show the text-mode screen\n"
                   "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n"
                   "       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n"
-                  "  -T - As above, but also provide carriage return\n"
                   "  -t - Type text via keyboard virtualisation.\n"
+                  "  -T - As above, but also provide carriage return\n"
                   "  -U - Flash menu file to preload at $50000-$57FFF.\n"
                   "  -u - Enable unit test mode: m65 does not terminate until it receives a response from a unit test.\n"
                   "  -v - The location of the Vivado executable to use for -b on Windows.\n"
@@ -956,8 +956,11 @@ void do_type_text(char* type_text)
     }
 
     // RETURN at end if requested
-    if (type_text_cr)
+    if (type_text_cr) {
       slow_write(fd, "sffd3615 01 7f 7f \n", 19);
+      // Allow time for a keyboard scan interrupt
+      usleep(20000);
+    }
   }
   // Stop pressing keys
   slow_write(fd, "sffd3615 7f 7f 7f \n", 19);
