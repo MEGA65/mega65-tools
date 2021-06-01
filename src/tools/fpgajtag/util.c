@@ -396,7 +396,7 @@ USB_INFO* fpgausb_init(void)
     struct libusb_device_descriptor desc;
     if (libusb_get_device_descriptor(dev, &desc) < 0)
       continue;
-    fprintf(stderr, "USB device %04x:%04x\n", desc.idVendor, desc.idProduct);
+    //	fprintf(stderr,"USB device %04x:%04x\n",desc.idVendor,desc.idProduct);
     if (desc.idVendor == 0x403
         && (desc.idProduct == 0x6001 || desc.idProduct == 0x6010 || desc.idProduct == 0x6011
             || desc.idProduct == 0x6014)) { /* Xilinx */
