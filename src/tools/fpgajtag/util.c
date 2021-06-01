@@ -615,7 +615,11 @@ uint32_t read_inputfile(const char* filename)
   if (!filename)
     return -1;
   if (strcmp(filename, "-")) {
+#ifdef WINDOWS
+    inputfd = open(filename, O_RDONLY | O_BINARY);
+#else
     inputfd = open(filename, O_RDONLY);
+#endif
     if (inputfd == -1) {
       printf("fpgajtag: Unable to open file '%s'\n", filename);
       exit(-1);
