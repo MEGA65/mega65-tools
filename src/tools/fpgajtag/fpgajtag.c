@@ -790,7 +790,7 @@ void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idc
       // {
       //   printf("On Windows, please specify COM port for your JTAG connection via the -l argument\n");
       //   printf("E.g.: m65 -l COM9 -b mybitstream.bit\n");
-      //   printf("In case it helps: bus=%d, port=%d\n", bus, port);
+      printf("In case it helps: bus=%d, port=%d\n", bus, port);
       //   exit(-1);
       // }
 #else

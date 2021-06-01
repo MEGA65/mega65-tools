@@ -381,7 +381,7 @@ USB_INFO* fpgausb_init(void)
     exit(-1);
   }
 
-  //#ifdef LIOBUSB_OPTION_USE_USBDK
+#ifdef LIOBUSB_OPTION_USE_USBDK
   if (usedk) {
     printf("Requesting to use USBDK backend.\n");
     int res = libusb_set_option(usb_context, LIBUSB_OPTION_USE_USBDK);
@@ -389,9 +389,9 @@ USB_INFO* fpgausb_init(void)
       printf("WARNING: Failed to switch to USEDK backend: %s\n", libusb_strerror(res));
     }
   }
-  //#else
-  // #warning No USBDK support in libusb
-  //#endif
+#else
+#warning No USBDK support in libusb
+#endif
 
   while ((dev = device_list[i++])) {
     struct libusb_device_descriptor desc;
