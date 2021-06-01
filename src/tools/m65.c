@@ -956,8 +956,11 @@ void do_type_text(char* type_text)
     }
 
     // RETURN at end if requested
-    if (type_text_cr)
+    if (type_text_cr) {
       slow_write(fd, "sffd3615 01 7f 7f \n", 19);
+      // Allow time for a keyboard scan interrupt
+      usleep(20000);
+    }
   }
   // Stop pressing keys
   slow_write(fd, "sffd3615 7f 7f 7f \n", 19);
