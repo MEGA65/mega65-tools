@@ -156,6 +156,8 @@ void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* 
 
 void activate_double_buffer(void)
 {
+  while(PEEK(0xD012)<0xe8) continue;
+
   lcopy(0x50000, 0x40000, 0x8000);
   lcopy(0x58000, 0x48000, 0x8000);
 }
@@ -519,9 +521,6 @@ void main(void)
 	  y++; if (y>199) y=0;
 
 	activate_double_buffer();
-
-	  while(!PEEK(0xD610)) continue;
-	  POKE(0xD610,0);
 
   }
 }
