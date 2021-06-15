@@ -498,7 +498,10 @@ void format_track(unsigned char track_number)
   }
 
   print_text(0, 4, 15, "Press any key to start formatting");
-  while(!PEEK(0xD610)) continue;
+  while(!PEEK(0xD610)) {
+    POKE(0xC0A0,PEEK(0xD610));
+    continue;
+  }
   POKE(0xD610,0);  
   /*
     From the C65 Specifications Manual:
@@ -632,25 +635,37 @@ If you do, the final CRC value should be 0.
 	   
   */
 
+  POKE(0xD020,0x06);
+  
   // Clock byte = $FF
   POKE(0xD088,0xFF);
   // Data byte = $00 (first of 12 post-index gap bytes)
   POKE(0xD087,0x00);
+
+  lfill(0xFF80000L,0x01,4000);
   
   // Begin unbuffered write
   POKE(0xD081,0xA1);  
-  
+
   // Write 12 gap bytes
+  POKE(0xD020,15);
   for(i=0;i<12;i++) {
-    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xC000+(i*2),0x01);
+    while(!(PEEK(0xD082)&0x40)) {
+      POKE(0xC000,PEEK(0xC000)+1);
+      continue;
+    }
     POKE(0xD087,0x00);
     // Bump border colour, so that we know we are alive
-    POKE(0xD020,PEEK(0xD020)+1);
+    POKE(0xD020,i);
   }
 
   // Write 3 sync bytes
   for(i=0;i<3;i++) {
-    while(!(PEEK(0xD082)&0x40)) continue;
+    while(!(PEEK(0xD082)&0x40)) {
+      POKE(0xC002,PEEK(0xC002)+1);
+      continue;
+    }
     POKE(0xD088,0xFB);
     POKE(0xD087,0xA1);
     // Bump border colour, so that we know we are alive
@@ -658,11 +673,17 @@ If you do, the final CRC value should be 0.
   }
 
   // Header mark
-  while(!(PEEK(0xD082)&0x40)) continue;
+  while(!(PEEK(0xD082)&0x40)) {
+    POKE(0xC004,PEEK(0xC004)+1);
+    continue;
+  }
   POKE(0xD088,0xFE); POKE(0xD087,0xFF);
 
   // Track number
-  while(!(PEEK(0xD082)&0x40)) continue;
+  while(!(PEEK(0xD082)&0x40)) {
+    POKE(0xC006,PEEK(0xC006)+1);
+    continue;
+  }
   POKE(0xD088,track_number); POKE(0xD087,0xFF);
 
   // Side number
