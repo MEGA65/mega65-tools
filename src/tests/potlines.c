@@ -427,6 +427,7 @@ void main(void)
 {
   unsigned char playing = 0,c;
   signed short x,y , goes=0;
+  unsigned char frames=0;
   unsigned long pixel_addr;
 
   asm("sei");
@@ -517,10 +518,13 @@ void main(void)
 #endif
 	  // Draw black down the right hand edge
 	  draw_line(319,0,319,199,0);
+	  y=PEEK(0xD624)>>1;
+	  y&=0x78;
 	  plot_pixel(319,y,1);
-	  y++; if (y>199) y=0;
 
-	activate_double_buffer();
+	  frames++;
+	  if (frames==8) { frames=0;
+	activate_double_buffer(); }
 
   }
 }
