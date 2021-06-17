@@ -2656,8 +2656,30 @@ int queue_mount_file(char* filename)
   return TRUE;
 }
 
+void petscify_text(char* text)
+{
+  for (int k = 0; k < strlen(text); k++) {
+    char c = text[k] & 0xdf;
+    // switch lower and upper-case
+    if (c >= 0x41 && c <= 0x5a)
+      text[k] = text[k] ^ 0x20;
+  }
+}
+
 void mount_file(char* filename)
 {
+  if (!safe_open_dir())
+    return;
+
+  // Check if file exists
+  struct m65dirent de;
+  if (!find_file_in_curdir(filename, &de)) {
+    printf("?  FILE NOT FOUND ERROR FOR \"%s\"\n", filename);
+    return;
+  }
+
+  petscify_text(filename);
+
   if (!queue_mount_file(filename))
     return;
 
