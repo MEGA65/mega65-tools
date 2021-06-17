@@ -1621,7 +1621,7 @@ int main(int argc, char** argv)
   // provided
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(WINDOWS)
   if (bitstream)
 #endif
   {
