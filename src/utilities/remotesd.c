@@ -46,6 +46,7 @@ void press_key(void)
 
 uint8_t c, j, z, pl, job_type, pause_flag = 0, xemu_flag = 0;
 uint16_t i, job_type_addr;
+char filename[65];
 
 void check_xemu_flag(void)
 {
@@ -269,6 +270,28 @@ void wait_for_sdcard_to_go_busy(void)
       continue;
   }
 }
+
+#pragma optimize(off)
+void mount_file(void)
+{
+  printf("Mounting \"%s\"...\n", filename);
+  strcpy((char*)0x0400, filename);
+  *((char*)0x400 + strlen(filename)) = 0x00;
+
+  // Call dos_setname()
+  __asm__("LDY #$04");
+  __asm__("LDX #$00");
+
+  __asm__("LDA #$2E");
+  __asm__("STA $D640");
+  __asm__("NOP");
+
+  // Try to attach it
+  __asm__("LDA #$40");
+  __asm__("STA $D640");
+  __asm__("NOP");
+}
+#pragma optimize(on)
 
 void main(void)
 {
@@ -552,6 +575,15 @@ void main(void)
           printf("$%04x : Send mem done\n", *(uint16_t*)0xDC08);
 #endif
 
+          break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Mount a disk image
+        // - - - - - - - - - - - - - - - - - - - - -
+        case 0x12:
+          job_addr++;
+          strcpy(filename, (char*)job_addr);
+          mount_file();
           break;
 
           // - - - - - - - - - - - - - - - - - - - - -

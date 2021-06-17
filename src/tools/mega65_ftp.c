@@ -89,6 +89,7 @@ int delete_file(char* name);
 int rename_file(char* name, char* dest_name);
 int upload_file(char* name, char* dest_name);
 int sdhc_check(void);
+void mount_file(char* filename);
 #define CACHE_NO 0
 #define CACHE_YES 1
 int read_sector(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead);
@@ -477,6 +478,9 @@ int execute_command(char* cmd)
   }
   else if (parse_command(cmd, "clusters %s", src) == 1) {
     download_file(src, src, 1);
+  }
+  else if (parse_command(cmd, "mount %s", src) == 1) {
+    mount_file(src);
   }
   else if (!strcasecmp(cmd, "help")) {
     printf("MEGA65 File Transfer Program Command Reference:\n");
@@ -2628,6 +2632,58 @@ int is_fragmented(char* filename)
   }
 
   return fragmented_flag;
+}
+
+int queue_mount_file(char* filename)
+{
+  uint8_t job[66]; // for now, I made a max filename size of 64 bytes
+                   // (1 byte for job-id, 1 byte for null-terminator)
+  int len = strlen(filename);
+
+  if (len > 64) {
+    printf("ERROR: For now, maximum filename is limited to 64 bytes\n"
+           "       (this is a hardcoded limit for mount that we can change later, if needbe)\n");
+    return FALSE;
+  }
+
+  job[0] = 0x12;
+  strcpy((char*)(job + 1), filename);
+  len++;
+  job[len] = 0; // add null-terminator at end
+  len++;
+  queue_add_job(job, len);
+
+  return TRUE;
+}
+
+void petscify_text(char* text)
+{
+  for (int k = 0; k < strlen(text); k++) {
+    char c = text[k] & 0xdf;
+    // switch lower and upper-case
+    if (c >= 0x41 && c <= 0x5a)
+      text[k] = text[k] ^ 0x20;
+  }
+}
+
+void mount_file(char* filename)
+{
+  if (!safe_open_dir())
+    return;
+
+  // Check if file exists
+  struct m65dirent de;
+  if (!find_file_in_curdir(filename, &de)) {
+    printf("?  FILE NOT FOUND ERROR FOR \"%s\"\n", filename);
+    return;
+  }
+
+  petscify_text(filename);
+
+  if (!queue_mount_file(filename))
+    return;
+
+  queue_execute();
 }
 
 int download_file(char* dest_name, char* local_name, int showClusters)
