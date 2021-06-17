@@ -2636,8 +2636,8 @@ int is_fragmented(char* filename)
 
 int queue_mount_file(char* filename)
 {
-  uint8_t job[66];  // for now, I made a max filename size of 64 bytes
-                    // (1 byte for job-id, 1 byte for null-terminator)
+  uint8_t job[66]; // for now, I made a max filename size of 64 bytes
+                   // (1 byte for job-id, 1 byte for null-terminator)
   int len = strlen(filename);
 
   if (len > 64) {
@@ -2647,9 +2647,9 @@ int queue_mount_file(char* filename)
   }
 
   job[0] = 0x12;
-  strcpy((char*)(job+1), filename);
+  strcpy((char*)(job + 1), filename);
   len++;
-  job[len] = 0;  // add null-terminator at end
+  job[len] = 0; // add null-terminator at end
   len++;
   queue_add_job(job, len);
 
