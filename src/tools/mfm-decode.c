@@ -138,12 +138,22 @@ int main(int argc, char** argv)
   if (b>=a&&c>=b&&d>=c) {
     fprintf(stderr,"NOTE: File appears to be $D6AC capture\n");
 
+    int last_counter=(a-1)&0x1f;
+    
     for(i=0;i<count;i++) {
+      int counter_val=(buffer[i]>>2)&0x1f;
+      if (counter_val!=(last_counter+1)) {
+	fprintf(stderr,"WARNING: Byte %d : counter=%d, expected %d\n",
+		i,counter_val,last_counter+1);
+      }
+      last_counter=counter_val;
+      if (last_counter==31) last_counter=-1;
+					   
       switch(buffer[i]&3) {
       case 0: mfm_decode(1.0); break;
       case 1: mfm_decode(1.5); break;
       case 2: mfm_decode(2.0); break;
-      case 3: mfm_decode(0.0); break; // invalidly short or long gap
+      case 3: mfm_decode(1.0); break; // invalidly short or long gap, just lie and call it a short gap
       }
     }
     exit(-1);
