@@ -13,12 +13,12 @@ save:
 	CPX #4
 	BNE save	
 	
-	;; Initialise 32-bit ZP pointer to bank 4 ($40000)
+	;; Initialise 32-bit ZP pointer to bank 5 ($50000)
 	LDA #$00
 	STA $FA
 	STA $FB
 	STA $FD
-	LDA #$04
+	LDA #$05
 	STA $FC
 	
 waitforindexhigh:
@@ -31,22 +31,27 @@ waitforfirstindexedge:
 	LDA $D6AC
 	STA $FF
 loop:
-	LDX $D6A0
-	BMI done
 waitfornextfluxevent:
 	LDA $D6AC
 	CMP $FF
 	BEQ waitfornextfluxevent
 	INC $D020
-	;; Store byte in bank 4	
+	;; Store byte in bank 5	
 	;; STA [$FA],Z
-	.byte $EA,$92,$FA
-	
+	.byte $EA,$92,$FA	; STA [$FA],Z to save value
+	STA $FF			; Update comparison value
+
+	;; Show some activity while doing it
+	.byte $9C,$10,$C0 	; STZ $C010
+	LDY $FB
+	STA $C012
+
+	;; Are we done yet?
 	;; INZ
 	.byte $1B  		; INZ
-	
 	BNE loop
 	INC $FB
+	LDY $FB
 	BNE loop
 
 done:
@@ -58,7 +63,7 @@ restore:
 	STA $FA,X
 	INX
 	CPX #4
-	BNE save
+	BNE restore
 	
 	CLI
 	RTS 
