@@ -135,11 +135,21 @@ int main(int argc, char** argv)
   if (a==63) { b+=64; c+=64; d+=64; }
   if (b==63) { c+=64; d+=64; }
   if (c==63) { d+=64; }
-  if (b==a+1&&c==b+1&&d==c+1) {
+  if (b>=a&&c>=b&&d>=c) {
     fprintf(stderr,"NOTE: File appears to be $D6AC capture\n");
+
+    for(i=0;i<count;i++) {
+      switch(buffer[i]&3) {
+      case 0: mfm_decode(1.0); break;
+      case 1: mfm_decode(1.5); break;
+      case 2: mfm_decode(2.0); break;
+      case 3: mfm_decode(0.0); break; // invalidly short or long gap
+      }
+    }
     exit(-1);
   }
-  
+
+  fprintf(stderr,"NOTE: Assuming raw $D6A0 capture.\n");
   for (i = 1; i < count; i++) {
     if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
       if (last_pulse) // ignore pseudo-pulse caused by start of file
