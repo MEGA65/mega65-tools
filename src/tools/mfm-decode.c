@@ -81,7 +81,7 @@ void mfm_decode(float gap)
       emit_bit(0);
       emit_bit(1);
     }
-    else if (gap == 2.0) {
+    else if (gap >= 2.0) {
       emit_bit(1);
       emit_bit(0);
       emit_bit(1);
@@ -95,7 +95,7 @@ void mfm_decode(float gap)
         emit_bit(0);
         emit_bit(0);
       }
-      else if (gap == 2.0) {
+      else if (gap >= 2.0) {
         emit_bit(0);
         emit_bit(1);
       }
@@ -186,7 +186,7 @@ int main(int argc, char** argv)
 
       int gap_len=buffer[i]+((buffer[i+1]&0xf)<<8);
       float qgap=gap_len*1.0/162.0;
-      printf("  gap=%.1f (%d)\n",qgap,gap_len);
+      // printf("  gap=%.1f (%d)\n",qgap,gap_len);
       mfm_decode(qgap);
     }
       
