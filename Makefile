@@ -86,6 +86,7 @@ TOOLS=	$(BINDIR)/etherload \
 	$(BINDIR)/pngprepare \
 	$(BINDIR)/giftotiles \
 	$(BINDIR)/m65ftp_test \
+	$(BINDIR)/mfm-decode \
 	$(BINDIR)/bit2core \
 	$(BINDIR)/bit2mcs \
 	$(BINDIR)/m65.exe \
@@ -429,6 +430,9 @@ $(SDCARD_DIR)/BANNER.M65:	$(BINDIR)/pngprepare $(ASSETS)/mega65_320x64.png /usr/
 
 $(BINDIR)/m65ftp_test:	$(TESTDIR)/m65ftp_test.c
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/m65ftp_test $(TESTDIR)/m65ftp_test.c
+
+$(BINDIR)/mfm-decode:	$(TOOLDIR)/mfm-decode.c
+	$(CC) $(COPT) -g -Wall -o $(BINDIR)/mfm-decode $(TOOLDIR)/mfm-decode.c
 
 $(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
 	$(CC) $(COPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/m65 $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng

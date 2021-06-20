@@ -127,6 +127,19 @@ int main(int argc, char** argv)
 
   int i;
 
+  // Check if data looks like it is a $D6AC capture
+  int a=buffer[0]>>2;
+  int b=buffer[1]>>2;
+  int c=buffer[2]>>2;
+  int d=buffer[3]>>2;
+  if (a==63) { b+=64; c+=64; d+=64; }
+  if (b==63) { c+=64; d+=64; }
+  if (c==63) { d+=64; }
+  if (b==a+1&&c==b+1&&d==c+1) {
+    fprintf(stderr,"NOTE: File appears to be $D6AC capture\n");
+    exit(-1);
+  }
+  
   for (i = 1; i < count; i++) {
     if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
       if (last_pulse) // ignore pseudo-pulse caused by start of file
