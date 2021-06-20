@@ -7,6 +7,8 @@
 #include <dirent.h>
 #include <fileio.h>
 
+void readtrackgaps(void);
+
 unsigned short i;
 unsigned char a, b, c, d;
 unsigned short interval_length;
@@ -656,7 +658,7 @@ If you do, the final CRC value should be 0.
   // Write 12 gap bytes
   POKE(0xD020,15);
   for(i=0;i<12;i++) {
-    POKE(0xC000+(i*2),0x01);
+    POKE(0xC000+(i*2),'*');
     while(!(PEEK(0xD082)&0x40)) {
       POKE(0xC000,PEEK(0xC000)+1);
       continue;
@@ -785,8 +787,19 @@ If you do, the final CRC value should be 0.
   while(1) {
     snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     print_text(0, 24, 7, peak_msg);
-    POKE(0xD020,PEEK(0xD020)+1);
-    POKE(0xD021,PEEK(0xD021)+1);
+    POKE(0xC000,PEEK(0xC000)+1);
+
+    // Allow reading a full track of data
+    if (PEEK(0xD610)) {
+
+      POKE (0xc002,PEEK(0xc002)+1);
+      
+      // Call routine to read a complete track of data into $50000-$5FFFF
+      readtrackgaps();
+      
+      POKE(0xD610,0);
+    }
+    
     continue;
   }
   
@@ -813,7 +826,6 @@ void main(void)
     POKE(0xD062, 0);
     POKE(0xD011, 0x1b);
 
-    
     printf("%cMEGA65 Floppy Test Utility.\n\n", 0x93);
 
     printf("1. MFM Histogram and seeking tests.\n");
