@@ -440,87 +440,93 @@ void read_track(unsigned char track_number)
 {
   // First seek to the correct track
 
-  // Connect to real floppy drive
-  while(!(lpeek(0xffd36a1L) & 1)) {
-    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
-  }
-  
-  // Floppy motor on
-  POKE(0xD080, 0x68);
-
-  // Enable auto-tracking
-  POKE(0xD689, PEEK(0xD689) & 0xEF);
-
-  // Map FDC sector buffer, not SD sector buffer
-  POKE(0xD689, PEEK(0xD689) & 0x7f);
-
-  // Disable matching on any sector, use real drive
-  POKE(0xD6A1, 0x01);
-
-  // Wait until busy flag clears
-  while (PEEK(0xD082) & 0x80) {
-    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-    print_text(0, 24, 7, peak_msg);
-    continue;
-  }
-
-  
-  print_text(0, 0, 7, "Reading track...");
-
-  while(1) {
-    
-    // Don't proceed without user's concent to ruin the disk in the drive
-    print_text(0, 1, 2, "Insert disk, then press /");
-    
-#if 1
-    while(PEEK(0xD610)!='/') {
-      if (PEEK(0xD610)&&PEEK(0xD610)!='/') {
-	POKE(0xD610,0);
-      }
+  if (track_number!=255) {
+    // Connect to real floppy drive
+    while(!(lpeek(0xffd36a1L) & 1)) {
+      lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
     }
-#endif
     
+    // Floppy motor on
+    POKE(0xD080, 0x68);
     
-    POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+    // Enable auto-tracking
+    POKE(0xD689, PEEK(0xD689) & 0xEF);
     
-    // Seek to track 0
-    print_text(0, 2, 15, "Seeking to track 0");
-    while(!(PEEK(0xD082)&0x01)) {
-      POKE(0xD081,0x10);
-      usleep(20000);
-      
+    // Map FDC sector buffer, not SD sector buffer
+    POKE(0xD689, PEEK(0xD689) & 0x7f);
+    
+    // Disable matching on any sector, use real drive
+    POKE(0xD6A1, 0x01);
+    
+    // Wait until busy flag clears
+    while (PEEK(0xD082) & 0x80) {
       snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
       print_text(0, 24, 7, peak_msg);
-      
-    }
-    
-    // Seek to the requested track
-    print_text(0, 3, 15, "Seeking to target track");
-    for(i=0;i<track_number;i++) {
-      POKE(0xD081,0x18);
-      usleep(20000);
-      
-    }
-    
-    // Show sector under head after done writing as simple verification test
-    while(1) {
-      snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-      print_text(0, 24, 7, peak_msg);
-      POKE(0xC000,PEEK(0xC000)+1);
-      
-      // Allow reading a full track of data
-      if (PEEK(0xD610)) {
-	
-	POKE (0xc002,PEEK(0xc002)+1);
-	
-	// Call routine to read a complete track of data into $50000-$5FFFF
-	readtrackgaps();
-	
-	POKE(0xD610,0);
-      }
-      
       continue;
     }
+
+    print_text(0, 0, 7, "Reading track...");
+    
+    while(1) {
+      
+      // Don't proceed without user's concent to ruin the disk in the drive
+      print_text(0, 1, 2, "Insert disk, then press /");
+      
+#if 1
+      while(PEEK(0xD610)!='/') {
+	if (PEEK(0xD610)&&PEEK(0xD610)!='/') {
+	  POKE(0xD610,0);
+	}
+      }
+#endif
+      
+      
+      POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+      
+      // Seek to track 0
+      print_text(0, 2, 15, "Seeking to track 0");
+      while(!(PEEK(0xD082)&0x01)) {
+	POKE(0xD081,0x10);
+	usleep(20000);
+	
+	snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+	print_text(0, 24, 7, peak_msg);
+	
+      }
+      
+      // Seek to the requested track
+      print_text(0, 3, 15, "Seeking to target track");
+      for(i=0;i<track_number;i++) {
+	POKE(0xD081,0x18);
+	usleep(20000);
+	
+      }        
+    }
+  }
+  else 
+    print_text(0, 0, 7, "Reading current track...");
+  
+  // Show sector under head after done writing as simple verification test
+  while(1) {
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+    POKE(0xC000,PEEK(0xC000)+1);
+    
+    // Allow reading a full track of data
+    if (PEEK(0xD610)||(track_number==255)) {
+      
+      POKE (0xc002,PEEK(0xc002)+1);
+      
+      // Call routine to read a complete track of data into $50000-$5FFFF
+      readtrackgaps();
+      
+      POKE(0xD610,0);
+
+      // Only auto-read it once
+      track_number=254;
+    }
+    
+    continue;
   }
   
 }
@@ -781,48 +787,49 @@ If you do, the final CRC value should be 0.
       POKE(0xC004,PEEK(0xC004)+1);
       continue;
     }
-    POKE(0xD088,0xFE); POKE(0xD087,0xFF);
+    POKE(0xD088,0xFF);
+    POKE(0xD087,0xFE); 
     
     // Track number
     while(!(PEEK(0xD082)&0x40)) {
       POKE(0xC006,PEEK(0xC006)+1);
       continue;
     }
-    POKE(0xD088,track_number); POKE(0xD087,0xFF);
+    POKE(0xD087,track_number); 
 
     POKE(0xC04c,2);
     
     // Side number
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD088,0x80); POKE(0xD087,0xFF);
+    POKE(0xD087,0x00); 
 
     POKE(0xC04c,3);
     
     // Sector number
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD088,0x80+sector_num); POKE(0xD087,0xFF);  
+    POKE(0xD087,0x00+sector_num); 
 
     POKE(0xC04c,4);
     
     // Sector length
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD088,0x02); POKE(0xD087,0xFF);  
+    POKE(0xD087,0x02); 
 
     POKE(0xC04c,5);
     
     // Sector header CRC
     // XXX how do we calculate these?
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD088,0x00); POKE(0xD087,0xFF);  
+    POKE(0xD087,0x00); 
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD088,0x00); POKE(0xD087,0xFF);
+    POKE(0xD087,0x00); 
 
     POKE(0xC04c,6);
     
     // 23 gap bytes
     for (i=0;i<23;i++) {
       while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD088,0x4E); POKE(0xD087,0xFF);
+      POKE(0xD087,0x4E); 
     }
 
     POKE(0xC04c,7);    
@@ -830,7 +837,7 @@ If you do, the final CRC value should be 0.
     // 12 gap bytes
     for (i=0;i<12;i++) {
       while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD088,0x00); POKE(0xD087,0xFF);
+      POKE(0xD087,0x00); 
     }
 
     POKE(0xC04c,8);   
@@ -848,23 +855,24 @@ If you do, the final CRC value should be 0.
     
     // Data mark
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD088,0xFB); POKE(0xD087,0xFF);
+    POKE(0xD088,0xFF);    
+    POKE(0xD087,0xFB); 
 
     POKE(0xC04c,10);
     
     // Data bytes
     for (i=0;i<512;i++) {
       while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD088,0x00); POKE(0xD087,0xFF);
+      POKE(0xD087,0x00); 
     }
 
     POKE(0xC04c,11);
     
     
     // 24 gap bytes
-    for (i=0;i<23;i++) {
+    for (i=0;i<24;i++) {
       while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD088,0x4E); POKE(0xD087,0xFF);
+      POKE(0xD087,0x4E);
     }
 
     POKE(0xC04c,12);
@@ -913,7 +921,7 @@ void main(void)
     case '3':
       POKE(0xD610,0);
       format_track(39);
-      read_track(38);
+      read_track(255);
       break;
     }
   }
