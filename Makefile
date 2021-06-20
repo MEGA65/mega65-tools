@@ -254,10 +254,10 @@ $(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65)
 	git submodule update
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
-$(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(CC65)
+$(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(TESTDIR)/floppyread.s $(CC65)
 	git submodule init
 	git submodule update
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s $(TESTDIR)/floppyread.s
 
 $(UTILDIR)/c65toc64wrapper.prg:	$(UTILDIR)/c65toc64wrapper.asm $(ACME)
 	$(ACME) --setpc 0x2001 --cpu m65 --format cbm --outfile $(UTILDIR)/c65toc64wrapper.prg $(UTILDIR)/c65toc64wrapper.asm
