@@ -20,6 +20,7 @@ int last_bit = 0;
 unsigned char byte = 0;
 int bits = 0;
 int byte_count = 0;
+int bytes_emitted=0;
 
 void emit_bit(int b)
 {
@@ -35,6 +36,7 @@ void emit_bit(int b)
       byte_count = 0;
     }
     printf(" $%02x", byte);
+    bytes_emitted++;
     byte = 0;
     bits = 0;
   }
@@ -61,10 +63,12 @@ void mfm_decode(float gap)
   if (i == 4) {
     if (byte_count)
       printf("\n");
+    if (bytes_emitted) printf("(%d bytes since last sync)\n",bytes_emitted);
     printf("Sync $A1\n");
     bits = 0;
     byte = 0;
     byte_count = 0;
+    bytes_emitted = 0;
     return;
   }
 
@@ -135,7 +139,7 @@ int main(int argc, char** argv)
   if (a==63) { b+=64; c+=64; d+=64; }
   if (b==63) { c+=64; d+=64; }
   if (c==63) { d+=64; }
-  if (b>=a&&c>=b&&d>=c) {
+  if (b>=a&&c>=b&&d>=c&&buffer[0]!=buffer[3]&&buffer[0]!=buffer[2]) {
     fprintf(stderr,"NOTE: File appears to be $D6AC capture\n");
 
     int last_counter=(a-1)&0x1f;
@@ -159,6 +163,37 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
+  if (
+      ((((buffer[1]>>4)+1)&0xf)==(buffer[3]>>4))
+      &&
+      ((((buffer[3]>>4)+1)&0xf)==(buffer[5]>>4))
+      &&
+      ((((buffer[5]>>4)+1)&0xf)==(buffer[7]>>4))
+      &&
+      ((((buffer[7]>>4)+1)&0xf)==(buffer[9]>>4))) {
+    fprintf(stderr,"NOTE: Auto-detect $D699/$D69A log.\n");
+
+    int last_count=buffer[1]>>4;
+    
+    for (i = 0; i < count; i+=2) {
+      int this_count=buffer[i+1]>>4;
+      if (this_count!=last_count) {
+	fprintf(stderr,"ERROR: Saw count %d instead of %d at offset %d\n",
+		this_count,count,i);
+      }
+      last_count++;
+      if (last_count>0xf) last_count=0;      
+
+      int gap_len=buffer[i]+((buffer[i+1]&0xf)<<8);
+      float qgap=gap_len*1.0/162.0;
+      printf("  gap=%.1f (%d)\n",qgap,gap_len);
+      mfm_decode(qgap);
+    }
+      
+    exit(-1);
+  }
+      
+      
   fprintf(stderr,"NOTE: Assuming raw $D6A0 capture.\n");
   for (i = 1; i < count; i++) {
     if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {

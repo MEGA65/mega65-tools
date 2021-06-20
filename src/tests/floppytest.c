@@ -467,57 +467,61 @@ void read_track(unsigned char track_number)
   
   print_text(0, 0, 7, "Reading track...");
 
-  // Don't proceed without user's concent to ruin the disk in the drive
-  print_text(0, 1, 2, "Insert disk, then press /");
-#if 1
-  while(PEEK(0xD610)!='/') {
-    if (PEEK(0xD610)) {
-      POKE(0xD610,0);
-      return;
-    }
-  }
-#endif
-
-  POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
-  
-  // Seek to track 0
-  print_text(0, 2, 15, "Seeking to track 0");
-  while(!(PEEK(0xD082)&0x01)) {
-    POKE(0xD081,0x10);
-    usleep(20000);
-
-    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-    print_text(0, 24, 7, peak_msg);
-    
-  }
-
-  // Seek to the requested track
-  print_text(0, 3, 15, "Seeking to target track");
-  for(i=0;i<track_number;i++) {
-    POKE(0xD081,0x18);
-    usleep(20000);
-    
-  }
-
-  // Show sector under head after done writing as simple verification test
   while(1) {
-    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-    print_text(0, 24, 7, peak_msg);
-    POKE(0xC000,PEEK(0xC000)+1);
-
-    // Allow reading a full track of data
-    if (PEEK(0xD610)) {
-
-      POKE (0xc002,PEEK(0xc002)+1);
+    
+    // Don't proceed without user's concent to ruin the disk in the drive
+    print_text(0, 1, 2, "Insert disk, then press /");
+    
+#if 1
+    while(PEEK(0xD610)!='/') {
+      if (PEEK(0xD610)&&PEEK(0xD610)!='/') {
+	POKE(0xD610,0);
+      }
+    }
+#endif
+    
+    
+    POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+    
+    // Seek to track 0
+    print_text(0, 2, 15, "Seeking to track 0");
+    while(!(PEEK(0xD082)&0x01)) {
+      POKE(0xD081,0x10);
+      usleep(20000);
       
-      // Call routine to read a complete track of data into $50000-$5FFFF
-      readtrackgaps();
+      snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+      print_text(0, 24, 7, peak_msg);
       
-      POKE(0xD610,0);
     }
     
-    continue;
-  }    
+    // Seek to the requested track
+    print_text(0, 3, 15, "Seeking to target track");
+    for(i=0;i<track_number;i++) {
+      POKE(0xD081,0x18);
+      usleep(20000);
+      
+    }
+    
+    // Show sector under head after done writing as simple verification test
+    while(1) {
+      snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+      print_text(0, 24, 7, peak_msg);
+      POKE(0xC000,PEEK(0xC000)+1);
+      
+      // Allow reading a full track of data
+      if (PEEK(0xD610)) {
+	
+	POKE (0xc002,PEEK(0xc002)+1);
+	
+	// Call routine to read a complete track of data into $50000-$5FFFF
+	readtrackgaps();
+	
+	POKE(0xD610,0);
+      }
+      
+      continue;
+    }
+  }
   
 }
 
@@ -558,8 +562,7 @@ void format_track(unsigned char track_number)
 
   // Don't proceed without user's concent to ruin the disk in the drive
 #if 0
-  print_text(0, 1, 2, "Insert sacraficial disk, then press *");
-  while(PEEK(0xD610)!='*') {
+    while(PEEK(0xD610)!='*') {
     if (PEEK(0xD610)) {
       POKE(0xD610,0);
       return;

@@ -35,12 +35,19 @@ waitfornextfluxevent:
 	LDA $D6AC
 	CMP $FF
 	BEQ waitfornextfluxevent
+	STA $FF			; Update comparison value
 	INC $D020
-	;; Store byte in bank 5	
+	;; Store real length in bank 5
+	LDA $D6A9
 	;; STA [$FA],Z
 	.byte $EA,$92,$FA	; STA [$FA],Z to save value
-	STA $FF			; Update comparison value
 
+	.byte $1B  		; INZ
+
+	LDA $D6AA
+	;; STA [$FA],Z
+	.byte $EA,$92,$FA	; STA [$FA],Z to save value
+	
 	;; Show some activity while doing it
 	.byte $9C,$10,$C0 	; STZ $C010
 	LDY $FB
