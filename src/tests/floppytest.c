@@ -558,7 +558,7 @@ unsigned short crc16(unsigned short crc, unsigned short b)
 }
 
 unsigned char header_crc_bytes[20];
-unsigned char data_crc[2];
+unsigned char data_crc_bytes[2];
 
 void format_track(unsigned char track_number)
 {
@@ -623,14 +623,15 @@ void format_track(unsigned char track_number)
       header_crc_bytes[i*2+0]=crc&0xff;
       header_crc_bytes[i*2+1]=crc>>8;
     }
-  snprintf(peak_msg,40,"CRC A1,A1,A1,FE=$%04x",crc);
-  print_text(0,15,7,peak_msg);
 
   // Now also calculate CRC of empty data sector
   crc16_init();
   for(i=0;i<512;i++) crc=crc16(crc,0x00);
-  data_crc[0]=crc&0xff;
-  data_crc[1]=crc>>8;
+  data_crc_bytes[0]=crc&0xff;
+  data_crc_bytes[1]=crc>>8;
+
+  snprintf(peak_msg,40,"CRC data=$%02x%02x",data_crc_bytes[1],data_crc_bytes[0]);
+  print_text(0,15,7,peak_msg);
   
   // Seek to track 0
   print_text(0, 2, 15, "Seeking to track 0");
@@ -920,6 +921,12 @@ If you do, the final CRC value should be 0.
       POKE(0xD087,0x00); 
     }
 
+    // Write data CRC bytes
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD087,data_crc_bytes[1]); 
+    while(!(PEEK(0xD082)&0x40)) continue;
+    POKE(0xD087,data_crc_bytes[0]); 
+    
     POKE(0xC04c,11);
     
     
