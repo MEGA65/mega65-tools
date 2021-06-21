@@ -531,6 +531,35 @@ void read_track(unsigned char track_number)
   
 }
 
+// CRC16 algorithm from:
+// https://github.com/psbhlw/floppy-disk-ripper/blob/master/fdrc/mfm.cpp
+// GPL3+, Copyright (C) 2014, psb^hlw, ts-labs.
+// crc16 table
+unsigned short crc_ccitt[256];
+unsigned short crc=0;
+
+// crc16 init table
+void crc16_init()
+{
+    for (i = 0; i < 256; i++)
+    {
+        uint16_t w = i << 8;
+        for (a = 0; a < 8; a++)
+            w = (w << 1) ^ ((w & 0x8000) ? 0x1021 : 0);
+        crc_ccitt[i] = w;
+    }
+}
+
+// calc crc16 for 1 byte
+unsigned short crc16(unsigned short crc, unsigned short b)
+{
+    crc = (crc << 8) ^ crc_ccitt[((crc >> 8) & 0xff) ^ b];
+    return crc;
+}
+
+unsigned char header_crc_bytes[20];
+unsigned char data_crc[2];
+
 void format_track(unsigned char track_number)
 {
   // First seek to the correct track
@@ -577,6 +606,31 @@ void format_track(unsigned char track_number)
 #endif
 
   POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+
+  // Pre-calculate CRC bytes
+  crc16_init();
+  for(i=0;i<10;i++)
+    {
+      // Calculate initial CRC of sync bytes and $FE header marker
+      crc=crc16(0xFFFF,0xa1);
+      crc=crc16(crc,0xa1);
+      crc=crc16(crc,0xa1);
+      crc=crc16(crc,0xfe);
+      crc=crc16(crc,track_number);
+      crc=crc16(crc,0); // side is always 0 for now
+      crc=crc16(crc,i);
+      crc=crc16(crc,2); // 512 byte sectors
+      header_crc_bytes[i*2+0]=crc&0xff;
+      header_crc_bytes[i*2+1]=crc>>8;
+    }
+  snprintf(peak_msg,40,"CRC A1,A1,A1,FE=$%04x",crc);
+  print_text(0,15,7,peak_msg);
+
+  // Now also calculate CRC of empty data sector
+  crc16_init();
+  for(i=0;i<512;i++) crc=crc16(crc,0x00);
+  data_crc[0]=crc&0xff;
+  data_crc[1]=crc>>8;
   
   // Seek to track 0
   print_text(0, 2, 15, "Seeking to track 0");
@@ -762,7 +816,8 @@ If you do, the final CRC value should be 0.
     POKE(0xD020,i);
   }
 
-  for(sector_num=0;sector_num<10;sector_num++) {
+  // We cound x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
+  for(sector_num=0;sector_num<10*2;sector_num+=2) {
 
     POKE(0xC04d,0);
     POKE(0xC04f,0);
@@ -807,7 +862,7 @@ If you do, the final CRC value should be 0.
     
     // Sector number
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,0x00+sector_num); 
+    POKE(0xD087,sector_num>>1); 
 
     POKE(0xC04c,4);
     
@@ -818,11 +873,10 @@ If you do, the final CRC value should be 0.
     POKE(0xC04c,5);
     
     // Sector header CRC
-    // XXX how do we calculate these?
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,0x00); 
+    POKE(0xD087,header_crc_bytes[sector_num+1]); 
     while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,0x00); 
+    POKE(0xD087,header_crc_bytes[sector_num+0]); 
 
     POKE(0xC04c,6);
     

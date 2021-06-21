@@ -179,10 +179,11 @@ int main(int argc, char** argv)
       int this_count=buffer[i+1]>>4;
       if (this_count!=last_count) {
 	fprintf(stderr,"ERROR: Saw count %d instead of %d at offset %d\n",
-		this_count,count,i);
-      }
-      last_count++;
-      if (last_count>0xf) last_count=0;      
+		this_count,last_count,i);
+	last_count=this_count+1;	
+      } else 
+	last_count++;
+      if (last_count>0xf) last_count=0;
 
       int gap_len=buffer[i]+((buffer[i+1]&0xf)<<8);
       float qgap=gap_len*1.0/162.0;

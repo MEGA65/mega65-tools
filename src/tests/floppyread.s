@@ -36,7 +36,6 @@ waitfornextfluxevent:
 	CMP $FF
 	BEQ waitfornextfluxevent
 	STA $FF			; Update comparison value
-	INC $D020
 	;; Store real length in bank 5
 	LDA $D6A9
 	;; STA [$FA],Z
