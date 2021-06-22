@@ -499,7 +499,7 @@ void read_track(unsigned char track_number)
       print_text(0, 2, 15, "Seeking to track 0");
       while(!(PEEK(0xD082)&0x01)) {
 	POKE(0xD081,0x10);
-	usleep(20000);
+	usleep(6000);
 	
 	snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
 	print_text(0, 24, 7, peak_msg);
@@ -583,7 +583,7 @@ void format_disk(void)
     lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
   }
   
-  // Floppy motor on
+  // Floppy 0 motor on
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
@@ -615,13 +615,15 @@ void format_disk(void)
   print_text(0, 2, 15, "Seeking to track 0");
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
-    usleep(20000);
+    usleep(6000);
 
     snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     print_text(0, 24, 7, peak_msg);
     
   }
 
+  lfill(0xFF80000L,0x01,4000);
+  
   for(track_num=0;track_num<85;track_num++) {
     // Seek to the requested track
     snprintf(peak_msg, 40, "Formatting track %d",track_num);
@@ -799,8 +801,6 @@ If you do, the final CRC value should be 0.
       POKE(0xD088,0xFF);
       // Data byte = $00 (first of 12 post-index gap bytes)
       POKE(0xD087,0x00);
-      
-      lfill(0xFF80000L,0x01,4000);
       
       // Begin unbuffered write
       POKE(0xD081,0xA1);  
