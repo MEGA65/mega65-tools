@@ -337,8 +337,8 @@ void read_all_sectors()
     POKE(0x8000 + i, PEEK(0xD087));
   //  lcopy(0xffd6000L,0x4e200L,0x200);
 
+  graphics_clear_double_buffer();
   while (1) {
-    graphics_clear_double_buffer();
     print_text(0, 0, 1, "Reading all sectors...");
     print_text(0, 22, 15, "GREEN = good, RED = bad");
     print_text(0, 23, 15, "YELLOW = Track >80 bad");
@@ -357,6 +357,14 @@ void read_all_sectors()
     for (t = 0; t < 85; t++) {
       if (PEEK(0xD610))
         break;
+
+      // Clear display for reading this track
+      x = t * 7; y=16;
+      for (xx = 0; xx < 6; xx++)
+	for (yy = 0; yy < 160; yy++)
+	  plot_pixel(x + xx, y + yy, 0);
+
+      
       for (h = 0; h < 2; h++) {
         if (PEEK(0xD610))
           break;
@@ -438,7 +446,7 @@ void read_all_sectors()
   }
 }
 
-unsigned sector_num=0;
+unsigned char sector_num=0;
 
 void read_track(unsigned char track_number)
 {
