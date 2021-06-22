@@ -314,8 +314,8 @@ void read_all_sectors()
   // Floppy motor on
   POKE(0xD080, 0x68);
 
-  // Enable auto-tracking
-  POKE(0xD689, PEEK(0xD689) & 0xEF);
+  // Disable auto-tracking
+  POKE(0xD689, PEEK(0xD689) | 0x10);
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -430,6 +430,10 @@ void read_all_sectors()
           //	  lcopy(0xffd6000L,0x4e200L,0x200);
         }
       }
+
+      // Seek to next track
+      POKE(0xD081,0x18);
+      usleep(10000);
     }
   }
 }
@@ -559,8 +563,10 @@ unsigned short crc16(unsigned short crc, unsigned short b)
 
 unsigned char header_crc_bytes[20];
 unsigned char data_crc_bytes[2];
+unsigned char track_num=0;
+unsigned char side=0;
 
-void format_track(unsigned char track_number)
+void format_disk(void)
 {
   // First seek to the correct track
 
@@ -572,8 +578,8 @@ void format_track(unsigned char track_number)
   // Floppy motor on
   POKE(0xD080, 0x68);
 
-  // Enable auto-tracking
-  POKE(0xD689, PEEK(0xD689) & 0xEF);
+  // Disable auto-tracking
+  POKE(0xD689, PEEK(0xD689) ^ 0x10);
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -593,46 +599,10 @@ void format_track(unsigned char track_number)
   }
 
   
-  print_text(0, 0, 7, "Formatting track...");
-
-  // Don't proceed without user's concent to ruin the disk in the drive
-#if 0
-    while(PEEK(0xD610)!='*') {
-    if (PEEK(0xD610)) {
-      POKE(0xD610,0);
-      return;
-    }
-  }
-#endif
+  print_text(0, 0, 7, "Formatting disk...");
 
   POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
 
-  // Pre-calculate CRC bytes
-  crc16_init();
-  for(i=0;i<10;i++)
-    {
-      // Calculate initial CRC of sync bytes and $FE header marker
-      crc=crc16(0xFFFF,0xa1);
-      crc=crc16(crc,0xa1);
-      crc=crc16(crc,0xa1);
-      crc=crc16(crc,0xfe);
-      crc=crc16(crc,track_number);
-      crc=crc16(crc,0); // side is always 0 for now
-      crc=crc16(crc,i);
-      crc=crc16(crc,2); // 512 byte sectors
-      header_crc_bytes[i*2+0]=crc&0xff;
-      header_crc_bytes[i*2+1]=crc>>8;
-    }
-
-  // Now also calculate CRC of empty data sector
-  crc16_init();
-  for(i=0;i<512;i++) crc=crc16(crc,0x00);
-  data_crc_bytes[0]=crc&0xff;
-  data_crc_bytes[1]=crc>>8;
-
-  snprintf(peak_msg,40,"CRC data=$%02x%02x",data_crc_bytes[1],data_crc_bytes[0]);
-  print_text(0,15,7,peak_msg);
-  
   // Seek to track 0
   print_text(0, 2, 15, "Seeking to track 0");
   while(!(PEEK(0xD082)&0x01)) {
@@ -644,28 +614,51 @@ void format_track(unsigned char track_number)
     
   }
 
-  // Seek to the requested track
-  print_text(0, 3, 15, "Seeking to target track");
-  for(i=0;i<track_number;i++) {
-    POKE(0xD081,0x18);
-    usleep(20000);
-    
-  }
+  for(track_num=0;track_num<85;track_num++) {
+    // Seek to the requested track
+    snprintf(peak_msg, 40, "Formatting track %d",track_num);
+    print_text(0, 3, 15, peak_msg);
 
-  print_text(0, 4, 15, "Press any key to start formatting");
-#if 0
-  while(!PEEK(0xD610)) {
-    POKE(0xC0A0,PEEK(0xD610));
-    continue;
-  }
-#endif
-  POKE(0xD610,0);  
-  /*
-    From the C65 Specifications Manual:
+    for(side=0;side<2;side++) {
 
-    Write Track Unbuffered
-
-           write FF hex to clock register
+      // Select head side
+      if (side)
+	POKE(0xD080, 0x68);
+      else
+	POKE(0xD080, 0x60);
+      
+      // Pre-calculate CRC bytes
+      crc16_init();
+      for(i=0;i<10;i++)
+	{
+	  // Calculate initial CRC of sync bytes and $FE header marker
+	  crc=crc16(0xFFFF,0xa1);
+	  crc=crc16(crc,0xa1);
+	  crc=crc16(crc,0xa1);
+	  crc=crc16(crc,0xfe);
+	  crc=crc16(crc,track_num);
+	  crc=crc16(crc,side);
+	  crc=crc16(crc,i);
+	  crc=crc16(crc,2); // 512 byte sectors
+	  header_crc_bytes[i*2+0]=crc&0xff;
+	  header_crc_bytes[i*2+1]=crc>>8;
+	}
+      
+      // Now also calculate CRC of empty data sector
+      crc16_init();
+      for(i=0;i<512;i++) crc=crc16(crc,0x00);
+      data_crc_bytes[0]=crc&0xff;
+      data_crc_bytes[1]=crc>>8;
+      
+      snprintf(peak_msg,40,"CRC data=$%02x%02x",header_crc_bytes[1],header_crc_bytes[0]);
+      print_text(0,15,7,peak_msg);
+      
+      /*
+	From the C65 Specifications Manual:
+	
+	Write Track Unbuffered
+	
+	   write FF hex to clock register
            issue "write track unbuffered" command
            write FF hex to data register
            wait for first DRQ flag
@@ -792,152 +785,160 @@ If you do, the final CRC value should be 0.
 	   
   */
 
-  POKE(0xD020,0x06);
-  
-  // Clock byte = $FF
-  POKE(0xD088,0xFF);
-  // Data byte = $00 (first of 12 post-index gap bytes)
-  POKE(0xD087,0x00);
-
-  lfill(0xFF80000L,0x01,4000);
-  
-  // Begin unbuffered write
-  POKE(0xD081,0xA1);  
-
-  // Write 12 gap bytes
-  POKE(0xD020,15);
-  for(i=0;i<12;i++) {
-    POKE(0xC000+(i*2),'*');
-    while(!(PEEK(0xD082)&0x40)) {
-      POKE(0xC000,PEEK(0xC000)+1);
-      continue;
-    }
-    POKE(0xD087,0x00);
-    // Bump border colour, so that we know we are alive
-    POKE(0xD020,i);
-  }
-
-  // We cound x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
-  for(sector_num=0;sector_num<10*2;sector_num+=2) {
-
-    POKE(0xC04d,0);
-    POKE(0xC04f,0);
-    POKE(0xC04e,sector_num);
-    
-    // Write 3 sync bytes
-    for(i=0;i<3;i++) {
-      while(!(PEEK(0xD082)&0x40)) {
-	POKE(0xC002,PEEK(0xC002)+1);
-	continue;
+      POKE(0xD020,0x06);
+      
+      // Clock byte = $FF
+      POKE(0xD088,0xFF);
+      // Data byte = $00 (first of 12 post-index gap bytes)
+      POKE(0xD087,0x00);
+      
+      lfill(0xFF80000L,0x01,4000);
+      
+      // Begin unbuffered write
+      POKE(0xD081,0xA1);  
+      
+      // Write 12 gap bytes
+      POKE(0xD020,15);
+      for(i=0;i<12;i++) {
+	POKE(0xC000+(i*2),'*');
+	while(!(PEEK(0xD082)&0x40)) {
+	  POKE(0xC000,PEEK(0xC000)+1);
+	  continue;
+	}
+	POKE(0xD087,0x00);
+	// Bump border colour, so that we know we are alive
+	POKE(0xD020,i);
       }
-      POKE(0xD088,0xFB);
-      POKE(0xD087,0xA1);
-      // Bump border colour, so that we know we are alive
-      POKE(0xD020,PEEK(0xD020)+1);
+      
+      // We cound x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
+      for(sector_num=0;sector_num<10*2;sector_num+=2) {
+	
+	POKE(0xC04d,0);
+	POKE(0xC04f,0);
+	POKE(0xC04e,sector_num);
+	
+	// Write 3 sync bytes
+	for(i=0;i<3;i++) {
+	  while(!(PEEK(0xD082)&0x40)) {
+	    POKE(0xC002,PEEK(0xC002)+1);
+	    continue;
+	  }
+	  POKE(0xD088,0xFB);
+	  POKE(0xD087,0xA1);
+	  // Bump border colour, so that we know we are alive
+	  POKE(0xD020,PEEK(0xD020)+1);
+	}
+	
+	POKE(0xC04c,1);
+	
+	// Header mark
+	while(!(PEEK(0xD082)&0x40)) {
+	  POKE(0xC004,PEEK(0xC004)+1);
+	  continue;
+	}
+	POKE(0xD088,0xFF);
+	POKE(0xD087,0xFE); 
+	
+	// Track number
+	while(!(PEEK(0xD082)&0x40)) {
+	  POKE(0xC006,PEEK(0xC006)+1);
+	  continue;
+	}
+	POKE(0xD087,track_num); 
+	
+	POKE(0xC04c,2);
+	
+	// Side number
+	while(!(PEEK(0xD082)&0x40)) continue;
+	POKE(0xD087,0x00); 
+	
+	POKE(0xC04c,3);
+	
+	// Sector number
+	while(!(PEEK(0xD082)&0x40)) continue;
+	POKE(0xD087,sector_num>>1); 
+	
+	POKE(0xC04c,4);
+	
+	// Sector length
+	while(!(PEEK(0xD082)&0x40)) continue;
+	POKE(0xD087,0x02); 
+	
+	POKE(0xC04c,5);
+	
+	// Sector header CRC
+	while(!(PEEK(0xD082)&0x40)) continue;
+	POKE(0xD087,header_crc_bytes[sector_num+1]); 
+	while(!(PEEK(0xD082)&0x40)) continue;
+	POKE(0xD087,header_crc_bytes[sector_num+0]); 
+	
+	POKE(0xC04c,6);
+	
+	// 23 gap bytes
+	for (i=0;i<23;i++) {
+	  while(!(PEEK(0xD082)&0x40)) continue;
+	  POKE(0xD087,0x4E); 
+	}
+	
+	POKE(0xC04c,7);    
+	
+	// 12 gap bytes
+	for (i=0;i<12;i++) {
+	  while(!(PEEK(0xD082)&0x40)) continue;
+	  POKE(0xD087,0x00); 
+	}
+	
+	POKE(0xC04c,8);   
+	
+	// Write 3 sync bytes
+	for(i=0;i<3;i++) {
+	  while(!(PEEK(0xD082)&0x40)) continue;
+	  POKE(0xD088,0xFB);
+	  POKE(0xD087,0xA1);
+	  // Bump border colour, so that we know we are alive
+	  POKE(0xD020,PEEK(0xD020)+1);
+	}
+	
+	POKE(0xC04c,9);
+	
+	// Data mark
+	while(!(PEEK(0xD082)&0x40)) continue;
+	POKE(0xD088,0xFF);    
+	POKE(0xD087,0xFB); 
+	
+	POKE(0xC04c,10);
+	
+	// Data bytes
+	for (i=0;i<512;i++) {
+	  while(!(PEEK(0xD082)&0x40)) continue;
+	  POKE(0xD087,0x00); 
+	}
+	
+	// Write data CRC bytes
+	while(!(PEEK(0xD082)&0x40)) continue;
+	POKE(0xD087,data_crc_bytes[1]); 
+	while(!(PEEK(0xD082)&0x40)) continue;
+	POKE(0xD087,data_crc_bytes[0]); 
+	
+	POKE(0xC04c,11);
+	
+	
+	// 24 gap bytes
+	for (i=0;i<24;i++) {
+	  while(!(PEEK(0xD082)&0x40)) continue;
+	  POKE(0xD087,0x4E);
+	}
+	
+	POKE(0xC04c,12);
+	
+      }
+
     }
+    
+  // Seek to next track
+  POKE(0xD081,0x18);
+  usleep(20000);
 
-    POKE(0xC04c,1);
-    
-    // Header mark
-    while(!(PEEK(0xD082)&0x40)) {
-      POKE(0xC004,PEEK(0xC004)+1);
-      continue;
-    }
-    POKE(0xD088,0xFF);
-    POKE(0xD087,0xFE); 
-    
-    // Track number
-    while(!(PEEK(0xD082)&0x40)) {
-      POKE(0xC006,PEEK(0xC006)+1);
-      continue;
-    }
-    POKE(0xD087,track_number); 
-
-    POKE(0xC04c,2);
-    
-    // Side number
-    while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,0x00); 
-
-    POKE(0xC04c,3);
-    
-    // Sector number
-    while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,sector_num>>1); 
-
-    POKE(0xC04c,4);
-    
-    // Sector length
-    while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,0x02); 
-
-    POKE(0xC04c,5);
-    
-    // Sector header CRC
-    while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,header_crc_bytes[sector_num+1]); 
-    while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,header_crc_bytes[sector_num+0]); 
-
-    POKE(0xC04c,6);
-    
-    // 23 gap bytes
-    for (i=0;i<23;i++) {
-      while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD087,0x4E); 
-    }
-
-    POKE(0xC04c,7);    
-    
-    // 12 gap bytes
-    for (i=0;i<12;i++) {
-      while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD087,0x00); 
-    }
-
-    POKE(0xC04c,8);   
-    
-    // Write 3 sync bytes
-    for(i=0;i<3;i++) {
-      while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD088,0xFB);
-      POKE(0xD087,0xA1);
-      // Bump border colour, so that we know we are alive
-      POKE(0xD020,PEEK(0xD020)+1);
-    }
-
-    POKE(0xC04c,9);
-    
-    // Data mark
-    while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD088,0xFF);    
-    POKE(0xD087,0xFB); 
-
-    POKE(0xC04c,10);
-    
-    // Data bytes
-    for (i=0;i<512;i++) {
-      while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD087,0x00); 
-    }
-
-    // Write data CRC bytes
-    while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,data_crc_bytes[1]); 
-    while(!(PEEK(0xD082)&0x40)) continue;
-    POKE(0xD087,data_crc_bytes[0]); 
-    
-    POKE(0xC04c,11);
-    
-    
-    // 24 gap bytes
-    for (i=0;i<24;i++) {
-      while(!(PEEK(0xD082)&0x40)) continue;
-      POKE(0xD087,0x4E);
-    }
-
-    POKE(0xC04c,12);
-    
   }
 
 }
@@ -955,6 +956,7 @@ void main(void)
   POKE(0xD021,0);
   
   while (1) {
+    // Revert video mode
     POKE(0xD054, 0);
     POKE(0xD031, 0);
     POKE(0xD060, 0);
@@ -981,8 +983,7 @@ void main(void)
       break;
     case '3':
       POKE(0xD610,0);
-      format_track(39);
-      read_track(255);
+      format_disk();
       break;
     }
   }
