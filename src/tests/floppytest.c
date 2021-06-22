@@ -453,6 +453,11 @@ void read_track(unsigned char track_number)
   // First seek to the correct track
 
   if (track_number!=255) {
+
+    graphics_mode();
+    graphics_clear_double_buffer();
+    activate_double_buffer();
+    
     // Connect to real floppy drive
     while(!(lpeek(0xffd36a1L) & 1)) {
       lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
@@ -479,68 +484,37 @@ void read_track(unsigned char track_number)
 
     print_text(0, 0, 7, "Reading track...");
     
-    while(1) {
+    POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
       
-      // Don't proceed without user's concent to ruin the disk in the drive
-      print_text(0, 1, 2, "Insert disk, then press /");
+    // Seek to track 0
+    print_text(0, 2, 15, "Seeking to track 0");
+    while(!(PEEK(0xD082)&0x01)) {
+      POKE(0xD081,0x10);
+      usleep(6000);
       
-#if 1
-      while(PEEK(0xD610)!='/') {
-	if (PEEK(0xD610)&&PEEK(0xD610)!='/') {
-	  POKE(0xD610,0);
-	}
-      }
-#endif
+      snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+      print_text(0, 24, 7, peak_msg);
       
-      
-      POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
-      
-      // Seek to track 0
-      print_text(0, 2, 15, "Seeking to track 0");
-      while(!(PEEK(0xD082)&0x01)) {
-	POKE(0xD081,0x10);
-	usleep(6000);
-	
-	snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-	print_text(0, 24, 7, peak_msg);
-	
-      }
-      
-      // Seek to the requested track
-      print_text(0, 3, 15, "Seeking to target track");
-      for(i=0;i<track_number;i++) {
-	POKE(0xD081,0x18);
-	usleep(20000);
-	
-      }        
     }
+    
+    // Seek to the requested track
+    print_text(0, 3, 15, "Seeking to target track");
+    for(i=0;i<track_number;i++) {
+      POKE(0xD081,0x18);
+      usleep(6000);	
+    }        
+    print_text(0, 4, 15, "Seek complete");
   }
   else 
     print_text(0, 0, 7, "Reading current track...");
   
-  // Show sector under head after done writing as simple verification test
-  while(1) {
-    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-    print_text(0, 24, 7, peak_msg);
-    POKE(0xC000,PEEK(0xC000)+1);
-    
-    // Allow reading a full track of data
-    if (PEEK(0xD610)||(track_number==255)) {
-      
-      POKE (0xc002,PEEK(0xc002)+1);
-      
-      // Call routine to read a complete track of data into $50000-$5FFFF
-      readtrackgaps();
-      
-      POKE(0xD610,0);
-
-      // Only auto-read it once
-      track_number=254;
-    }
-    
-    continue;
-  }
+  print_text(0, 4, 7, "Starting track read");
   
+  // Call routine to read a complete track of data into $50000-$5FFFF
+  readtrackgaps();
+  
+  print_text(0, 5, 7, "Track read complete");
+     
 }
 
 // CRC16 algorithm from:
@@ -797,10 +771,10 @@ If you do, the final CRC value should be 0.
 
       POKE(0xD020,0x06);
       
-      // Clock byte = $FF
-      POKE(0xD088,0xFF);
       // Data byte = $00 (first of 12 post-index gap bytes)
       POKE(0xD087,0x00);
+      // Clock byte = $FF
+      POKE(0xD088,0xFF);
       
       // Begin unbuffered write
       POKE(0xD081,0xA1);  
@@ -829,8 +803,8 @@ If you do, the final CRC value should be 0.
 	    POKE(0xC002,PEEK(0xC002)+1);
 	    continue;
 	  }
-	  POKE(0xD088,0xFB);
 	  POKE(0xD087,0xA1);
+	  POKE(0xD088,0xFB);
 	}
 	
 	POKE(0xC04c,1);
@@ -840,8 +814,8 @@ If you do, the final CRC value should be 0.
 	  POKE(0xC004,PEEK(0xC004)+1);
 	  continue;
 	}
-	POKE(0xD088,0xFF);
 	POKE(0xD087,0xFE); 
+	POKE(0xD088,0xFF);
 	
 	// Track number
 	while(!(PEEK(0xD082)&0x40)) {
@@ -897,16 +871,16 @@ If you do, the final CRC value should be 0.
 	// Write 3 sync bytes
 	for(i=0;i<3;i++) {
 	  while(!(PEEK(0xD082)&0x40)) continue;
-	  POKE(0xD088,0xFB);
 	  POKE(0xD087,0xA1);
+	  POKE(0xD088,0xFB);
 	}
 	
 	POKE(0xC04c,9);
 	
 	// Data mark
 	while(!(PEEK(0xD082)&0x40)) continue;
-	POKE(0xD088,0xFF);    
 	POKE(0xD087,0xFB); 
+	POKE(0xD088,0xFF);    
 	
 	POKE(0xC04c,10);
 	
@@ -971,6 +945,8 @@ void main(void)
     printf("1. MFM Histogram and seeking tests.\n");
     printf("2. Test all sectors on disk.\n");
     printf("3. Test formatting new directory track.\n");
+    printf("4. Format continuously.\n");
+    printf("5. Read raw track 0 to $5xxxx.\n");
 
     while (!PEEK(0xD610))
       continue;
@@ -986,6 +962,16 @@ void main(void)
     case '3':
       POKE(0xD610,0);
       format_disk();
+      break;
+    case '4':
+      POKE(0xD610,0);
+      // Format in a loop to try to trigger bug
+      while(!PEEK(0xD610)) format_disk();
+      break;
+    case '5':
+      // Read track 0
+      POKE(0xD610,0);
+      read_track(0);
       break;
     default:
       // Consume any other key pressed
