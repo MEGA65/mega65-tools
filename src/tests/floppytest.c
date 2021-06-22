@@ -814,8 +814,6 @@ If you do, the final CRC value should be 0.
 	  continue;
 	}
 	POKE(0xD087,0x00);
-	// Bump border colour, so that we know we are alive
-	POKE(0xD020,i);
       }
       
       // We cound x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
@@ -833,8 +831,6 @@ If you do, the final CRC value should be 0.
 	  }
 	  POKE(0xD088,0xFB);
 	  POKE(0xD087,0xA1);
-	  // Bump border colour, so that we know we are alive
-	  POKE(0xD020,PEEK(0xD020)+1);
 	}
 	
 	POKE(0xC04c,1);
@@ -903,8 +899,6 @@ If you do, the final CRC value should be 0.
 	  while(!(PEEK(0xD082)&0x40)) continue;
 	  POKE(0xD088,0xFB);
 	  POKE(0xD087,0xA1);
-	  // Bump border colour, so that we know we are alive
-	  POKE(0xD020,PEEK(0xD020)+1);
 	}
 	
 	POKE(0xC04c,9);
@@ -992,6 +986,10 @@ void main(void)
     case '3':
       POKE(0xD610,0);
       format_disk();
+      break;
+    default:
+      // Consume any other key pressed
+      POKE(0xD610,0);
       break;
     }
   }
