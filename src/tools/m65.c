@@ -45,6 +45,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <libusb.h>
 
 #include "m65common.h"
 
@@ -1437,6 +1438,31 @@ void enterTestMode()
   do_exit(UT_RES_TIMEOUT);
 }
 
+unsigned char checkUSBPermissions()
+{
+  libusb_device_handle* usbhandle = NULL;
+  struct libusb_context* usb_context;
+  libusb_device** device_list;
+  libusb_device* dev;
+  unsigned int i = 0;
+
+  if (libusb_init(&usb_context) < 0 || libusb_get_device_list(usb_context, &device_list) < 0) {
+    printf("libusb_init failed\n");
+    exit(-1);
+  }
+  while ((dev = device_list[i++])) {
+    struct libusb_device_descriptor desc;
+    if (libusb_get_device_descriptor(dev, &desc) < 0)
+      continue;
+    int open_result = libusb_open(dev, &usbhandle);
+    if (open_result < 0) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
 int main(int argc, char** argv)
 {
   start_time = time(0);
@@ -1648,7 +1674,12 @@ int main(int argc, char** argv)
       fclose(f);
     }
     fprintf(stderr, "INFO: Using fpga_id %x\n", fpga_id);
-    init_fpgajtag(NULL, bitstream, fpga_id);
+    if (checkUSBPermissions()) {
+      init_fpgajtag(NULL, bitstream, fpga_id);
+    }
+    else {
+      fprintf(stderr, "Can not autodetect usb port due to insufficient permissions.\n");
+    }
   }
 
 #ifdef WINDOWS
