@@ -1444,7 +1444,7 @@ unsigned char checkUSBPermissions()
   struct libusb_context* usb_context;
   libusb_device** device_list;
   libusb_device* dev;
-  unsigned int i;
+  unsigned int i = 0;
 
   if (libusb_init(&usb_context) < 0 || libusb_get_device_list(usb_context, &device_list) < 0) {
     printf("libusb_init failed\n");
