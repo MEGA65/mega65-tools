@@ -155,7 +155,6 @@ void seek_random_track(void)
       POKE(0xD081, 0x10);
       while ((PEEK(0xD082) & 0x80))
         continue;
-      //      usleep(6000);
       a--;
     }
   }
@@ -448,7 +447,7 @@ void read_all_sectors()
 
 unsigned char sector_num=0;
 
-void read_track(unsigned char track_number)
+void read_track(unsigned char track_number,unsigned char side)
 {
   // First seek to the correct track
 
@@ -463,8 +462,9 @@ void read_track(unsigned char track_number)
       lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
     }
     
-    // Floppy motor on
+    // Floppy motor on, and select side
     POKE(0xD080, 0x68);
+    if (side) POKE(0xD080,0x60);
     
     // Enable auto-tracking
     POKE(0xD689, PEEK(0xD689) & 0xEF);
@@ -607,9 +607,9 @@ void format_disk(void)
 
       // Select head side
       if (side)
-	POKE(0xD080, 0x68);
-      else
 	POKE(0xD080, 0x60);
+      else
+	POKE(0xD080, 0x68);
       
       // Pre-calculate CRC bytes
       crc16_init();
@@ -772,7 +772,7 @@ If you do, the final CRC value should be 0.
       POKE(0xD020,0x06);
       
       // Data byte = $00 (first of 12 post-index gap bytes)
-      POKE(0xD087,0x00);
+      POKE(0xD087,0x4E);
       // Clock byte = $FF
       POKE(0xD088,0xFF);
       
@@ -784,6 +784,7 @@ If you do, the final CRC value should be 0.
       for(i=0;i<12;i++) {
 	POKE(0xC000+(i*2),'*');
 	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
 	  POKE(0xC000,PEEK(0xC000)+1);
 	  continue;
 	}
@@ -800,6 +801,7 @@ If you do, the final CRC value should be 0.
 	// Write 3 sync bytes
 	for(i=0;i<3;i++) {
 	  while(!(PEEK(0xD082)&0x40)) {
+	    if (!(PEEK(0xD082)&0x80)) break;
 	    POKE(0xC002,PEEK(0xC002)+1);
 	    continue;
 	  }
@@ -811,6 +813,7 @@ If you do, the final CRC value should be 0.
 	
 	// Header mark
 	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
 	  POKE(0xC004,PEEK(0xC004)+1);
 	  continue;
 	}
@@ -819,6 +822,7 @@ If you do, the final CRC value should be 0.
 	
 	// Track number
 	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
 	  POKE(0xC006,PEEK(0xC006)+1);
 	  continue;
 	}
@@ -827,34 +831,46 @@ If you do, the final CRC value should be 0.
 	POKE(0xC04c,2);
 	
 	// Side number
-	while(!(PEEK(0xD082)&0x40)) continue;
-	POKE(0xD087,0x00); 
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
+	POKE(0xD087,side); 
 	
 	POKE(0xC04c,3);
 	
 	// Sector number
-	while(!(PEEK(0xD082)&0x40)) continue;
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
 	POKE(0xD087,sector_num>>1); 
 	
 	POKE(0xC04c,4);
 	
 	// Sector length
-	while(!(PEEK(0xD082)&0x40)) continue;
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
 	POKE(0xD087,0x02); 
 	
 	POKE(0xC04c,5);
 	
 	// Sector header CRC
-	while(!(PEEK(0xD082)&0x40)) continue;
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
 	POKE(0xD087,header_crc_bytes[sector_num+1]); 
-	while(!(PEEK(0xD082)&0x40)) continue;
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
 	POKE(0xD087,header_crc_bytes[sector_num+0]); 
 	
 	POKE(0xC04c,6);
 	
 	// 23 gap bytes
 	for (i=0;i<23;i++) {
-	  while(!(PEEK(0xD082)&0x40)) continue;
+	  while(!(PEEK(0xD082)&0x40)) {
+	    if (!(PEEK(0xD082)&0x80)) break;
+	  }
 	  POKE(0xD087,0x4E); 
 	}
 	
@@ -862,7 +878,9 @@ If you do, the final CRC value should be 0.
 	
 	// 12 gap bytes
 	for (i=0;i<12;i++) {
-	  while(!(PEEK(0xD082)&0x40)) continue;
+	  while(!(PEEK(0xD082)&0x40)) {
+	    if (!(PEEK(0xD082)&0x80)) break;
+	  }
 	  POKE(0xD087,0x00); 
 	}
 	
@@ -870,7 +888,9 @@ If you do, the final CRC value should be 0.
 	
 	// Write 3 sync bytes
 	for(i=0;i<3;i++) {
-	  while(!(PEEK(0xD082)&0x40)) continue;
+	  while(!(PEEK(0xD082)&0x40)) {
+	    if (!(PEEK(0xD082)&0x80)) break;
+	  }
 	  POKE(0xD087,0xA1);
 	  POKE(0xD088,0xFB);
 	}
@@ -878,7 +898,9 @@ If you do, the final CRC value should be 0.
 	POKE(0xC04c,9);
 	
 	// Data mark
-	while(!(PEEK(0xD082)&0x40)) continue;
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
 	POKE(0xD087,0xFB); 
 	POKE(0xD088,0xFF);    
 	
@@ -886,14 +908,20 @@ If you do, the final CRC value should be 0.
 	
 	// Data bytes
 	for (i=0;i<512;i++) {
-	  while(!(PEEK(0xD082)&0x40)) continue;
+	  while(!(PEEK(0xD082)&0x40)) {
+	    if (!(PEEK(0xD082)&0x80)) break;
+	  }
 	  POKE(0xD087,0x00); 
 	}
 	
 	// Write data CRC bytes
-	while(!(PEEK(0xD082)&0x40)) continue;
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
 	POKE(0xD087,data_crc_bytes[1]); 
-	while(!(PEEK(0xD082)&0x40)) continue;
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
 	POKE(0xD087,data_crc_bytes[0]); 
 	
 	POKE(0xC04c,11);
@@ -901,7 +929,9 @@ If you do, the final CRC value should be 0.
 	
 	// 24 gap bytes
 	for (i=0;i<24;i++) {
-	  while(!(PEEK(0xD082)&0x40)) continue;
+	  while(!(PEEK(0xD082)&0x40)) {
+	    if (!(PEEK(0xD082)&0x80)) break;
+	  }
 	  POKE(0xD087,0x4E);
 	}
 	
@@ -917,6 +947,111 @@ If you do, the final CRC value should be 0.
 
   }
 
+}
+
+void wipe_disk(void)
+{
+  // Connect to real floppy drive
+  while(!(lpeek(0xffd36a1L) & 1)) {
+    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+  }
+  
+  // Floppy 0 motor on
+  POKE(0xD080, 0x68);
+
+  // Disable auto-tracking
+  POKE(0xD689, PEEK(0xD689) ^ 0x10);
+
+  // Map FDC sector buffer, not SD sector buffer
+  POKE(0xD689, PEEK(0xD689) & 0x7f);
+
+  // Disable matching on any sector, use real drive
+  POKE(0xD6A1, 0x01);
+
+  graphics_mode();
+  graphics_clear_double_buffer();
+  activate_double_buffer();
+
+  // Wait until busy flag clears
+  while (PEEK(0xD082) & 0x80) {
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+    continue;
+  }
+
+  
+  print_text(0, 0, 7, "Wiping disk (erasing magnetic reversals)...");
+
+  POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+
+  // Seek to track 0
+  print_text(0, 2, 15, "Seeking to track 0");
+  while(!(PEEK(0xD082)&0x01)) {
+    POKE(0xD081,0x10);
+    usleep(6000);
+
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+    
+  }
+
+  lfill(0xFF80000L,0x01,4000);
+  
+  a=0;
+  for(track_num=0;track_num<85;track_num++) {
+    // Seek to the requested track
+    snprintf(peak_msg, 40, "Erasing track %d",track_num);
+    print_text(0, 3, 15, peak_msg);
+
+    for(side=0;side<2;side++) {
+
+      // Select head side
+      if (side)
+	POKE(0xD080, 0x68);
+      else
+	POKE(0xD080, 0x60);
+      
+      POKE(0xD020,0x06);
+
+      // Write no data with no clock
+      POKE(0xD087,0x00);
+      POKE(0xD088,0x00);
+
+      // Begin unbuffered write
+      POKE(0xD081,0xA1);  
+      
+      // Write 87+512 x 10 sectors = 5,990
+      POKE(0xD020,15);
+      
+      for(i=0;i<5990;i++) {
+	  while(!(PEEK(0xD082)&0x40)) {
+	    if (!(PEEK(0xD082)&0x80)) break;
+	    POKE(0xC002,PEEK(0xC002)+1);
+	    POKE(0xC004,PEEK(0xD082)&0xC0);
+	    POKE(0xC006,PEEK(0xD6A0)&0x80); // floppy INDEX line
+	    POKE(0xC008,PEEK(0xD685)); // SD/FDC state machine state
+	    if (PEEK(0xD082)<0x40) {
+	      a++;
+	      snprintf(peak_msg, 40, "i=%d, track=%d, count=%d",i,track_num,a);
+	      print_text(0,5,2,peak_msg);
+	    }
+	    continue;
+	  }
+	  POKE(0xD087,0x00);
+	  POKE(0xD088,0x00);
+      }
+      
+      POKE(0xC04c,1);
+      
+      POKE(0xC04c,12);
+    }
+    
+    // Seek to next track
+    POKE(0xD081,0x18);
+    usleep(20000);
+    
+  }
+  
 }
 
 void main(void)
@@ -944,9 +1079,10 @@ void main(void)
 
     printf("1. MFM Histogram and seeking tests.\n");
     printf("2. Test all sectors on disk.\n");
-    printf("3. Test formatting new directory track.\n");
-    printf("4. Format continuously.\n");
+    printf("3. Test formatting of disk.\n");
+    printf("4. Format disk continuously.\n");
     printf("5. Read raw track 0 to $5xxxx.\n");
+    printf("6. Wipe disk (clear all flux reversals).\n");
 
     while (!PEEK(0xD610))
       continue;
@@ -971,12 +1107,16 @@ void main(void)
     case '5':
       // Read track 0
       POKE(0xD610,0);
-      read_track(0);
+      read_track(0,1);
+      break;
+    case '6':
+      POKE(0xD610,0);
+      wipe_disk();
       break;
     default:
-      // Consume any other key pressed
-      POKE(0xD610,0);
       break;
     }
+    // Consume any other key pressed
+    POKE(0xD610,0);
   }
 }
