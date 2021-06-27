@@ -210,7 +210,7 @@ void gap_histogram(void)
 
     snprintf(peak_msg, 40, "FDC Status = $%02X,$%02X, requested T:$%02x", PEEK(0xD082), PEEK(0xD083), request_track);
     print_text(0, 3, 7, peak_msg);
-    snprintf(peak_msg, 40, "Last sector           T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    snprintf(peak_msg, 40, "Last sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     if ((PEEK(0xD6A3) & 0x7f) != last_track_seen) {
       last_track_seen = PEEK(0xD6A3) & 0x7f;
       // Zero out list of sectors seen
@@ -267,17 +267,17 @@ void gap_histogram(void)
         last_random_target = random_target;
         random_target = 255;
         break;
-      case 0x4D:
+      case 0x4D: // (M)anual seeking
       case 0x6D:
         // Switch auto/manual tracking in FDC to manual
         POKE(0xD689, PEEK(0xD689) | 0x10);
         break;
-      case 0x41:
+      case 0x41: // (A)uto track seeking
       case 0x61:
         // Auto-tune on
         POKE(0xD689, PEEK(0xD689) & 0xEF);
         break;
-      case 0x52:
+      case 0x52: // (R)ead a sector
       case 0x72:
         // Schedule a sector read
         POKE(0xD081, 0x00); // Cancel previous action
@@ -291,7 +291,7 @@ void gap_histogram(void)
         POKE(0xD081, 0x40);
 
         break;
-      case 0x53:
+      case 0x53: // (S)eek to a random sector
       case 0x73:
         random_seek_count = 0;
         seek_random_track();
