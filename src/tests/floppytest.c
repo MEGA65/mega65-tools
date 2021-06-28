@@ -1054,6 +1054,132 @@ void wipe_disk(void)
   
 }
 
+void read_write_test(void)
+{
+  // Connect to real floppy drive
+  while(!(lpeek(0xffd36a1L) & 1)) {
+    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+  }
+  
+  // Floppy 0 motor on
+  POKE(0xD080, 0x68);
+
+  // Disable auto-tracking
+  POKE(0xD689, PEEK(0xD689) ^ 0x10);
+
+  // Map FDC sector buffer, not SD sector buffer
+  POKE(0xD689, PEEK(0xD689) & 0x7f);
+
+  // Disable matching on any sector, use real drive
+  POKE(0xD6A1, 0x01);
+
+  request_track=0;
+  
+  graphics_mode();
+  graphics_clear_double_buffer();
+  activate_double_buffer();
+
+  // Wait until busy flag clears
+  while (PEEK(0xD082) & 0x80) {
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+    continue;
+  }
+  
+  POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+
+  // Seek to track 0
+  print_text(0, 2, 15, "Seeking to track 0");
+  while(!(PEEK(0xD082)&0x01)) {
+    POKE(0xD081,0x10);
+    usleep(6000);
+
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+    
+  }
+
+  while(1) {
+
+    if (PEEK(0xD610)) {
+      switch (PEEK(0xD610)) {
+      case 0x11:
+      case '-':
+        POKE(0xD081, 0x10);
+        break;
+      case 0x91:
+      case '+':
+        POKE(0xD081, 0x18);
+        break;
+      case '0':
+        request_track = 0;
+        break;
+      case '4':
+        request_track = 40;
+        break;
+      case '8':
+        request_track = 80;
+        break;
+      case '1':
+        request_track = 81;
+        break;
+      case 0x9d:
+        request_track--;
+        break;
+      case 0x1d:
+        request_track++;
+        break;
+      case 0x4D: // (M)anual seeking
+      case 0x6D:
+        // Switch auto/manual tracking in FDC to manual
+        POKE(0xD689, PEEK(0xD689) | 0x10);
+        break;
+      case 0x41: // (A)uto track seeking
+      case 0x61:
+        // Auto-tune on
+        POKE(0xD689, PEEK(0xD689) & 0xEF);
+        break;
+      case 0x52: // (R)ead a sector
+      case 0x72:
+        // Schedule a sector read
+        POKE(0xD081, 0x00); // Cancel previous action
+
+        // Select track, sector, side
+        POKE(0xD084, request_track);
+        POKE(0xD085, 1);
+        POKE(0xD086, 0);
+
+        // Issue read command
+        POKE(0xD081, 0x40);
+
+        break;
+      case 0x53: // (S)eek to a random sector
+      case 0x73:
+        random_seek_count = 0;
+        seek_random_track();
+        break;
+      }
+      POKE(0xD610, 0);
+    }
+
+    snprintf(peak_msg, 40, "Target track is %d   ", request_track);
+    print_text(0, 5, 7, peak_msg);
+    
+    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text(0, 24, 7, peak_msg);
+
+    // Seek to requested track
+    if (request_track<PEEK(0xD6A3)) {
+      POKE(0xD081,0x10);
+      usleep(20000);
+    } else if (request_track>PEEK(0xD6A3)) {
+      POKE(0xD081,0x18);
+      usleep(20000);
+    }
+  }
+
+}
+
 void main(void)
 {
   // Fast CPU, M65 IO
@@ -1083,6 +1209,7 @@ void main(void)
     printf("4. Format disk continuously.\n");
     printf("5. Read raw track 0 to $5xxxx.\n");
     printf("6. Wipe disk (clear all flux reversals).\n");
+    printf("7. Sector write testing.\n");
 
     while (!PEEK(0xD610))
       continue;
@@ -1112,6 +1239,10 @@ void main(void)
     case '6':
       POKE(0xD610,0);
       wipe_disk();
+      break;
+    case '7':
+      POKE(0xD610,0);
+      read_write_test();
       break;
     default:
       break;
