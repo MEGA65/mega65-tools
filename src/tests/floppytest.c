@@ -607,11 +607,15 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   // Now select the side, and try to read the sector
   POKE(0xD084, track_number);
   POKE(0xD085, sector);
-  POKE(0xD086, side?0:1);
+  POKE(0xD086, side?1:0);
 
   // Issue read command
   POKE(0xD081, 0x40);
 
+  // Wait for job to run
+  while (!(PEEK(0xD082) & 0x80)) continue;
+  while (!(PEEK(0xD082) & 0x54)) continue;
+  
   // Wait for busy flag to clear
   while (PEEK(0xD082) & 0x80) {
     POKE(0xc000,PEEK(0xc000)+1);
@@ -1187,8 +1191,8 @@ void read_write_test(void)
   // Disable matching on any sector, use real drive
   POKE(0xD6A1, 0x01);
 
-  request_track=0;
-  request_sector=0;
+  request_track=39;
+  request_sector=1;
   request_side=0;
   
   // Wait until busy flag clears
@@ -1256,7 +1260,7 @@ void read_write_test(void)
 	text80x40_clear_screen();
 	
 	// Read the sector
-	if (!read_a_sector(request_track,request_sector,request_side))
+	if (!read_a_sector(request_track,request_side,request_sector))
 	  {
 	    // Display sector buffer contents
 	    // XXX This is really slow, but it works
@@ -1275,15 +1279,15 @@ void read_write_test(void)
 	}
 	
         break;
-      case 0x11:
+      case 0x91:
       case 0x53: // Bump target sector
 	request_sector++;
-	if (request_sector>9) request_sector=0;
+	if (request_sector>10) request_sector=1;
 	break;
-      case 0x91:
+      case 0x11:
       case 0x73:
         request_sector--;
-	if (request_sector>9) request_sector=9;
+	if (request_sector>10) request_sector=10;
 	break;
       case 0xdd: // Toggle disk side
 	request_side^=1;
