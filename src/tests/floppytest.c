@@ -29,6 +29,38 @@ void get_interval(void)
   interval_length = a + ((b & 0xf) << 8);
 }
 
+void text80x40_clear_screen(void)
+{
+  lfill(0xC000L, 0x20, 80*40);
+  lfill(0xff80000L, 0xf, 80*40);
+}
+
+void text80x40_mode(void)
+{
+  // 8-bit text mode, normal chars
+  POKE(0xD054, 0x00);
+  // H640, V400, fast CPU
+  POKE(0xD031, 0xC8);
+  // Adjust D016 smooth scrolling for VIC-III H640 offset
+  POKE(0xD016, 0xC9);
+  // Advance 80 bytes per row of text
+  POKE(0xD058, 80);
+  POKE(0xD059, 80 / 256);
+  // Draw 80 chars
+  POKE(0xD05E, 80);
+  // Draw 40 rows
+  POKE(0xD07B, 39);
+  // Put ~3.5KB screen at $C000
+  POKE(0xD060, 0x00);
+  POKE(0xD061, 0xc0);
+  POKE(0xD062, 0x00);
+
+  POKE(0xD020, 0);
+  POKE(0xD021, 0);
+
+  text80x40_clear_screen();
+}
+
 void graphics_clear_screen(void)
 {
   lfill(0x40000L, 0, 32768);
@@ -55,6 +87,8 @@ void graphics_mode(void)
   POKE(0xD059, 80 / 256);
   // Draw 40 (double-wide) chars per row
   POKE(0xD05E, 40);
+  // Draw 25 rows
+  POKE(0xD07B, 24);
   // Put 2KB screen at $C000
   POKE(0xD060, 0x00);
   POKE(0xD061, 0xc0);
@@ -119,6 +153,23 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
+void print_text80x40(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+{
+  pixel_addr = 0xC000 + x + y * 80;
+  while (*msg) {
+    char_code = *msg;
+    if (*msg >= 0xc0 && *msg <= 0xe0)
+      char_code = *msg - 0x80;
+    if (*msg >= 0x40 && *msg <= 0x60)
+      char_code = *msg - 0x40;
+    POKE(pixel_addr + 0, char_code);
+    lpoke(0xff80000 - 0xc000 + pixel_addr + 0, colour);
+    msg++;
+    pixel_addr ++;
+  }
+}
+
+
 void activate_double_buffer(void)
 {
   lcopy(0x50000, 0x40000, 0x8000);
@@ -126,7 +177,7 @@ void activate_double_buffer(void)
 }
 
 unsigned char histo_bins[640];
-char peak_msg[40 + 1];
+char peak_msg[80 + 1];
 unsigned char random_target = 40;
 unsigned char last_random_target = 40;
 unsigned int random_seek_count = 0;
@@ -386,7 +437,7 @@ void read_all_sectors()
           // Select track, sector, side
           POKE(0xD084, t);
           POKE(0xD085, s);
-          POKE(0xD086, 0); // Always zero: only SIDE1 flag should be set for side 1
+          POKE(0xD086, 1-h); // Side flag is inverted
 
           // Select correct side of the disk
           if (h)
@@ -466,9 +517,6 @@ void read_track(unsigned char track_number,unsigned char side)
     POKE(0xD080, 0x68);
     if (side) POKE(0xD080,0x60);
     
-    // Enable auto-tracking
-    POKE(0xD689, PEEK(0xD689) & 0xEF);
-    
     // Map FDC sector buffer, not SD sector buffer
     POKE(0xD689, PEEK(0xD689) & 0x7f);
     
@@ -517,6 +565,86 @@ void read_track(unsigned char track_number,unsigned char side)
      
 }
 
+unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsigned char sector)
+{
+
+  lfill(0xc000,0,16);
+  for(i=0;i<16;i+=2) {
+    lpoke(0xff80000+i,0x0);
+    lpoke(0xff80001+i,0xf);
+  }
+  
+  // Disable auto-seek, or we can't force seeking to track 0    
+  POKE(0xD689,PEEK(0xD689)|0x10); 
+
+  // Connect to real floppy drive
+  while(!(lpeek(0xffd36a1L) & 1)) {
+    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+  }
+  
+  // Floppy motor on, and select side
+  POKE(0xD080, 0x68);
+  if (side) POKE(0xD080,0x60);
+  
+  // Map FDC sector buffer, not SD sector buffer
+  POKE(0xD689, PEEK(0xD689) & 0x7f);
+  
+  // Disable matching on any sector, use real drive
+  POKE(0xD6A1, 0x01);
+
+  POKE(0xC000,0xa0);
+  
+  // Wait until busy flag clears
+  while (PEEK(0xD082) & 0x80) {
+    continue;
+  }
+
+  POKE(0xC002,0xa0);
+    
+  // Seek to track 0
+  while(!(PEEK(0xD082)&0x01)) {
+    POKE(0xD081,0x10);
+    usleep(6000);          
+  }
+
+  POKE(0xC004,0xa0);
+  
+  // Seek to the requested track
+  for(i=0;i<track_number;i++) {
+    POKE(0xD081,0x18);
+    usleep(6000);	
+    }        
+
+  POKE(0xC006,0xa0);
+  
+  // Now select the side, and try to read the sector
+  POKE(0xD084, track_number);
+  POKE(0xD085, sector);
+  POKE(0xD086, side?0:1);
+
+  // Issue read command
+  POKE(0xD081, 0x40);
+
+  POKE(0xC008,0xa0);
+  
+  // Wait for busy flag to clear
+  while (PEEK(0xD082) & 0x80) {
+  }
+
+  if (PEEK(0xD082) & 0x10) {
+    // Read failed
+    POKE(0xC00A,0xd0);
+    POKE(0xD020,PEEK(0xD020)+1);
+    return 1;
+  } else {
+    // Read succeeded
+    POKE(0xC00C,0xd1);
+    return 0;
+  }
+}
+
+
+
 // CRC16 algorithm from:
 // https://github.com/psbhlw/floppy-disk-ripper/blob/master/fdrc/mfm.cpp
 // GPL3+, Copyright (C) 2014, psb^hlw, ts-labs.
@@ -561,7 +689,7 @@ void format_disk(void)
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD689, PEEK(0xD689) ^ 0x10);
+  POKE(0xD689, PEEK(0xD689) | 0x10);
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -960,7 +1088,7 @@ void wipe_disk(void)
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD689, PEEK(0xD689) ^ 0x10);
+  POKE(0xD689, PEEK(0xD689) | 0x10);
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -1056,6 +1184,8 @@ void wipe_disk(void)
 
 void read_write_test(void)
 {
+  text80x40_mode();
+  
   // Connect to real floppy drive
   while(!(lpeek(0xffd36a1L) & 1)) {
     lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
@@ -1065,7 +1195,7 @@ void read_write_test(void)
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD689, PEEK(0xD689) ^ 0x10);
+  POKE(0xD689, PEEK(0xD689) | 0x10);
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -1075,27 +1205,20 @@ void read_write_test(void)
 
   request_track=0;
   
-  graphics_mode();
-  graphics_clear_double_buffer();
-  activate_double_buffer();
-
   // Wait until busy flag clears
   while (PEEK(0xD082) & 0x80) {
-    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-    print_text(0, 24, 7, peak_msg);
+    snprintf(peak_msg, 80, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text80x40(0, 39, 7, peak_msg);
     continue;
   }
   
-  POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
-
   // Seek to track 0
-  print_text(0, 2, 15, "Seeking to track 0");
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
     usleep(6000);
 
-    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-    print_text(0, 24, 7, peak_msg);
+    snprintf(peak_msg, 80, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    print_text80x40(0, 39, 7, peak_msg);
     
   }
 
@@ -1141,17 +1264,16 @@ void read_write_test(void)
         break;
       case 0x52: // (R)ead a sector
       case 0x72:
-        // Schedule a sector read
-        POKE(0xD081, 0x00); // Cancel previous action
 
-        // Select track, sector, side
-        POKE(0xD084, request_track);
-        POKE(0xD085, 1);
-        POKE(0xD086, 0);
+	// Fill sector buffer with known contents
 
-        // Issue read command
-        POKE(0xD081, 0x40);
+	POKE(0xc000,PEEK(0xc000)+1);
+	
+	// Read the sector
+	read_a_sector(request_track,0,0);
 
+	// Display sector buffer contents
+	
         break;
       case 0x53: // (S)eek to a random sector
       case 0x73:
@@ -1163,18 +1285,19 @@ void read_write_test(void)
     }
 
     snprintf(peak_msg, 40, "Target track is %d   ", request_track);
-    print_text(0, 5, 7, peak_msg);
+    print_text80x40(0, 1, 7, peak_msg);
     
     snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
-    print_text(0, 24, 7, peak_msg);
+    print_text80x40(0, 39, 7, peak_msg);
 
     // Seek to requested track
-    if (request_track<PEEK(0xD6A3)) {
+    // (but mask out "track matched" flag in bit 7)
+    if (request_track<(PEEK(0xD6A3)&0x7f)) {
       POKE(0xD081,0x10);
-      usleep(20000);
-    } else if (request_track>PEEK(0xD6A3)) {
+      usleep(50000);
+    } else if (request_track>(PEEK(0xD6A3)&0x7f)) {
       POKE(0xD081,0x18);
-      usleep(20000);
+      usleep(50000);
     }
   }
 
@@ -1208,7 +1331,7 @@ void main(void)
     printf("3. Test formatting of disk.\n");
     printf("4. Format disk continuously.\n");
     printf("5. Read raw track 0 to $5xxxx.\n");
-    printf("6. Wipe disk (clear all flux reversals).\n");
+    printf("6. Wipe disk (clear all flux reversals).");
     printf("7. Sector write testing.\n");
 
     while (!PEEK(0xD610))
