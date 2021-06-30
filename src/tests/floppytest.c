@@ -182,6 +182,8 @@ unsigned char random_target = 40;
 unsigned char last_random_target = 40;
 unsigned int random_seek_count = 0;
 unsigned char request_track = 40;
+unsigned char request_sector = 0;
+unsigned char request_side = 0;
 unsigned char read_sectors[41] = { 0 };
 unsigned char last_track_seen = 255;
 unsigned int histo_samples = 0;
@@ -567,13 +569,6 @@ void read_track(unsigned char track_number,unsigned char side)
 
 unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsigned char sector)
 {
-
-  lfill(0xc000,0,16);
-  for(i=0;i<16;i+=2) {
-    lpoke(0xff80000+i,0x0);
-    lpoke(0xff80001+i,0xf);
-  }
-  
   // Disable auto-seek, or we can't force seeking to track 0    
   POKE(0xD689,PEEK(0xD689)|0x10); 
 
@@ -592,31 +587,23 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   // Disable matching on any sector, use real drive
   POKE(0xD6A1, 0x01);
 
-  POKE(0xC000,0xa0);
-  
   // Wait until busy flag clears
   while (PEEK(0xD082) & 0x80) {
     continue;
   }
 
-  POKE(0xC002,0xa0);
-    
   // Seek to track 0
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
     usleep(6000);          
   }
 
-  POKE(0xC004,0xa0);
-  
   // Seek to the requested track
   for(i=0;i<track_number;i++) {
     POKE(0xD081,0x18);
     usleep(6000);	
     }        
 
-  POKE(0xC006,0xa0);
-  
   // Now select the side, and try to read the sector
   POKE(0xD084, track_number);
   POKE(0xD085, sector);
@@ -625,20 +612,17 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   // Issue read command
   POKE(0xD081, 0x40);
 
-  POKE(0xC008,0xa0);
-  
   // Wait for busy flag to clear
   while (PEEK(0xD082) & 0x80) {
+    POKE(0xc000,PEEK(0xc000)+1);
   }
 
   if (PEEK(0xD082) & 0x10) {
     // Read failed
-    POKE(0xC00A,0xd0);
     POKE(0xD020,PEEK(0xD020)+1);
     return 1;
   } else {
     // Read succeeded
-    POKE(0xC00C,0xd1);
     return 0;
   }
 }
@@ -1204,6 +1188,8 @@ void read_write_test(void)
   POKE(0xD6A1, 0x01);
 
   request_track=0;
+  request_sector=0;
+  request_side=0;
   
   // Wait until busy flag clears
   while (PEEK(0xD082) & 0x80) {
@@ -1226,11 +1212,9 @@ void read_write_test(void)
 
     if (PEEK(0xD610)) {
       switch (PEEK(0xD610)) {
-      case 0x11:
       case '-':
         POKE(0xD081, 0x10);
         break;
-      case 0x91:
       case '+':
         POKE(0xD081, 0x18);
         break;
@@ -1266,28 +1250,54 @@ void read_write_test(void)
       case 0x72:
 
 	// Fill sector buffer with known contents
+	lfill(0xffd6c00L,0xbd,0x400);
 
-	POKE(0xc000,PEEK(0xc000)+1);
+	// Clear screen before reading, so we know the data we see is fresh
+	text80x40_clear_screen();
 	
 	// Read the sector
-	read_a_sector(request_track,0,0);
-
-	// Display sector buffer contents
+	if (!read_a_sector(request_track,request_sector,request_side))
+	  {
+	    // Display sector buffer contents
+	    // XXX This is really slow, but it works
+	    for(i=0;i<512;i+=16) {
+	      snprintf(peak_msg,80,"%04x:",i);
+	      print_text80x40(0,(i>>4)+5,15,peak_msg);
+	      for(a=0;a<16;a++) {
+		b=lpeek(0xffd6c00+i+a);
+		snprintf(peak_msg,80,"%02x",b);
+		print_text80x40(6+a*3,(i>>4)+5,15,peak_msg);
+		POKE(0xC000+80*((i>>4)+5)+55+a,b);
+	      }
+	    }
+	  } else {
+	  print_text80x40(30,21,2,"Read Error Encountered");
+	}
 	
         break;
-      case 0x53: // (S)eek to a random sector
+      case 0x11:
+      case 0x53: // Bump target sector
+	request_sector++;
+	if (request_sector>9) request_sector=0;
+	break;
+      case 0x91:
       case 0x73:
-        random_seek_count = 0;
-        seek_random_track();
+        request_sector--;
+	if (request_sector>9) request_sector=9;
+	break;
+      case 0xdd: // Toggle disk side
+	request_side^=1;
+	break;
+	
         break;
       }
       POKE(0xD610, 0);
     }
 
-    snprintf(peak_msg, 40, "Target track is %d   ", request_track);
+    snprintf(peak_msg, 80, "Target is track %d, sector %d, side %d   ", request_track,request_sector,request_side);
     print_text80x40(0, 1, 7, peak_msg);
     
-    snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
+    snprintf(peak_msg, 80, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     print_text80x40(0, 39, 7, peak_msg);
 
     // Seek to requested track
