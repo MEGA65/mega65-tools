@@ -321,7 +321,11 @@ void main(void)
     current_time = *(uint16_t*)0xDC08;
     if (current_time != last_advertise_time) {
       // Announce our protocol version
-      // serial_write_string("\nmega65ft1.0\n\r", 14);
+      // NOTE: Despite this constant serial-comms being incredibly spammy and annoying,
+      // hold back your temptation to remove/comment this line, as mega65_ftp relies on it
+      // in order to assess if remotesd is presently running on the hardware.
+      // Turns out this is detection is a behaviour that M65Connect relies on.
+      serial_write_string("\nmega65ft1.0\n\r", 14);
       last_advertise_time = current_time;
     }
 

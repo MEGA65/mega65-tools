@@ -571,7 +571,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
   // slowing things down, at 4mbit/sec we are now too fast for the serial monitor to keep up
   // when receiving stuff
 
-  stop_cpu();
+  fake_stop_cpu();
 
   load_helper();
 
@@ -726,7 +726,7 @@ int load_helper(void)
       char buffer[8193];
       int bytes = serialport_read(fd, (unsigned char*)buffer, 8192);
       buffer[8192] = 0;
-      if (bytes >= (int)strlen("MEGA65FT1.0"))
+      if (bytes >= (int)strlen("MEGA65FT1.0")) {
         for (int i = 0; i < bytes - strlen("MEGA65FT1.0"); i++) {
           printf("i=%d, bytes=%d, strlen=%d\n", i, bytes, (int)strlen("MEGA65FT1.0"));
           if (!strncmp("MEGA65FT1.0", &buffer[i], strlen("MEGA65FT1.0"))) {
@@ -734,6 +734,7 @@ int load_helper(void)
             return 0;
           }
         }
+      }
 
       detect_mode();
 
@@ -742,7 +743,7 @@ int load_helper(void)
         switch_to_c64mode();
       }
 
-      stop_cpu();
+      fake_stop_cpu();
 
       char cmd[1024];
 

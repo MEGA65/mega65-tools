@@ -294,7 +294,7 @@ int virtual_f011_read(int device, int track, int sector, int side)
   }
 
   /* signal done/result */
-  stop_cpu();
+  real_stop_cpu();
   mega65_poke(0xffd3086, side & 0x7f);
   start_cpu();
 
@@ -357,7 +357,7 @@ int virtual_f011_write(int device, int track, int sector, int side)
   }
 
   /* signal done/result */
-  stop_cpu();
+  real_stop_cpu();
   mega65_poke(0xffd3086, side & 0x0f);
   start_cpu();
 
@@ -1192,7 +1192,7 @@ void enter_hypervisor_mode(void)
      properly.
   */
   monitor_sync();
-  stop_cpu();
+  real_stop_cpu();
   slow_write_safe(fd, "sffd367e 0\r", 11);
   slow_write_safe(fd, "\r", 1);
 }
@@ -1798,9 +1798,9 @@ int main(int argc, char** argv)
 
     timestamp_msg("Replacing HYPPO...\n");
 
-    stop_cpu();
+    real_stop_cpu();
     if (hyppo) {
-      stop_cpu();
+      real_stop_cpu();
       load_file(hyppo, 0xfff8000, patchKS);
     }
     if (flashmenufile) {
@@ -1837,7 +1837,7 @@ int main(int argc, char** argv)
     char cmd[1024];
 
     for (int i = 0; i < 2; i++) {
-      stop_cpu();
+      real_stop_cpu();
       mega65_poke(0xffd37d, 0x00); // disable cartridge
       // bank ROM in
       mega65_poke(0x0, 0x37);
@@ -2079,7 +2079,7 @@ int main(int argc, char** argv)
 
   // -S screen shot
   if (screen_shot) {
-    stop_cpu();
+    real_stop_cpu();
     do_screen_shot();
     start_cpu();
     do_exit(0);
