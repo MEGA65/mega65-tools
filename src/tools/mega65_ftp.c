@@ -89,6 +89,7 @@ int delete_file(char* name);
 int rename_file(char* name, char* dest_name);
 int upload_file(char* name, char* dest_name);
 int sdhc_check(void);
+void request_remotesd_version(void);
 void mount_file(char* filename);
 #define CACHE_NO 0
 #define CACHE_YES 1
@@ -722,6 +723,7 @@ int load_helper(void)
 
       // First see if the helper is already running by looking for the
       // MEGA65FT1.0 string
+      request_remotesd_version();
       sleep(1);
       char buffer[8193];
       int bytes = serialport_read(fd, (unsigned char*)buffer, 8192);
@@ -2665,6 +2667,19 @@ void petscify_text(char* text)
     if (c >= 0x41 && c <= 0x5a)
       text[k] = text[k] ^ 0x20;
   }
+}
+
+void poke(unsigned long addr, unsigned char value)
+{
+  char cmd[16];
+  sprintf(cmd, "s%lx %x\r", addr, value);
+  slow_write(fd, cmd, strlen(cmd));
+}
+
+void request_remotesd_version(void)
+{
+  poke(0xc001, 0x13);
+  poke(0xc000, 0x01);
 }
 
 void mount_file(char* filename)
