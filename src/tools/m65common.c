@@ -341,7 +341,38 @@ void purge_and_check_for_vf011_jobs(int stopP)
   }
 }
 
-int stop_cpu(void)
+// NOTE: It was discovered late that this function did not actually stop the cpu
+// (due to a call to slow_write_safe() which turns trace-mode off at the end anyway ('t0'))
+//
+// An initial attempt was made to repair the function to genuinely stop the cpu, but tools
+// like mega65_ftp (and perhaps others) were adversely affected by this. They seemed to rely
+// on this 'broken' behaviour that did not actually stop the cpu.
+//
+// Given that, this broken function and its usages have been renamed to 'fake_stop_cpu()'
+// in order to highlight the broken nature of the function to other developers.
+//
+// Developers are advised to consider switching any usages they encounter to use 'real_stop_cpu()'
+// instead, and assess the tool for any adverse impact before committing.
+int fake_stop_cpu(void)
+{
+  if (cpu_stopped) {
+    //    printf("CPU already stopped.\n");
+    return 1;
+  }
+  // Stop CPU
+  timestamp_msg("");
+  fprintf(stderr, "Stopping CPU\n");
+  if (no_rxbuff)
+    do_usleep(50000);
+  slow_write_safe(fd, "t1\r", 3);
+  purge_and_check_for_vf011_jobs(1);
+  return 0;
+}
+
+// NOTE: This function genuinely stops the cpu. As you switch over from fake_stop_cpu()
+// to make use of this function, please be to assure the tool you are working on isn't
+// adversely impacted by the genuine stopping of the cpu.
+int real_stop_cpu(void)
 {
   if (cpu_stopped) {
     //    printf("CPU already stopped.\n");
@@ -810,7 +841,7 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
   // monitor processor for some number of cycles per character while it finishes
   // instructions.
   if (!cpu_stopped_state)
-    stop_cpu();
+    real_stop_cpu();
 
   char cmd[8192];
   for (unsigned int offset = 0; offset < count;) {

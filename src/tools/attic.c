@@ -83,7 +83,7 @@ int process_line(char* line, int live)
     if (pc == 0xf4a5 || pc == 0xf4a2 || pc == 0xf666) {
       // Intercepted LOAD command
       printf("LOAD vector intercepted\n");
-      stop_cpu();
+      fake_stop_cpu();
       state = 1;
     }
     else if ( //  (pc>=0x8000&&pc<0xc000)&&

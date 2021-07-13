@@ -89,6 +89,8 @@ int delete_file(char* name);
 int rename_file(char* name, char* dest_name);
 int upload_file(char* name, char* dest_name);
 int sdhc_check(void);
+void request_remotesd_version(void);
+void request_quit(void);
 void mount_file(char* filename);
 #define CACHE_NO 0
 #define CACHE_YES 1
@@ -368,7 +370,7 @@ int execute_command(char* cmd)
   if ((!strcmp(cmd, "exit")) || (!strcmp(cmd, "quit"))) {
     printf("Reseting MEGA65 and exiting.\n");
 
-    restart_hyppo();
+    request_quit();
     exit(0);
   }
 
@@ -571,7 +573,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
   // slowing things down, at 4mbit/sec we are now too fast for the serial monitor to keep up
   // when receiving stuff
 
-  stop_cpu();
+  fake_stop_cpu();
 
   load_helper();
 
@@ -722,11 +724,12 @@ int load_helper(void)
 
       // First see if the helper is already running by looking for the
       // MEGA65FT1.0 string
+      request_remotesd_version();
       sleep(1);
       char buffer[8193];
       int bytes = serialport_read(fd, (unsigned char*)buffer, 8192);
       buffer[8192] = 0;
-      if (bytes >= (int)strlen("MEGA65FT1.0"))
+      if (bytes >= (int)strlen("MEGA65FT1.0")) {
         for (int i = 0; i < bytes - strlen("MEGA65FT1.0"); i++) {
           printf("i=%d, bytes=%d, strlen=%d\n", i, bytes, (int)strlen("MEGA65FT1.0"));
           if (!strncmp("MEGA65FT1.0", &buffer[i], strlen("MEGA65FT1.0"))) {
@@ -734,6 +737,7 @@ int load_helper(void)
             return 0;
           }
         }
+      }
 
       detect_mode();
 
@@ -742,7 +746,7 @@ int load_helper(void)
         switch_to_c64mode();
       }
 
-      stop_cpu();
+      fake_stop_cpu();
 
       char cmd[1024];
 
@@ -2664,6 +2668,25 @@ void petscify_text(char* text)
     if (c >= 0x41 && c <= 0x5a)
       text[k] = text[k] ^ 0x20;
   }
+}
+
+void poke(unsigned long addr, unsigned char value)
+{
+  char cmd[16];
+  sprintf(cmd, "s%lx %x\r", addr, value);
+  slow_write(fd, cmd, strlen(cmd));
+}
+
+void request_remotesd_version(void)
+{
+  poke(0xc001, 0x13);
+  poke(0xc000, 0x01);
+}
+
+void request_quit(void)
+{
+  poke(0xc001, 0xff);
+  poke(0xc000, 0x01);
 }
 
 void mount_file(char* filename)

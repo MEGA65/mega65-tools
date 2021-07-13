@@ -86,7 +86,6 @@ void serial_write_string(uint8_t* m, uint16_t len)
 #endif
 }
 
-uint16_t last_advertise_time, current_time;
 uint8_t job_count = 0;
 uint16_t job_addr;
 
@@ -311,20 +310,11 @@ void main(void)
 
   check_xemu_flag();
 
-  last_advertise_time = 0;
-
   // Clear communications area
   lfill(0xc000, 0x00, 0x1000);
   lfill(0xc001, 0x42, 0x1000);
 
   while (1) {
-    current_time = *(uint16_t*)0xDC08;
-    if (current_time != last_advertise_time) {
-      // Announce our protocol version
-      // serial_write_string("\nmega65ft1.0\n\r", 14);
-      last_advertise_time = current_time;
-    }
-
     if (PEEK(0xC000)) {
       // Perform one or more jobs
       job_count = PEEK(0xC000);
@@ -355,7 +345,7 @@ void main(void)
           break;
 
         // - - - - - - - - - - - - - - - - - - - - -
-        // Terminate
+        // Terminate / Quit
         // - - - - - - - - - - - - - - - - - - - - -
         case 0xFF:
           __asm__("jmp 58552");
@@ -584,6 +574,14 @@ void main(void)
           job_addr++;
           strcpy(filename, (char*)job_addr);
           mount_file();
+          break;
+
+        // - - - - - - - - - - - - - - - - - - - - -
+        // Request remotesd version
+        // - - - - - - - - - - - - - - - - - - - - -
+        case 0x13:
+          job_addr++;
+          serial_write_string("\nmega65ft1.0\n\r", 14);
           break;
 
           // - - - - - - - - - - - - - - - - - - - - -
