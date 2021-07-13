@@ -90,6 +90,7 @@ int rename_file(char* name, char* dest_name);
 int upload_file(char* name, char* dest_name);
 int sdhc_check(void);
 void request_remotesd_version(void);
+void request_quit(void);
 void mount_file(char* filename);
 #define CACHE_NO 0
 #define CACHE_YES 1
@@ -369,7 +370,7 @@ int execute_command(char* cmd)
   if ((!strcmp(cmd, "exit")) || (!strcmp(cmd, "quit"))) {
     printf("Reseting MEGA65 and exiting.\n");
 
-    restart_hyppo();
+    request_quit();
     exit(0);
   }
 
@@ -2679,6 +2680,12 @@ void poke(unsigned long addr, unsigned char value)
 void request_remotesd_version(void)
 {
   poke(0xc001, 0x13);
+  poke(0xc000, 0x01);
+}
+
+void request_quit(void)
+{
+  poke(0xc001, 0xff);
   poke(0xc000, 0x01);
 }
 

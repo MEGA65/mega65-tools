@@ -345,7 +345,7 @@ void main(void)
           break;
 
         // - - - - - - - - - - - - - - - - - - - - -
-        // Terminate
+        // Terminate / Quit
         // - - - - - - - - - - - - - - - - - - - - -
         case 0xFF:
           __asm__("jmp 58552");
