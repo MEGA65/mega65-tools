@@ -24,6 +24,15 @@ before_deploy:
   if [[ -z "$TRAVIS_TAG" ]]; then
     export TRAVIS_TAG=CI-latest
   fi
+- echo "" >> bin/README.md
+- echo "Last updated at:" >> bin/README.md
+- date | bin/README.md
+- echo "" >> bin/README.md
+- git log -1 >> bin/README.md
+- bin/bit2core &> bin/README.md
+- bin/m65 &> bin/README.md
+- bin/mega65_ftp &> bin/README.md
+- ls -lh bin/ > bin/README.md
 deploy:
 - provider: releases
   api_key: $GITHUB_API_KEY
