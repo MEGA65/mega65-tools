@@ -30,7 +30,7 @@ before_deploy:
 - echo "" >> bin/README.md
 - git log -1 >> bin/README.md
 - echo "" >> bin/README.md
-- ls -lh bin/ > bin/README.md
+- ls -lh bin/ >> bin/README.md
 deploy:
 - provider: releases
   api_key: $GITHUB_API_KEY
