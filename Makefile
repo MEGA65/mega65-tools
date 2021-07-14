@@ -478,7 +478,7 @@ test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTBINDIR)/bit2core.test.exe
 	$(GTESTBINDIR)/bit2core.test.exe
 
 $(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c
-	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c -lreadline -lncurses
+	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c -Wl,-Bstatic -lreadline -lncurses -ltinfo -Wl,-Bdynamic
 
 $(BINDIR)/mega65_ftp.static:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
 	$(CC) $(COPT) -Iinclude -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap
