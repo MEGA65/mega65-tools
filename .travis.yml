@@ -26,7 +26,7 @@ before_deploy:
   fi
 - echo "" >> bin/README.md
 - echo "Last updated at:" >> bin/README.md
-- date | bin/README.md
+- date >> bin/README.md
 - echo "" >> bin/README.md
 - git log -1 >> bin/README.md
 - bin/bit2core &> bin/README.md
