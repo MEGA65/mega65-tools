@@ -29,9 +29,7 @@ before_deploy:
 - date >> bin/README.md
 - echo "" >> bin/README.md
 - git log -1 >> bin/README.md
-- bin/bit2core &> bin/README.md
-- bin/m65 &> bin/README.md
-- bin/mega65_ftp &> bin/README.md
+- echo "" >> bin/README.md
 - ls -lh bin/ > bin/README.md
 deploy:
 - provider: releases
