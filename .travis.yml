@@ -64,6 +64,7 @@ matrix:
       - make USE_LOCAL_CC65=1 bin/m65
       - mv bin/m65 bin/m65.osx
       - make USE_LOCAL_CC65=1 bin/mega65_ftp.osx
+      - make USE_LOCAL_CC65=1 bin/romdiff.osx
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
