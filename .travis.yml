@@ -1,46 +1,91 @@
 language: minimal
-os: linux
 arch: amd64
 dist: focal
 branches: 
   except:
     - CI-latest
-script:
-- sudo apt-get install -y libusb-1.0-0-dev
-- sudo apt-get install -y libgif-dev
-- sudo apt-get install -y libpng-dev
-- sudo apt-get install -y mingw-w64-common
-- sudo apt-get install -y libz-mingw-w64-dev
-- sudo apt-get install -y libgtest-dev
-- sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE
-- sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
-- sudo apt-get update
-- sudo apt install -y libpng-mingw-w64 libusb-1.0-0-mingw-w64
-- sudo apt-get install -y cc65
-- make USE_LOCAL_CC65=1
-- make USE_LOCAL_CC65=1 test
-before_deploy:
-- |
-  if [[ -z "$TRAVIS_TAG" ]]; then
-    export TRAVIS_TAG=CI-latest
-  fi
-- echo "MEGA65-TOOLS RELEASE FILES" > bin/RELEASE.txt
-- echo "Last updated at:" >> bin/RELEASE.txt
-- date >> bin/RELEASE.txt
-- echo "" >> bin/RELEASE.txt
-- git log -1 >> bin/RELEASE.txt
-- echo "" >> bin/RELEASE.txt
-- ls -lh bin/ >> bin/RELEASE.txt
-deploy:
-- provider: releases
-  api_key: $GITHUB_API_KEY
-  file_glob: true
-  file: 
-  - $TRAVIS_BUILD_DIR/bin/*
-  skip_cleanup: true
-  prerelease: true
-  draft: false
-  overwrite: true
-  on:
-    tags: false
-    branch: master
+
+matrix:
+  include:
+    - name: Linux native compilation
+      os: linux
+      script:
+      - sudo apt-get install -y libusb-1.0-0-dev
+      - sudo apt-get install -y libgif-dev
+      - sudo apt-get install -y libpng-dev
+      - sudo apt-get install -y mingw-w64-common
+      - sudo apt-get install -y libz-mingw-w64-dev
+      - sudo apt-get install -y libgtest-dev
+      - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE
+      - sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
+      - sudo apt-get update
+      - sudo apt install -y libpng-mingw-w64 libusb-1.0-0-mingw-w64
+      - sudo apt-get install -y cc65
+      - make USE_LOCAL_CC65=1
+      - make USE_LOCAL_CC65=1 test
+      before_deploy:
+      - |
+        if [[ -z "$TRAVIS_TAG" ]]; then
+          export TRAVIS_TAG=CI-latest
+        fi
+      - echo "MEGA65-TOOLS RELEASE FILES" > bin/RELEASE.txt
+      - echo "Last updated at:" >> bin/RELEASE.txt
+      - date >> bin/RELEASE.txt
+      - echo "" >> bin/RELEASE.txt
+      - git log -1 >> bin/RELEASE.txt
+      - echo "" >> bin/RELEASE.txt
+      - ls -lh bin/ >> bin/RELEASE.txt
+      deploy:
+      - provider: releases
+        api_key: $GITHUB_API_KEY
+        file_glob: true
+        file: 
+        - $TRAVIS_BUILD_DIR/bin/*
+        skip_cleanup: true
+        prerelease: true
+        draft: false
+        overwrite: true
+        on:
+          tags: false
+          branch: master
+    - name: MacOS native compilation
+      os: osx
+      osx_image: xcode11
+      addons:
+        homebrew:
+          packages:
+            - libusb
+            - libpng
+            - zlib
+            - cc65
+      script:
+      - make USE_LOCAL_CC65=1 bin/bit2core
+      - mv bin/bit2core bin/bit2core.osx
+      - make USE_LOCAL_CC65=1 bin/m65
+      - mv bin/m65 bin/m65.osx
+      - make USE_LOCAL_CC65=1 bin/mega65_ftp.osx
+      before_deploy:
+      - |
+        if [[ -z "$TRAVIS_TAG" ]]; then
+          export TRAVIS_TAG=CI-latest
+        fi
+      - echo "MEGA65-TOOLS RELEASE FILES" > bin/RELEASE-OSX.txt
+      - echo "Last updated at:" >> bin/RELEASE-OSX.txt
+      - date >> bin/RELEASE-OSX.txt
+      - echo "" >> bin/RELEASE-OSX.txt
+      - git log -1 >> bin/RELEASE-OSX.txt
+      - echo "" >> bin/RELEASE-OSX.txt
+      - ls -lh bin/ >> bin/RELEASE-OSX.txt
+      deploy:
+      - provider: releases
+        api_key: $GITHUB_API_KEY
+        file_glob: true
+        file: 
+        - $TRAVIS_BUILD_DIR/bin/*
+        skip_cleanup: true
+        prerelease: true
+        draft: false
+        overwrite: true
+        on:
+          tags: false
+          branch: master
