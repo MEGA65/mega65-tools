@@ -544,7 +544,7 @@ int dump_bytes(int col, char* msg, unsigned char* bytes, int length)
       if (i + j < length)
         fprintf(stderr, " %02X", bytes[i + j]);
       else
-        fprintf(stderr, "   ");
+        fprintf(stderr, " | ");
     fprintf(stderr, "  ");
     for (int j = 0; j < 16; j++)
       if (i + j < length)
