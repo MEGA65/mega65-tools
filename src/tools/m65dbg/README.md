@@ -1,17 +1,23 @@
 # m65dbg
-An enhanced remote serial debugger/monitor for the mega65 project
+The “m65dbg” tool is a command-line based enhanced remote serial debugger/monitor for the mega65 project. In brief, some of its facilities include:
 
-* Provide disassembly of output from remote serial output
-* Can display your source-code as you debug
-  * This requires that you build your assembly source via a modified version of Ophis that enhances the \*.list file output
-    * **git clone https://github.com/gardners/Ophis.git**
-* allows uploading of a local file directly into mega65 memory via the **load** command
-* allows dumping out of data to a local file via the **save** command
-* Use the **back** command to get a backstrace of the stack, then use **up** and **down** to navigate through the stack
-* Many commands can take symbolic references if you tell the Ophis compiler to save out a .map files
+* Capable of being a symbolic debugger (for code compiled with Ophis, ACME or CC65)
+* Disassemble any point of memory (showing original file-listing, if available)
+* Print out memory values in byte, word, dword or string form
+* Watch such memory values continuously as you debug and step through code
+* Save and load chunks of memory between the MEGA65 and your local PC
+* Provide a backtrace that you can comfortably move up and down through
+* Search through memory for a sequence of bytes or string
+* Take petscii screenshots of current screen context (borrowed from m65 tool)
+* Remote-typing mode (borrowed from m65 tool)
+* FTP access to SD-card (borrowed from mega65\_ftp tool)
+* You can also connect m65dbg to the serial-monitor provided by the xemu mega65 emulator
 
-## Future Wishlist
-* How about live assembly, direct into the mega65's memory?
+# Latest documentation
+
+Latest detailed documentation can be found here:
+
+* https://docs.google.com/document/d/1cEhHvvc1E47UgSoXvKPpwnf43l20sLPY-y-ZuQ4b\_ng/edit?usp=sharing
 
 # The raw monitor
 
@@ -20,7 +26,7 @@ The m65dbg app adds enhanced commands on-top of the existing commands provided b
 Documentation for this raw monitor exists for it in the following locations:
 
 * C65GS System Notes
-  * https://docs.google.com/document/d/1fmEUg6hDdWRb2tFZ3n4LG7S1mNP04_SUAW5DrE8zRpk/edit#
+  * https://docs.google.com/document/d/1fmEUg6hDdWRb2tFZ3n4LG7S1mNP04\_SUAW5DrE8zRpk/edit#
   * See the “**4.3 Remote Serial Monitor (handy for debugging)**” section
 * https://github.com/Ben-401/c65gs/blob/dockit/doc/monitor.md
   * Some extra usage info exists in this page of Ben's fork of the github repo
@@ -30,21 +36,20 @@ The source for the m65dbg app is available here:
 
 * https://github.com/MEGA65/m65dbg
 
-# Building
+# Video walkthroughs of m65dbg
 
-* You will need to install a few pre-requisite libraries (via apt-get/yum/zypper, or cygwin's setup.exe)
-  * **libreadline-dev**
-  * **libpng-dev**
-* **git clone https://github.com/MEGA65/m65dbg**
-* **cd m65dbg**
-* **make**
-  * This will produce the “**m65dbg**” executable (or, “**m65dbg.exe**”, in Cygwin's case)
+These videos are highly-recommended watching, in order to get quickly acquainted with the facilities available in the m65dbg tool:
 
-# Walkthrough
+* m65dbg walkthrough
+  * https://www.youtube.com/watch?v=2VT8yB3odhg
+* m65dbg updates
+  * https://www.youtube.com/watch?v=Rumti6AzsKY
 
 For a youtube video walkthrough, please visit:
 
 * https://www.youtube.com/watch?v=2VT8yB3odhg
+
+# Walkthrough
 
 Here's some written points below:
 
