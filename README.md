@@ -6,6 +6,12 @@ Tools and Utilities for the MEGA65 Retro Computers, such as:
 - **mega65_ftp**: an ftp tool to more easily put and get files to/from your sd-card
 - **bit2core**: a tool for converting bitstreams into core files (.cor)
 
+# Download
+
+Latest binaries are always available here:
+
+* https://github.com/MEGA65/mega65-tools/releases/tag/CI-latest
+
 # Building under Linux
 
 To build on e.g. Debian Linux, install the following packages:
