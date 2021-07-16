@@ -49,8 +49,6 @@
 #define TRUE 1
 #define FALSE 0
 
-#define DT_FREESLOT 0xff
-
 #define SECTOR_CACHE_SIZE 4096
 int sector_cache_count = 0;
 unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
@@ -190,6 +188,8 @@ int poke_value = 0;
 #define M65DT_REG 1
 #define M65DT_DIR 2
 #define M65DT_UNKNOWN 4
+#define M65DT_FREESLOT 0xff
+
 
 int sd_status_fresh = 0;
 unsigned char sd_status[16];
@@ -1686,6 +1686,8 @@ int fat_readdir(struct m65dirent* d)
       d->d_type = M65DT_UNKNOWN;
     else if (d->d_attr & 0x10)
       d->d_type = M65DT_DIR;
+    else if (d->d_attr == 0 && d->d_name[0] == 0)
+      d->d_type = M65DT_FREESLOT;
     else
       d->d_type = M65DT_REG;
 
@@ -2452,7 +2454,7 @@ int upload_file(char* name, char* dest_name)
       }
       struct m65dirent de;
       while (!fat_readdir(&de)) {
-        if (!de.d_name[0] && de.d_type==DT_FREESLOT) {
+        if (!de.d_name[0] && de.d_type==M65DT_FREESLOT) {
           if (0)
             printf("Found empty slot at dir_sector=%d, dir_sector_offset=%d\n", dir_sector, dir_sector_offset);
 
