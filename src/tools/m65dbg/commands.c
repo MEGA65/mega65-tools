@@ -1005,7 +1005,7 @@ mem_data get_mem(int addr, bool useAddr28)
 }
 
 
-// read all 32 lines at once (to hopefully speed things up for saving memory dumps)
+// read all 16 at once (to hopefully speed things up for saving memory dumps)
 mem_data* get_mem28array(int addr)
 {
   static mem_data multimem[32];
@@ -1015,7 +1015,7 @@ mem_data* get_mem28array(int addr)
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
   char* strLine = strtok(inbuf, "\n");
-  for (int k = 0; k < 32; k++)
+  for (int k = 0; k < 16; k++)
   {
     mem = &multimem[k];
     sscanf(strLine, ":%X:%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
