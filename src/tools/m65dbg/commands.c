@@ -613,6 +613,30 @@ void load_ca65_map(FILE* f)
   }
 }
 
+void load_lbl(const char* fname)
+{
+  // load the map file
+  FILE* f = fopen(fname, "rt");
+
+  while (!feof(f))
+  {
+    char line[1024];
+    char sval[256];
+    fgets(line, 1024, f);
+
+    int addr;
+    char sym[1024];
+    sscanf(line, "al %06X %s", &addr, sym);
+
+    type_symmap_entry sme;
+    sme.addr = addr;
+    sme.sval = sval; 
+    sme.symbol = sym;
+    add_to_symmap(sme);
+  }
+  fclose(f);
+}
+
 // loads the *.map file corresponding to the provided *.list file (if one exists)
 void load_map(const char* fname)
 {
@@ -741,7 +765,7 @@ void load_ca65_list(const char* fname, FILE* f)
 
     // did we find a line with a relocatable address at the start of it
     if (line[0] != ' ' && line[1] != ' ' && line[2] != ' ' && line[3] != ' ' && line[4] != ' ' && line[5] != ' '
-        && line[6] == 'r' && line[7] == ' ' && line[8] != ' ')
+        && (line[6] == 'r' || line[6] == ' ') && line[7] == ' ' && line[8] != ' ')
     {
       char saddr[8];
       int addr;
@@ -750,8 +774,11 @@ void load_ca65_list(const char* fname, FILE* f)
       addr = strtol(saddr, NULL, 16);
 
       // convert relocatable address into absolute address
-      addr += get_segment_offset(current_segment);
-      addr += get_module_offset(current_module, current_segment);
+      if (line[6] == 'r')
+      {
+        addr += get_segment_offset(current_segment);
+        addr += get_module_offset(current_module, current_segment);
+      }
 
       //printf("mod=%s:seg=%s : %08X : %s", current_module, current_segment, addr, line);
       type_fileloc fl;
@@ -955,6 +982,12 @@ void listSearch(void)
     while ((dir = readdir(d)) != NULL)
     {
       char* ext = get_extension(dir->d_name);
+      // VICE label file?
+      if (ext != NULL && strcmp(ext, ".lbl") == 0)
+      {
+        printf("Loading \"%s\"...\n", dir->d_name);
+        load_lbl(dir->d_name);
+      }
       // .list = Ophis or CA65?
       if (ext != NULL && strcmp(ext, ".list") == 0)
       {
