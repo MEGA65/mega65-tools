@@ -15,3 +15,4 @@ bool serialClose(void);
 void serialWrite(char* string);
 bool serialRead(char* buf, int bufsize);
 void serialBaud(bool fastmode);
+void serialFlush(void);

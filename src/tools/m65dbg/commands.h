@@ -46,6 +46,7 @@ void cmdPetscii(void);
 void cmdFastMode(void);
 void cmdScope(void);
 void cmdOffs(void);
+void cmdOneShotAssembly(void);
 int  cmdGetCmdCount(void);
 char* cmdGetCmdName(int idx);
 

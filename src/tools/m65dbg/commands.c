@@ -95,6 +95,7 @@ type_command_details command_details[] =
   { "fastmode", cmdFastMode, "0/1", "Used to quickly switch between 2,000,000bps (slow-mode: default) or 4,000,000bps (fast-mode: used in ftp-mode)" },
   { "scope", cmdScope, "<int>", "the scope-size of the listing to show alongside the disassembly" },
   { "offs", cmdOffs, "<int>", "the offset of the listing to show alongside the disassembly" },
+  { ":", cmdOneShotAssembly, "<assembly>", "A one-shot line of assembly to execute. E.g., ': SEI' to set interrupt flag" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -1503,8 +1504,8 @@ void write_bytes(int* addr, int size, ...)
   va_list valist;
   va_start(valist, size);
 
-  char str[10];
-  sprintf(outbuf, "s%08X", *addr);
+  char str[16];
+  sprintf(outbuf, "s%X", *addr);
 
   int i = 0;
   while(i < size) 
@@ -1588,12 +1589,244 @@ int modematcher(char* curmode, char* modeform, int* var1, int* var2)
   return varcnt;
 }
 
+// return -1=invalid-command, 0=no-command, 1=bytes written
+int oneShotAssembly(int* paddr, char* str)
+{
+  int val1;
+  int val2;
+  int opcode = 0;
+  int startaddr = *paddr;
+  int invalid = 0;
+  if (str[strlen(str)-1] == '\n')
+    str[strlen(str)-1] = '\0';
+
+  if (strlen(str) == 0)
+    return 0;
+
+  strupper(str);
+
+  char* instr = strtok(str, " ");
+  char* mode = strtok(NULL, "\0");
+  
+  // todo: check if instruction is valid.
+  // if not, show syntax error.
+
+  if (strcmp(instr, "NOP") == 0)
+    strcpy(instr, "EOM");
+
+  // figure out instruction mode
+  if (mode == NULL || mode[0] == '\0')
+  {
+    if ((opcode = getopcode(M_impl, instr)) != -1)
+    {
+      write_bytes(paddr, 1, opcode);
+    }
+    else if ((opcode = getopcode(M_A, instr)) != -1)
+    {
+      write_bytes(paddr, 1, opcode);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "($%x,X)",&val1, &val2) == 1)
+  {
+    if ((opcode = getopcode(M_InnX, instr)) != -1 && val1 < 0x100)
+    {
+      // e.g. ORA ($20,X)
+      write_bytes(paddr, 2, opcode, val1);
+    }
+    else if ((opcode = getopcode(M_InnnnX, instr)) != -1)
+    {
+      // e.g. JSR ($2000,X)
+      write_bytes(paddr, 3, opcode, val1 & 0xff, val1 >> 8);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "$%x,$%x",&val1, &val2) == 2)
+  {
+    if ((opcode = getopcode(M_nnrr, instr)) != -1)
+    {
+      // e.g. BBR $20,$2005
+      int rr = 0;
+      // TODO: confirm this arithmetic (for M_nnrr in disassemble_addr_into_string() too)
+      if (val2 > *paddr)
+        rr = val2 - *paddr - 2;
+      else
+        rr = (val2 - *paddr - 2) & 0xff;
+
+      write_bytes(paddr, 3, opcode, val1, rr);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "($%x),Y", &val1, &val2) == 1)
+  {
+    if ((opcode = getopcode(M_InnY, instr)) != -1)
+    {
+      // e.g. ORA ($20),Y
+      write_bytes(paddr, 2, opcode, val1);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "($%x),Z", &val1, &val2) == 1)
+  {
+    if ((opcode = getopcode(M_InnZ, instr)) != -1)
+    {
+      // e.g. ORA ($20),Z
+      write_bytes(paddr, 2, opcode, val1);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "$%x,X", &val1, &val2) == 1)
+  {
+    if ((opcode = getopcode(M_nnX, instr)) != -1 && val1 < 0x100)
+    {
+      // e.g. ORA $20,X
+      write_bytes(paddr, 2, opcode, val1);
+    }
+    else if ((opcode = getopcode(M_nnnnX, instr)) != -1)
+    {
+      // e.g. ORA $2000,X
+      write_bytes(paddr, 3, opcode, val1 & 0xff, val1 >> 8);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "$%x,Y", &val1, &val2) == 1)
+  {
+    if ((opcode = getopcode(M_nnY, instr)) != -1 && val1 < 0x100)
+    {
+      // e.g. STX $20,Y
+      write_bytes(paddr, 2, opcode, val1);
+    }
+    else if ((opcode = getopcode(M_nnnnY, instr)) != -1)
+    {
+      // e.g. ORA $2000,Y
+      write_bytes(paddr, 3, opcode, val1 & 0xff, val1 >> 8);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "($%x)", &val1, &val2) == 1)
+  {
+    if ((opcode = getopcode(M_Innnn, instr)) != -1)
+    {
+      // e.g. JSR ($2000)
+      write_bytes(paddr, 3, opcode, val1 & 0xff, val1 >> 8);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "($%x,SP),Y", &val1, &val2) == 1)
+  {
+    if ((opcode = getopcode(M_InnSPY, instr)) != -1)
+    {
+      // e.g. STA ($20,SP),Y
+      write_bytes(paddr, 2, opcode, val1);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "$%x",&val1, &val2) == 1)
+  {
+    int diff = val1 - *paddr;
+    if (diff < 0) diff = -diff;
+
+    if ((opcode = getopcode(M_nn, instr)) != -1 && val1 < 0x100)
+    {
+      // e.g. STA $20
+      write_bytes(paddr, 2, opcode, val1);
+    }
+    else if ((opcode = getopcode(M_nnnn, instr)) != -1)
+    {
+      // e.g. STA $2000
+      write_bytes(paddr, 3, opcode, val1 & 0xff, val1 >> 8);
+    }
+    
+    else if ((opcode = getopcode(M_rr, instr)) != -1 && diff < 0x100)
+    {
+      int rr = 0;
+      // TODO: confirm this arithmetic (for M_rr in disassemble_addr_into_string() too)
+      if (val1 > *paddr)
+        rr = val1 - *paddr - 2;
+      else
+        rr = (val1 - *paddr - 2) & 0xff;
+      // e.g. BCC $2005
+      write_bytes(paddr, 2, opcode, rr);
+    }
+    else if ((opcode = getopcode(M_rrrr, instr)) != -1)
+    {
+      int rrrr = 0;
+      // TODO: confirm this arithmetic (for M_rrrr in disassemble_addr_into_string() too)
+      if (val1 > *paddr)
+        rrrr = val1 - *paddr - 2;
+      else
+        rrrr = (val1 - *paddr - 2) & 0xffff;
+      // e.g. BPL $AD22
+      write_bytes(paddr, 3, opcode, rrrr & 0xff, rrrr >> 8);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else if (modematcher(mode, "#$%x",&val1, &val2) == 1)
+  {
+    // M_immnn
+    // M_immnnnn
+    if ((opcode = getopcode(M_immnn, instr)) != -1 && val1 < 0x100)
+    {
+      // e.g. LDA #$20
+      write_bytes(paddr, 2, opcode, val1);
+    }
+    else if ((opcode = getopcode(M_immnnnn, instr)) != -1)
+    {
+      // e.g. PHW #$1234
+      write_bytes(paddr, 3, opcode, val1 & 0xff, val1 >> 8);
+    }
+    else
+    {
+      invalid=1;
+    }
+  }
+  else
+  {
+    invalid = 1;
+  }
+
+  if (invalid)
+    return -1;
+
+  // return number of bytes written
+  return *paddr - startaddr;
+}
+
+
 void cmdAssemble(void)
 {
   int addr;
   char str[128] = { 0 };
-  int val1;
-  int val2;
   char* token = strtok(NULL, " ");
   if (token != NULL)
   {
@@ -1602,232 +1835,17 @@ void cmdAssemble(void)
 
   do
   {
-    int invalid = 0;
-    int opcode = 0;
-
     printf("$%07X ", addr);
     fgets(str, 128, stdin);
-    if (str[strlen(str)-1] == '\n')
-      str[strlen(str)-1] = '\0';
+    int ret = oneShotAssembly(&addr, str);
 
-    if (strlen(str) == 0)
-      return;
-
-    strupper(str);
-
-    char* instr = strtok(str, " ");
-    char* mode = strtok(NULL, "\0");
-    
-    // todo: check if instruction is valid.
-    // if not, show syntax error.
-
-    if (strcmp(instr, "NOP") == 0)
-      strcpy(instr, "EOM");
-
-    // figure out instruction mode
-    if (mode == NULL || mode[0] == '\0')
-    {
-      if ((opcode = getopcode(M_impl, instr)) != -1)
-      {
-        write_bytes(&addr, 1, opcode);
-      }
-      else if ((opcode = getopcode(M_A, instr)) != -1)
-      {
-        write_bytes(&addr, 1, opcode);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "($%x,X)",&val1, &val2) == 1)
-    {
-      if ((opcode = getopcode(M_InnX, instr)) != -1 && val1 < 0x100)
-      {
-        // e.g. ORA ($20,X)
-        write_bytes(&addr, 2, opcode, val1);
-      }
-      else if ((opcode = getopcode(M_InnnnX, instr)) != -1)
-      {
-        // e.g. JSR ($2000,X)
-        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "$%x,$%x",&val1, &val2) == 2)
-    {
-      if ((opcode = getopcode(M_nnrr, instr)) != -1)
-      {
-        // e.g. BBR $20,$2005
-        int rr = 0;
-        // TODO: confirm this arithmetic (for M_nnrr in disassemble_addr_into_string() too)
-        if (val2 > addr)
-          rr = val2 - addr - 2;
-        else
-          rr = (val2 - addr - 2) & 0xff;
-
-        write_bytes(&addr, 3, opcode, val1, rr);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "($%x),Y", &val1, &val2) == 1)
-    {
-      if ((opcode = getopcode(M_InnY, instr)) != -1)
-      {
-        // e.g. ORA ($20),Y
-        write_bytes(&addr, 2, opcode, val1);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "($%x),Z", &val1, &val2) == 1)
-    {
-      if ((opcode = getopcode(M_InnZ, instr)) != -1)
-      {
-        // e.g. ORA ($20),Z
-        write_bytes(&addr, 2, opcode, val1);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "$%x,X", &val1, &val2) == 1)
-    {
-      if ((opcode = getopcode(M_nnX, instr)) != -1 && val1 < 0x100)
-      {
-        // e.g. ORA $20,X
-        write_bytes(&addr, 2, opcode, val1);
-      }
-      else if ((opcode = getopcode(M_nnnnX, instr)) != -1)
-      {
-        // e.g. ORA $2000,X
-        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "$%x,Y", &val1, &val2) == 1)
-    {
-      if ((opcode = getopcode(M_nnY, instr)) != -1 && val1 < 0x100)
-      {
-        // e.g. STX $20,Y
-        write_bytes(&addr, 2, opcode, val1);
-      }
-      else if ((opcode = getopcode(M_nnnnY, instr)) != -1)
-      {
-        // e.g. ORA $2000,Y
-        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "($%x)", &val1, &val2) == 1)
-    {
-      if ((opcode = getopcode(M_Innnn, instr)) != -1)
-      {
-        // e.g. JSR ($2000)
-        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "($%x,SP),Y", &val1, &val2) == 1)
-    {
-      if ((opcode = getopcode(M_InnSPY, instr)) != -1)
-      {
-        // e.g. STA ($20,SP),Y
-        write_bytes(&addr, 2, opcode, val1);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "$%x",&val1, &val2) == 1)
-    {
-      int diff = val1 - addr;
-      if (diff < 0) diff = -diff;
-
-      if ((opcode = getopcode(M_nn, instr)) != -1 && val1 < 0x100)
-      {
-        // e.g. STA $20
-        write_bytes(&addr, 2, opcode, val1);
-      }
-      else if ((opcode = getopcode(M_nnnn, instr)) != -1)
-      {
-        // e.g. STA $2000
-        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
-      }
-      
-      else if ((opcode = getopcode(M_rr, instr)) != -1 && diff < 0x100)
-      {
-        int rr = 0;
-        // TODO: confirm this arithmetic (for M_rr in disassemble_addr_into_string() too)
-        if (val1 > addr)
-          rr = val1 - addr - 2;
-        else
-          rr = (val1 - addr - 2) & 0xff;
-        // e.g. BCC $2005
-        write_bytes(&addr, 2, opcode, rr);
-      }
-      else if ((opcode = getopcode(M_rrrr, instr)) != -1)
-      {
-        int rrrr = 0;
-        // TODO: confirm this arithmetic (for M_rrrr in disassemble_addr_into_string() too)
-        if (val1 > addr)
-          rrrr = val1 - addr - 2;
-        else
-          rrrr = (val1 - addr - 2) & 0xffff;
-        // e.g. BPL $AD22
-        write_bytes(&addr, 3, opcode, rrrr & 0xff, rrrr >> 8);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else if (modematcher(mode, "#$%x",&val1, &val2) == 1)
-    {
-      // M_immnn
-      // M_immnnnn
-      if ((opcode = getopcode(M_immnn, instr)) != -1 && val1 < 0x100)
-      {
-        // e.g. LDA #$20
-        write_bytes(&addr, 2, opcode, val1);
-      }
-      else if ((opcode = getopcode(M_immnnnn, instr)) != -1)
-      {
-        // e.g. PHW #$1234
-        write_bytes(&addr, 3, opcode, val1 & 0xff, val1 >> 8);
-      }
-      else
-      {
-        invalid=1;
-      }
-    }
-    else
-    {
-      invalid = 1;
-    }
-
-    if (invalid)
+    if (ret == -1)  // invalid?
     {
       printf("???\n");
+    }
+    else if (ret == 0) // no command?
+    {
+      return;
     }
 
   } while (1);
@@ -2481,6 +2499,109 @@ void cmdOffs(void)
   if (autocls)
     cmdClearScreen();
   cmdDisassemble();
+}
+
+int isCpuStopped(void)
+{
+  int cnt = 0;
+  int cur_pc = -1;
+  int same_cnt = 0;
+  while ( cnt < 10 )
+  {
+    // get current register values
+    reg_data reg = get_regs();
+
+    usleep(10000);
+
+    if (reg.pc == cur_pc)
+    {
+      same_cnt++;
+      if (same_cnt == 5)
+        return 1;
+    }
+    else
+    {
+      same_cnt = 0;
+      cur_pc = reg.pc;
+    }
+    cnt++;
+  }
+
+  return 0;
+}
+
+void cmdOneShotAssembly(void)
+{
+  char* strCommand = strtok(NULL, "\0");
+  char str[128];
+
+  int cpu_stopped = isCpuStopped();
+
+  if (!cpu_stopped)
+  {
+    serialWrite("t1\n");
+    usleep(10000);
+    serialRead(inbuf, BUFSIZE);
+  }
+
+  reg_data reg = get_regs();
+  int tmppc = 0xf0;
+
+  usleep(10000);
+  
+  // get memory at 0xf0 (usually always 'writable' memory in zero-page)
+  // serialFlush();
+  mem_data mem = get_mem(tmppc, false);
+  serialFlush();
+  // serialRead(inbuf, BUFSIZE);
+
+  usleep(10000);
+
+  int numbytes = oneShotAssembly(&tmppc, strCommand);
+  serialFlush();
+
+  usleep(10000);
+
+  if (numbytes > 0)
+  {
+    // reset pc
+    serialWrite("gf0\n");
+    serialRead(inbuf, BUFSIZE);
+
+    usleep(100000);
+
+    // just send an enter command to do single step
+    serialWrite("\n");
+
+    usleep(100000);
+
+    // reset pc
+    sprintf(str, "g%X\n", reg.pc);
+    serialWrite(str);
+    serialRead(inbuf, BUFSIZE);
+
+    // usleep(100000);
+
+    // reset byte-values at this point
+    for (int k = 0; k < numbytes; k++)
+    {
+      sprintf(str, "s777%04X %02X\n", 0xf0+k, mem.b[k]);
+      serialWrite(str);
+      usleep(10000);
+      serialRead(inbuf, BUFSIZE);
+    }
+  }
+  if (numbytes == -1)
+    printf("???\n");
+
+  if (!cpu_stopped)
+  {
+    serialWrite("t0\n");
+    usleep(100000);
+    serialRead(inbuf, BUFSIZE);
+  }
+
+   serialFlush();
 }
 
 void cmdSymbolValue(void)
