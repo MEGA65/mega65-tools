@@ -95,7 +95,6 @@ type_command_details command_details[] =
   { "fastmode", cmdFastMode, "0/1", "Used to quickly switch between 2,000,000bps (slow-mode: default) or 4,000,000bps (fast-mode: used in ftp-mode)" },
   { "scope", cmdScope, "<int>", "the scope-size of the listing to show alongside the disassembly" },
   { "offs", cmdOffs, "<int>", "the offset of the listing to show alongside the disassembly" },
-  { ":", cmdOneShotAssembly, "<assembly>", "A one-shot line of assembly to execute. E.g., ': SEI' to set interrupt flag" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -1524,6 +1523,18 @@ void write_bytes(int* addr, int size, ...)
   *addr += size;
 }
 
+int isValidMnemonic(char* str)
+{
+  strupper(str);
+  char* instr = strtok(str, " ");
+  for (int k = 0; k < 256; k++)
+  {
+    if (strcmp(instruction_lut[k], instr) == 0)
+      return 1;
+  }
+  return 0;
+}
+
 int getopcode(int mode, const char* instr)
 {
   for (int k = 0; k < 256; k++)
@@ -2530,15 +2541,16 @@ int isCpuStopped(void)
   return 0;
 }
 
-void cmdOneShotAssembly(void)
+int doOneShotAssembly(char* strCommand)
 {
-  char* strCommand = strtok(NULL, "\0");
+  int numbytes;
   char str[128];
 
   int cpu_stopped = isCpuStopped();
 
   if (!cpu_stopped)
   {
+    printf("Stopping CPU first...\n");
     serialWrite("t1\n");
     usleep(10000);
     serialRead(inbuf, BUFSIZE);
@@ -2557,7 +2569,7 @@ void cmdOneShotAssembly(void)
 
   usleep(10000);
 
-  int numbytes = oneShotAssembly(&tmppc, strCommand);
+  numbytes = oneShotAssembly(&tmppc, strCommand);
   serialFlush();
 
   usleep(10000);
@@ -2591,17 +2603,10 @@ void cmdOneShotAssembly(void)
       serialRead(inbuf, BUFSIZE);
     }
   }
-  if (numbytes == -1)
-    printf("???\n");
-
-  if (!cpu_stopped)
-  {
-    serialWrite("t0\n");
-    usleep(100000);
-    serialRead(inbuf, BUFSIZE);
-  }
 
    serialFlush();
+
+   return numbytes;
 }
 
 void cmdSymbolValue(void)

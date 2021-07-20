@@ -50,17 +50,33 @@ void parse_command(void)
   // preserve a copy of original command
   strcpy(outbuf, strInput);
 
+  // assume it might be a one-shot assembly command
+  if (isValidMnemonic(strInput))
+  {
+    // restore original command
+    strcpy(strInput, outbuf);
+
+    if (doOneShotAssembly(strInput) > 0)
+      handled = true;
+  }
+
+  // restore original command
+  strcpy(strInput, outbuf);
+
   // tokenise command
   token = strtok(strInput, " ");
 
   // test for special commands provided by the m65dbg app
-  for (int k = 0; command_details[k].name != NULL; k++)
+  if (!handled)
   {
-    if (strcmp(token, command_details[k].name) == 0)
+    for (int k = 0; command_details[k].name != NULL; k++)
     {
-      command_details[k].func();
-      handled = true;
-      break;
+      if (strcmp(token, command_details[k].name) == 0)
+      {
+        command_details[k].func();
+        handled = true;
+        break;
+      }
     }
   }
 

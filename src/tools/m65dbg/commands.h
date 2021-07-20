@@ -46,9 +46,10 @@ void cmdPetscii(void);
 void cmdFastMode(void);
 void cmdScope(void);
 void cmdOffs(void);
-void cmdOneShotAssembly(void);
+int doOneShotAssembly(char* strCommand);
 int  cmdGetCmdCount(void);
 char* cmdGetCmdName(int idx);
+int isValidMnemonic(char* str);
 
 #define BUFSIZE 4096
 
