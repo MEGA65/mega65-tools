@@ -644,6 +644,11 @@ int main(int argc, char** argv)
   bzero(block_header, 8);
   fwrite(block_header, 8, 1, outfile);
 
+  // Write 1500 bytes of nulls at the end, to work around WeeIP data-on-close
+  // bug
+  bzero(screen_ram,1500);
+  fwrite(screen_ram,1500,1,outfile);
+  
   if (outfile != NULL) {
     fclose(outfile);
     outfile = NULL;
