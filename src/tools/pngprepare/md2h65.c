@@ -434,6 +434,13 @@ void emit_paragraph(void)
   }
 }
 
+unsigned char ascii_to_screen_code(unsigned char c)
+{
+  // XXX Fold lower to upper case for now
+  if (c>='a'&&c<='z') c=c^0x20;
+  return c;
+}
+
 void emit_word(char *word) {
   /* Check for special formatting options:
      - Begins with * = enable bold/italic etc
@@ -452,6 +459,8 @@ void emit_word(char *word) {
 
   int start=0;
   int end=strlen(word);
+
+  in_paragraph=1;
   
   if (word[0]=='*'&&word[1]=='*') {
     text_colour_saved=text_colour;
@@ -472,9 +481,9 @@ void emit_word(char *word) {
       x=0; y++;
     }
     if (y*160+x*2<MAX_COLOURRAM_SIZE) {
-      screen_ram[y*160+x*2+0]=word[xx];
-      colour_ram[y*160+x*2+0]=text_colour+attributes;
-      colour_ram[y*160+x*2+1]=0;
+      screen_ram[y*160+x*2+0]=ascii_to_screen_code(word[xx]);
+      colour_ram[y*160+x*2+0]=0;
+      colour_ram[y*160+x*2+1]=text_colour+attributes;
     }
     x++;
   }
@@ -548,6 +557,7 @@ int main(int argc, char** argv)
       attributes=0x80; // underline for headings
       emit_text(&line[2]);
       text_colour=14;
+      emit_paragraph();
     } else if (line[0]=='\n'||line[0]=='\r') {
       // Blank line = paragraph break
       emit_paragraph();
@@ -580,7 +590,7 @@ int main(int argc, char** argv)
   // Number of chars per line to display
   header[8] = 80;
   // V400/H640 flags
-  header[9] = 0x98; // V400, H640, VIC-III attributes
+  header[9] = 0xE8; // V400, H640, VIC-III attributes
   // Number of screen lines
   header[10] = (MAX_COLOURRAM_SIZE / 80) & 0xff;
   header[11] = (MAX_COLOURRAM_SIZE / 80) >> 8;
@@ -594,8 +604,8 @@ int main(int argc, char** argv)
   fwrite(header, 128, 1, outfile);
 
   // $300 @ $FFD3100 for palettes
-  block_header[0] = 0x31;
-  block_header[1] = 0x00;
+  block_header[0] = 0x00;
+  block_header[1] = 0x31;
   block_header[2] = 0xFD;
   block_header[3] = 0x0F;
   block_header[4] = 0x00;
