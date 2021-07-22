@@ -401,6 +401,8 @@ int main(int argc, char** argv)
 
   unsigned char screen_ram[MAX_COLOURRAM_SIZE];
   unsigned char colour_ram[MAX_COLOURRAM_SIZE];
+  unsigned int screen_ram_used=0;
+  unsigned int line_count=0;
 
   // Initialise screen and colour RAM
   bzero(colour_ram, sizeof(colour_ram));
@@ -426,6 +428,10 @@ int main(int argc, char** argv)
     exit(-3);
   }
 
+  // Allow upto 128KB of tiles
+  struct tile_set* ts = new_tileset(128 * 1024 / 64);
+
+  // Read the .md file
   char line[1024];
   line[0] = 0;
   fgets(line, 1024, infile);
@@ -435,14 +441,8 @@ int main(int argc, char** argv)
     fgets(line, 1024, infile);
   }
 
-  // Allow upto 128KB of tiles
-  struct tile_set* ts = new_tileset(128 * 1024 / 64);
-
-  struct screen* screen_list[256];
-  // Screen 0 is reserved for the current display (it gets constructed
-  // by MEGABASIC on initialisation).
-  int screen_count = 1;
-
+  
+  
   printf("Writing headers...\n");
   unsigned char header[128];
   bzero(header, sizeof(header));
@@ -456,13 +456,20 @@ int main(int argc, char** argv)
   header[5] = 0x00;
   // Screen line width
   header[6] = 80;
+  // $D054 value: Enable FCM for chars >$fF
+  header[7] = 0x05;
+  // Number of chars per line to display
+  header[8] = 80;
+  // V400/H640 flags
+  header[9] = 0x98; // V400, H640, VIC-III attributes
   // Number of screen lines
-  header[7] = (MAX_COLOURRAM_SIZE / 80) & 0xff;
-  header[8] = (MAX_COLOURRAM_SIZE / 80) >> 8;
+  header[10] = (MAX_COLOURRAM_SIZE / 80) & 0xff;
+  header[11] = (MAX_COLOURRAM_SIZE / 80) >> 8;
+
   // Screen colours
-  header[9] = 0x06;
-  header[10] = 0x06;
-  header[11] = 0x01;
+  header[12] = 0x06;
+  header[13] = 0x06;
+  header[14] = 0x01;
 
   // Write header out
   fwrite(header, 128, 1, outfile);
@@ -488,6 +495,32 @@ int main(int argc, char** argv)
     paletteblock[i] = nyblswap(ts->colours[i].b);
   fwrite(paletteblock, 256, 1, outfile);
 
+  // Header for screen RAM
+  block_header[0] = 0x00;
+  block_header[1] = 0x20;
+  block_header[2] = 0x01;
+  block_header[3] = 0x00;
+  block_header[4] = screen_ram_used & 0xff;
+  block_header[5] = ((screen_ram_used) >> 8) & 0xff;
+  block_header[6] = ((screen_ram_used) >> 16) & 0xff;
+  block_header[7] = ((screen_ram_used) >> 24) & 0xff;
+  fwrite(block_header, 8, 1, outfile);
+  // Screen RAM
+  fwrite(screen_ram, screen_ram_used, 1, outfile);
+
+  // Header for colour RAM
+  block_header[0] = 0x00;
+  block_header[1] = 0x00;
+  block_header[2] = 0xF8;
+  block_header[3] = 0x0F;
+  block_header[4] = screen_ram_used & 0xff;
+  block_header[5] = ((screen_ram_used) >> 8) & 0xff;
+  block_header[6] = ((screen_ram_used) >> 16) & 0xff;
+  block_header[7] = ((screen_ram_used) >> 24) & 0xff;
+  fwrite(block_header, 8, 1, outfile);
+  // Colour RAM
+  fwrite(colour_ram, screen_ram_used, 1, outfile);
+  
   // Header for tiles at $40000
   block_header[0] = 0x00;
   block_header[1] = 0x00;
