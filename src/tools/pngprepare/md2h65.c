@@ -106,6 +106,29 @@ struct tile_set {
   struct tile_set* next;
 };
 
+void palette_c64_init(struct tile_set *ts)
+{
+    // Pre-load in C64 palette, so that those colours can be re-used if required
+
+  ts->colours[0] = (struct rgb) { .r = 0, .g = 0, .b = 0 };
+  ts->colours[1] = (struct rgb) { .r = 0xff, .g = 0xff, .b = 0xff };
+  ts->colours[2] = (struct rgb) { .r = 0xab, .g = 0x31, .b = 0x26 };
+  ts->colours[3] = (struct rgb) { .r = 0x66, .g = 0xda, .b = 0xff };
+  ts->colours[4] = (struct rgb) { .r = 0xbb, .g = 0x3f, .b = 0xb8 };
+  ts->colours[5] = (struct rgb) { .r = 0x55, .g = 0xce, .b = 0x58 };
+  ts->colours[6] = (struct rgb) { .r = 0x1d, .g = 0x0e, .b = 0x97 };
+  ts->colours[7] = (struct rgb) { .r = 0xea, .g = 0xf5, .b = 0x7c };
+  ts->colours[8] = (struct rgb) { .r = 0xb9, .g = 0x74, .b = 0x18 };
+  ts->colours[9] = (struct rgb) { .r = 0x78, .g = 0x73, .b = 0x00 };
+  ts->colours[10] = (struct rgb) { .r = 0xdd, .g = 0x93, .b = 0x87 };
+  ts->colours[11] = (struct rgb) { .r = 0x5b, .g = 0x5b, .b = 0x5b };
+  ts->colours[12] = (struct rgb) { .r = 0x8b, .g = 0x8b, .b = 0x8b };
+  ts->colours[13] = (struct rgb) { .r = 0xb0, .g = 0xf4, .b = 0xac };
+  ts->colours[14] = (struct rgb) { .r = 0xaa, .g = 0x9d, .b = 0xef };
+  ts->colours[15] = (struct rgb) { .r = 0xb8, .g = 0xb8, .b = 0xb8 };
+  ts->colour_count = 16;
+}
+
 int palette_lookup(struct tile_set* ts, int r, int g, int b)
 {
   int i;
@@ -511,6 +534,7 @@ int main(int argc, char** argv)
 
   // Allow upto 128KB of tiles
   struct tile_set* ts = new_tileset(128 * 1024 / 64);
+  palette_c64_init(ts);
 
   // Read the .md file
   char line[1024];
