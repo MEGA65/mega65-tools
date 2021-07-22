@@ -448,6 +448,7 @@ void read_all_sectors()
             POKE(0xD080, 0x60);
 
           // Issue read command
+	  POKE(0xD081, 0x01); // but first reset buffers
           POKE(0xD081, 0x40);
 
           x = t * 7;
@@ -595,13 +596,13 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   // Seek to track 0
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
-    usleep(6000);          
+    while(PEEK(0xD082)&0x80) continue;
   }
 
   // Seek to the requested track
   for(i=0;i<track_number;i++) {
     POKE(0xD081,0x18);
-    usleep(6000);	
+    while(PEEK(0xD082)&0x80) continue;
     }        
 
   // Now select the side, and try to read the sector
@@ -610,12 +611,9 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   POKE(0xD086, side?1:0);
 
   // Issue read command
+  POKE(0xD081, 0x01); // but first reset buffers
   POKE(0xD081, 0x40);
 
-  // Wait for job to run
-  while (!(PEEK(0xD082) & 0x80)) continue;
-  while (!(PEEK(0xD082) & 0x54)) continue;
-  
   // Wait for busy flag to clear
   while (PEEK(0xD082) & 0x80) {
     POKE(0xc000,PEEK(0xc000)+1);
@@ -1308,10 +1306,10 @@ void read_write_test(void)
     // (but mask out "track matched" flag in bit 7)
     if (request_track<(PEEK(0xD6A3)&0x7f)) {
       POKE(0xD081,0x10);
-      usleep(50000);
+      usleep(20000);
     } else if (request_track>(PEEK(0xD6A3)&0x7f)) {
       POKE(0xD081,0x18);
-      usleep(50000);
+      usleep(20000);
     }
   }
 
