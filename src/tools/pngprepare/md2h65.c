@@ -501,21 +501,37 @@ void emit_word(char *word) {
 void emit_text(char *text)
 {
   // Emit the text
+  int last_was_word=0;
   char word[1024];
   int word_len=0;
+
+  if (x>indent) {
+    // Emit a space before the text, if we are not the first
+    // thing on the line.
+    colour_ram[y*160+x*2+1]=text_colour+attributes;      
+    x++;
+    if (x>=80) { y++; x=indent; }
+  }
+  
   // Emit word at a time, so that we can find special token
   for(int i=0;text[i];i++) {
     if (text[i]==' '||text[i]=='\t'||text[i]=='\n'||text[i]=='\r') {
       word[word_len]=0;
-      if (word_len) emit_word(word);
+      if (word_len) {
+	emit_word(word);
+	last_was_word=1;
+      }
       word_len=0;
     } else word[word_len++]=text[i];
-   
-    if (text[i]==' '||text[i]=='\t') {
-      // Emit a space after the word if required.
-      colour_ram[y*160+x*2+1]=text_colour+attributes;      
-      x++;
-      if (x>=80) { y++; x=indent; }
+
+    if (last_was_word) {
+      if (text[i]==' '||text[i]=='\t') {
+	// Emit a space after the word if required.
+	colour_ram[y*160+x*2+1]=text_colour+attributes;      
+	x++;
+	if (x>=80) { y++; x=indent; }
+      }
+      last_was_word=0;
     }
     
   }
@@ -524,6 +540,7 @@ void emit_text(char *text)
   if (word_len) {
     word[word_len]=0;
     emit_word(word);
+
   }
 }
 
@@ -607,8 +624,8 @@ int main(int argc, char** argv)
   // V400/H640 flags
   header[9] = 0xE8; // V400, H640, VIC-III attributes
   // Number of screen lines
-  header[10] = (MAX_COLOURRAM_SIZE / 80) & 0xff;
-  header[11] = (MAX_COLOURRAM_SIZE / 80) >> 8;
+  header[10] = y & 0xff;
+  header[11] = y >> 8;
 
   // Screen colours
   header[12] = 0x06;
