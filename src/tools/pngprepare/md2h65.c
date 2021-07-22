@@ -472,7 +472,6 @@ void emit_word(char *word) {
     start=2;
   }
   if (word[end-2]=='*'&&word[end-1]=='*') {
-    text_colour=text_colour_saved; // end of bold
     end-=2;
   }
 
@@ -492,6 +491,11 @@ void emit_word(char *word) {
     x++;
   }
 
+  end=strlen(word);
+  if (word[end-2]=='*'&&word[end-1]=='*') {
+    text_colour=text_colour_saved; // end of bold
+  }
+  
 }
 
 void emit_text(char *text)
@@ -514,6 +518,12 @@ void emit_text(char *text)
       if (x>=80) { y++; x=indent; }
     }
     
+  }
+
+  // Output any final word
+  if (word_len) {
+    word[word_len]=0;
+    emit_word(word);
   }
 }
 
