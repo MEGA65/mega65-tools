@@ -505,6 +505,7 @@ void emit_text(char *text)
    
     if (text[i]==' '||text[i]=='\t') {
       // Emit a space after the word if required.
+      colour_ram[y*160+x*2+1]=text_colour+attributes;      
       x++;
       if (x>=80) { y++; x=indent; }
     }
