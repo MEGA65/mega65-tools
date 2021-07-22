@@ -653,7 +653,7 @@ int main(int argc, char** argv)
 
   // Header for colour RAM
   block_header[0] = 0x00;
-  block_header[1] = 0x00;
+  block_header[1] = 0x20;
   block_header[2] = 0xF8;
   block_header[3] = 0x0F;
   block_header[4] = screen_ram_used & 0xff;
