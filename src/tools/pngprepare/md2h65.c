@@ -54,6 +54,8 @@
 #define PNG_DEBUG 3
 #include <png.h>
 
+extern unsigned char ascii_font[4097];
+
 /* ============================================================= */
 
 /* ============================================================= */
@@ -436,9 +438,11 @@ void emit_paragraph(void)
 
 unsigned char ascii_to_screen_code(unsigned char c)
 {
-  // XXX Fold lower to upper case for now
-  if (c>='a'&&c<='z') c=c^0x20;
+  // Nothing to do when using the ASCII font
   return c;
+  
+  // XXX Fold lower to upper case for now
+  // if (c>='a'&&c<='z') c=c^0x20;
 }
 
 void emit_word(char *word) {
@@ -601,6 +605,15 @@ int main(int argc, char** argv)
   header[13] = 0x06;
   header[14] = 0x01;
 
+  // Charset absolute address
+  // $1800 = lower case
+  // $1000 = upper case
+  // $F000 = custom ASCII charset we load at $F000
+  header[15] = 0xF0; // we provide only the page number
+  // $D016 value
+  // ($C9 for 80 colums, $C8 for 40 columns for VIC-III but compatibility)
+  header[16] = 0xC9;
+  
   // Write header out
   fwrite(header, 128, 1, outfile);
 
@@ -650,6 +663,19 @@ int main(int argc, char** argv)
   fwrite(block_header, 8, 1, outfile);
   // Colour RAM
   fwrite(colour_ram, screen_ram_used, 1, outfile);
+
+  // Header for ASCII charset
+  block_header[0] = 0x00;
+  block_header[1] = 0xF0;
+  block_header[2] = 0x00;
+  block_header[3] = 0x00;
+  block_header[4] = 0x00;
+  block_header[5] = 0x08;
+  block_header[6] = 0x00;
+  block_header[7] = 0x00;
+  fwrite(block_header, 8, 1, outfile);
+  // Colour RAM
+  fwrite(ascii_font, 0x0800, 1, outfile);  
   
   // Header for tiles at $40000
   block_header[0] = 0x00;

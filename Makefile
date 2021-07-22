@@ -380,8 +380,13 @@ $(SRCDIR)/open-roms/assets/8x8font.png:
 	git submodule update
 	( cd $(SRCDIR)/open-roms ; git submodule init ; git submodule update )
 
-$(BINDIR)/asciifont.bin:	$(BINDIR)/pngprepare $(ASSETS)/ascii00-7f.png
-	$(BINDIR)/pngprepare charrom $(ASSETS)/ascii00-7f.png $(BINDIR)/asciifont.bin
+$(BINDIR)/asciifont.bin:	$(BINDIR)/pngprepare $(ASSETS)/ascii00-ff.png
+	$(BINDIR)/pngprepare charrom $(ASSETS)/ascii00-ff.png $(BINDIR)/asciifont.bin
+
+$(TOOLDIR)/ascii_font.c:	$(BINDIR)/asciifont.bin
+	echo "unsigned char ascii_font[4097]={" > $(TOOLDIR)/ascii_font.c
+	hexdump -v -e '/1 "0x%02X, "' -e '8/1 """\n"' $(BINDIR)/asciifont.bin >> $(TOOLDIR)/ascii_font.c
+	echo "0};" >>$(TOOLDIR)/ascii_font.c
 
 $(BINDIR)/charrom.bin:	$(BINDIR)/pngprepare $(ASSETS)/8x8font.png
 	$(BINDIR)/pngprepare charrom $(ASSETS)/8x8font.png $(BINDIR)/charrom.bin
@@ -408,8 +413,8 @@ $(BINDIR)/pnghcprepare:	$(TOOLDIR)/pngprepare/pnghcprepare.c Makefile
 	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/pnghcprepare $(TOOLDIR)/pngprepare/pnghcprepare.c -lpng
 
 # Utility to make hi-colour displays from PNGs, with upto 256 colours per char row
-$(BINDIR)/md2h65:	$(TOOLDIR)/pngprepare/md2h65.c Makefile
-	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/md2h65 $(TOOLDIR)/pngprepare/md2h65.c -lpng
+$(BINDIR)/md2h65:	$(TOOLDIR)/pngprepare/md2h65.c Makefile $(TOOLDIR)/ascii_font.c
+	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/md2h65 $(TOOLDIR)/pngprepare/md2h65.c $(TOOLDIR)/ascii_font.c -lpng
 
 
 $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
