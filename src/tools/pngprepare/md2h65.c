@@ -389,20 +389,101 @@ void read_png_file(char* file_name)
 
 #define MAX_COLOURRAM_SIZE 32768
 
+int i, x = 0, y = 0;
+int colour=14; // C64 light blue by default
+unsigned char text_colour = 14;
+unsigned char text_colour_saved = 14;
+unsigned char indent = 0;
+unsigned char attributes = 0;
+unsigned char screen_ram[MAX_COLOURRAM_SIZE];
+unsigned char colour_ram[MAX_COLOURRAM_SIZE];
+unsigned int screen_ram_used=0;
+unsigned int line_count=0;
+unsigned int in_paragraph=0;
+
+void emit_paragraph(void)
+{
+  // End a previous paragraph, if one was started.
+  if (in_paragraph) {
+    if (x) y+=2; else y++; x=0;
+    in_paragraph=0;
+    indent=0;
+  }
+}
+
+void emit_word(char *word) {
+  /* Check for special formatting options:
+     - Begins with * = enable bold/italic etc
+     - Begins with ! = show image
+     - Begins with digit followed by dot followed by space = ordered list
+     - Begins with "- " = unordered list item
+     - "---" = horizontal rule
+     - Begins with "[" = link
+     etc.
+
+     For now, the parser is horrible, and only detects a very few things.
+     Link labels and alt-text fields with spaces will not initially be supported.
+
+     In fact, initially, we will support only bold = **text goes here**
+  */
+
+  int start=0;
+  int end=strlen(word);
+  
+  if (word[0]=='*'&&word[1]=='*') {
+    text_colour_saved=text_colour;
+    text_colour=7; // bold = yellow
+    start=2;
+  }
+  if (word[end-2]=='*'&&word[end-1]=='*') {
+    text_colour=text_colour_saved; // end of bold
+    end-=2;
+  }
+
+  int len=end-start;
+  if ((80-x)<len) {
+    y++; x=indent;
+  }
+  for(int xx=start;xx<end;xx++) {
+    if (x>=80) {
+      x=0; y++;
+    }
+    if (y*160+x*2<MAX_COLOURRAM_SIZE) {
+      screen_ram[y*160+x*2+0]=word[xx];
+      colour_ram[y*160+x*2+0]=text_colour+attributes;
+      colour_ram[y*160+x*2+1]=0;
+    }
+    x++;
+  }
+
+}
+
+void emit_text(char *text)
+{
+  // Emit the text
+  char word[1024];
+  int word_len=0;
+  // Emit word at a time, so that we can find special token
+  for(int i=0;text[i];i++) {
+    if (text[i]==' '||text[i]=='\t'||text[i]=='\n'||text[i]=='\r') {
+      word[word_len]=0;
+      if (word_len) emit_word(word);
+      word_len=0;
+    } else word[word_len++]=text[i];
+   
+    if (text[i]==' '||text[i]=='\t') {
+      // Emit a space after the word if required.
+      x++;
+      if (x>=80) { y++; x=indent; }
+    }
+    
+  }
+}
+
 int main(int argc, char** argv)
 {
-  int i, x = 0, y = 0;
-
-  unsigned char text_colour = 1;
-  unsigned char indent = 0;
-  unsigned char attributes = 0;
 
   unsigned char block_header[8];
-
-  unsigned char screen_ram[MAX_COLOURRAM_SIZE];
-  unsigned char colour_ram[MAX_COLOURRAM_SIZE];
-  unsigned int screen_ram_used=0;
-  unsigned int line_count=0;
 
   // Initialise screen and colour RAM
   bzero(colour_ram, sizeof(colour_ram));
@@ -436,12 +517,26 @@ int main(int argc, char** argv)
   line[0] = 0;
   fgets(line, 1024, infile);
   while (line[0]) {
-
+    if (line[0]=='#') {
+      emit_paragraph();
+      // Heading
+      text_colour=1; // white text for headings
+      attributes=0x80; // underline for headings
+      emit_text(&line[2]);
+      text_colour=14;
+    } else if (line[0]=='\n'||line[0]=='\r') {
+      // Blank line = paragraph break
+      emit_paragraph();
+    } else {      
+      // Normal text
+      attributes=0; // cancel underline from a heading
+      emit_text(&line[0]);      
+    }
     line[0] = 0;
     fgets(line, 1024, infile);
   }
 
-  
+  screen_ram_used=y*160+x*2;
   
   printf("Writing headers...\n");
   unsigned char header[128];
