@@ -99,13 +99,23 @@ struct rgb {
   int b;
 };
 
+// We only have 128KB of tile RAM, so we can't have more than 128K different
+// coloured pixels
+#define MAX_COLOURS (128*1024)
+
+// If we have >256 colours, though, we do need to reduce the final palette down
+// to 256 colours.
+int second_pass_required=0;
+int pass_num=1;
+
 struct tile_set {
   struct tile* tiles;
   int tile_count;
   int max_tiles;
 
   // Palette
-  struct rgb colours[256];
+  struct rgb colours[MAX_COLOURS];
+  int colour_counts[MAX_COLOURS];
   int colour_count;
 
   struct tile_set* next;
@@ -132,6 +142,7 @@ void palette_c64_init(struct tile_set *ts)
   ts->colours[14] = (struct rgb) { .r = 0xaa, .g = 0x9d, .b = 0xef };
   ts->colours[15] = (struct rgb) { .r = 0xb8, .g = 0xb8, .b = 0xb8 };
   ts->colour_count = 16;
+  fprintf(stderr,"Setup C64 palette.\n");
 }
 
 int palette_lookup(struct tile_set* ts, int r, int g, int b)
@@ -142,21 +153,22 @@ int palette_lookup(struct tile_set* ts, int r, int g, int b)
   for (i = 0; i < ts->colour_count; i++) {
     if (r == ts->colours[i].r && g == ts->colours[i].g && b == ts->colours[i].b) {
       // It's a colour we have seen before, so return the index
+      ts->colour_counts[i]++;
       return i;
     }
   }
 
   // new colour, check if palette has space
-  if (ts->colour_count > 256) {
-    fprintf(stderr, "Too many colours (%d) in image: Must be <= %d\n", ts->colour_count,256);
-    exit(-1);
+  if (ts->colour_count == 256) {
+    fprintf(stderr, "WARNING: Image has many colours. A second pass will be required.\n");
+    second_pass_required=1;
   }
 
   // allocate the new colour
   ts->colours[ts->colour_count].r = r;
   ts->colours[ts->colour_count].g = g;
   ts->colours[ts->colour_count].b = b;
-  fprintf(stderr,"Allocated colour #%-3d = #%02x.%02x.%02x\n",ts->colour_count,r,g,b);
+  ts->colour_counts[ts->colour_count]=1;
   return ts->colour_count++;
 }
 
@@ -505,7 +517,6 @@ void emit_word(char *word) {
     // Currently we only support PNG images, and the alt text must
     // NOT have any spaces in at the moment.
     if (sscanf(word,"![%[^]]](%[^)])",alttext,imgname)==2) {
-      fprintf(stderr,"WARNING: I need to include image '%s' here.\n",imgname);
       read_png_file(imgname);
       struct screen* s = png_to_screen(0, ts);
 
@@ -611,21 +622,16 @@ void emit_text(char *text)
   }
 }
 
-int main(int argc, char** argv)
+int do_pass(char **argv)
 {
-
+  
   unsigned char block_header[8];
-
+  
   // Initialise screen and colour RAM
   bzero(colour_ram, sizeof(colour_ram));
   for (i = 0; i < MAX_COLOURRAM_SIZE; i += 2) {
     screen_ram[i] = ' ';
     screen_ram[i + 1] = 0;
-  }
-
-  if (argc < 3) {
-    fprintf(stderr, "Usage: md2h65 <input.md> <output.h65>\n");
-    exit(-1);
   }
 
   FILE* infile = fopen(argv[1], "r");
@@ -669,7 +675,6 @@ int main(int argc, char** argv)
     fgets(line, 1024, infile);
   }
 
-  fprintf(stderr,"screen_y=%d, screen_x=%d at end.\n",screen_y,screen_x);
   screen_ram_used=screen_y*160+screen_x*2;
   
   printf("Writing headers...\n");
@@ -814,3 +819,17 @@ int main(int argc, char** argv)
 }
 
 /* ============================================================= */
+
+int main(int argc, char** argv)
+{
+
+  if (argc != 3) {
+    fprintf(stderr, "Usage: md2h65 <input.md> <output.h65>\n");
+    exit(-1);
+  }
+
+  do_pass(argv);
+  pass_num=2;
+  if (second_pass_required) do_pass(argv);
+}
+
