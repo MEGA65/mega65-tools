@@ -415,7 +415,8 @@ void read_png_file(char* file_name)
 
 /* ============================================================= */
 
-#define MAX_COLOURRAM_SIZE 32768
+// Only 24KB colour RAM and screen RAM available
+#define MAX_COLOURRAM_SIZE (24*1024)
 
 int i, x = 0, y = 0;
 int colour=14; // C64 light blue by default
@@ -425,6 +426,7 @@ unsigned char indent = 0;
 unsigned char attributes = 0;
 unsigned char screen_ram[MAX_COLOURRAM_SIZE];
 unsigned char colour_ram[MAX_COLOURRAM_SIZE];
+const max_lines = (MAX_COLOURRAM_SIZE / (80*2));
 unsigned int screen_ram_used=0;
 unsigned int line_count=0;
 unsigned int in_paragraph=0;
@@ -433,7 +435,19 @@ void emit_paragraph(void)
 {
   // End a previous paragraph, if one was started.
   if (in_paragraph) {
-    if (screen_x) screen_y+=2; else screen_y++; screen_x=0;
+    if (screen_x) screen_y+=2; else screen_y++;
+    screen_x=0;
+    in_paragraph=0;
+    indent=0;
+  }
+}
+
+void emit_paragraph_no_gap(void)
+{
+  // End a previous paragraph, if one was started.
+  if (in_paragraph) {
+    if (screen_x) screen_y+=1;
+    screen_x=0;
     in_paragraph=0;
     indent=0;
   }
@@ -482,7 +496,27 @@ void emit_word(char *word) {
     if (sscanf(word,"![%[^]]](%[^)])",alttext,imgname)==2) {
       fprintf(stderr,"WARNING: I need to include image '%s' here.\n",imgname);
       read_png_file(imgname);
-      struct screen* s = png_to_screen(0, ts);      
+      struct screen* s = png_to_screen(0, ts);
+
+      if (s->width>80||(s->height+screen_y)>max_lines) {
+	fprintf(stderr,"WARNING: Not enough space left on page to fit image '%s'\n",
+		imgname);
+      } else {
+	// Make sure we are on a fresh line before displaying an image,
+	// but don't force a blank line, so images and text can be placed
+	// flush
+	emit_paragraph_no_gap();
+
+	// Draw the image on the screen and colour RAM
+	for (y = 0; y < s->height; y++) {
+	  bcopy(&s->screen_rows[y], &screen_ram[(screen_y+y)*80*2],s->width*2);
+	  bcopy(&s->colourram_rows[y], &colour_ram[(screen_y+y)*80*2],s->width*2);
+	}
+	// Now advance our draw point to after the image
+	screen_y+=s->height;
+      }
+
+      
     } else {
       fprintf(stderr,"WARNING: Could not parse image reference:\n  %s\n",word);
       fprintf(stderr,"         (Don't forget alt text must be present, and NOT have any spaces in it).\n");
@@ -729,8 +763,8 @@ int main(int argc, char** argv)
   // Header for tiles at $40000
   block_header[0] = 0x00;
   block_header[1] = 0x00;
-  block_header[2] = 0x00;
-  block_header[3] = 0x04;
+  block_header[2] = 0x04;
+  block_header[3] = 0x00;
   block_header[4] = (ts->tile_count * 64) & 0xff;
   block_header[5] = ((ts->tile_count * 64) >> 8) & 0xff;
   block_header[6] = ((ts->tile_count * 64) >> 16) & 0xff;
