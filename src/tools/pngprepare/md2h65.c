@@ -156,7 +156,13 @@ int palette_lookup(struct tile_set* ts, int r, int g, int b)
   ts->colours[ts->colour_count].r = r;
   ts->colours[ts->colour_count].g = g;
   ts->colours[ts->colour_count].b = b;
+  fprintf(stderr,"Allocated colour #%-3d = #%02x.%02x.%02x\n",ts->colour_count,r,g,b);
   return ts->colour_count++;
+}
+
+unsigned char nonyblswap(unsigned char in)
+{
+  return in;
 }
 
 unsigned char nyblswap(unsigned char in)
@@ -333,10 +339,16 @@ struct screen* png_to_screen(int id, struct tile_set* ts)
         // Block has non-transparent pixels, so add to tileset,
         // or lookup to see if it is already there.
         int tile_number = tile_lookup(ts, &t);
+
+	// Adjust tile number in screen data for address of tile in RAM
+	tile_number += (0x40000 / 0x40);
+	
         s->screen_rows[y / 8][x / 8 * 2 + 0] = tile_number & 0xff;
         s->screen_rows[y / 8][x / 8 * 2 + 1] = (tile_number >> 8) & 0xff;
         s->colourram_rows[y / 8][x / 8 * 2 + 0] = 0x00;
-        s->colourram_rows[y / 8][x / 8 * 2 + 1] = 0xff; // FG colour
+	// FG colour
+	// XXX Must be <$10, as we have VIC-III attributes enabled
+        s->colourram_rows[y / 8][x / 8 * 2 + 1] = 0x00; 
       }
     }
   return s;
@@ -428,7 +440,6 @@ unsigned char screen_ram[MAX_COLOURRAM_SIZE];
 unsigned char colour_ram[MAX_COLOURRAM_SIZE];
 const max_lines = (MAX_COLOURRAM_SIZE / (80*2));
 unsigned int screen_ram_used=0;
-unsigned int line_count=0;
 unsigned int in_paragraph=0;
 
 void emit_paragraph(void)
@@ -509,8 +520,8 @@ void emit_word(char *word) {
 
 	// Draw the image on the screen and colour RAM
 	for (y = 0; y < s->height; y++) {
-	  bcopy(&s->screen_rows[y], &screen_ram[(screen_y+y)*80*2],s->width*2);
-	  bcopy(&s->colourram_rows[y], &colour_ram[(screen_y+y)*80*2],s->width*2);
+	  bcopy(&s->screen_rows[y][0], &screen_ram[(screen_y+y)*80*2],s->width*2);
+	  bcopy(&s->colourram_rows[y][0], &colour_ram[(screen_y+y)*80*2],s->width*2);
 	}
 	// Now advance our draw point to after the image
 	screen_y+=s->height;
@@ -658,6 +669,7 @@ int main(int argc, char** argv)
     fgets(line, 1024, infile);
   }
 
+  fprintf(stderr,"screen_y=%d, screen_x=%d at end.\n",screen_y,screen_x);
   screen_ram_used=screen_y*160+screen_x*2;
   
   printf("Writing headers...\n");
@@ -680,8 +692,8 @@ int main(int argc, char** argv)
   // V400/H640 flags
   header[9] = 0xE8; // V400, H640, VIC-III attributes
   // Number of screen lines
-  header[10] = y & 0xff;
-  header[11] = y >> 8;
+  header[10] = screen_y & 0xff;
+  header[11] = screen_y >> 8;
 
   // Screen colours
   header[12] = 0x06;
