@@ -210,7 +210,12 @@ int palette_lookup(struct tile_set* ts, int r, int g, int b)
   for (i = 0; i < ts->colour_count; i++) {
     if (r == ts->colours[i].r && g == ts->colours[i].g && b == ts->colours[i].b) {
       // It's a colour we have seen before, so return the index
-      ts->colour_counts[i]++;
+      if (pass_num==1) ts->colour_counts[i]++;
+      if (pass_num==2) {
+	// Resolve remapped/merged colours
+	while(ts->target_colours[i]!=i)
+	  i=ts->target_colours[i];
+      }
       return i;
     }
   }
