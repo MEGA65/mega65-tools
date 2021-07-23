@@ -369,37 +369,44 @@ struct screen* png_to_screen(int id, struct tile_set* ts)
 {
   int x, y;
 
-  if (height % 8 || width % 8) {
-    fprintf(stderr, "ERROR: PNG image dimensions must be a multiple of 8.\n");
-    exit(-3);
-  }
-
-  struct screen* s = new_screen(id, ts, width / 8, height / 8);
+  struct screen* s = new_screen(id, ts, 1+ ( width / 8),1 +( height / 8));
 
   for (y = 0; y < height; y += 8)
     for (x = 0; x < width; x += 8) {
       int transparent_tile = 1;
       struct tile t;
       for (int yy = 0; yy < 8; yy++) {
-        png_byte* row = row_pointers[yy + y];
-        for (int xx = 0; xx < 8; xx++) {
-          png_byte* ptr = &(row[(xx + x) * multiplier]);
-          int r, g, b, a, c;
-          r = ptr[0];
-          g = ptr[1];
-          b = ptr[2];
-          if (multiplier == 4)
-            a = ptr[3];
-          else
-            a = 0xff;
-          if (a) {
-            transparent_tile = 0;
-            c = palette_lookup(ts, r, g, b);
-          }
-          else
-            c = 0;
-          t.bytes[xx][yy] = c;
-        }
+	if ((yy+y)<height) {
+	  png_byte* row = row_pointers[yy + y];
+	  for (int xx = 0; xx < 8; xx++) {
+	    int r, g, b, a, c;
+	    if ((xx+x)<width) {
+	      png_byte* ptr = &(row[(xx + x) * multiplier]);
+	      r = ptr[0];
+	      g = ptr[1];
+	      b = ptr[2];
+	      if (multiplier == 4)
+		a = ptr[3];
+	      else
+		a = 0xff;
+	      if (a) {
+		transparent_tile = 0;
+		c = palette_lookup(ts, r, g, b);
+	      }
+	      else
+		c = 0;
+	    } else {
+	      // Off edge of image
+	      c=0;
+	    }
+	    t.bytes[xx][yy] = c;
+	  }
+	} else {
+	  // Off edge of image
+	  for (int xx = 0; xx < 8; xx++) {
+	    t.bytes[xx][yy] = 0;
+	  }
+	}
       }
       if (transparent_tile) {
         // Set screen and colour bytes to all $00 to indicate
