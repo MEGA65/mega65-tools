@@ -555,6 +555,13 @@ void register_box(int url_id,int x1,int y1,int x2,int y2)
     fprintf(stderr,"ERROR: Too many link sources. Increase MAX_LINKS?\n");
     exit(-1);
   }
+
+  url_boxes[link_count].url_id=url_id;
+  url_boxes[link_count].x1=x1;
+  url_boxes[link_count].y1=y1;
+  url_boxes[link_count].x2=x2;
+  url_boxes[link_count++].y2=y2;
+  
 }
 
 int register_url(char *url)
@@ -577,6 +584,7 @@ int attribute_count=0;
 
 void parse_attributes(char *in)
 {
+  fprintf(stderr,"Parsing attribute string '%s'\n",in);
   attribute_count=0;
   char key[1024];
   char value[1024];
@@ -616,6 +624,7 @@ void parse_attributes(char *in)
 	}
 	strcpy(attribute_keys[attribute_count],key);
 	strcpy(attribute_values[attribute_count++],value);
+	fprintf(stderr,"Attrib tag: '%s'='%s'\n",key,value);
 	klen=0; vlen=0;
 	state=0;
 	break;
@@ -624,6 +633,11 @@ void parse_attributes(char *in)
 	value[vlen]=0;
     }
     }
+  }
+  if (state==1) {
+    strcpy(attribute_keys[attribute_count],key);
+    strcpy(attribute_values[attribute_count++],value);
+    fprintf(stderr,"Attrib tag: '%s'='%s'\n",key,value);
   }
 
 }
@@ -1003,8 +1017,10 @@ int do_pass(char **argv)
      XXX - We use all 32KB regardless of how much we need, which
      increases file size unnecessarily.
   */
+  fprintf(stderr,"File contains %d link bounding boxes, pointing to %d URLs.\n",link_count,url_count);
   if (link_count) {
     unsigned char url_data[30*1024];
+    bzero(url_data,30*1024);
     int url_data_ofs=30*1024;
     for(int i=0;i<url_count;i++) {
       url_data_ofs-=1+strlen(urls[i]);
