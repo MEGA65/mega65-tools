@@ -161,8 +161,14 @@ void quantise_colours(struct tile_set *ts)
 	}
       }
     }
+    
+    // Find the nearest colour to this one
     int nearest_colour=find_nearest_colour(ts,colour_num);
-    ts->target_colours[colour_num]=nearest_colour; // XXX Should be nearest colour
+    ts->target_colours[colour_num]=nearest_colour;
+
+    // Increase the weighting of the colour we have switched to
+    ts->colour_counts[nearest_colour]+=ts->colour_counts[colour_num];
+
     printf("Removing rarely used colour #%d (used %d times): Mapping #%02x%02x%02x -> #%02x%02x%02x\n",
 	   colour_num,freq,
 	   ts->colours[colour_num].r,
@@ -522,7 +528,113 @@ unsigned char colour_ram[MAX_COLOURRAM_SIZE];
 const int max_lines = (MAX_COLOURRAM_SIZE / (80*2));
 unsigned int screen_ram_used=0;
 unsigned int in_paragraph=0;
+#define MAX_URLS 255
+#define MAX_URL_LEN 255
+char urls[MAX_URLS][MAX_URL_LEN];
+int url_count=0;
+int bounding_box_count=0;
+struct bounding_box {
+  int url_id;
+  int x1,x2,y1,y2;
+};
+#define MAX_LINKS 4096
+struct bounding_box url_boxes[MAX_LINKS];
+int link_count=0;
 
+void register_box(int url_id,int x1,int y1,int x2,int y2)
+{
+  for(int i=0;i<link_count;i++) {
+    if (url_boxes[i].url_id==url_id
+	&&url_boxes[i].x1==x1
+	&&url_boxes[i].y1==y1
+	&&url_boxes[i].x2==x2
+	&&url_boxes[i].y2==y2) return;
+  }
+  if (link_count>=MAX_LINKS) {
+    fprintf(stderr,"ERROR: Too many link sources. Increase MAX_LINKS?\n");
+    exit(-1);
+  }
+}
+
+int register_url(char *url)
+{
+  for(int i=0;i<url_count;i++) {
+    if (!strcmp(url,urls[i])) return i;
+  }
+  if (url_count>=MAX_URLS) {
+    fprintf(stderr,"ERROR: Too many URLs. Increase MAX_URLS?\n");
+    exit(-1);
+  }
+  strcpy(urls[url_count++],url);
+  return url_count-1;
+}
+
+#define MAX_ATTRIBUTES 16
+char attribute_keys[MAX_ATTRIBUTES][1024];
+char attribute_values[MAX_ATTRIBUTES][1024];
+int attribute_count=0;
+
+void parse_attributes(char *in)
+{
+  attribute_count=0;
+  char key[1024];
+  char value[1024];
+  int klen=0;
+  int vlen=0;
+  int state=0;
+  for(int i=0;in[i];i++) {
+    switch(state) {
+    case 0:
+      switch(in[i]) {
+      case ',': // next attribute (end of keyword)
+	if (klen) {
+	  if (attribute_count>=MAX_ATTRIBUTES) {
+	    fprintf(stderr,"ERROR: Too many attributes in attribute string '%s'\n",in);
+	    exit(-1);
+	  }
+	  strcpy(attribute_keys[attribute_count],key);
+	  attribute_values[attribute_count++][0]=0;
+	  klen=0;
+	}
+	break;
+      case '=': // value follows
+	state=1;
+	break;
+      default:
+	if (klen<1023) key[klen++]=in[i];
+	key[klen]=0;
+      }
+      break;
+    case 1: // value of key=val pair
+      switch(in[i]) {
+      case ',':
+	// End of attribute
+	if (attribute_count>=MAX_ATTRIBUTES) {
+	  fprintf(stderr,"ERROR: Too many attributes in attribute string '%s'\n",in);
+	  exit(-1);
+	}
+	strcpy(attribute_keys[attribute_count],key);
+	strcpy(attribute_values[attribute_count++],value);
+	klen=0; vlen=0;
+	state=0;
+	break;
+      default:
+	if (vlen<1023) value[vlen++]=in[i];
+	value[vlen]=0;
+    }
+    }
+  }
+
+}
+
+char *get_attribute(char *key)
+{
+  for(int i=0;i<attribute_count;i++) {
+    if (!strcmp(key,attribute_keys[i])) return attribute_values[i];
+  }
+  return NULL;
+}
+  
 void emit_paragraph(void)
 {
   // End a previous paragraph, if one was started.
@@ -589,6 +701,13 @@ void emit_word(char *word) {
       read_png_file(imgname);
       struct screen* s = png_to_screen(0, ts);
 
+      // Check if the image has a link
+      parse_attributes(alttext);
+      if (get_attribute("href")) {
+	int url_id=register_url(get_attribute("href"));
+	register_box(url_id,screen_x,screen_y,screen_x+s->width-1,screen_y+s->height-1);
+      }
+      
       if (s->width>80||(s->height+screen_y)>max_lines) {
 	fprintf(stderr,"WARNING: Not enough space left on page to fit image '%s'\n",
 		imgname);
