@@ -531,6 +531,7 @@ unsigned int in_paragraph=0;
 #define MAX_URLS 255
 #define MAX_URL_LEN 255
 char urls[MAX_URLS][MAX_URL_LEN];
+int url_addrs[MAX_URLS];
 int url_count=0;
 int bounding_box_count=0;
 struct bounding_box {
@@ -986,6 +987,65 @@ int do_pass(char **argv)
   }
   printf("\n");
 
+  /* Build and write URL list
+     Build and write hyperlink bounding box list.
+
+     These both live in a shared 30KB segment in BANK 1 from
+     $18000 to $1F7FF.
+
+     The URLs can actually go anywhere in BANK 1, but the 
+     list of bounding boxes has to start at $18000 and grows 
+     upwards.  $18000 and $18001 is the number of bounding
+     boxes.  Then each box consists of 6 bytes:
+           (url_addr (16 bits), x1, y1, x2, y2)
+     Where the positions are counted in characters, not pixels.
+
+     XXX - We use all 32KB regardless of how much we need, which
+     increases file size unnecessarily.
+  */
+  if (link_count) {
+    unsigned char url_data[30*1024];
+    int url_data_ofs=30*1024;
+    for(int i=0;i<url_count;i++) {
+      url_data_ofs-=1+strlen(urls[i]);
+      if (url_data_ofs<2) {
+	fprintf(stderr,"ERROR: URLs are too big. Split page or use relativel links perhaps?\n");
+	exit(-1);
+      }
+      url_addrs[i]=url_data_ofs;
+      bcopy(urls[i],&url_data[url_data_ofs],1+strlen(urls[i]));
+    }
+    // Number of links
+    url_data[0]=link_count>>0;
+    url_data[1]=link_count>>8;
+    // The 6 byte records per link
+    int url_box_ofs=2;
+    for(int i=0;i<link_count;i++) {
+      if ((url_box_ofs+5)>=url_data_ofs) {
+	fprintf(stderr,"ERROR: URL area overflowed: Reduce number and/or length of URLs, and/or length and number of links.\n");
+	exit(-1);
+      }
+      url_data[url_box_ofs+0]=url_addrs[i]>>0;
+      url_data[url_box_ofs+1]=url_addrs[i]>>8;
+      url_data[url_box_ofs+2]=url_boxes[i].x1;
+      url_data[url_box_ofs+3]=url_boxes[i].y1;
+      url_data[url_box_ofs+4]=url_boxes[i].x2;
+      url_data[url_box_ofs+5]=url_boxes[i].y2;
+      url_box_ofs+=6;
+    }
+    // Header for URL data at $18000
+    block_header[0] = 0x00;
+    block_header[1] = 0x80;
+    block_header[2] = 0x01;
+    block_header[3] = 0x00;
+    block_header[4] = 0x00;
+    block_header[5] = 0x78;
+    block_header[6] = 0x00;
+    block_header[7] = 0x00;
+    fwrite(block_header, 8, 1, outfile);
+    fwrite(url_data,30*1024,1,outfile);
+  }
+  
   // Write end of file marker
   bzero(block_header, 8);
   fwrite(block_header, 8, 1, outfile);
