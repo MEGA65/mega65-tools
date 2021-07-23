@@ -116,10 +116,67 @@ struct tile_set {
   // Palette
   struct rgb colours[MAX_COLOURS];
   int colour_counts[MAX_COLOURS];
+  int target_colours[MAX_COLOURS];
   int colour_count;
 
   struct tile_set* next;
 };
+
+int find_nearest_colour(struct tile_set *ts,int c)
+{
+  int nearest_id=0;
+  int error=999999999;
+  
+  for(int i=0;i<ts->colour_count;i++) 
+    // Has colour been remapped already, or is it the same colour we are looking to approximate?
+    if ((i!=c)&&ts->target_colours[i]==i) {
+      int this_error=0
+	+abs(ts->colours[i].r-ts->colours[c].r)*abs(ts->colours[i].r-ts->colours[c].r)
+	+abs(ts->colours[i].g-ts->colours[c].g)*abs(ts->colours[i].g-ts->colours[c].g)
+	+abs(ts->colours[i].b-ts->colours[c].b)*abs(ts->colours[i].b-ts->colours[c].b);
+      if (this_error<error) { nearest_id=i; error=this_error; }
+    }
+
+  return nearest_id;
+}
+
+void quantise_colours(struct tile_set *ts)
+{
+  // Start with all colours mapped to themselves.
+  for(int i=0;i<ts->colour_count;i++)
+    ts->target_colours[i]=i;
+
+  int colour_count=ts->colour_count;
+  while(colour_count>255) {
+    int freq=999999999;
+    int colour_num=99999999;
+    // Don't remap the C64 normal 16 colours
+    for(int i=16;i<ts->colour_count;i++) {
+      // Has colour been remapped already?
+      if (ts->target_colours[i]==i) {
+	// No, so check its frequency to see if it is the next rarest colour
+	if (ts->colour_counts[i]<freq) {
+	  freq=ts->colour_counts[i];
+	  colour_num=i;
+	}
+      }
+    }
+    int nearest_colour=find_nearest_colour(ts,colour_num);
+    ts->target_colours[colour_num]=nearest_colour; // XXX Should be nearest colour
+    printf("Removing rarely used colour #%d (used %d times): Mapping #%02x%02x%02x -> #%02x%02x%02x\n",
+	   colour_num,freq,
+	   ts->colours[colour_num].r,
+	   ts->colours[colour_num].g,
+	   ts->colours[colour_num].b,
+	   ts->colours[nearest_colour].r,
+	   ts->colours[nearest_colour].g,
+	   ts->colours[nearest_colour].b
+	   );
+    
+    
+    colour_count--;
+  }
+}
 
 void palette_c64_init(struct tile_set *ts)
 {
@@ -450,7 +507,7 @@ unsigned char indent = 0;
 unsigned char attributes = 0;
 unsigned char screen_ram[MAX_COLOURRAM_SIZE];
 unsigned char colour_ram[MAX_COLOURRAM_SIZE];
-const max_lines = (MAX_COLOURRAM_SIZE / (80*2));
+const int max_lines = (MAX_COLOURRAM_SIZE / (80*2));
 unsigned int screen_ram_used=0;
 unsigned int in_paragraph=0;
 
@@ -623,9 +680,10 @@ void emit_text(char *text)
 }
 
 int do_pass(char **argv)
-{
-  
+{  
   unsigned char block_header[8];
+
+  screen_x=0; screen_y=0;
   
   // Initialise screen and colour RAM
   bzero(colour_ram, sizeof(colour_ram));
@@ -645,10 +703,6 @@ int do_pass(char **argv)
     perror("Could not open output file");
     exit(-3);
   }
-
-  // Allow upto 128KB of tiles
-  ts = new_tileset(128 * 1024 / 64);
-  palette_c64_init(ts);
 
   // Read the .md file
   char line[1024];
@@ -828,8 +882,17 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
+  // Allow upto 128KB of tiles
+  ts = new_tileset(128 * 1024 / 64);
+  palette_c64_init(ts);
+  
   do_pass(argv);
   pass_num=2;
-  if (second_pass_required) do_pass(argv);
+  if (second_pass_required) {
+    fprintf(stderr,"Quantising colours for 2nd pass.\n");
+    quantise_colours(ts);
+    fprintf(stderr,"Running 2nd pass.\n");
+    do_pass(argv);
+  }
 }
 
