@@ -56,11 +56,14 @@
 
 extern unsigned char ascii_font[4097];
 
+struct tile_set* ts = NULL;
+
 /* ============================================================= */
 
 /* ============================================================= */
 
 int x, y;
+int screen_x=0, screen_y=0;
 
 int width, height;
 png_byte color_type;
@@ -144,8 +147,8 @@ int palette_lookup(struct tile_set* ts, int r, int g, int b)
   }
 
   // new colour, check if palette has space
-  if (ts->colour_count > 255) {
-    fprintf(stderr, "Too many colours in image: Must be <= %d\n", 256);
+  if (ts->colour_count > 256) {
+    fprintf(stderr, "Too many colours (%d) in image: Must be <= %d\n", ts->colour_count,256);
     exit(-1);
   }
 
@@ -430,7 +433,7 @@ void emit_paragraph(void)
 {
   // End a previous paragraph, if one was started.
   if (in_paragraph) {
-    if (x) y+=2; else y++; x=0;
+    if (screen_x) screen_y+=2; else screen_y++; screen_x=0;
     in_paragraph=0;
     indent=0;
   }
@@ -467,28 +470,47 @@ void emit_word(char *word) {
   in_paragraph=1;
   
   if (word[0]=='*'&&word[1]=='*') {
+    // Bold
     text_colour_saved=text_colour;
     text_colour=7; // bold = yellow
     start=2;
-  }
+  } else if (word[0]=='!'&&word[1]=='[') {
+    char alttext[2048]="",imgname[2048]="";
+    // ![alt-text](imagefile.png)
+    // Currently we only support PNG images, and the alt text must
+    // NOT have any spaces in at the moment.
+    if (sscanf(word,"![%[^]]](%[^)])",alttext,imgname)==2) {
+      fprintf(stderr,"WARNING: I need to include image '%s' here.\n",imgname);
+      read_png_file(imgname);
+      struct screen* s = png_to_screen(0, ts);      
+    } else {
+      fprintf(stderr,"WARNING: Could not parse image reference:\n  %s\n",word);
+      fprintf(stderr,"         (Don't forget alt text must be present, and NOT have any spaces in it).\n");
+      fprintf(stderr,"         imgname='%s', alttext='%s'\n",imgname,alttext);
+    }
+    // Don't output the image markdown
+    word[0]=0;
+    end=0;
+    start=0;
+  } 
   if (word[end-2]=='*'&&word[end-1]=='*') {
     end-=2;
   }
 
   int len=end-start;
-  if ((80-x)<len) {
-    y++; x=indent;
+  if ((80-screen_x)<len) {
+    screen_y++; screen_x=indent;
   }
   for(int xx=start;xx<end;xx++) {
-    if (x>=80) {
-      x=0; y++;
+    if (screen_x>=80) {
+      screen_x=0; screen_y++;
     }
-    if (y*160+x*2<MAX_COLOURRAM_SIZE) {
-      screen_ram[y*160+x*2+0]=ascii_to_screen_code(word[xx]);
-      colour_ram[y*160+x*2+0]=0;
-      colour_ram[y*160+x*2+1]=text_colour+attributes;
+    if (screen_y*160+screen_x*2<MAX_COLOURRAM_SIZE) {
+      screen_ram[screen_y*160+screen_x*2+0]=ascii_to_screen_code(word[xx]);
+      colour_ram[screen_y*160+screen_x*2+0]=0;
+      colour_ram[screen_y*160+screen_x*2+1]=text_colour+attributes;
     }
-    x++;
+    screen_x++;
   }
 
   end=strlen(word);
@@ -505,12 +527,12 @@ void emit_text(char *text)
   char word[1024];
   int word_len=0;
 
-  if (x>indent) {
+  if (screen_x>indent) {
     // Emit a space before the text, if we are not the first
     // thing on the line.
-    colour_ram[y*160+x*2+1]=text_colour+attributes;      
-    x++;
-    if (x>=80) { y++; x=indent; }
+    colour_ram[screen_y*160+screen_x*2+1]=text_colour+attributes;      
+    screen_x++;
+    if (screen_x>=80) { screen_y++; screen_x=indent; }
   }
   
   // Emit word at a time, so that we can find special token
@@ -527,9 +549,9 @@ void emit_text(char *text)
     if (last_was_word) {
       if (text[i]==' '||text[i]=='\t') {
 	// Emit a space after the word if required.
-	colour_ram[y*160+x*2+1]=text_colour+attributes;      
-	x++;
-	if (x>=80) { y++; x=indent; }
+	colour_ram[screen_y*160+screen_x*2+1]=text_colour+attributes;      
+	screen_x++;
+	if (screen_x>=80) { screen_y++; screen_x=indent; }
       }
       last_was_word=0;
     }
@@ -574,7 +596,7 @@ int main(int argc, char** argv)
   }
 
   // Allow upto 128KB of tiles
-  struct tile_set* ts = new_tileset(128 * 1024 / 64);
+  ts = new_tileset(128 * 1024 / 64);
   palette_c64_init(ts);
 
   // Read the .md file
@@ -602,7 +624,7 @@ int main(int argc, char** argv)
     fgets(line, 1024, infile);
   }
 
-  screen_ram_used=y*160+x*2;
+  screen_ram_used=screen_y*160+screen_x*2;
   
   printf("Writing headers...\n");
   unsigned char header[128];
