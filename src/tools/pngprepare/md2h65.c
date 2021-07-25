@@ -697,7 +697,7 @@ void emit_word(char *word) {
      In fact, initially, we will support only bold = **text goes here**
   */
 
-  int start=0;
+  int start=0,x1,y1;
   int end=strlen(word);
 
   in_paragraph=1;
@@ -707,6 +707,25 @@ void emit_word(char *word) {
     text_colour_saved=text_colour;
     text_colour=7; // bold = yellow
     start=2;
+  } else if (word[0]=='[') {
+    char text[2048]="",theurl[2048]="";
+    // [text](url) -- A link
+    // NOT have any spaces in at the moment.
+    if (sscanf(word,"[%[^]]](%[^)])",text,theurl)==2) {
+      // Emit word and get the dimensions for it
+      attributes=0x80; // underline links
+      text_colour_saved=text_colour;
+      text_colour=0x04; // purple text
+      x1=screen_x; y1=screen_y;
+      emit_word(text);
+      if (screen_y>y1) { x1=0; y1=screen_y; }
+      text_colour=text_colour_saved;
+      attributes=0;
+      word[0]=0; end=0;
+      
+      int url_id=register_url(theurl);
+      register_box(url_id,x1,y1,screen_x,screen_y);
+    }
   } else if (word[0]=='!'&&word[1]=='[') {
     char alttext[2048]="",imgname[2048]="";
     // ![alt-text](imagefile.png)
@@ -976,31 +995,33 @@ int do_pass(char **argv)
   fwrite(block_header, 8, 1, outfile);
   // Colour RAM
   fwrite(ascii_font, 0x0800, 1, outfile);  
-  
-  // Header for tiles at $40000
-  block_header[0] = 0x00;
-  block_header[1] = 0x00;
-  block_header[2] = 0x04;
-  block_header[3] = 0x00;
-  block_header[4] = (ts->tile_count * 64) & 0xff;
-  block_header[5] = ((ts->tile_count * 64) >> 8) & 0xff;
-  block_header[6] = ((ts->tile_count * 64) >> 16) & 0xff;
-  block_header[7] = ((ts->tile_count * 64) >> 24) & 0xff;
-  fwrite(block_header, 8, 1, outfile);
 
-  printf("Writing tiles");
-  fflush(stdout);
-  for (i = 0; i < ts->tile_count; i++) {
-    unsigned char tile[64];
-    for (y = 0; y < 8; y++)
-      for (x = 0; x < 8; x++)
-        tile[y * 8 + x] = ts->tiles[i].bytes[x][y];
-    fwrite(tile, 64, 1, outfile);
-    printf(".");
+  if (ts->tile_count) {
+    // Header for tiles at $40000
+    block_header[0] = 0x00;
+    block_header[1] = 0x00;
+    block_header[2] = 0x04;
+    block_header[3] = 0x00;
+    block_header[4] = (ts->tile_count * 64) & 0xff;
+    block_header[5] = ((ts->tile_count * 64) >> 8) & 0xff;
+    block_header[6] = ((ts->tile_count * 64) >> 16) & 0xff;
+    block_header[7] = ((ts->tile_count * 64) >> 24) & 0xff;
+    fwrite(block_header, 8, 1, outfile);
+    
+    printf("Writing tiles");
     fflush(stdout);
+    for (i = 0; i < ts->tile_count; i++) {
+      unsigned char tile[64];
+      for (y = 0; y < 8; y++)
+	for (x = 0; x < 8; x++)
+	  tile[y * 8 + x] = ts->tiles[i].bytes[x][y];
+      fwrite(tile, 64, 1, outfile);
+      printf(".");
+      fflush(stdout);
+    }
+    printf("\n");
   }
-  printf("\n");
-
+  
   /* Build and write URL list
      Build and write hyperlink bounding box list.
 
@@ -1030,6 +1051,7 @@ int do_pass(char **argv)
       }
       url_addrs[i]=url_data_ofs;
       bcopy(urls[i],&url_data[url_data_ofs],1+strlen(urls[i]));
+      printf("'%s' @ $%04x\n",urls[i],url_data_ofs);
     }
     // Number of links
     url_data[0]=link_count>>0;
