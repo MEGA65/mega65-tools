@@ -52,6 +52,9 @@ int  traceframe = 0;  // tracks which frame within the backtrace
 int dis_offs = 0;
 int dis_scope = 10;
 
+int softbrkaddr = 0;
+char softbrkmem[3] = { 0 };
+ 
 type_command_details command_details[] =
 {
   { "?", cmdRawHelp, NULL, "Shows help information for raw/native monitor commands" },
@@ -72,6 +75,7 @@ type_command_details command_details[] =
   { "ps", cmdPrintString, "<addr>", "Prints the null-terminated string-value found at the given address" },
   { "cls", cmdClearScreen, NULL, "Clears the screen" }, { "autocls", cmdAutoClearScreen, "0/1", "If set to 1, clears the screen prior to every step/next command" },
   { "break", cmdSetBreakpoint, "<addr>", "Sets the hardware breakpoint to the desired address" },
+  { "sbreak", cmdSetSoftwareBreakpoint, "<addr>", "Sets the software breakpoint to the desired address" },
   { "wb", cmdWatchByte, "<addr>", "Watches the byte-value of the given address" },
   { "ww", cmdWatchWord, "<addr>", "Watches the word-value of the given address" },
   { "wd", cmdWatchDWord, "<addr>", "Watches the dword-value of the given address" },
@@ -122,6 +126,9 @@ type_offsets segmentOffsets = {{ 0 }};
 type_offsets* lstModuleOffsets = NULL;
 
 type_watch_entry* lstWatches = NULL;
+
+void clearSoftBreak(void);
+int isCpuStopped(void);
 
 void add_to_offsets_list(type_offsets mo)
 {
@@ -1908,7 +1915,11 @@ void cmdContinue(void)
     {
       same_cnt++;
       if (same_cnt == 5)
+      {
+        if (reg.pc == softbrkaddr || reg.pc == softbrkaddr + 3)
+          clearSoftBreak();
         break;
+      }
     }
     else
     {
@@ -2309,6 +2320,69 @@ void cmdSetBreakpoint(void)
     sprintf(str, "b%04X\n", addr);
     serialWrite(str);
     serialRead(inbuf, BUFSIZE);
+  }
+}
+
+void clearSoftBreak(void)
+{
+  char str[100];
+
+  // stop the cpu
+  serialWrite("t1\n");
+  usleep(10000);
+  serialRead(inbuf, BUFSIZE);
+
+  // inject JMP command to loop over itself
+  sprintf(str, "s%04X %02X %02X %02X\n", softbrkaddr, softbrkmem[0], softbrkmem[1], softbrkmem[2]);
+  serialWrite(str);
+  serialRead(inbuf, BUFSIZE);
+}
+
+void cmdSetSoftwareBreakpoint(void)
+{
+  char* token = strtok(NULL, " ");
+  char str[100];
+  
+  if (token != NULL)
+  {
+    int addr = get_sym_value(token);
+
+    if (addr == -1)
+      return;
+
+    printf("- Setting software breakpoint to $%04X\n", addr);
+
+    softbrkaddr = addr;
+
+    int cpu_stopped = isCpuStopped();
+
+    if (!cpu_stopped)
+    {
+      serialWrite("t1\n");
+      usleep(10000);
+      serialRead(inbuf, BUFSIZE);
+    }
+
+    mem_data mem = get_mem(addr, false);
+    softbrkmem[0] = mem.b[0];
+    softbrkmem[1] = mem.b[1];
+    softbrkmem[2] = mem.b[2];
+
+    // inject JMP command to loop over itself
+    sprintf(str, "s%04X %02X %02X %02X\n", addr, 0x4C, addr & 0xff, addr >> 8);
+    serialWrite(str);
+    serialRead(inbuf, BUFSIZE);
+
+    if (!cpu_stopped)
+    {
+      serialWrite("t0\n");
+      usleep(100000);
+      serialRead(inbuf, BUFSIZE);
+    }
+
+    // sprintf(str, "b%04X\n", addr);
+    // serialWrite(str);
+    // serialRead(inbuf, BUFSIZE);
   }
 }
 

@@ -22,6 +22,7 @@ void cmdPrintString(void);
 void cmdClearScreen(void);
 void cmdAutoClearScreen(void);
 void cmdSetBreakpoint(void);
+void cmdSetSoftwareBreakpoint(void);
 void cmdWatchByte(void);
 void cmdWatchByte(void);
 void cmdWatchWord(void);
