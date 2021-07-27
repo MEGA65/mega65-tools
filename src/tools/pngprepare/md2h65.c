@@ -1063,8 +1063,8 @@ int do_pass(char **argv)
 	fprintf(stderr,"ERROR: URL area overflowed: Reduce number and/or length of URLs, and/or length and number of links.\n");
 	exit(-1);
       }
-      url_data[url_box_ofs+0]=url_addrs[i]>>0;
-      url_data[url_box_ofs+1]=url_addrs[i]>>8;
+      url_data[url_box_ofs+0]=url_addrs[url_boxes[i].url_id]>>0;
+      url_data[url_box_ofs+1]=url_addrs[url_boxes[i].url_id]>>8;
       url_data[url_box_ofs+2]=url_boxes[i].x1;
       url_data[url_box_ofs+3]=url_boxes[i].y1;
       url_data[url_box_ofs+4]=url_boxes[i].x2;
