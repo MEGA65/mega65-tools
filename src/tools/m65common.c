@@ -868,7 +868,7 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       if (no_rxbuff)
         do_usleep(1000 * SLOW_FACTOR);
       if (xemu_flag)
-        do_usleep(5000 * SLOW_FACTOR);
+        do_usleep(50000 * SLOW_FACTOR);
       int n = b;
       unsigned char* p = &buffer[offset];
       while (n > 0) {
@@ -876,9 +876,12 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
         if (w > 0) {
           p += w;
           n -= w;
+          if (xemu_flag)
+            do_usleep(50000 * SLOW_FACTOR);
         }
-        else
+        else {
           do_usleep(1000 * SLOW_FACTOR);
+        }
       }
     }
     wait_for_prompt();
@@ -1520,6 +1523,7 @@ int hostname_to_ip(char* hostname, char* ip)
 #ifdef WINDOWS
 int open_tcp_port(char* portname)
 {
+  xemu_flag = 1;
   char hostname[128] = "localhost";
   char port[128] = "4510"; // assume a default port of 4510
   if (portname[3] == '#')  // did user provide a hostname and port number?

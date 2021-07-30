@@ -1440,6 +1440,7 @@ void enterTestMode()
 
 unsigned char checkUSBPermissions()
 {
+#ifndef WINDOWS
   libusb_device_handle* usbhandle = NULL;
   struct libusb_context* usb_context;
   libusb_device** device_list;
@@ -1459,6 +1460,7 @@ unsigned char checkUSBPermissions()
       return 0;
     }
   }
+#endif
 
   return 1;
 }

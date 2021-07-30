@@ -394,6 +394,8 @@ int execute_command(char* cmd)
     printf("Reseting MEGA65 and exiting.\n");
 
     request_quit();
+    if (xemu_flag)
+      usleep(30000);
     exit(0);
   }
 
@@ -813,10 +815,9 @@ int load_helper(void)
 
       printf("Helper in memory\n");
 
-      // Launch helper programme
-      snprintf(cmd, 1024, "g080d\r");
-      slow_write(fd, cmd, strlen(cmd));
-      wait_for_prompt();
+      // Preferring to simply call RUN rather than uart-monitor's `g080d` command
+      // as the latter seems to have issues when run on openroms
+      stuff_keybuffer("RUN\r");
 
       snprintf(cmd, 1024, "t0\r");
       slow_write(fd, cmd, strlen(cmd));
@@ -2083,9 +2084,11 @@ void restore_sectors(void)
 
 void poke_sector(void)
 {
-    read_sector(poke_secnum, dir_sector_buffer, CACHE_NO, 0);
-    dir_sector_buffer[poke_offset] = poke_value;
-    write_sector(poke_secnum, dir_sector_buffer);
+  read_sector(poke_secnum, dir_sector_buffer, CACHE_NO, 0);
+  dir_sector_buffer[poke_offset] = poke_value;
+  write_sector(poke_secnum, dir_sector_buffer);
+  // Flush any pending sector writes out
+  execute_write_queue();
 }
 
 void show_secinfo(void)
