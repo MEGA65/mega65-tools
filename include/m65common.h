@@ -70,7 +70,10 @@ void set_serial_speed(int fd, int serial_speed);
 #endif
 void open_the_serial_port(char* serial_port);
 int switch_to_c64mode(void);
-void close_tcp_port(void);
+PORT_TYPE open_tcp_port(char* portname);
+void close_tcp_port(PORT_TYPE localfd);
+void do_write(PORT_TYPE localfd, char* str);
+int do_read(PORT_TYPE localfd, char* str, int max);
 
 #ifdef WINDOWS
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
