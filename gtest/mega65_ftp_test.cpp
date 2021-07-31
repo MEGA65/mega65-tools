@@ -241,4 +241,56 @@ TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
   ASSERT_EQ(0, is_fragmented(file8kb));
 }
 
+TEST(Mega65FtpTest, RenameToAnExistingFilenameShouldNotBePermitted)
+{
+  upload_file("file1.txt");
+  upload_file("file2.txt");
+  rename_file("file1.txt", "file2.txt");
+  // this should result in an error
+}
+
+TEST(Mega65FtpTest, UploadNewLFNShouldOfferShortName)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  // assess_shortname = "LONGFI~1.D81"
+}
+
+TEST(Mega65FtpTest, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  // examine dir-entries for file and assess validity of LFN and 8.3 ShortName
+}
+
+TEST(Mega65FtpTest, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  // as with test above, assure the dir-entries exist
+  delete_file("LongFileName.d81");
+  // now assess that dir-entries have been removed
+}
+
+TEST(Mega65FtpTest, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDirEntries)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  // as with test above, assure the dir-entries exist
+  rename_file("LongFileName.d81", "AnotherLongFileName.d81");
+  // now assess that dir-entries for LFN and 8.3 shortname have been updated
+}
+
+TEST(Mega65FtpTest, UploadSameLFNWithExistingShortNameShouldOverwrite)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  upload_file("LongFileName2.d81", "LongFileName.d81");
+  download_file("LongFileName.d81");
+  // it should match the contents of LongFileName2.d81
+}
+
+TEST(Mega65FtpTest, UploadDifferentLFNWithExistingShortNameShouldUseDifferentName)
+{
+  upload_file("LongFileName.d81"); // This will be 'LONGFI~1.D81'
+  upload_file("LongFish.d81");   // This should be 'LONGFI~2.D81'
+  download("LONGFI~2.D81");
+  // assure its contents matches 'LongFish.d81'
+}
+
 } // namespace mega65_ftp
