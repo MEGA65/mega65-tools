@@ -137,7 +137,6 @@ int read_rows(char* str, int strcnt)
   static int squarebrackstart = 0;
   static int curlbrackstart = 0;
   static int quotestart = 0;
-  static int valquotestart = 0;
   static tfile_info finfo = { 0 };
 
   static int iskey = 1;
@@ -328,7 +327,10 @@ void strupper(char* dest, char* src)
 char* download_file_from_filehost(int fileidx)
 {
   char* path;
-  char fname[256];
+  static char fname[256];
+  char* retfname = NULL;
+
+  fname[0] = '\0';
   
   tlist_item *ptr = &lst_finfos;
   int cnt = 1;
@@ -403,6 +405,7 @@ char* download_file_from_filehost(int fileidx)
         if (total == content_length)
         {
           printf("Download of \"%s\" file complete\n", fname);
+          retfname = fname;
           break;
         }
       }
@@ -414,10 +417,13 @@ char* download_file_from_filehost(int fileidx)
   }
 
   close_tcp_port(fd);
+  return retfname;
 }
 
+/*
 void main(void)
 {
   read_filehost_struct();
   download_file_from_filehost(25);
 }
+*/

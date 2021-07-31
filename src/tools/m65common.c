@@ -174,12 +174,12 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
 void do_write(PORT_TYPE localfd, char* str)
 {
   int len = strlen(str);
-  do_serial_port_write(localfd, str, len, NULL, NULL, 0);
+  do_serial_port_write(localfd, (uint8_t*)str, len, NULL, NULL, 0);
 }
 
 int do_read(PORT_TYPE localfd, char* str, int max)
 {
-  return do_serial_port_read(localfd, str, max, NULL, NULL, 0);
+  return do_serial_port_read(localfd, (uint8_t*)str, max, NULL, NULL, 0);
 }
 
 int do_slow_write_safe(PORT_TYPE fd, char* d, int l, const char* func, const char* file, int line)
