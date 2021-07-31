@@ -110,6 +110,7 @@ int no_rxbuff = 1;
 
 int saw_c64_mode = 0;
 int saw_c65_mode = 0;
+int saw_openrom  = 0;
 
 int serial_speed = 2000000;
 
@@ -1037,6 +1038,7 @@ int detect_mode(void)
   */
   saw_c65_mode = 0;
   saw_c64_mode = 0;
+  saw_openrom = 0;
 
   unsigned char mem_buff[8192];
 
@@ -1047,6 +1049,7 @@ int detect_mode(void)
     int date_code = atoi((const char*)&mem_buff[1]);
     if (date_code > 2000000) {
       fprintf(stderr, "Detected OpenROM version %d\n", date_code);
+      saw_openrom = 1;
       saw_c64_mode = 1;
       return 0;
     }

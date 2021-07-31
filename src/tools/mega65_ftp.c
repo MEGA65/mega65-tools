@@ -43,6 +43,7 @@
 #include <stdio.h>
 
 #include "m65common.h"
+#include "filehost.h"
 #include "dirtymock.h"
 
 #define BOOL int
@@ -92,6 +93,7 @@ void show_secinfo(void);
 void show_mbrinfo(void);
 void show_vbrinfo(void);
 void poke_sector(void);
+void perform_filehost_get(int num);
 int show_directory(char* path);
 int delete_file(char* name);
 int rename_file(char* name, char* dest_name);
@@ -184,6 +186,7 @@ int secrestore_start = 0;
 int poke_secnum = 0;
 int poke_offset = 0;
 int poke_value = 0;
+int fhnum = 0;
 
 #define M65DT_REG 1
 #define M65DT_DIR 2
@@ -530,7 +533,11 @@ int execute_command(char* cmd)
     show_vbrinfo();
   } else if (sscanf(cmd, "poke %d %d %d", &poke_secnum, &poke_offset, &poke_value)==3) {
     poke_sector();
-  } else if (!strcasecmp(cmd,"help")) {
+  } else if (!strcmp(cmd, "fh")) {
+    read_filehost_struct();
+  } else if (sscanf(cmd, "fhget %d", &fhnum) == 1) {
+    perform_filehost_get(fhnum);
+  }else if (!strcasecmp(cmd,"help")) {
     printf("MEGA65 File Transfer Program Command Reference:\n");
     printf("\n");
     printf("dir [directory] - show contents of current or specified directory.\n");
@@ -554,6 +561,8 @@ int execute_command(char* cmd)
     printf("mbrinfo - lists the partitions specified in the MBR (sector 0)\n");
     printf("vbrinfo - lists the VBR details of the main Mega65 partition\n");
     printf("poke <sector> <offset> <val> - poke a value into a sector, at the desired offset.\n");
+    printf("fh - retrieve a list of files available on the filehost at files.mega65.org\n");
+    printf("fhget <num> - download a file from the filehost and upload it onto your sd-card\n");
     printf("exit - leave this programme.\n");
     printf("quit - leave this programme.\n");
   }
@@ -815,9 +824,15 @@ int load_helper(void)
 
       printf("Helper in memory\n");
 
-      // Preferring to simply call RUN rather than uart-monitor's `g080d` command
-      // as the latter seems to have issues when run on openroms
-      stuff_keybuffer("RUN\r");
+      if (saw_openrom) {
+        stuff_keybuffer("RUN\r");
+      }
+      else {
+        // Launch helper programme
+        snprintf(cmd, 1024, "g080d\r");
+        slow_write(fd, cmd, strlen(cmd));
+        wait_for_prompt();
+      }
 
       snprintf(cmd, 1024, "t0\r");
       slow_write(fd, cmd, strlen(cmd));
@@ -2089,6 +2104,20 @@ void poke_sector(void)
   write_sector(poke_secnum, dir_sector_buffer);
   // Flush any pending sector writes out
   execute_write_queue();
+}
+
+void perform_filehost_get(int num)
+{
+  char* fname = download_file_from_filehost(num);
+
+  if (fname)
+  {
+    upload_file(fname, fname);
+  }
+  else
+  {
+    printf("ERROR: Unable to download file from filehost!\n");
+  }
 }
 
 void show_secinfo(void)

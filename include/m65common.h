@@ -98,6 +98,7 @@ extern PORT_TYPE fd;
 extern int serial_speed;
 extern int saw_c64_mode;
 extern int saw_c65_mode;
+extern int saw_openrom;
 extern int xemu_flag;
 
 #endif // M65COMMON_H

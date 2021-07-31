@@ -353,7 +353,7 @@ char* download_file_from_filehost(int fileidx)
   path = pfi->location;
   strupper(fname, pfi->filename);
 
-  printf("path = %s, fname = %s\n", path, fname);
+  printf("Downloading \"%s\"...\n", fname);
 
   char str[4096];
   PORT_TYPE fd = open_tcp_port("tcp#files.mega65.org:80");
@@ -405,6 +405,7 @@ char* download_file_from_filehost(int fileidx)
         if (total == content_length)
         {
           printf("Download of \"%s\" file complete\n", fname);
+          fclose(f);
           retfname = fname;
           break;
         }
