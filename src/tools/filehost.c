@@ -312,10 +312,23 @@ void check_content_length(char c, int* content_length)
   }
 }
 
+void strupper(char* dest, char* src)
+{
+  char* psrc = src;
+  char* pdest = dest;
+  while (*psrc != '\0')
+  {
+    *pdest = toupper(*psrc);
+    psrc++;
+    pdest++;
+  }
+  *pdest = '\0';
+}
+
 char* download_file_from_filehost(int fileidx)
 {
   char* path;
-  char* fname;
+  char fname[256];
   
   tlist_item *ptr = &lst_finfos;
   int cnt = 1;
@@ -336,7 +349,7 @@ char* download_file_from_filehost(int fileidx)
   tfile_info *pfi = (tfile_info*)ptr->cur;
 
   path = pfi->location;
-  fname = pfi->filename;
+  strupper(fname, pfi->filename);
 
   printf("path = %s, fname = %s\n", path, fname);
 
