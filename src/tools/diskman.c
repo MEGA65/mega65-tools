@@ -156,7 +156,7 @@ void update_tsptr(int track, int sector, int t, int s)
   dest[1] = s;
 }
 
-void write_sector(int track, int sector, char* chunk)
+static void write_sector(int track, int sector, char* chunk)
 {
   char* dest = &data[(track-1)*(256*40) + sector*256];
   memcpy(dest, chunk, 256);
@@ -228,7 +228,9 @@ char* create_d81_for_prg(char* prgfname)
   return d81name;
 }
 
+/*
 void main(void)
 {
   create_d81_for_prg("momo.prg");
 }
+*/

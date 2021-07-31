@@ -44,6 +44,7 @@
 
 #include "m65common.h"
 #include "filehost.h"
+#include "diskman.h"
 #include "dirtymock.h"
 
 #define BOOL int
@@ -2106,9 +2107,27 @@ void poke_sector(void)
   execute_write_queue();
 }
 
+int endswith(char* fname, char* ext)
+{
+  char* actual_ext = strrchr(fname, '.');
+  if (!ext)
+    return 0;
+  
+  if (strcmp(ext, actual_ext) == 0)
+    return 1;
+
+  return 0;
+}
+
 void perform_filehost_get(int num)
 {
   char* fname = download_file_from_filehost(num);
+
+  if (endswith(fname, ".prg") || endswith(fname, ".PRG"))
+  {
+    char* d81name = create_d81_for_prg(fname);
+    strcpy(fname, d81name);
+  }
 
   if (fname)
   {
