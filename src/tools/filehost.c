@@ -43,6 +43,26 @@ typedef struct list_item
 
 tlist_item lst_finfos = { 0 };
 
+void clean_copy(char* dest, char* src)
+{
+  char* sptr = src;
+  char* dptr = dest;
+
+  while (*sptr != '\0')
+  {
+    if (*sptr == '\\')
+    {
+      sptr++;
+      continue;
+    }
+
+    *dptr = *sptr;
+    sptr++;
+    dptr++;
+  }
+  *dptr = '\0';
+}
+
 void assess_key_val(tfile_info *finfo, char* key, char* val)
 {
   if (strcmp(key, "title") == 0)
@@ -52,7 +72,7 @@ void assess_key_val(tfile_info *finfo, char* key, char* val)
   if (strcmp(key, "filename") == 0)
     strcpy(finfo->filename, val);
   if (strcmp(key, "location") == 0)
-    strcpy(finfo->location, val);
+    clean_copy(finfo->location, val);
   if (strcmp(key, "author") == 0)
     strcpy(finfo->author, val);
 }
@@ -195,14 +215,16 @@ int read_rows(char* str, int strcnt)
 
 void print_items(void)
 {
+  int cnt = 1;
   tlist_item *ptr = &lst_finfos;
   while (ptr != NULL)
   {
     tfile_info *pfinfo = (tfile_info*)ptr->cur;
-    printf("title: %s\nfilename: %s\nlocation: %s\nauthor: %s\n\n",
-        pfinfo->title, pfinfo->filename, pfinfo->location, pfinfo->author);
+    printf("%d: %s - \"%s\" - author: %s\n",
+        cnt, pfinfo->title, pfinfo->filename, pfinfo->author);
 
     ptr = ptr->next;
+    cnt++;
   }
 }
 
@@ -290,8 +312,34 @@ void check_content_length(char c, int* content_length)
   }
 }
 
-void download_file(char *path, char *fname)
+char* download_file_from_filehost(int fileidx)
 {
+  char* path;
+  char* fname;
+  
+  tlist_item *ptr = &lst_finfos;
+  int cnt = 1;
+  while (ptr != NULL)
+  {
+    if (fileidx == cnt)
+      break;
+    ptr = ptr->next;
+    cnt++;
+  }
+
+  if (fileidx != cnt)
+  {
+    printf("ERROR: Invalid file index\n");
+    return NULL;
+  }
+
+  tfile_info *pfi = (tfile_info*)ptr->cur;
+
+  path = pfi->location;
+  fname = pfi->filename;
+
+  printf("path = %s, fname = %s\n", path, fname);
+
   char str[4096];
   PORT_TYPE fd = open_tcp_port("tcp#files.mega65.org:80");
   sprintf(str, "GET /php/%s HTTP/1.1\r\n", path);
@@ -341,7 +389,7 @@ void download_file(char *path, char *fname)
         total++;
         if (total == content_length)
         {
-          printf("Download of file complete\n");
+          printf("Download of \"%s\" file complete\n", fname);
           break;
         }
       }
@@ -357,6 +405,6 @@ void download_file(char *path, char *fname)
 
 void main(void)
 {
-  // read_filehost_struct();
-  download_file("../files/c/camelot-1536dots_a5uS3h.prg", "camelot.prg");
+  read_filehost_struct();
+  download_file_from_filehost(25);
 }
