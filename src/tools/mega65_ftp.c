@@ -94,6 +94,7 @@ void show_secinfo(void);
 void show_mbrinfo(void);
 void show_vbrinfo(void);
 void poke_sector(void);
+void perform_filehost_read(void);
 void perform_filehost_get(int num);
 int show_directory(char* path);
 int delete_file(char* name);
@@ -142,6 +143,8 @@ int mode_report = 0;
 
 char serial_port[1024] = "/dev/ttyUSB1";
 char* bitstream = NULL;
+char* username = NULL;
+char* password = NULL;
 
 unsigned char* sd_read_buffer = NULL;
 int sd_read_offset = 0;
@@ -535,7 +538,7 @@ int execute_command(char* cmd)
   } else if (sscanf(cmd, "poke %d %d %d", &poke_secnum, &poke_offset, &poke_value)==3) {
     poke_sector();
   } else if (!strcmp(cmd, "fh")) {
-    read_filehost_struct();
+    perform_filehost_read();
   } else if (sscanf(cmd, "fhget %d", &fhnum) == 1) {
     perform_filehost_get(fhnum);
   }else if (!strcasecmp(cmd,"help")) {
@@ -588,7 +591,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
   start_usec = gettime_us();
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
@@ -614,6 +617,12 @@ int DIRTYMOCK(main)(int argc, char** argv)
       break;
     case 'c':
       queue_command(optarg);
+      break;
+    case 'u':
+      username = strdup(optarg);
+      break;
+    case 'p':
+      password = strdup(optarg);
       break;
     default: /* '?' */
       usage();
@@ -2117,6 +2126,16 @@ int endswith(char* fname, char* ext)
     return 1;
 
   return 0;
+}
+
+void perform_filehost_read(void)
+{
+  if (username != NULL)
+  {
+    log_in_and_get_cookie(username, password);
+  }
+
+  read_filehost_struct();
 }
 
 void perform_filehost_get(int num)

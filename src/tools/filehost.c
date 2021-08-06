@@ -191,7 +191,7 @@ int read_rows(char* str, int strcnt)
         // are we expecting an end of curly-bracket?
         if (c == '}')
         {
-          if (finfo.author[0] != '\0' && strcmp(finfo.os, " MEGA65") == 0)
+          if (finfo.author[0] != '\0' && strstr(finfo.os, " MEGA65") != NULL)
           {
             add_to_list(&finfo);
             memset(&finfo, 0, sizeof(tfile_info));
@@ -227,12 +227,71 @@ void print_items(void)
   }
 }
 
+char cookies[256] = "";
+
+void log_in_and_get_cookie(char* username, char* password)
+{
+  char str[4096];
+  char data[4096];
+  sprintf(data, "logindata%%5Busername%%5D=%s&logindata%%5Bpassword%%5D=%s", username, password);
+  PORT_TYPE fd = open_tcp_port("tcp#files.mega65.org:80");
+  do_write(fd, "POST /php/login.php HTTP/1.1\r\n");
+  do_write(fd, "Host: files.mega65.org\r\n");
+  do_write(fd, "Accept: */*\r\n");
+  do_write(fd, "Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\n");
+  do_write(fd, "X-Requested-With: XMLHttpRequest\r\n");
+  sprintf(str, "Content-Length: %d\r\n\r\n", (int)strlen(data));
+  do_write(fd, str); 
+  do_write(fd, data);
+
+  int count = 0, total = 0;
+  data[0] = 0;
+  while( (count = do_read(fd, str, 4096)) != 0 || total == 0)
+  {
+    if (count == 0)
+      continue;
+
+    strcat(data, str);
+    total += count;
+  }
+
+  char* ptr = strtok(data, "\n");
+  cookies[0] = 0;
+  int ckptr = 0;
+  char* cookie_field = "Set-Cookie:";
+  do
+  {
+    if (strncmp(ptr, cookie_field, strlen(cookie_field)) == 0) {
+      ptr += strlen(cookie_field);
+      int k = 0;
+      do
+      {
+        cookies[ckptr] = ptr[k];
+        k++;
+        ckptr++;
+      } while (ptr[k] != ';');
+      cookies[ckptr] = ';';
+      ckptr++;
+      cookies[ckptr] = '\0';
+    }
+    ptr = strtok(NULL, "\n");
+  } while (ptr != NULL);
+  
+  close_tcp_port(fd);
+}
+
 void read_filehost_struct(void)
 {
   char str[4096];
   PORT_TYPE fd = open_tcp_port("tcp#files.mega65.org:80");
   do_write(fd, "GET /php/readfilespublic.php HTTP/1.1\r\n");
-  do_write(fd, "Host: files.mega65.org\r\n\r\n");
+  do_write(fd, "Host: files.mega65.org\r\n");
+  if (cookies[0] != '\0') {
+    cookies[strlen(cookies)-1]='\0'; //remove last ';'
+    sprintf(str, "Cookie:%s\r\n", cookies);
+    do_write(fd, str);
+  }
+  do_write(fd, "\r\n");
 
   do_usleep(100000);
 
