@@ -1984,10 +1984,91 @@ unsigned int find_contiguous_clusters(unsigned int total_clusters)
   return start_cluster;
 }
 
+typedef struct _llist
+{
+  void* item;
+  struct _llist* next;
+} llist;
+
+void llist_free(llist* lstitem)
+{
+  llist* next;
+  while (lstitem != NULL)
+  {
+    free(lstitem->item);
+    next = lstitem->next;
+    free(lstitem);
+    lstitem = next;
+  }
+}
+
+llist* llist_new(void)
+{
+  llist* lst = (llist*)malloc(sizeof(llist));
+  memset(lst, 0, sizeof(llist));
+  return lst;
+}
+
+void llist_add(llist* lst, void* item, int compare(void *, void*))
+{
+  if (lst->item == NULL)
+  {
+    lst->item = item;
+    return;
+  }
+
+  llist* prev = NULL;
+
+  while (lst != NULL)
+  {
+    // we found a home for it?
+    if (compare(lst->item, item) > 0)
+    {
+      llist* mvlst = llist_new();
+      mvlst->item = lst->item;
+      mvlst->next = lst->next;
+
+      lst->item = item;
+      lst->next = mvlst;
+      return;
+    }
+    prev = lst;
+    lst = lst->next;
+  }
+  // couldn't insert before, so add to end
+  llist* lstnew = llist_new();
+  lstnew->item = item;
+  prev->next = lstnew;
+}
+
+int compare_dirents(void* s, void* d)
+{
+  struct m65dirent* src = (struct m65dirent*)s;
+  struct m65dirent* dest = (struct m65dirent*)d;
+  // both dirs?
+  if ((dest->d_attr & 0x10) && (src->d_attr & 0x10))
+  {
+    // compare filenames
+    return strcmp(src->d_name, dest->d_name);
+  }
+  // new item is dir and existing item isn't?
+  else if ((dest->d_attr & 0x10) && !(src->d_attr & 0x10))
+    return 1;
+  // new item is file and existing item is a dir?
+  else if (!(dest->d_attr & 0x10) && (src->d_attr & 0x10))
+    return -1;
+  else
+    // compare filenames
+    return strcmp(src->d_name, dest->d_name);
+}
+
 int show_directory(char* path)
 {
+  llist* lst_dirents = llist_new();
+
   struct m65dirent de;
   int retVal = 0;
+
   do {
     if (!file_system_found)
       open_file_system();
@@ -2002,14 +2083,26 @@ int show_directory(char* path)
       break;
     }
     // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-    while (!fat_readdir(&de)) {
-      if (de.d_attr & 0x10) {
-        printf(" <directory> %s\n", de.d_name);
-      }
-      else if (de.d_name[0] && (de.d_filelen >= 0))
-        printf("%12d %s\n", (int)de.d_filelen, de.d_name);
+    while (!fat_readdir(&de))
+    {
+      struct m65dirent* denew = (struct m65dirent*)malloc(sizeof(struct m65dirent));
+      memcpy(denew, &de, sizeof(struct m65dirent));
+      llist_add(lst_dirents, denew, compare_dirents);
+    }
+
+    llist* cur = lst_dirents;
+    while (cur != NULL)
+    {
+      struct m65dirent* itm = (struct m65dirent*)cur->item;
+      if (itm->d_attr & 0x10)
+        printf("       <DIR> %s\n", itm->d_name);
+      else if (itm->d_name[0] && itm->d_filelen >= 0)
+        printf("%12d %s\n", (int)itm->d_filelen, itm->d_name);
+      cur = cur->next;
     }
   } while (0);
+
+  llist_free(lst_dirents);
 
   return retVal;
 }
