@@ -118,6 +118,7 @@ BOOL find_file_in_curdir(char* filename, struct m65dirent* de);
 BOOL create_directory_entry_for_file(char* filename);
 unsigned int calc_first_cluster_of_file(void);
 BOOL is_d81_file(char* filename);
+void wrap_upload(char* fname);
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -415,6 +416,9 @@ int execute_command(char* cmd)
   else if (parse_command(cmd, "put %s %s", src, dst) == 2) {
     upload_file(src, dst);
   }
+  else if (parse_command(cmd, "wput %s", src) == 1) {
+    wrap_upload(src);
+  }
   else if (parse_command(cmd, "del %s", src) == 1) {
     delete_file(src);
   }
@@ -548,6 +552,7 @@ int execute_command(char* cmd)
     printf("cd [directory] - change current working directory.\n");
     printf("put <file> [destination name] - upload file to SD card, and optionally rename it destination file.\n");
     printf("get <file> [destination name] - download file from SD card, and optionally rename it destination file.\n");
+    printf("wput <file> - upload .prg file wrapped into a .d81 file\n");
     printf("del <file> - delete a file from SD card.\n");
     printf("mkdir <dirname> - create a directory on the SD card.\n");
     printf("cd <dirname> - change directory on the SD card. (aka. 'chdir')\n");
@@ -2136,6 +2141,21 @@ void perform_filehost_read(void)
   }
 
   read_filehost_struct();
+}
+
+void wrap_upload(char* fname)
+{
+  char* d81name = create_d81_for_prg(fname);
+  strcpy(fname, d81name);
+
+  if (fname)
+  {
+    upload_file(fname, fname);
+  }
+  else
+  {
+    printf("ERROR: Unable to download file from filehost!\n");
+  }
 }
 
 void perform_filehost_get(int num)

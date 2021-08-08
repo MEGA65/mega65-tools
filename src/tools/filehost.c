@@ -191,7 +191,7 @@ int read_rows(char* str, int strcnt)
         // are we expecting an end of curly-bracket?
         if (c == '}')
         {
-          if (finfo.author[0] != '\0' && strstr(finfo.os, " MEGA65") != NULL)
+          if (finfo.author[0] != '\0' && strstr(finfo.os, "MEGA65") != NULL)
           {
             add_to_list(&finfo);
             memset(&finfo, 0, sizeof(tfile_info));
