@@ -1483,7 +1483,7 @@ int fat_opendir(char* path)
         break;
     }
 
-    printf("dir_cluster = $%x, dir_sector = $%x\n", dir_cluster, partition_start + dir_sector);
+    // printf("dir_cluster = $%x, dir_sector = $%x\n", dir_cluster, partition_start + dir_sector);
 
   } while (0);
   return retVal;
@@ -2062,11 +2062,94 @@ int compare_dirents(void* s, void* d)
     return strcmp(src->d_name, dest->d_name);
 }
 
+int read_direntries(llist* lst, char* path)
+{
+  struct m65dirent de;
+
+  if (fat_opendir(path)) {
+    return 0;
+  }
+  // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
+  while (!fat_readdir(&de))
+  {
+    struct m65dirent* denew = (struct m65dirent*)malloc(sizeof(struct m65dirent));
+    memcpy(denew, &de, sizeof(struct m65dirent));
+    llist_add(lst, denew, compare_dirents);
+  }
+
+  return 1;
+}
+
+int contains_dir(llist* lst, char* path)
+{
+  while (lst != NULL)
+  {
+    struct m65dirent* itm = (struct m65dirent*)lst->item;
+    if (itm->d_attr & 0x10 && strcmp(itm->d_name, path) == 0)
+      return 1;
+
+    lst = lst->next;
+  }
+
+  return 0;
+}
+
+// Initial effort borrowed from Robert James Mieta's snippet in this thread:
+// - https://stackoverflow.com/questions/23457305/compare-strings-with-wildcard
+// Needed a bit of refinement to get the wildcards working for me though.
+int is_match(char* line, char* pattern)
+{
+  int wildcard = 0;
+
+  do
+  {
+    if ((*pattern == *line) || (*pattern == '?'))
+    {
+      line++;
+      pattern++;
+    }
+    else if (*pattern == '*')
+    {
+      if (*(++pattern) == '\0')
+      {
+        return 1;
+      }
+      wildcard = 1;
+    }
+    else if (wildcard)
+    {
+      if (*line == *pattern)
+      {
+        wildcard = 0;
+        line++;
+        pattern++;
+      }
+      else
+      {
+        line++;
+      }
+    } 
+    else
+    {
+      return 0;
+    }
+  } while (*line);
+
+  if (*pattern == '\0')
+  {
+    return 1;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
 int show_directory(char* path)
 {
   llist* lst_dirents = llist_new();
+  char* searchterm = NULL;
 
-  struct m65dirent de;
   int retVal = 0;
 
   do {
@@ -2078,22 +2161,30 @@ int show_directory(char* path)
       break;
     }
 
-    if (fat_opendir(path)) {
-      retVal = -1;
+    if (!read_direntries(lst_dirents, current_dir))
       break;
+
+    // check if the user wants to 'dir' a sub-folder
+    if (contains_dir(lst_dirents, path)) {
+      llist_free(lst_dirents);
+      lst_dirents = llist_new();
+
+      if (!read_direntries(lst_dirents, path))
+        break;
     }
-    // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-    while (!fat_readdir(&de))
-    {
-      struct m65dirent* denew = (struct m65dirent*)malloc(sizeof(struct m65dirent));
-      memcpy(denew, &de, sizeof(struct m65dirent));
-      llist_add(lst_dirents, denew, compare_dirents);
-    }
+    else if (strcmp(path, current_dir) != 0)
+      searchterm = path;
 
     llist* cur = lst_dirents;
     while (cur != NULL)
     {
       struct m65dirent* itm = (struct m65dirent*)cur->item;
+
+      if (searchterm && !is_match(itm->d_name, searchterm)) {
+        cur = cur->next;
+        continue;
+      }
+
       if (itm->d_attr & 0x10)
         printf("       <DIR> %s\n", itm->d_name);
       else if (itm->d_name[0] && itm->d_filelen >= 0)
