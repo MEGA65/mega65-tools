@@ -97,6 +97,9 @@ void poke_sector(void);
 void perform_filehost_read(void);
 void perform_filehost_get(int num);
 int show_directory(char* path);
+void show_local_directory(char* searchpattern);
+void change_local_dir(char* path);
+void show_local_pwd(void);
 int delete_file(char* name);
 int rename_file(char* name, char* dest_name);
 int upload_file(char* name, char* dest_name);
@@ -440,6 +443,12 @@ int execute_command(char* cmd)
   else if (!strcmp(cmd, "dir")) {
     show_directory(current_dir);
   }
+  else if (parse_command(cmd, "ldir %s", src) == 1) {
+    show_local_directory(src);
+  }
+  else if (!strcmp(cmd, "ldir")) {
+    show_local_directory(NULL);
+  }
   else if (parse_command(cmd, "put %s", src) == 1) {
     char* dest = src;
     // Set destination name to last element of source name, if no destination name provided
@@ -450,6 +459,12 @@ int execute_command(char* cmd)
   }
   else if (parse_command(cmd, "mkdir %s", src) == 1) {
     create_dir(src);
+  }
+  else if (parse_command(cmd, "lcd %s", src) == 1) {
+    change_local_dir(src);
+  }
+  else if (!strcmp(cmd, "lpwd")) {
+    show_local_pwd();
   }
   else if ((parse_command(cmd, "chdir %s", src) == 1) || (parse_command(cmd, "cd %s", src) == 1)) {
     if (src[0] == '/') {
@@ -548,8 +563,10 @@ int execute_command(char* cmd)
   }else if (!strcasecmp(cmd,"help")) {
     printf("MEGA65 File Transfer Program Command Reference:\n");
     printf("\n");
-    printf("dir [directory] - show contents of current or specified directory.\n");
-    printf("cd [directory] - change current working directory.\n");
+    printf("dir [directory|wildcardpattern] - show contents of current or specified sdcard directory. Can use a wildcard pattern on current directory.\n");
+    printf("ldir [wildcardpattern] - shows the contents of current local directory.\n");
+    printf("cd [directory] - change current sdcard working directory.\n");
+    printf("lcd [directory] - change current local working directory.\n");
     printf("put <file> [destination name] - upload file to SD card, and optionally rename it destination file.\n");
     printf("get <file> [destination name] - download file from SD card, and optionally rename it destination file.\n");
     printf("wput <file> - upload .prg file wrapped into a .d81 file\n");
@@ -2049,7 +2066,7 @@ int compare_dirents(void* s, void* d)
   if ((dest->d_attr & 0x10) && (src->d_attr & 0x10))
   {
     // compare filenames
-    return strcmp(src->d_name, dest->d_name);
+    return stricmp(src->d_name, dest->d_name);
   }
   // new item is dir and existing item isn't?
   else if ((dest->d_attr & 0x10) && !(src->d_attr & 0x10))
@@ -2059,7 +2076,7 @@ int compare_dirents(void* s, void* d)
     return -1;
   else
     // compare filenames
-    return strcmp(src->d_name, dest->d_name);
+    return stricmp(src->d_name, dest->d_name);
 }
 
 int read_direntries(llist* lst, char* path)
@@ -2143,6 +2160,62 @@ int is_match(char* line, char* pattern)
   {
     return 0;
   }
+}
+
+void show_local_directory(char* searchpattern)
+{
+  DIR *d;
+  struct dirent *dir;
+
+  // list directories first
+  d = opendir(".");
+  if (d) {
+    while ((dir = readdir(d)) != NULL ) {
+      if (searchpattern && !is_match(dir->d_name, searchpattern))
+        continue;
+
+      struct stat file_stats;
+      if (!stat(dir->d_name, & file_stats))
+      {
+        if (S_ISDIR(file_stats.st_mode))
+          printf("       <DIR> %s\n", dir->d_name);
+      }
+    }
+  }
+  closedir(d);
+
+  // list files next
+  d = opendir(".");
+  if (d) {
+    while ((dir = readdir(d)) != NULL ) {
+      if (searchpattern && !is_match(dir->d_name, searchpattern))
+        continue;
+
+      struct stat file_stats;
+      if (!stat(dir->d_name, & file_stats))
+      {
+        if (!S_ISDIR(file_stats.st_mode)) {
+          if (dir->d_name[0] && file_stats.st_size >= 0)
+            printf("%12d %s\n", (int)file_stats.st_size, dir->d_name);
+        }
+      }
+    }
+  }
+  closedir(d);
+}
+
+void show_local_pwd(void)
+{
+  char cwd[MAX_PATH];
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    printf("%s\n", cwd);
+  }
+}
+
+void change_local_dir(char* path)
+{
+  if (chdir(path))
+    printf("ERROR: Failed to change directory (%s)!\n", path);
 }
 
 int show_directory(char* path)
