@@ -614,6 +614,11 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   POKE(0xD081, 0x01); // but first reset buffers
   POKE(0xD081, 0x40);
 
+  // XXX DEBUG: Read raw gap data as soon as we have found the sector
+  // header.
+  while((PEEK(0xD6A4)&0x7f)!=sector) POKE(0xD020,PEEK(0xD020)+1);
+  readtrackgaps();
+  
   // Wait for busy flag to clear
   while (PEEK(0xD082) & 0x80) {
     POKE(0xc000,PEEK(0xc000)+1);
@@ -658,9 +663,13 @@ unsigned short crc16(unsigned short crc, unsigned short b)
 }
 
 unsigned char header_crc_bytes[20];
-unsigned char data_crc_bytes[2];
+unsigned char data_crc_bytes[10][2];
 unsigned char track_num=0;
 unsigned char side=0;
+
+unsigned char s;
+unsigned char sector_data[10][512];
+char msg[80];
 
 void format_disk(void)
 {
@@ -742,12 +751,29 @@ void format_disk(void)
 	  header_crc_bytes[i*2+1]=crc>>8;
 	}
       
-      // Now also calculate CRC of empty data sector
-      crc16_init();
-      for(i=0;i<512;i++) crc=crc16(crc,0x00);
-      data_crc_bytes[0]=crc&0xff;
-      data_crc_bytes[1]=crc>>8;
-      
+      // Now also calculate CRC of data sectors
+      // We fill the data sectors with info that makes it easy to see where mis-reads
+      // have come from.
+      for(s=0;s<10;s++) {
+	bzero(sector_data[s],512);
+	for(i=0;i<512;) {
+	  snprintf(msg,80,"Offset $%x, Track %d, Sector %d. ",i,track_num,s);
+	  if (strlen(msg)+i<512) {
+	    lcopy((unsigned long)msg,(unsigned long)&sector_data[s][i],strlen(msg));
+	    i+=strlen(msg);
+	  } else break;	   
+	}
+	
+	crc16_init();
+	crc=crc16(0xFFFF,0xa1);
+	crc=crc16(crc,0xa1);
+	crc=crc16(crc,0xa1);
+	crc=crc16(crc,0xfb);
+	for(i=0;i<512;i++) crc=crc16(crc,sector_data[s][i]);
+	data_crc_bytes[s][0]=crc&0xff;
+	data_crc_bytes[s][1]=crc>>8;
+	
+      }      
       snprintf(peak_msg,40,"CRC data=$%02x%02x",header_crc_bytes[1],header_crc_bytes[0]);
       print_text(0,15,7,peak_msg);
       
@@ -907,6 +933,8 @@ If you do, the final CRC value should be 0.
       
       // We cound x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
       for(sector_num=0;sector_num<10*2;sector_num+=2) {
+
+	s=sector_num>>1;
 	
 	POKE(0xC04d,0);
 	POKE(0xC04f,0);
@@ -1025,18 +1053,18 @@ If you do, the final CRC value should be 0.
 	  while(!(PEEK(0xD082)&0x40)) {
 	    if (!(PEEK(0xD082)&0x80)) break;
 	  }
-	  POKE(0xD087,0x00); 
+	  POKE(0xD087,sector_data[s][i]); 
 	}
 	
 	// Write data CRC bytes
 	while(!(PEEK(0xD082)&0x40)) {
 	  if (!(PEEK(0xD082)&0x80)) break;
 	}
-	POKE(0xD087,data_crc_bytes[1]); 
+	POKE(0xD087,data_crc_bytes[s][1]); 
 	while(!(PEEK(0xD082)&0x40)) {
 	  if (!(PEEK(0xD082)&0x80)) break;
 	}
-	POKE(0xD087,data_crc_bytes[0]); 
+	POKE(0xD087,data_crc_bytes[s][0]); 
 	
 	POKE(0xC04c,11);
 	
