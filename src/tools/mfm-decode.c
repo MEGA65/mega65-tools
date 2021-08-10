@@ -21,6 +21,89 @@ unsigned char byte = 0;
 int bits = 0;
 int byte_count = 0;
 int bytes_emitted=0;
+int sync_count=0;
+int field_ofs=0;
+unsigned char data_field[1024];
+
+// CRC16 algorithm from:
+// https://github.com/psbhlw/floppy-disk-ripper/blob/master/fdrc/mfm.cpp
+// GPL3+, Copyright (C) 2014, psb^hlw, ts-labs.
+// crc16 table
+unsigned short crc_ccitt[256];
+unsigned short crc=0;
+
+// crc16 init table
+void crc16_init()
+{
+    for (int i = 0; i < 256; i++)
+    {
+      unsigned short w = i << 8;
+      for (int a = 0; a < 8; a++)
+	w = (w << 1) ^ ((w & 0x8000) ? 0x1021 : 0);
+      crc_ccitt[i] = w;
+    }
+}
+
+// calc crc16 for 1 byte
+unsigned short crc16(unsigned short crc, unsigned short b)
+{
+    crc = (crc << 8) ^ crc_ccitt[((crc >> 8) & 0xff) ^ b];
+    return crc;
+}
+
+
+void describe_data(void)
+{
+  switch(data_field[0]) {
+  case 0xfe:
+    // Sector header
+    fprintf(stdout,"SECTOR HEADER: Track=%d, Side=%d, Sector=%d, Size=%d (%d bytes) ",
+	    data_field[1],data_field[2],data_field[3],data_field[4],
+	    128<<(data_field[4]),
+	    data_field[5],data_field[6]);
+    unsigned short crc=0xffff;
+    for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
+    for(int i=0;i<7;i++) {
+      crc=crc16(crc,data_field[i]);
+    }
+    if (crc) printf("CRC FAIL!\n");
+    else printf("CRC ok\n");
+    break;
+  case 0xfb:
+    // Sector data
+    crc=0xffff;
+    printf("SECTOR DATA:\n");
+    for(int i=0;i<512;i+=16) {
+      printf("  %04x :",i);
+      for(int j=0;j<16;j++) {
+	printf(" %02x",data_field[1+i+j]);
+      }
+      printf("    ");
+      for(int j=0;j<16;j++) {
+	unsigned char c=data_field[1+i+j];
+	// De-PETSCII the data
+	if (c>=0xc0&&c<0xdb) c-=0x60;
+	if ((c>='a'&&c<='z')||(c>='A'&&c<='Z'))
+	  c^=0x20;
+	if (c>=' '&&c<0x7f) printf("%c",c); else printf(".");
+      }
+      printf("\n");
+    }
+    for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
+    unsigned short crc_calc;
+    for(int i=0;i<1+512+2;i++) {
+      if (i==1+512) crc_calc=crc;
+      crc=crc16(crc,data_field[i]);
+    }
+    if (crc) printf("CRC FAIL!  (included field = $%02x%02x, calculated as $%04x)\n",
+		    data_field[1+512],data_field[1+513],crc_calc);
+    else printf("CRC ok\n");
+    break;
+  default:
+    fprintf(stdout,"WARNING: Unknown data field type $%02x\n",data_field[0]);
+    break;
+  }
+}
 
 void emit_bit(int b)
 {
@@ -32,10 +115,18 @@ void emit_bit(int b)
     if (byte_count < 16)
       byte_count++;
     else {
-      printf("\n");
+      //      printf("\n");
       byte_count = 0;
     }
-    printf(" $%02x", byte);
+    if (sync_count==3) {
+      //      printf("Data field type $%02x\n",byte);
+      sync_count=0;
+      field_ofs=1;
+      data_field[0]=byte;
+    } else  {
+      //      printf(" $%02x", byte);
+      if (field_ofs<1024) data_field[field_ofs++]=byte;
+    }
     bytes_emitted++;
     byte = 0;
     bits = 0;
@@ -61,16 +152,21 @@ void mfm_decode(float gap)
     if (recent_gaps[i] != sync_gaps[i])
       break;
   if (i == 4) {
-    if (byte_count)
-      printf("\n");
-    if (bytes_emitted) printf("(%d bytes since last sync)\n",bytes_emitted);
-    printf("Sync $A1\n");
+    //    if (byte_count)
+    //      printf("\n");
+    if (bytes_emitted) {
+      describe_data();
+      printf("(%d bytes since last sync)\n",bytes_emitted);
+    }
+    sync_count++;
+    if (sync_count==3) printf("SYNC MARK (3x $A1)\n");
+    //    printf("Sync $A1 x #%d\n",sync_count);
     bits = 0;
     byte = 0;
     byte_count = 0;
     bytes_emitted = 0;
     return;
-  }
+  } 
 
   if (!last_gap) {
     if (gap == 1.0) {
@@ -129,6 +225,8 @@ int main(int argc, char** argv)
   int count = fread(buffer, 1, 65536, f);
   printf("Read %d bytes\n", count);
 
+  crc16_init();
+  
   int i;
 
   // Check if data looks like it is a $D6AC capture
