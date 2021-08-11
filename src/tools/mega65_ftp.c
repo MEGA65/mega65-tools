@@ -2587,7 +2587,7 @@ int contains_file(char* name)
     // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
     if (!strcasecmp(de.d_name, name)) {
       // Found file, so will replace it
-      printf("Found \"%s\" on the file system, beginning at cluster %d\n", name, (int)de.d_ino);
+      // printf("Found \"%s\" on the file system, beginning at cluster %d\n", name, (int)de.d_ino);
       return 1;
     }
   }
