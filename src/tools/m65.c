@@ -2528,6 +2528,6 @@ void do_exit(int retval)
       pthread_join(threads[i], NULL);
   }
 #endif
-  close_tcp_port();
+  close_default_tcp_port();
   exit(retval);
 }

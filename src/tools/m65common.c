@@ -1650,7 +1650,25 @@ void close_tcp_port(PORT_TYPE localfd)
   // TODO: do I need to do any nice closing of the socket in linux too?
 }
 
+// provide an implementation of stricmp for linux/mac
+int stricmp(const char *a, const char *b)
+{
+  int ca, cb;
+  do {
+     ca = (unsigned char) *a++;
+     cb = (unsigned char) *b++;
+     ca = tolower(toupper(ca));
+     cb = tolower(toupper(cb));
+   } while (ca == cb && ca != '\0');
+   return ca - cb;
+}
+
 #endif
+
+void close_default_tcp_port(void)
+{
+  close_tcp_port(fd);
+}
 
 void open_the_serial_port(char* serial_port)
 {

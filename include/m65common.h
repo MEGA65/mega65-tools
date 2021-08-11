@@ -72,6 +72,7 @@ void open_the_serial_port(char* serial_port);
 int switch_to_c64mode(void);
 PORT_TYPE open_tcp_port(char* portname);
 void close_tcp_port(PORT_TYPE localfd);
+void close_default_tcp_port(void);
 void do_write(PORT_TYPE localfd, char* str);
 int do_read(PORT_TYPE localfd, char* str, int max);
 
@@ -82,6 +83,7 @@ void do_usleep(__int64 usec);
 #else
 #include <termios.h>
 void do_usleep(unsigned long usec);
+int stricmp(const char *a, const char *b);
 #endif
 
 #ifdef __APPLE__
