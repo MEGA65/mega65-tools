@@ -29,6 +29,13 @@ else
 	CC65_PREFIX=$(PWD)/cc65/bin/
 endif
 
+BUILD_STATIC=-Wl,-Bstatic
+
+ifeq ($(DO_STATIC), 0)
+	# Does user want compile dynamically? (faster, better during development)
+	BUILD_STATIC=
+endif
+
 CC65=  $(CC65_PREFIX)cc65
 CA65=  $(CC65_PREFIX)ca65 --cpu 4510
 LD65=  $(CC65_PREFIX)ld65 -t none
@@ -387,7 +394,7 @@ $(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
 	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
 
 $(BINDIR)/romdiff.exe:	$(TOOLDIR)/romdiff.c Makefile
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/romdiff.exe $(TOOLDIR)/romdiff.c -Wl,-Bstatic -Wl,-Bdynamic
+	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/romdiff.exe $(TOOLDIR)/romdiff.c $(BUILD_STATIC) -Wl,-Bdynamic
 
 $(BINDIR)/romdiff.osx:	$(TOOLDIR)/romdiff.c Makefile
 	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -o $(BINDIR)/romdiff.osx $(TOOLDIR)/romdiff.c
@@ -411,7 +418,11 @@ $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
 	echo "Could not find the program 'convert'. Try the following:"
 	echo "sudo apt-get install imagemagick"
 
-MAKE_VERSION=echo 'const char *version_string="'`./gitversion.sh`'";' > $(TOOLDIR)/version.c
+MAKE_VERSION= \
+	@if [ -z "$(DO_MKVER)" ] || [ "$(DO_MKVER)" -eq "1" ] ; then \
+	echo "Retrieving Git version string... (set env-var DO_MKVER=0 to turn this behaviour off)" ; \
+	echo 'const char *version_string="'`./gitversion.sh`'";' > $(TOOLDIR)/version.c ; \
+	fi
 
 $(SDCARD_DIR)/BANNER.M65:	$(BINDIR)/pngprepare $(ASSETS)/mega65_320x64.png /usr/bin/convert
 	/usr/bin/convert -colors 128 -depth 8 +dither $(ASSETS)/mega65_320x64.png $(BINDIR)/mega65_320x64_128colour.png
@@ -434,7 +445,7 @@ $(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_sho
 
 $(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
 	$(MAKE_VERSION)
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude `pkg-config --cflags libusb-1.0` -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
+	$(WINCC) $(WINCOPT) -g -Wall -Iinclude `pkg-config --cflags libusb-1.0` -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c $(BUILD_STATIC) -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
 $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
@@ -450,13 +461,19 @@ $(1): $(2)
 
 $(1).exe: $(2)
 	$$(MAKE_VERSION)
-	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread -Wl,-Bstatic -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
+	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $$(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
 endef
+
+MEGA65FTP_SRC=$(TOOLDIR)/mega65_ftp.c \
+							$(TOOLDIR)/m65common.c \
+							$(TOOLDIR)/ftphelper.c \
+							$(TOOLDIR)/filehost.c \
+							$(TOOLDIR)/diskman.c
 
 # Gives two targets of:
 # - gtest/bin/mega65_ftp.test
 # - gtest/bin/mega65_ftp.test.exe
-$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c Makefile))
+$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(MEGA65FTP_SRC) Makefile))
 
 # Gives two targets of:
 # - gtest/bin/bit2core.test
@@ -471,15 +488,9 @@ test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTBINDIR)/bit2core.test.exe
 	$(GTESTBINDIR)/mega65_ftp.test.exe
 	$(GTESTBINDIR)/bit2core.test.exe
 
-MEGA65FTP_SRC=$(TOOLDIR)/mega65_ftp.c \
-							$(TOOLDIR)/m65common.c \
-							$(TOOLDIR)/ftphelper.c \
-							$(TOOLDIR)/filehost.c \
-							$(TOOLDIR)/diskman.c
-
 $(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) Makefile
 	$(MAKE_VERSION)
-	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -Wl,-Bstatic -lreadline -lncurses -ltinfo -Wl,-Bdynamic
+	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(MEGA65FTP_SRC) $(TOOLDIR)/version.c $(BUILD_STATIC) -lreadline -lncurses -ltinfo -Wl,-Bdynamic
 
 $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
 	$(MAKE_VERSION)
@@ -487,7 +498,7 @@ $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) Makefile ncurses/lib/libncurses.a 
 
 $(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) Makefile 
 	$(MAKE_VERSION)
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 -Wl,-Bstatic -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
+	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
 
 $(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) Makefile 
 	$(MAKE_VERSION)

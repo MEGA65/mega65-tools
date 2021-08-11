@@ -2601,33 +2601,47 @@ int delete_file(char* name)
   return 0;
 }
 
-int rename_file(char* name, char* dest_name)
+// returns:
+// -1 = problems opening file-system
+// 0 = doesn't exist
+// 1 = exists
+int contains_file(char* name)
 {
   struct m65dirent de;
+
+  if (check_file_system_access() == -1)
+    return -1;
+
+  if (fat_opendir(current_dir))
+    return -1;
+
+  // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
+  while (!fat_readdir(&de)) {
+    // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_filelen);
+    // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
+    if (!strcasecmp(de.d_name, name)) {
+      // Found file, so will replace it
+      printf("Found \"%s\" on the file system, beginning at cluster %d\n", name, (int)de.d_ino);
+      return 1;
+    }
+  }
+  if (dir_sector == -1)
+    return 0;
+}
+
+int rename_file(char* name, char* dest_name)
+{
   int retVal = 0;
   do {
 
-    if (check_file_system_access() == -1)
+    if (!contains_file(name)) {
+      printf("ERROR: File %s does not exist.\n", name);
       return -1;
+    }
 
-    if (fat_opendir(current_dir)) {
-      retVal = -1;
-      break;
-    }
-    // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-    while (!fat_readdir(&de)) {
-      // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_filelen);
-      // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
-      if (!strcasecmp(de.d_name, name)) {
-        // Found file, so will replace it
-        printf("%s already exists on the file system, beginning at cluster %d\n", name, (int)de.d_ino);
-        break;
-      }
-    }
-    if (dir_sector == -1) {
-      printf("File %s does not exist.\n", name);
-      retVal = -1;
-      break;
+    if (contains_file(dest_name)) {
+      printf("ERROR: Cannot rename to \"%s\", as this file already exists.\n", dest_name);
+      return -2;
     }
 
     // Write name
@@ -2661,9 +2675,11 @@ int rename_file(char* name, char* dest_name)
   return retVal;
 }
 
-#ifdef USE_LFN
+// #ifdef USE_LFN
+// returns: 0 = doesn't need long name, 1 = needs long name
 int normalise_long_name(char* long_name, char* short_name, char* dir_name)
 {
+  struct m65dirent de;
   int base_len = 0;
   int ext_len = 0;
   int dot_count = 0;
@@ -2673,12 +2689,12 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
 
   // Handle . and .. special cases
   if (!strcmp(long_name, ".")) {
-    bcopy(".          ", short_name);
-    return;
+    bcopy(".          ", short_name, 8+3);
+    return 0;
   }
   if (!strcmp(long_name, "..")) {
-    bcopy("..         ", short_name);
-    return;
+    bcopy("..         ", short_name, 8+3);
+    return 0;
   }
 
   for (int i = 0; long_name[i]; i++) {
@@ -2727,8 +2743,8 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
       snprintf(temp, 8 - ofs, "~%d", i);
       bcopy(temp, &short_name[ofs], 8 - ofs);
       printf("  considering short-name '%s'...\n", short_name);
-      if (fat_opendir(dir)) {
-        fprintf(stderr, "ERROR: Could not open directory '%s' to check for LFN uniqueness.\n", dir);
+      if (fat_opendir(dir_name)) {
+        fprintf(stderr, "ERROR: Could not open directory '%s' to check for LFN uniqueness.\n", dir_name);
         // So just assume its unique
         break;
       }
@@ -2741,7 +2757,8 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
           // rather than calling fat_readdir(). Else we can make fat_readdir()
           // store the unmodified short-name (and eventually long-name)?
           fprintf(stderr, "ERROR: Not implemented.\n");
-          exit(-1);
+          return -1;
+          //exit(-1);
         }
       }
     }
@@ -2760,7 +2777,7 @@ unsigned char lfn_checksum(const unsigned char* pFCBName)
 
   return sum;
 }
-#endif
+// #endif
 
 int upload_file(char* name, char* dest_name)
 {
@@ -2768,15 +2785,15 @@ int upload_file(char* name, char* dest_name)
   int retVal = 0;
   do {
 
-#ifdef USE_LFN
-    unsigned char short_name[8 + 3 + 1];
+// #ifdef USE_LFN
+    char short_name[8 + 3 + 1];
 
     // Normalise dest_name into 8.3 format.
-    normalise_long_name(dest_name, short_name);
+    normalise_long_name(dest_name, short_name, current_dir);
 
     // Calculate checksum of 8.3 name
-    unsigned char lfn_csum = lfn_checksum(short_name);
-#endif
+    unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
+// #endif
 
     time_t upload_start = time(0);
 

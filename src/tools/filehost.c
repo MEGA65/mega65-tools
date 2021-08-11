@@ -118,12 +118,12 @@ void add_to_list(tfile_info* finfo)
   {
     if (ptr->next)
     {
-      ptr = ptr->next;
+      ptr = (tlist_item*)ptr->next;
     }
     else
     {
       ptr->next = malloc(sizeof(tlist_item));
-      ptr = ptr->next;
+      ptr = (tlist_item*)ptr->next;
       memset(ptr, 0, sizeof(tlist_item));
     }
   }
@@ -222,7 +222,7 @@ void print_items(void)
     printf("%d: %s - \"%s\" - author: %s\n",
         cnt, pfinfo->title, pfinfo->filename, pfinfo->author);
 
-    ptr = ptr->next;
+    ptr = (tlist_item*)ptr->next;
     cnt++;
   }
 }
@@ -397,7 +397,7 @@ char* download_file_from_filehost(int fileidx)
   {
     if (fileidx == cnt)
       break;
-    ptr = ptr->next;
+    ptr = (tlist_item*)ptr->next;
     cnt++;
   }
 

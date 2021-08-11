@@ -4,6 +4,7 @@
 
 int parse_command(const char* str, const char* format, ...);
 int upload_file(char* name, char* dest_name);
+int rename_file(char* name, char* dest_name);
 int delete_file(char* name);
 int download_file(char* dest_name, char* local_name, int showClusters);
 int is_fragmented(char* filename);
@@ -183,21 +184,32 @@ class Mega65FtpTestFixture : public ::testing::Test {
   protected:
   char* file4kb = "4kbtest.tmp";
   char* file8kb = "8kbtest.d81";
+  bool suppressflag = 0;
 
   void SetUp() override
   {
     // suppress the chatty output
     ::testing::internal::CaptureStderr();
     ::testing::internal::CaptureStdout();
+    suppressflag = 1;
 
     generate_dummy_file(file4kb, 4096);
     generate_dummy_file(file8kb, 8192);
   }
 
+  void ReleaseStdOut(void)
+  {
+    if (suppressflag)
+    {
+      suppressflag = 0;
+      testing::internal::GetCapturedStderr();
+      testing::internal::GetCapturedStdout();
+    }
+  }
+
   void TearDown() override
   {
-    testing::internal::GetCapturedStderr();
-    testing::internal::GetCapturedStdout();
+    ReleaseStdOut();
 
     // cleanup
     delete_local_file(file4kb);
@@ -236,19 +248,26 @@ TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
   //         +----------+----------+----------+----------+----------+-----
   upload_file(file8kb, file8kb);
 
+  ReleaseStdOut();
   ASSERT_EQ(0, is_fragmented("4kb1.tmp"));
   ASSERT_EQ(0, is_fragmented("4kb3.tmp"));
   ASSERT_EQ(0, is_fragmented(file8kb));
 }
 
-TEST(Mega65FtpTest, RenameToAnExistingFilenameShouldNotBePermitted)
+TEST_F(Mega65FtpTestFixture, RenameToAnExistingFilenameShouldNotBePermitted)
 {
-  upload_file("file1.txt");
-  upload_file("file2.txt");
-  rename_file("file1.txt", "file2.txt");
+  init_sdcard_data();
+  upload_file(file4kb, file4kb);
+  upload_file(file8kb, file8kb);
+  int ret = rename_file(file4kb, file8kb);
   // this should result in an error
+  
+
+  ReleaseStdOut();
+  ASSERT_EQ(ret, -2);
 }
 
+/*
 TEST(Mega65FtpTest, UploadNewLFNShouldOfferShortName)
 {
   upload_file("LongFileName.d81", "LongFileName.d81");
@@ -292,5 +311,6 @@ TEST(Mega65FtpTest, UploadDifferentLFNWithExistingShortNameShouldUseDifferentNam
   download("LONGFI~2.D81");
   // assure its contents matches 'LongFish.d81'
 }
+*/
 
 } // namespace mega65_ftp
