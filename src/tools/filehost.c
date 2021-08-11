@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+#include <ctype.h>
 #include "m65common.h"
 
 #define FINISHED -1

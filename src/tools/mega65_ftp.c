@@ -2194,7 +2194,7 @@ void show_local_directory(char* searchpattern)
 
 void show_local_pwd(void)
 {
-  char cwd[MAX_PATH];
+  char cwd[4096];
   if (getcwd(cwd, sizeof(cwd)) != NULL) {
     printf("%s\n", cwd);
   }
@@ -2595,7 +2595,9 @@ int contains_file(char* name)
     }
   }
   if (dir_sector == -1)
-    return 0;
+    return -1;
+
+  return 0;
 }
 
 int rename_file(char* name, char* dest_name)
@@ -2603,12 +2605,12 @@ int rename_file(char* name, char* dest_name)
   int retVal = 0;
   do {
 
-    if (!contains_file(name)) {
+    if (contains_file(name)) {
       printf("ERROR: File %s does not exist.\n", name);
       return -1;
     }
 
-    if (contains_file(dest_name)) {
+    if (contains_file(dest_name) == 1) {
       printf("ERROR: Cannot rename to \"%s\", as this file already exists.\n", dest_name);
       return -2;
     }
