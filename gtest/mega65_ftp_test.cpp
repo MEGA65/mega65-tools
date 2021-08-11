@@ -7,6 +7,7 @@ int upload_file(char* name, char* dest_name);
 int rename_file(char* name, char* dest_name);
 int delete_file(char* name);
 int download_file(char* dest_name, char* local_name, int showClusters);
+int open_file_system(void);
 int is_fragmented(char* filename);
 
 #define SECTOR_SIZE 512
@@ -22,6 +23,8 @@ unsigned char sdcard[SDSIZE] = { 0 };
 
 void init_sdcard_data(void)
 {
+  memset(sdcard, 0, SDSIZE);
+
   // MBR
   // ===
   // - Describe the 1st (and only) partition
@@ -253,7 +256,18 @@ TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
   ASSERT_EQ(0, is_fragmented(file8kb));
 }
 
-TEST_F(Mega65FtpTestFixture, RenameToAnExistingFilenameShouldNotBePermitted)
+TEST_F(Mega65FtpTestFixture, RenameToNonExistingFilenameShouldBePermitted)
+{
+  init_sdcard_data();
+  upload_file(file4kb, file4kb);
+  int ret = rename_file(file4kb, file8kb);
+  // this should result in an error
+
+  ReleaseStdOut();
+  ASSERT_EQ(ret, 0);
+}
+
+TEST_F(Mega65FtpTestFixture, RenameToExistingFilenameShouldNotBePermitted)
 {
   init_sdcard_data();
   upload_file(file4kb, file4kb);

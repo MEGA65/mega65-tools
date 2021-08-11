@@ -2591,8 +2591,9 @@ int contains_file(char* name)
       return 1;
     }
   }
+  // if dir-sector = -1, that means we got to the end of the directory entries without finding a match
   if (dir_sector == -1)
-    return -1;
+    return 0;
 
   return 0;
 }
