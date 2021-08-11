@@ -2605,7 +2605,7 @@ int rename_file(char* name, char* dest_name)
   int retVal = 0;
   do {
 
-    if (contains_file(name)) {
+    if (!contains_file(name)) {
       printf("ERROR: File %s does not exist.\n", name);
       return -1;
     }

@@ -481,11 +481,23 @@ $(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(G
 $(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/bit2core.test, $(GTESTDIR)/bit2core_test.cpp $(TOOLDIR)/bit2core.c))
 
 test: $(GTESTBINDIR)/mega65_ftp.test $(GTESTBINDIR)/bit2core.test
+	@echo ""
+	@echo "TESTING: MEGA65_FTP..."
+	@echo "======================"
 	$(GTESTBINDIR)/mega65_ftp.test
+	@echo ""
+	@echo "TESTING: BIT2CORE..."
+	@echo "===================="
 	$(GTESTBINDIR)/bit2core.test
 
 test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTBINDIR)/bit2core.test.exe
+	@echo ""
+	@echo "TESTING: MEGA65_FTP..."
+	@echo "======================"
 	$(GTESTBINDIR)/mega65_ftp.test.exe
+	@echo ""
+	@echo "TESTING: BIT2CORE..."
+	@echo "===================="
 	$(GTESTBINDIR)/bit2core.test.exe
 
 $(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) Makefile
