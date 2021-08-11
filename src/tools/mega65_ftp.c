@@ -2613,6 +2613,9 @@ int rename_file(char* name, char* dest_name)
       return -2;
     }
 
+    // need to call this again to set various global variable details for the found file properly
+    contains_file(name);
+
     // Write name
     for (int i = 0; i < 11; i++)
       dir_sector_buffer[dir_sector_offset + i] = 0x20;

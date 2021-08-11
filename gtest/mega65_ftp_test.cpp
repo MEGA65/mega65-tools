@@ -8,6 +8,7 @@ int rename_file(char* name, char* dest_name);
 int delete_file(char* name);
 int download_file(char* dest_name, char* local_name, int showClusters);
 int open_file_system(void);
+int contains_file(char* name);
 int is_fragmented(char* filename);
 
 #define SECTOR_SIZE 512
@@ -260,11 +261,10 @@ TEST_F(Mega65FtpTestFixture, RenameToNonExistingFilenameShouldBePermitted)
 {
   init_sdcard_data();
   upload_file(file4kb, file4kb);
-  int ret = rename_file(file4kb, file8kb);
-  // this should result in an error
+  rename_file(file4kb, file8kb);
 
   ReleaseStdOut();
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(1, contains_file(file8kb));
 }
 
 TEST_F(Mega65FtpTestFixture, RenameToExistingFilenameShouldNotBePermitted)
