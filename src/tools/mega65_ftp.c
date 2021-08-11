@@ -544,9 +544,6 @@ int execute_command(char* cmd)
     clustermap_count = 1;
     show_clustermap();
   }
-  else if (sscanf(cmd, "clusters %s", src) == 1) {
-    download_file(src, src, 1);
-  }
   else if (sscanf(cmd, "cluster %d", &cluster_num) == 1) {
     show_cluster();
   }
