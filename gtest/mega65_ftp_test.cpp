@@ -199,8 +199,7 @@ class Mega65FtpTestFixture : public ::testing::Test {
 
   void ReleaseStdOut(void)
   {
-    if (suppressflag)
-    {
+    if (suppressflag) {
       suppressflag = 0;
       testing::internal::GetCapturedStderr();
       testing::internal::GetCapturedStdout();
@@ -261,7 +260,6 @@ TEST_F(Mega65FtpTestFixture, RenameToAnExistingFilenameShouldNotBePermitted)
   upload_file(file8kb, file8kb);
   int ret = rename_file(file4kb, file8kb);
   // this should result in an error
-  
 
   ReleaseStdOut();
   ASSERT_EQ(ret, -2);

@@ -110,7 +110,7 @@ int no_rxbuff = 1;
 
 int saw_c64_mode = 0;
 int saw_c65_mode = 0;
-int saw_openrom  = 0;
+int saw_openrom = 0;
 
 int serial_speed = 2000000;
 
@@ -1545,8 +1545,7 @@ PORT_TYPE open_tcp_port(char* portname)
   {
     sscanf(&portname[4], "%[^:]:%s", hostname, port);
   }
-  else if (portname[3] == '\\' && portname[4] == '#')
-  {
+  else if (portname[3] == '\\' && portname[4] == '#') {
     sscanf(&portname[5], "%[^:]:%s", hostname, port);
   }
 
