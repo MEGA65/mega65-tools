@@ -570,6 +570,73 @@ void read_track(unsigned char track_number,unsigned char side)
 
 unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsigned char sector)
 {
+#if 0
+  // Disable auto-seek, or we can't force seeking to track 0    
+  POKE(0xD689,PEEK(0xD689)|0x10); 
+
+  // Connect to real floppy drive
+  while(!(lpeek(0xffd36a1L) & 1)) {
+    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+  }
+  
+  // Floppy motor on, and select side
+  POKE(0xD080, 0x68);
+  if (side) POKE(0xD080,0x60);
+  
+  // Map FDC sector buffer, not SD sector buffer
+  POKE(0xD689, PEEK(0xD689) & 0x7f);
+  
+  // Disable matching on any sector, use real drive
+  POKE(0xD6A1, 0x01);
+
+  // Wait until busy flag clears
+  while (PEEK(0xD082) & 0x80) {
+    continue;
+  }
+
+  // Seek to track 0
+  while(!(PEEK(0xD082)&0x01)) {
+    POKE(0xD081,0x10); 
+    while(PEEK(0xD082)&0x80) continue;
+ }
+  
+  // Seek to the requested track
+  while(PEEK(0xD082)&0x80) continue;
+  for(i=0;i<track_number;i++) {
+    POKE(0xD081,0x18);
+    while(PEEK(0xD082)&0x80) continue;
+    }        
+#endif
+  
+  // Now select the side, and try to read the sector
+  POKE(0xD084, track_number);
+  POKE(0xD085, sector);
+  POKE(0xD086, side?1:0);
+
+  // Issue read command
+  POKE(0xD081, 0x01); // but first reset buffers
+  POKE(0xD081, 0x40);
+
+  // Wait for busy flag to clear
+  i=0xe000;
+  while (PEEK(0xD082) & 0x80) {
+    // Read sector data non-buffered while we wait for comparison
+    if (PEEK(0xD082)&0x40) { POKE(0xE000+i,PEEK(0xD087)); i++; i&=0x1fff; }
+    POKE(0xc000,PEEK(0xc000)+1);
+  }
+
+  if (PEEK(0xD082) & 0x18) {
+    // Read failed
+    POKE(0xD020,PEEK(0xD020)+1);
+    return 1;
+  } else {
+    // Read succeeded
+    return 0;
+  }
+}
+
+unsigned char write_a_sector(unsigned char track_number,unsigned char side, unsigned char sector)
+{
   // Disable auto-seek, or we can't force seeking to track 0    
   POKE(0xD689,PEEK(0xD689)|0x10); 
 
@@ -610,26 +677,24 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   POKE(0xD085, sector);
   POKE(0xD086, side?1:0);
 
-  // Issue read command
+  // Issue write command
   POKE(0xD081, 0x01); // but first reset buffers
-  POKE(0xD081, 0x40);
+  POKE(0xD081, 0x80);
 
-  // XXX DEBUG: Read raw gap data as soon as we have found the sector
-  // header.
-  while((PEEK(0xD6A4)&0x7f)!=sector) POKE(0xD020,PEEK(0xD020)+1);
-  readtrackgaps();
-  
   // Wait for busy flag to clear
   while (PEEK(0xD082) & 0x80) {
     POKE(0xc000,PEEK(0xc000)+1);
+
+    i=0xc050+PEEK(0xD694);
+    POKE(i,PEEK(i)+1);
   }
 
   if (PEEK(0xD082) & 0x10) {
-    // Read failed
+    // Write failed
     POKE(0xD020,PEEK(0xD020)+1);
     return 1;
   } else {
-    // Read succeeded
+    // Write succeeded
     return 0;
   }
 }
@@ -736,7 +801,7 @@ void format_disk(void)
       
       // Pre-calculate CRC bytes
       crc16_init();
-      for(i=0;i<10;i++)
+      for(i=0;i<=9;i++)
 	{
 	  // Calculate initial CRC of sync bytes and $FE header marker
 	  crc=crc16(0xFFFF,0xa1);
@@ -745,7 +810,7 @@ void format_disk(void)
 	  crc=crc16(crc,0xfe);
 	  crc=crc16(crc,track_num);
 	  crc=crc16(crc,side);
-	  crc=crc16(crc,i);
+	  crc=crc16(crc,i+1);
 	  crc=crc16(crc,2); // 512 byte sectors
 	  header_crc_bytes[i*2+0]=crc&0xff;
 	  header_crc_bytes[i*2+1]=crc>>8;
@@ -757,7 +822,7 @@ void format_disk(void)
       for(s=0;s<10;s++) {
 	bzero(sector_data[s],512);
 	for(i=0;i<512;) {
-	  snprintf(msg,80,"Offset $%x, Track %d, Sector %d. ",i,track_num,s);
+	  snprintf(msg,80,"Offset $%x, Track %d, Sector %d. ",i,track_num,s+1);
 	  if (strlen(msg)+i<512) {
 	    lcopy((unsigned long)msg,(unsigned long)&sector_data[s][i],strlen(msg));
 	    i+=strlen(msg);
@@ -931,10 +996,10 @@ If you do, the final CRC value should be 0.
 	POKE(0xD087,0x00);
       }
       
-      // We cound x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
+      // We count x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
       for(sector_num=0;sector_num<10*2;sector_num+=2) {
 
-	s=sector_num>>1;
+	s=(sector_num>>1);
 	
 	POKE(0xC04d,0);
 	POKE(0xC04f,0);
@@ -984,7 +1049,7 @@ If you do, the final CRC value should be 0.
 	while(!(PEEK(0xD082)&0x40)) {
 	  if (!(PEEK(0xD082)&0x80)) break;
 	}
-	POKE(0xD087,sector_num>>1); 
+	POKE(0xD087,1+(sector_num>>1)); 
 	
 	POKE(0xC04c,4);
 	
@@ -1196,6 +1261,8 @@ void wipe_disk(void)
   
 }
 
+unsigned short tries=0,auto_tracking=0;
+
 void read_write_test(void)
 {
   text80x40_mode();
@@ -1269,39 +1336,77 @@ void read_write_test(void)
       case 0x4D: // (M)anual seeking
       case 0x6D:
         // Switch auto/manual tracking in FDC to manual
+	auto_tracking=0;
         POKE(0xD689, PEEK(0xD689) | 0x10);
         break;
       case 0x41: // (A)uto track seeking
       case 0x61:
         // Auto-tune on
+	auto_tracking=1;
         POKE(0xD689, PEEK(0xD689) & 0xEF);
         break;
+      case 0x57: // (W)rite a sector
+      case 0x77:
+
+	// Fill sector buffer with known contents
+	lfill(0xffd6c00L,0x00,0x400);
+	snprintf(peak_msg,80,"Written to track %d, sector %d, side %d",
+		 request_track,request_sector,request_side);
+	lcopy((unsigned long)peak_msg,0xffd6c00L,strlen(peak_msg));
+	write_a_sector(request_track,request_side,request_sector);
+	print_text80x40(0,3,7,peak_msg);
+	
+        break;
+      case 0x54: case 0x74: // Read a (T)rack
+	read_track(request_track,0);
+	text80x40_mode();
+	break;
       case 0x52: // (R)ead a sector
       case 0x72:
 
 	// Fill sector buffer with known contents
 	lfill(0xffd6c00L,0xbd,0x400);
 
-	// Clear screen before reading, so we know the data we see is fresh
-	text80x40_clear_screen();
 	
 	// Read the sector
-	if (!read_a_sector(request_track,request_side,request_sector))
-	  {
-	    // Display sector buffer contents
-	    // XXX This is really slow, but it works
-	    for(i=0;i<512;i+=16) {
-	      snprintf(peak_msg,80,"%04x:",i);
-	      print_text80x40(0,(i>>4)+5,15,peak_msg);
-	      for(a=0;a<16;a++) {
-		b=lpeek(0xffd6c00+i+a);
-		snprintf(peak_msg,80,"%02x",b);
-		print_text80x40(6+a*3,(i>>4)+5,15,peak_msg);
-		POKE(0xC000+80*((i>>4)+5)+55+a,b);
+
+	tries=0;
+	
+	while(1) {	
+
+	  // Clear screen before reading, so we know the data we see is fresh
+	  text80x40_clear_screen();
+	  
+	  tries++;
+	  snprintf(peak_msg,80,"Try #%d",tries);
+	  print_text80x40(0,3,13,peak_msg);
+	  
+	  if (!read_a_sector(request_track,request_side,request_sector))
+	    {
+	      // Display sector buffer contents
+	      // XXX This is really slow, but it works
+	      for(i=0;i<512;i+=16) {
+		snprintf(peak_msg,80,"%04x:",i);
+		print_text80x40(0,(i>>4)+5,15,peak_msg);
+		for(a=0;a<16;a++) {
+		  b=lpeek(0xffd6c00+i+a);
+		  snprintf(peak_msg,80,"%02x",b);
+		  print_text80x40(6+a*3,(i>>4)+5,15,peak_msg);
+		  POKE(0xC000+80*((i>>4)+5)+55+a,b);
+		}
 	      }
-	    }
-	  } else {
-	  print_text80x40(30,21,2,"Read Error Encountered");
+	    } else {
+	    snprintf(peak_msg,80,"Read Error Encountered ($%02x)",PEEK(0xD082));
+	    print_text80x40(27,21,2,peak_msg);
+	    break;
+	  }
+#if 0
+	  if ((PEEK(0xD610)==0x52)||(lpeek(0xffd6c00)!=0xcf))
+	    break;	  
+	  if (tries==63) break;
+#else
+	  break;
+#endif
 	}
 	
         break;
@@ -1315,8 +1420,10 @@ void read_write_test(void)
         request_sector--;
 	if (request_sector>10) request_sector=10;
 	break;
-      case 0xdd: // Toggle disk side
+      case 0x44: case 0x64: // Toggle disk side
 	request_side^=1;
+	POKE(0xD080, 0x68);
+	if (request_side) POKE(0xD080,0x60);
 	break;
 	
         break;
@@ -1332,12 +1439,14 @@ void read_write_test(void)
 
     // Seek to requested track
     // (but mask out "track matched" flag in bit 7)
-    if (request_track<(PEEK(0xD6A3)&0x7f)) {
-      POKE(0xD081,0x10);
-      usleep(20000);
-    } else if (request_track>(PEEK(0xD6A3)&0x7f)) {
-      POKE(0xD081,0x18);
-      usleep(20000);
+    if (auto_tracking) {
+      if (request_track<(PEEK(0xD6A3)&0x7f)) {
+	POKE(0xD081,0x10);
+	usleep(20000);
+      } else if (request_track>(PEEK(0xD6A3)&0x7f)) {
+	POKE(0xD081,0x18);
+	usleep(20000);
+      }
     }
   }
 
@@ -1397,7 +1506,7 @@ void main(void)
     case '5':
       // Read track 0
       POKE(0xD610,0);
-      read_track(0,1);
+      read_track(0,0);
       break;
     case '6':
       POKE(0xD610,0);
