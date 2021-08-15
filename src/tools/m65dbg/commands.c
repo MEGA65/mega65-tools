@@ -26,6 +26,10 @@ typedef struct
   int sp;
   int mapl;
   int maph;
+  int lastop;
+  int odd1;   // what is this?
+  int odd2;   // what is this?
+  char flags[16];
 } reg_data;
 
 typedef struct
@@ -1066,12 +1070,17 @@ reg_data get_regs(void)
   serialWrite("r\n");
   serialRead(inbuf, BUFSIZE);
   line = strstr(inbuf+2, "\n") + 1;
-  sscanf(line,"%04X %02X %02X %02X %02X %02X %04X %04X %04X",
-    &reg.pc, &reg.a, &reg.x, &reg.y, &reg.z, &reg.b, &reg.sp, &reg.mapl, &reg.maph);
+  sscanf(line,"%04X %02X %02X %02X %02X %02X %04X %04X %04X %02X %02X %02X %s",
+    &reg.pc, &reg.a, &reg.x, &reg.y, &reg.z, &reg.b, &reg.sp, &reg.mapl, &reg.maph, &reg.lastop, &reg.odd1, &reg.odd2, reg.flags);
 
   return reg;
 }
 
+void show_regs(reg_data* reg)
+{
+  printf("PC   A  X  Y  Z  B  SP   MAPH MAPL LAST-OP     P  P-FLAGS   RGP uS IO\n");
+  printf("%04X %02X %02X %02X %02X %02X %04X %04X %04X %02X       %02X %02X %s\n", reg->pc, reg->a, reg->x, reg->y, reg->z, reg->b, reg->sp, reg->mapl, reg->maph, reg->lastop, reg->odd1, reg->odd2, reg->flags);
+}
 
 mem_data get_mem(int addr, bool useAddr28)
 {
@@ -1467,6 +1476,11 @@ void disassemble(bool useAddr28)
 
   // get current register values
   reg_data reg = get_regs();
+  if (autowatch)
+  {
+    show_regs(&reg);
+    printf("---------------------------------------\n");
+  }
 
   // get address from parameter?
   char* token = strtok(NULL, " ");
