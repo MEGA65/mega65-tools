@@ -877,16 +877,35 @@ void load_bsa_list(char* fname)
 
     if (is_hexc(line[0]) && is_hexc(line[1]) &&
         is_hexc(line[2]) && is_hexc(line[3]) &&
-        line[4] == ' ' && is_hexc(line[5]) &&
-        is_hexc(line[6]))
+        line[4] == ' ')
     {
-      type_fileloc fl;
-      int addr;
-      sscanf(line, "%X", &addr);
-      fl.addr = addr;
-      fl.file = fname;
-      fl.lineno = lineno;
-      add_to_list(fl);
+      if (is_hexc(line[5]) && is_hexc(line[6]))
+      {
+        type_fileloc fl;
+        int addr;
+        sscanf(line, "%X", &addr);
+        fl.addr = addr;
+        fl.file = fname;
+        fl.lineno = lineno;
+        add_to_list(fl);
+      }
+      else
+      {
+        char tok[256];
+        sscanf(line+5, "%s", tok);
+        if (tok[0] != '*')
+        {
+          // add to map?
+          type_symmap_entry sme;
+          int addr;
+          char sval[256];
+          sscanf(line, "%X", &addr);
+          sme.addr = addr;
+          sme.sval = sval;
+          sme.symbol = tok;
+          add_to_symmap(sme);
+        }
+      }
     }
   }
 }
