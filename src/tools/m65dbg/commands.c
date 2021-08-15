@@ -849,6 +849,44 @@ void load_list(char* fname)
   load_map(fname);
 }
 
+int is_hexc(char c)
+{
+  if ((c>='a' && c<='z') || (c >='0' && c<='9'))
+    return true;
+
+  return false;
+}
+
+void load_bsa_list(char* fname)
+{
+  FILE* f = fopen(fname, "rt");
+  char line[1024];
+  int lineno=0;
+
+  while (!feof(f))
+  {
+    fgets(line, 1024, f);
+    lineno++;
+
+    if (strlen(line) < 8)
+      continue;
+
+    if (is_hexc(line[0]) && is_hexc(line[1]) &&
+        is_hexc(line[2]) && is_hexc(line[3]) &&
+        line[4] == ' ' && is_hexc(line[5]) &&
+        is_hexc(line[6]))
+    {
+      type_fileloc fl;
+      int addr;
+      sscanf(line, "%X", &addr);
+      fl.addr = addr;
+      fl.file = fname;
+      fl.lineno = lineno;
+      add_to_list(fl);
+    }
+  }
+}
+
 void load_acme_map(const char* fname)
 {
   char strMapFile[200];
@@ -917,6 +955,8 @@ void load_acme_list(char* fname)
     if (starts_with(line, "; ****") && strstr(line, "Source:"))
     {
       char* asmname = strstr(line, "Source: ") + strlen("Source: ");
+      if (strrchr(asmname, '/'))
+        asmname = strrchr(asmname, '/') + 1;
       sscanf(asmname, "%s", curfile);
     }
     else
@@ -994,6 +1034,12 @@ void listSearch(void)
       {
         printf("Loading \"%s\"...\n", dir->d_name);
         load_lbl(dir->d_name);
+      }
+      // .lst = BSA Compiler for MEGA65 ROM
+      if (ext != NULL && strcmp(ext, ".lst") == 0)
+      {
+        printf("Loading \"%s\"...\n", dir->d_name);
+        load_bsa_list(dir->d_name);
       }
       // .list = Ophis or CA65?
       if (ext != NULL && strcmp(ext, ".list") == 0)
