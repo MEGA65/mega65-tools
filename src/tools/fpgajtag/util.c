@@ -390,6 +390,7 @@ USB_INFO* fpgausb_init(void)
   }
 #else
 //#warning No USBDK support in libusb
+  printf("WARNING: No USBDK support in libusb\n");
 #endif
 
   while ((dev = device_list[i++])) {
