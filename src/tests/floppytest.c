@@ -1311,9 +1311,11 @@ void read_write_test(void)
       switch (PEEK(0xD610)) {
       case '-':
         POKE(0xD081, 0x10);
+	while(PEEK(0xD082)&0x80) POKE(0xD020,PEEK(0xD020)+1);
         break;
       case '+':
         POKE(0xD081, 0x18);
+	while(PEEK(0xD082)&0x80) POKE(0xD020,PEEK(0xD020)+1);
         break;
       case '0':
         request_track = 0;
