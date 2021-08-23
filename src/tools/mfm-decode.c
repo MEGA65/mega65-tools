@@ -95,8 +95,21 @@ void describe_data(void)
       if (i==1+512) crc_calc=crc;
       crc=crc16(crc,data_field[i]);
     }
-    if (crc) printf("CRC FAIL!  (included field = $%02x%02x, calculated as $%04x)\n",
-		    data_field[1+512],data_field[1+513],crc_calc);
+    if (crc) {
+      unsigned int fdc_crc=(data_field[1+512]<<8)+data_field[1+513];
+      printf("CRC FAIL!  (included field = $%04x, calculated as $%04x)\n",
+	     fdc_crc,crc_calc);
+      for(int s=0;s<4;s++) {
+	crc=0xffff;
+	for(int i=0;i<s;i++) crc=crc16(crc,0xa1);
+	for(int i=1;i<1+512+2;i++) {
+	  if (i==1+512) crc_calc=crc;
+	  crc=crc16(crc,data_field[i]);
+	  if (crc==fdc_crc) printf("CRC matched at i=%d, with %d sync marks\n",i,s);
+	}
+      }
+      
+    }
     else printf("CRC ok\n");
     break;
   default:
@@ -119,12 +132,12 @@ void emit_bit(int b)
       byte_count = 0;
     }
     if (sync_count==3) {
-      //      printf("Data field type $%02x\n",byte);
+      printf("Data field type $%02x\n",byte);
       sync_count=0;
       field_ofs=1;
       data_field[0]=byte;
     } else  {
-      //      printf(" $%02x", byte);
+      printf(" $%02x", byte);
       if (field_ofs<1024) data_field[field_ofs++]=byte;
     }
     bytes_emitted++;
@@ -157,10 +170,11 @@ void mfm_decode(float gap)
     if (bytes_emitted) {
       describe_data();
       printf("(%d bytes since last sync)\n",bytes_emitted);
+      sync_count=0;
     }
     sync_count++;
     if (sync_count==3) printf("SYNC MARK (3x $A1)\n");
-    //    printf("Sync $A1 x #%d\n",sync_count);
+    printf("Sync $A1 x #%d\n",sync_count);
     bits = 0;
     byte = 0;
     byte_count = 0;
