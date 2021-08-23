@@ -139,16 +139,17 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
   int i;
-#if 0
-  printf("\nWriting ");
-  for(i=0;i<l;i++)
-    {
-      if (d[i]>=' ') printf("%c",d[i]); else printf("[$%02X]",d[i]);
-    }
-  printf("\n");
-  char line[1024];
-  fgets(line,1024,stdin);
-#endif
+  if (debug_serial&&0)
+  {
+    printf("\nWriting ");
+    for(i=0;i<l;i++)
+      {
+	if (d[i]>=' ') printf("%c",d[i]); else printf("[$%02X]",d[i]);
+      }
+    printf("\n");
+    char line[1024];
+    fgets(line,1024,stdin);
+  }
 
   for (i = 0; i < l; i++) {
     if (no_rxbuff) {
@@ -262,7 +263,33 @@ void wait_for_prompt(void)
 
     check_for_vf011_jobs(read_buff, b);
 
+    if (strstr((char*)read_buff, "!\r\n")) {
+      // Watch or break point triggered.
+      // There is a bug in the MEGA65 where it sometimes reports
+      // this repeatedly. It is worked around by simply sending a newline.
+      printf("WARNING: Break or watchpoint trigger seen.\n");
+      serialport_write(fd,"\r",1);
+    }
     if (strstr((char*)read_buff, ".")) {
+      break;
+    }
+  }
+}
+
+void wait_for_string(char *s)
+{
+  unsigned char read_buff[8192];
+  int b = 1;
+  while (1) {
+    b = serialport_read(fd, read_buff, 8191);
+    if (b>0) dump_bytes(0,"wait_for_prompt",read_buff,b);
+    if (b < 0 || b > 8191)
+      continue;
+    read_buff[b] = 0;
+
+    check_for_vf011_jobs(read_buff, b);
+
+    if (strstr((char*)read_buff, s)) {
       break;
     }
   }
@@ -881,6 +908,7 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
           do_usleep(1000 * SLOW_FACTOR);
       }
     }
+    wait_for_string(cmd);
     wait_for_prompt();
     offset += b;
   }
@@ -902,30 +930,34 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
   char next_addr_str[8192];
   int ofs = 0;
 
-  //  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
+  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
 
   //  monitor_sync();
   while (addr < (address + count)) {
-    if ((address + count - addr) < 17) {
-      snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
-      end_addr = addr + 0x10;
-    }
-    else {
-      snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
-      end_addr = addr + 0x100;
-    }
-    //    printf("Sending '%s'\n",cmd);
-    slow_write_safe(fd, cmd, strlen(cmd));
+    time_t last_rx=0;
     while (addr != end_addr) {
+      if (last_rx<time(0)) {
+	if ((address + count - addr) < 17) {
+	  snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
+	  end_addr = addr + 0x10;
+	}
+	else {
+	  snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
+	  end_addr = addr + 0x100;
+	}
+	printf("Sending '%s'\n",cmd);
+	slow_write_safe(fd, cmd, strlen(cmd));
+	last_rx=time(0);
+      }
       snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
       int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
       if (b <= 0)
         b = 0;
-      // else
-      //   printf("%s\n", read_buff);
+      else
+	printf("%s\n", read_buff);
       if ((ofs + b) > 8191)
         b = 8191 - ofs;
-      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
+      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
       read_buff[ofs + b] = 0;
       ofs += b;
       char* s = strstr((char*)read_buff, next_addr_str);
@@ -958,7 +990,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
     }
   }
   if (addr >= (address + count)) {
-    //    fprintf(stderr,"Memory read complete at $%lx\n",addr);
+    fprintf(stderr,"Memory read complete at $%lx\n",addr);
     return 0;
   }
   else {
@@ -1257,7 +1289,7 @@ int win_serial_port_write(HANDLE port, uint8_t* buffer, size_t size, const char*
   BOOL success;
   //  printf("Calling WriteFile(%d)\n",size);
 
-  if (debug_serial) {
+  if (debug_serial&&0) {
     fprintf(stderr, "%s:%d:%s(): ", file, line, func);
     dump_bytes(0, "serial write (windows)", buffer, size);
   }
