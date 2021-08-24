@@ -293,8 +293,8 @@ void wait_for_string(char *s)
   unsigned char read_buff[8192];
   int b = 1;
   while (1) {
-    b = serialport_read(fd, read_buff, 8191);
-    if (b>0) dump_bytes(0,"wait_for_prompt",read_buff,b);
+    b = serialport_read(fd, read_buff, strlen(s));
+    if (b>0) dump_bytes(0,"wait_for_string",read_buff,b);
     if (b < 0 || b > 8191)
       continue;
     read_buff[b] = 0;
