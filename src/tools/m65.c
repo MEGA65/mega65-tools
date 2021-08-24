@@ -1441,6 +1441,7 @@ void enterTestMode()
 
 unsigned char checkUSBPermissions()
 {
+#ifndef WINDOWS
   libusb_device_handle* usbhandle = NULL;
   struct libusb_context* usb_context;
   libusb_device** device_list;
@@ -1460,6 +1461,7 @@ unsigned char checkUSBPermissions()
       return 0;
     }
   }
+#endif
 
   return 1;
 }
@@ -2584,6 +2586,6 @@ void do_exit(int retval)
       pthread_join(threads[i], NULL);
   }
 #endif
-  close_tcp_port();
+  close_default_tcp_port();
   exit(retval);
 }

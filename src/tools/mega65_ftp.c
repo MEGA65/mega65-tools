@@ -43,6 +43,8 @@
 #include <stdio.h>
 
 #include "m65common.h"
+#include "filehost.h"
+#include "diskman.h"
 #include "dirtymock.h"
 
 #define BOOL int
@@ -84,7 +86,20 @@ char current_dir[1024] = "/";
 int open_file_system(void);
 int download_slot(int sllot, char* dest_name);
 int download_file(char* dest_name, char* local_name, int showClusters);
+void show_clustermap(void);
+void show_cluster(void);
+void dump_sectors(void);
+void restore_sectors(void);
+void show_secinfo(void);
+void show_mbrinfo(void);
+void show_vbrinfo(void);
+void poke_sector(void);
+void perform_filehost_read(void);
+void perform_filehost_get(int num);
 int show_directory(char* path);
+void show_local_directory(char* searchpattern);
+void change_local_dir(char* path);
+void show_local_pwd(void);
 int delete_file(char* name);
 int rename_file(char* name, char* dest_name);
 int upload_file(char* name, char* dest_name);
@@ -106,6 +121,7 @@ BOOL find_file_in_curdir(char* filename, struct m65dirent* de);
 BOOL create_directory_entry_for_file(char* filename);
 unsigned int calc_first_cluster_of_file(void);
 BOOL is_d81_file(char* filename);
+void wrap_upload(char* fname);
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -131,6 +147,8 @@ int mode_report = 0;
 
 char serial_port[1024] = "/dev/ttyUSB1";
 char* bitstream = NULL;
+char* username = NULL;
+char* password = NULL;
 
 unsigned char* sd_read_buffer = NULL;
 int sd_read_offset = 0;
@@ -164,9 +182,24 @@ unsigned char fat_mbr[512];
 unsigned char syspart_sector0[512];
 unsigned char syspart_configsector[512];
 
+int dirent_raw = 0;
+int clustermap_start = 0;
+int clustermap_count = 0;
+int cluster_num = 0;
+char secdump_file[256] = { 0 };
+int secdump_start = 0;
+int secdump_count = 0;
+char secrestore_file[256] = { 0 };
+int secrestore_start = 0;
+int poke_secnum = 0;
+int poke_offset = 0;
+int poke_value = 0;
+int fhnum = 0;
+
 #define M65DT_REG 1
 #define M65DT_DIR 2
 #define M65DT_UNKNOWN 4
+#define M65DT_FREESLOT 0xff
 
 int sd_status_fresh = 0;
 unsigned char sd_status[16];
@@ -371,6 +404,8 @@ int execute_command(char* cmd)
     printf("Reseting MEGA65 and exiting.\n");
 
     request_quit();
+    if (xemu_flag)
+      usleep(30000);
     exit(0);
   }
 
@@ -382,6 +417,9 @@ int execute_command(char* cmd)
   }
   else if (parse_command(cmd, "put %s %s", src, dst) == 2) {
     upload_file(src, dst);
+  }
+  else if (parse_command(cmd, "dput %s", src) == 1) {
+    wrap_upload(src);
   }
   else if (parse_command(cmd, "del %s", src) == 1) {
     delete_file(src);
@@ -397,11 +435,20 @@ int execute_command(char* cmd)
   else if (parse_command(cmd, "sector $%x", &sector_num) == 1) {
     show_sector(sector_num);
   }
+  else if (sscanf(cmd, "dirent_raw %d", &dirent_raw) == 1) {
+    printf("dirent_raw = %d\n", dirent_raw);
+  }
   else if (parse_command(cmd, "dir %s", src) == 1) {
     show_directory(src);
   }
   else if (!strcmp(cmd, "dir")) {
     show_directory(current_dir);
+  }
+  else if (parse_command(cmd, "ldir %s", src) == 1) {
+    show_local_directory(src);
+  }
+  else if (!strcmp(cmd, "ldir")) {
+    show_local_directory(NULL);
   }
   else if (parse_command(cmd, "put %s", src) == 1) {
     char* dest = src;
@@ -413,6 +460,12 @@ int execute_command(char* cmd)
   }
   else if (parse_command(cmd, "mkdir %s", src) == 1) {
     create_dir(src);
+  }
+  else if (parse_command(cmd, "lcd %s", src) == 1) {
+    change_local_dir(src);
+  }
+  else if (!strcmp(cmd, "lpwd")) {
+    show_local_pwd();
   }
   else if ((parse_command(cmd, "chdir %s", src) == 1) || (parse_command(cmd, "cd %s", src) == 1)) {
     if (src[0] == '/') {
@@ -484,16 +537,70 @@ int execute_command(char* cmd)
   else if (parse_command(cmd, "mount %s", src) == 1) {
     mount_file(src);
   }
+  else if (sscanf(cmd, "clustermap %d %d", &clustermap_start, &clustermap_count) == 2) {
+    show_clustermap();
+  }
+  else if (sscanf(cmd, "clustermap %d", &clustermap_start) == 1) {
+    clustermap_count = 1;
+    show_clustermap();
+  }
+  else if (sscanf(cmd, "cluster %d", &cluster_num) == 1) {
+    show_cluster();
+  }
+  else if (sscanf(cmd, "secdump %s %d %d", secdump_file, &secdump_start, &secdump_count) == 3) {
+    dump_sectors();
+  }
+  else if (sscanf(cmd, "secrestore %s %d", secrestore_file, &secrestore_start) == 2) {
+    restore_sectors();
+  }
+  else if (!strcmp(cmd, "secinfo")) {
+    show_secinfo();
+  }
+  else if (!strcmp(cmd, "mbrinfo")) {
+    show_mbrinfo();
+  }
+  else if (!strcmp(cmd, "vbrinfo")) {
+    show_vbrinfo();
+  }
+  else if (sscanf(cmd, "poke %d %d %d", &poke_secnum, &poke_offset, &poke_value) == 3) {
+    poke_sector();
+  }
+  else if (!strcmp(cmd, "fh")) {
+    perform_filehost_read();
+  }
+  else if (sscanf(cmd, "fhget %d", &fhnum) == 1) {
+    perform_filehost_get(fhnum);
+  }
   else if (!strcasecmp(cmd, "help")) {
-    printf("MEGA65 File Transfer Program Command Reference:\n");
-    printf("\n");
-    printf("dir [directory] - show contents of current or specified directory.\n");
-    printf("cd [directory] - change current working directory.\n");
+    printf("MEGA65 File Transfer Program Command Reference:\n\n");
+
+    printf("dir [directory|wildcardpattern] - show contents of current or specified sdcard directory. Can use a wildcard "
+           "pattern on current directory.\n");
+    printf("ldir [wildcardpattern] - shows the contents of current local directory.\n");
+    printf("cd [directory] - change current sdcard working directory.\n");
+    printf("lcd [directory] - change current local working directory.\n");
     printf("put <file> [destination name] - upload file to SD card, and optionally rename it destination file.\n");
     printf("get <file> [destination name] - download file from SD card, and optionally rename it destination file.\n");
+    printf("dput <file> - upload .prg file wrapped into a .d81 file\n");
+    printf("del <file> - delete a file from SD card.\n");
+    printf("mkdir <dirname> - create a directory on the SD card.\n");
+    printf("cd <dirname> - change directory on the SD card. (aka. 'chdir')\n");
+    printf("rename <oldname> <newname> - rename a file on the SD card.\n");
     printf("clusters <file> - show cluster chain of specified file.\n");
+    printf("mount <d81file> - Mount the specified .d81 file (which resides on the SD card).\n");
     printf("sector <number|$hex number> - display the contents of the specified sector.\n");
     printf("getslot <slot> <destination name> - download a freeze slot.\n");
+    printf("dirent_raw 0|1 - flag to hide/show 32-byte dump of directory entries.\n");
+    printf("clustermap <startidx> [<count>] - show cluster-map entries for specified range.\n");
+    printf("cluster <num> - dump the entire contents of this cluster.\n");
+    printf("secdump <filename> <startsec> <count> - dump the specified sector range to a file.\n");
+    printf("secrestore <filename> <startsec> - restore a dumped file back into the specified sector area.\n");
+    printf("secinfo - lists the locations of various useful sectors, for easy reference.\n");
+    printf("mbrinfo - lists the partitions specified in the MBR (sector 0)\n");
+    printf("vbrinfo - lists the VBR details of the main Mega65 partition\n");
+    printf("poke <sector> <offset> <val> - poke a value into a sector, at the desired offset.\n");
+    printf("fh - retrieve a list of files available on the filehost at files.mega65.org\n");
+    printf("fhget <num> - download a file from the filehost and upload it onto your sd-card\n");
     printf("exit - leave this programme.\n");
     printf("quit - leave this programme.\n");
   }
@@ -518,7 +625,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
   start_usec = gettime_us();
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
@@ -544,6 +651,12 @@ int DIRTYMOCK(main)(int argc, char** argv)
       break;
     case 'c':
       queue_command(optarg);
+      break;
+    case 'u':
+      username = strdup(optarg);
+      break;
+    case 'p':
+      password = strdup(optarg);
       break;
     default: /* '?' */
       usage();
@@ -755,10 +868,15 @@ int load_helper(void)
 
       printf("Helper in memory\n");
 
-      // Launch helper programme
-      snprintf(cmd, 1024, "g080d\r");
-      slow_write(fd, cmd, strlen(cmd));
-      wait_for_prompt();
+      if (saw_openrom) {
+        stuff_keybuffer("RUN\r");
+      }
+      else {
+        // Launch helper programme
+        snprintf(cmd, 1024, "g080d\r");
+        slow_write(fd, cmd, strlen(cmd));
+        wait_for_prompt();
+      }
 
       snprintf(cmd, 1024, "t0\r");
       slow_write(fd, cmd, strlen(cmd));
@@ -1305,6 +1423,8 @@ unsigned int get_next_cluster(int cluster)
     retVal = (buf[cluster_sector_offset + 0] << 0) | (buf[cluster_sector_offset + 1] << 8)
            | (buf[cluster_sector_offset + 2] << 16) | (buf[cluster_sector_offset + 3] << 24);
 
+    // mask out highest 4 bits (these seem to be flags on some systems)
+    retVal &= 0x0fffffff;
   } while (0);
   return retVal;
 }
@@ -1392,42 +1512,101 @@ int fat_opendir(char* path)
         break;
     }
 
-    printf("dir_cluster = $%x, dir_sector = $%x\n", dir_cluster, partition_start + dir_sector);
+    // printf("dir_cluster = $%x, dir_sector = $%x\n", dir_cluster, partition_start + dir_sector);
 
   } while (0);
   return retVal;
 }
 
+int advance_to_next_entry(void)
+{
+  int retVal = 0;
+
+  // Advance to next entry
+  dir_sector_offset += 32;
+  if (dir_sector_offset == 512) {
+    dir_sector_offset = 0;
+    dir_sector++;
+    dir_sector_in_cluster++;
+    if (dir_sector_in_cluster == sectors_per_cluster) {
+      // Follow to next cluster
+      int next_cluster = get_next_cluster(dir_cluster);
+      if (next_cluster < 0xFFFFFF0 && next_cluster) {
+        dir_cluster = next_cluster;
+        dir_sector_in_cluster = 0;
+        dir_sector = first_cluster_sector + (next_cluster - first_cluster) * sectors_per_cluster;
+      }
+      else {
+        // End of directory reached
+        dir_sector = -1;
+        retVal = -2;
+        return retVal;
+      }
+    }
+    if (dir_sector != -1)
+      retVal = read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
+    if (retVal)
+      dir_sector = -1;
+  }
+
+  return retVal;
+}
+
+void debug_vfatchunk(void)
+{
+  int start = 0x01;
+  int len = 5;
+
+  for (int k = start; k < (start + len * 2); k += 2)
+    printf("%c", dir_sector_buffer[dir_sector_offset + k]);
+
+  start = 0x0E;
+  len = 6;
+
+  for (int k = start; k < (start + len * 2); k += 2)
+    printf("%c", dir_sector_buffer[dir_sector_offset + k]);
+
+  start = 0x1C;
+  len = 2;
+
+  for (int k = start; k < (start + len * 2); k += 2)
+    printf("%c", dir_sector_buffer[dir_sector_offset + k]);
+
+  printf("\n");
+}
+
+void copy_to_dnamechunk_from_offset(char* dnamechunk, int offset, int numuc2chars)
+{
+  for (int k = 0; k < numuc2chars; k++) {
+    dnamechunk[k] = dir_sector_buffer[dir_sector_offset + offset + k * 2];
+  }
+}
+
+void copy_vfat_chars_into_dname(char* dname, int seqnumber)
+{
+  // increment char-pointer to the seqnumber string chunk we'll copy across
+  dname = dname + 13 * (seqnumber - 1);
+  copy_to_dnamechunk_from_offset(dname, 0x01, 5);
+  dname += 5;
+  copy_to_dnamechunk_from_offset(dname, 0x0E, 6);
+  dname += 6;
+  copy_to_dnamechunk_from_offset(dname, 0x1C, 2);
+}
+
 int fat_readdir(struct m65dirent* d)
 {
   int retVal = 0;
-  do {
+  int vfatEntry = 0;
+  int deletedEntry = 0;
+  d->d_type = 0;
 
-    // Advance to next entry
-    dir_sector_offset += 32;
-    if (dir_sector_offset == 512) {
-      dir_sector_offset = 0;
-      dir_sector++;
-      dir_sector_in_cluster++;
-      if (dir_sector_in_cluster == sectors_per_cluster) {
-        // Follow to next cluster
-        int next_cluster = get_next_cluster(dir_cluster);
-        if (next_cluster < 0xFFFFFF0 && next_cluster) {
-          dir_cluster = next_cluster;
-          dir_sector_in_cluster = 0;
-          dir_sector = first_cluster_sector + (next_cluster - first_cluster) * sectors_per_cluster;
-        }
-        else {
-          // End of directory reached
-          dir_sector = -1;
-          retVal = -1;
-          break;
-        }
-      }
-      if (dir_sector != -1)
-        retVal = read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
-      if (retVal)
-        dir_sector = -1;
+  do {
+    retVal = advance_to_next_entry();
+
+    if (retVal == -2) // exiting due to end-of-directory?
+    {
+      retVal = -1;
+      break;
     }
 
     if (dir_sector == -1) {
@@ -1441,31 +1620,116 @@ int fat_readdir(struct m65dirent* d)
 
     // printf("Found dirent %d %d %d\n",dir_sector,dir_sector_offset,dir_sector_in_cluster);
 
-    // XXX - Support FAT32 long names!
+    // Read in all FAT32-VFAT entries to extract out long filenames
+    if (dir_sector_buffer[dir_sector_offset + 0x0B] == 0x0F) {
+      vfatEntry = 1;
+      int firstTime = 1;
+      int seqnumber;
+      do {
+        // printf("seq = 0x%02X\n", dir_sector_buffer[dir_sector_offset+0x00]);
+        // debug_vfatchunk();
+        int seq = dir_sector_buffer[dir_sector_offset + 0x00];
+
+        if (seq == 0xE5) // if deleted-entry, then ignore
+        {
+          // printf("deleteentry!\n");
+          deletedEntry = 1;
+        }
+
+        seqnumber = seq & 0x1F;
+
+        // assure there is a null-terminator
+        if (firstTime) {
+          d->d_name[seqnumber * 13] = 0;
+          firstTime = 0;
+        }
+
+        // vfat seqnumbers will be parsed from high to low, each containing up to 13 UCS-2 characters
+        copy_vfat_chars_into_dname(d->d_name, seqnumber);
+        advance_to_next_entry();
+
+        // if next dirent is not a vfat entry, break out
+        if (dir_sector_buffer[dir_sector_offset + 0x0B] != 0x0F)
+          break;
+      } while (seqnumber != 1);
+    }
+
+    // ignore any vfat files starting with '.' (such as mac osx '._*' metadata files)
+    if (vfatEntry && d->d_name[0] == '.') {
+      // printf("._ vfat hide\n");
+      d->d_name[0] = 0;
+      return 0;
+    }
+
+    // ignored deleted vfat entries too (mac osx '._*' files are marked as deleted entries)
+    if (deletedEntry) {
+      d->d_name[0] = 0;
+      return 0;
+    }
+
+    // if the DOS 8.3 entry is a deleted-entry, then ignore
+    if (dir_sector_buffer[dir_sector_offset] == 0xE5) {
+      d->d_name[0] = 0;
+      return 0;
+    }
+
+    int attrib = dir_sector_buffer[dir_sector_offset + 0x0B];
+
+    // if this is the volume-name of the partition, then ignore
+    if (attrib == 0x08) {
+      d->d_name[0] = 0;
+      return 0;
+    }
+
+    // if the hidden attribute is turned on, then ignore
+    if (attrib & 0x02) {
+      d->d_name[0] = 0;
+      return 0;
+    }
 
     // Put cluster number in d_ino
     d->d_ino = (dir_sector_buffer[dir_sector_offset + 0x1A] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1B] << 8)
              | (dir_sector_buffer[dir_sector_offset + 0x14] << 16) | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
 
-    int namelen = 0;
-    if (dir_sector_buffer[dir_sector_offset]) {
-      for (int i = 0; i < 8; i++)
-        if (dir_sector_buffer[dir_sector_offset + i])
-          d->d_name[namelen++] = dir_sector_buffer[dir_sector_offset + i];
-      while (namelen && d->d_name[namelen - 1] == ' ')
-        namelen--;
-    }
-    if (dir_sector_buffer[dir_sector_offset + 8] && dir_sector_buffer[dir_sector_offset + 8] != ' ') {
-      d->d_name[namelen++] = '.';
-      for (int i = 0; i < 3; i++)
-        if (dir_sector_buffer[dir_sector_offset + 8 + i])
-          d->d_name[namelen++] = dir_sector_buffer[dir_sector_offset + 8 + i];
-      while (namelen && d->d_name[namelen - 1] == ' ')
-        namelen--;
-    }
-    d->d_name[namelen] = 0;
+    // if not vfat-longname, then extract out old 8.3 name
+    if (!vfatEntry) {
+      int namelen = 0;
+      int nt_flags = dir_sector_buffer[dir_sector_offset + 0x0C];
+      int basename_lowercase = nt_flags & 0x08;
+      int extension_lowercase = nt_flags & 0x10;
 
-    //    if (d->d_name[0]) dump_bytes(0,"dirent raw",&dir_sector_buffer[dir_sector_offset],32);
+      // get the 8-byte filename
+      if (dir_sector_buffer[dir_sector_offset]) {
+        for (int i = 0; i < 8; i++) {
+          if (dir_sector_buffer[dir_sector_offset + i]) {
+            int c = dir_sector_buffer[dir_sector_offset + i];
+            if (basename_lowercase)
+              c = tolower(c);
+            d->d_name[namelen++] = c;
+          }
+        }
+        while (namelen && d->d_name[namelen - 1] == ' ')
+          namelen--;
+      }
+      // get the 3-byte extension
+      if (dir_sector_buffer[dir_sector_offset + 8] && dir_sector_buffer[dir_sector_offset + 8] != ' ') {
+        d->d_name[namelen++] = '.';
+        for (int i = 0; i < 3; i++) {
+          if (dir_sector_buffer[dir_sector_offset + 8 + i]) {
+            int c = dir_sector_buffer[dir_sector_offset + 8 + i];
+            if (extension_lowercase)
+              c = tolower(c);
+            d->d_name[namelen++] = c;
+          }
+        }
+        while (namelen && d->d_name[namelen - 1] == ' ')
+          namelen--;
+      }
+      d->d_name[namelen] = 0;
+    }
+
+    if (dirent_raw && d->d_name[0])
+      dump_bytes(0, "dirent raw", &dir_sector_buffer[dir_sector_offset], 32);
 
     d->d_filelen = (dir_sector_buffer[dir_sector_offset + 0x1C] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1D] << 8)
                  | (dir_sector_buffer[dir_sector_offset + 0x1E] << 16) | (dir_sector_buffer[dir_sector_offset + 0x1F] << 24);
@@ -1475,6 +1739,8 @@ int fat_readdir(struct m65dirent* d)
       d->d_type = M65DT_UNKNOWN;
     else if (d->d_attr & 0x10)
       d->d_type = M65DT_DIR;
+    else if (d->d_attr == 0 && d->d_name[0] == 0)
+      d->d_type = M65DT_FREESLOT;
     else
       d->d_type = M65DT_REG;
 
@@ -1740,10 +2006,210 @@ unsigned int find_contiguous_clusters(unsigned int total_clusters)
   return start_cluster;
 }
 
-int show_directory(char* path)
+typedef struct _llist {
+  void* item;
+  struct _llist* next;
+} llist;
+
+void llist_free(llist* lstitem)
+{
+  llist* next;
+  while (lstitem != NULL) {
+    free(lstitem->item);
+    next = lstitem->next;
+    free(lstitem);
+    lstitem = next;
+  }
+}
+
+llist* llist_new(void)
+{
+  llist* lst = (llist*)malloc(sizeof(llist));
+  memset(lst, 0, sizeof(llist));
+  return lst;
+}
+
+void llist_add(llist* lst, void* item, int compare(void*, void*))
+{
+  if (lst->item == NULL) {
+    lst->item = item;
+    return;
+  }
+
+  llist* prev = NULL;
+
+  while (lst != NULL) {
+    // we found a home for it?
+    if (compare(lst->item, item) > 0) {
+      llist* mvlst = llist_new();
+      mvlst->item = lst->item;
+      mvlst->next = lst->next;
+
+      lst->item = item;
+      lst->next = mvlst;
+      return;
+    }
+    prev = lst;
+    lst = lst->next;
+  }
+  // couldn't insert before, so add to end
+  llist* lstnew = llist_new();
+  lstnew->item = item;
+  prev->next = lstnew;
+}
+
+int compare_dirents(void* s, void* d)
+{
+  struct m65dirent* src = (struct m65dirent*)s;
+  struct m65dirent* dest = (struct m65dirent*)d;
+  // both dirs?
+  if ((dest->d_attr & 0x10) && (src->d_attr & 0x10)) {
+    // compare filenames
+    return stricmp(src->d_name, dest->d_name);
+  }
+  // new item is dir and existing item isn't?
+  else if ((dest->d_attr & 0x10) && !(src->d_attr & 0x10))
+    return 1;
+  // new item is file and existing item is a dir?
+  else if (!(dest->d_attr & 0x10) && (src->d_attr & 0x10))
+    return -1;
+  else
+    // compare filenames
+    return stricmp(src->d_name, dest->d_name);
+}
+
+int read_direntries(llist* lst, char* path)
 {
   struct m65dirent de;
+
+  if (fat_opendir(path)) {
+    return 0;
+  }
+  // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
+  while (!fat_readdir(&de)) {
+    struct m65dirent* denew = (struct m65dirent*)malloc(sizeof(struct m65dirent));
+    memcpy(denew, &de, sizeof(struct m65dirent));
+    llist_add(lst, denew, compare_dirents);
+  }
+
+  return 1;
+}
+
+int contains_dir(llist* lst, char* path)
+{
+  while (lst != NULL) {
+    struct m65dirent* itm = (struct m65dirent*)lst->item;
+    if (itm->d_attr & 0x10 && strcmp(itm->d_name, path) == 0)
+      return 1;
+
+    lst = lst->next;
+  }
+
+  return 0;
+}
+
+// Initial effort borrowed from Robert James Mieta's snippet in this thread:
+// - https://stackoverflow.com/questions/23457305/compare-strings-with-wildcard
+// Needed a bit of refinement to get the wildcards working for me though.
+int is_match(char* line, char* pattern)
+{
+  int wildcard = 0;
+
+  do {
+    if ((*pattern == *line) || (*pattern == '?')) {
+      line++;
+      pattern++;
+    }
+    else if (*pattern == '*') {
+      if (*(++pattern) == '\0') {
+        return 1;
+      }
+      wildcard = 1;
+    }
+    else if (wildcard) {
+      if (*line == *pattern) {
+        wildcard = 0;
+        line++;
+        pattern++;
+      }
+      else {
+        line++;
+      }
+    }
+    else {
+      return 0;
+    }
+  } while (*line);
+
+  if (*pattern == '\0') {
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
+
+void show_local_directory(char* searchpattern)
+{
+  DIR* d;
+  struct dirent* dir;
+
+  // list directories first
+  d = opendir(".");
+  if (d) {
+    while ((dir = readdir(d)) != NULL) {
+      if (searchpattern && !is_match(dir->d_name, searchpattern))
+        continue;
+
+      struct stat file_stats;
+      if (!stat(dir->d_name, &file_stats)) {
+        if (S_ISDIR(file_stats.st_mode))
+          printf("       <DIR> %s\n", dir->d_name);
+      }
+    }
+  }
+  closedir(d);
+
+  // list files next
+  d = opendir(".");
+  if (d) {
+    while ((dir = readdir(d)) != NULL) {
+      if (searchpattern && !is_match(dir->d_name, searchpattern))
+        continue;
+
+      struct stat file_stats;
+      if (!stat(dir->d_name, &file_stats)) {
+        if (!S_ISDIR(file_stats.st_mode)) {
+          if (dir->d_name[0] && file_stats.st_size >= 0)
+            printf("%12d %s\n", (int)file_stats.st_size, dir->d_name);
+        }
+      }
+    }
+  }
+  closedir(d);
+}
+
+void show_local_pwd(void)
+{
+  char cwd[4096];
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    printf("%s\n", cwd);
+  }
+}
+
+void change_local_dir(char* path)
+{
+  if (chdir(path))
+    printf("ERROR: Failed to change directory (%s)!\n", path);
+}
+
+int show_directory(char* path)
+{
+  llist* lst_dirents = llist_new();
+  char* searchterm = NULL;
+
   int retVal = 0;
+
   do {
     if (!file_system_found)
       open_file_system();
@@ -1753,19 +2219,38 @@ int show_directory(char* path)
       break;
     }
 
-    if (fat_opendir(path)) {
-      retVal = -1;
+    if (!read_direntries(lst_dirents, current_dir))
       break;
+
+    // check if the user wants to 'dir' a sub-folder
+    if (contains_dir(lst_dirents, path)) {
+      llist_free(lst_dirents);
+      lst_dirents = llist_new();
+
+      if (!read_direntries(lst_dirents, path))
+        break;
     }
-    // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-    while (!fat_readdir(&de)) {
-      if (de.d_attr & 0x10) {
-        printf(" <directory> %s\n", de.d_name);
+    else if (strcmp(path, current_dir) != 0)
+      searchterm = path;
+
+    llist* cur = lst_dirents;
+    while (cur != NULL) {
+      struct m65dirent* itm = (struct m65dirent*)cur->item;
+
+      if (searchterm && !is_match(itm->d_name, searchterm)) {
+        cur = cur->next;
+        continue;
       }
-      else if (de.d_name[0] && (de.d_filelen >= 0))
-        printf("%12d %s\n", (int)de.d_filelen, de.d_name);
+
+      if (itm->d_attr & 0x10)
+        printf("       <DIR> %s\n", itm->d_name);
+      else if (itm->d_name[0] && itm->d_filelen >= 0)
+        printf("%12d %s\n", (int)itm->d_filelen, itm->d_name);
+      cur = cur->next;
     }
   } while (0);
+
+  llist_free(lst_dirents);
 
   return retVal;
 }
@@ -1781,6 +2266,255 @@ int check_file_system_access(void)
     retVal = -1;
   }
   return retVal;
+}
+
+int read_int32_from_offset_in_buffer(int offset)
+{
+  int val = (dir_sector_buffer[offset] << 0) | (dir_sector_buffer[offset + 1] << 8) | (dir_sector_buffer[offset + 2] << 16)
+          | (dir_sector_buffer[offset + 3] << 24);
+
+  return val;
+}
+
+void show_clustermap(void)
+{
+  int clustermap_end = clustermap_start + clustermap_count;
+  int previous_clustermap_sector = 0;
+  int abs_fat1_sector = partition_start + fat1_sector;
+
+  for (int clustermap_idx = clustermap_start; clustermap_idx < clustermap_end; clustermap_idx++) {
+    int clustermap_sector = abs_fat1_sector + (clustermap_idx * 4) / 512;
+    int clustermap_offset = (clustermap_idx * 4) % 512;
+
+    // printf("clustermap_sector = %d\nclustermap_offset=%d\n", clustermap_sector, clustermap_offset);
+
+    // do we need to read in the next sector?
+    if (clustermap_sector != previous_clustermap_sector) {
+      int retVal = read_sector(clustermap_sector, dir_sector_buffer, CACHE_YES, 0);
+      if (retVal) {
+        fprintf(stderr, "Failed to read next sector(%d)\n", clustermap_sector);
+        return;
+      }
+      previous_clustermap_sector = clustermap_sector;
+    }
+
+    int clustermap_val = read_int32_from_offset_in_buffer(clustermap_offset);
+    clustermap_val &= 0x0fffffff; // map out flags in top 4 bits
+    printf("%d:  %d  ($%08X)\n", clustermap_idx, clustermap_val, clustermap_val);
+  }
+}
+
+void show_cluster(void)
+{
+  char str[50];
+  int abs_cluster2_sector = partition_start + first_cluster_sector + (cluster_num - 2) * sectors_per_cluster;
+
+  for (int idx = 0; idx < sectors_per_cluster; idx++) {
+    read_sector(abs_cluster2_sector + idx, dir_sector_buffer, CACHE_YES, 0);
+    sprintf(str, "Sector %d:\n", abs_cluster2_sector + idx);
+    dump_bytes(0, str, dir_sector_buffer, 512);
+  }
+}
+
+void dump_sectors(void)
+{
+  FILE* fsave = fopen(secdump_file, "wb");
+  for (int sector = secdump_start; sector < (secdump_start + secdump_count); sector++) {
+    read_sector(sector, dir_sector_buffer, CACHE_YES, 0);
+    fwrite(dir_sector_buffer, 1, 512, fsave);
+    printf("\rSaving... (%d%%)", (sector - secdump_start) * 100 / secdump_count);
+  }
+  fclose(fsave);
+  printf("\rSaved to file \"%s\".         \n", secdump_file);
+}
+
+void restore_sectors(void)
+{
+  struct stat st;
+  stat(secrestore_file, &st);
+  int secrestore_count = st.st_size / 512;
+
+  FILE* fload = fopen(secrestore_file, "rb");
+  for (int sector = secrestore_start; sector < (secrestore_start + secrestore_count); sector++) {
+    fread(dir_sector_buffer, 1, 512, fload);
+    write_sector(sector, dir_sector_buffer);
+    printf("\rLoading... (%d%%)", (sector - secrestore_start) * 100 / secrestore_count);
+  }
+  fclose(fload);
+  printf("\rLoaded file \"%s\" at starting-sector %d.\n", secrestore_file, secrestore_start);
+}
+
+void poke_sector(void)
+{
+  read_sector(poke_secnum, dir_sector_buffer, CACHE_NO, 0);
+  dir_sector_buffer[poke_offset] = poke_value;
+  write_sector(poke_secnum, dir_sector_buffer);
+  // Flush any pending sector writes out
+  execute_write_queue();
+}
+
+int endswith(char* fname, char* ext)
+{
+  char* actual_ext = strrchr(fname, '.');
+  if (!ext)
+    return 0;
+
+  if (strcmp(ext, actual_ext) == 0)
+    return 1;
+
+  return 0;
+}
+
+void perform_filehost_read(void)
+{
+  if (username != NULL) {
+    log_in_and_get_cookie(username, password);
+  }
+
+  read_filehost_struct();
+}
+
+void wrap_upload(char* fname)
+{
+  char* d81name = create_d81_for_prg(fname);
+  strcpy(fname, d81name);
+
+  if (fname) {
+    upload_file(fname, fname);
+  }
+  else {
+    printf("ERROR: Unable to download file from filehost!\n");
+  }
+}
+
+void perform_filehost_get(int num)
+{
+  char* fname = download_file_from_filehost(num);
+
+  if (endswith(fname, ".prg") || endswith(fname, ".PRG")) {
+    char* d81name = create_d81_for_prg(fname);
+    strcpy(fname, d81name);
+  }
+
+  if (fname) {
+    upload_file(fname, fname);
+  }
+  else {
+    printf("ERROR: Unable to download file from filehost!\n");
+  }
+}
+
+void show_secinfo(void)
+{
+  int abs_fat1_sector = partition_start + fat1_sector;
+  int abs_fat2_sector = partition_start + fat2_sector;
+  int abs_cluster2_sector = partition_start + first_cluster_sector;
+
+  if (!file_system_found)
+    open_file_system();
+  printf("\n");
+  printf("  SECTOR : CONTENT\n");
+  printf("  ------   -------\n");
+  printf("% 8d : MBR (Master Boot Record)\n", 0);
+  printf("% 8d : VBR of 1st Partition\n", partition_start);
+  printf("% 8d : 1st FAT (cluster-chain map)\n", abs_fat1_sector);
+  printf("% 8d : 2nd FAT (backup)\n", abs_fat2_sector);
+  printf("% 8d : cluster #2 (root-directory table)\n", abs_cluster2_sector);
+  printf("\n");
+}
+
+void show_vbrinfo(void)
+{
+  unsigned char sector[512];
+  if (!file_system_found)
+    open_file_system();
+  if (read_sector(partition_start, sector, CACHE_YES, 0)) {
+    printf("Failed to read sector %d...\n", partition_start);
+    return;
+  }
+
+  printf("OEM Name=\"%c%c%c%c%c%c%c%c\"\n", sector[0x03], sector[0x04], sector[0x05], sector[0x06], sector[0x07],
+      sector[0x08], sector[0x09], sector[0x0A]);
+  printf("FAT32 Extended BIOS Parameter Block:\n");
+  printf("{\n");
+  printf("  DOS 3.31 BPB\n");
+  printf("  {\n");
+  printf("    DOS 2.0 BPB\n");
+  printf("    {\n");
+  printf("      Bytes per logical sector = %d\n", *(unsigned short*)&sector[0x0B]);
+  printf("      Logical sectors per cluster = %d\n", sector[0x0D]);
+  printf("      Count of reserved logical sectors before 1st FAT = %d\n", *(unsigned short*)&sector[0x0E]);
+  printf("      Number of FATs = %d\n", sector[0x10]);
+  printf("      Max no# of FAT12/16 root dir entries = %d\n", *(unsigned short*)&sector[0x11]);
+  printf("      Total logical sector (0 for FAT32) = %d\n", *(unsigned short*)&sector[0x13]);
+  printf("      Media Descriptor = 0x%02X\n", sector[0x15]);
+  printf("      Logical sectors per FAT (0 for FAT32) = %d\n", *(unsigned short*)&sector[0x16]);
+  printf("    }\n");
+  printf("    Physical sectors per track (for INT 13h CHS geometry) = %d\n", *(unsigned short*)&sector[0x18]);
+  printf("    Number of heads (for disks with INT 13h CHS geometry) = %d\n", *(unsigned short*)&sector[0x1A]);
+  printf("    Count of hidden sectors preceding the partition of this FAT volume = %d\n", *(unsigned int*)&sector[0x1C]);
+  printf("    Total logical sectors (if greater than 65535) = %d\n", *(unsigned int*)&sector[0x20]);
+  printf("  }\n");
+  printf("  Logical sectors per FAT = %d\n", *(unsigned int*)&sector[0x24]);
+  printf("  Drive description / mirroring flags = 0x%02X 0x%02X\n", sector[0x28], sector[0x29]);
+  printf("  Version = 0x%02X 0x%02X\n", sector[0x2A], sector[0x2B]);
+  printf("  Cluster number of root directory start = %d\n", *(unsigned int*)&sector[0x2C]);
+  printf("  Logical sector number of FS Information Sector = %d\n", *(unsigned short*)&sector[0x30]);
+  printf("  First logical sector number of copy of 3 FAT boot sectors = %d\n", *(unsigned short*)&sector[0x32]);
+  printf("  Cf. 0x024 for FAT12/FAT16 (Physical Drive Number) = 0x%02X\n", sector[0x40]);
+  printf("  Cf. 0x025 for FAT12/FAT16 (Used for various purposes; see FAT12/FAT16) = 0x%02X\n", sector[0x41]);
+  printf("  Cf. 0x026 for FAT12/FAT16 (Extended boot signature, 0x29) = 0x%02X\n", sector[0x42]);
+  printf("  Cf. 0x027 for FAT12/FAT16 (Volume ID) = %02X %02X %02X %02X\n", sector[0x43], sector[0x44], sector[0x45],
+      sector[0x46]);
+  printf("  Cf. 0x02B for FAT12/FAT16 (Volume Label) = %c%c%c%c%c%c%c%c%c%c%c\n", sector[0x47], sector[0x48], sector[0x49],
+      sector[0x4a], sector[0x4b], sector[0x4c], sector[0x4d], sector[0x4e], sector[0x4f], sector[0x50], sector[0x51]);
+  printf("  Cf. 0x036 for FAT12/FAT16 (File system type) = %c%c%c%c%c%c%c%c\n", sector[0x52], sector[0x53], sector[0x54],
+      sector[0x55], sector[0x56], sector[0x57], sector[0x58], sector[0x59]);
+  printf("}\n");
+
+  printf("\n");
+}
+
+void show_mbrinfo(void)
+{
+  unsigned char sector[512];
+  if (!file_system_found)
+    open_file_system();
+  if (read_sector(0, sector, CACHE_YES, 0)) {
+    printf("Failed to read sector 0...\n");
+    return;
+  }
+
+  int pt_ofs = 0x1be;
+  int part_cnt = 0;
+
+  for (int part_id = 0; part_id < 4; part_id++) {
+    if (sector[pt_ofs + 0x04] == 0x00) // is partition-type 0? (unused)
+      continue;
+
+    printf("Partition %d\n", part_id);
+    printf("-----------\n");
+    if (sector[pt_ofs] == 0x80)
+      printf("- active/bootable partition\n");
+    printf("- Partition type = 0x%02X\n", sector[pt_ofs + 0x04]);
+    int c = sector[pt_ofs + 0x03] + ((sector[pt_ofs + 0x02] & 0xC0) << 2);
+    int h = sector[pt_ofs + 0x02] & 0x3F;
+    int s = sector[pt_ofs + 0x01];
+    printf("- First sector chs: cylinder = %d, head = %d, sector = %d\n", c, h, s);
+    c = sector[pt_ofs + 0x07] + ((sector[pt_ofs + 0x06] & 0xC0) << 2);
+    h = sector[pt_ofs + 0x06] & 0x3F;
+    s = sector[pt_ofs + 0x05];
+    printf("- Last sector chs: cylinder = %d, head = %d, sector = %d\n", c, h, s);
+    printf("- First sector LBA: %d\n", *(unsigned int*)&sector[pt_ofs + 0x08]);
+    printf("- Number of sectors: %d\n", *(unsigned int*)&sector[pt_ofs + 0x0C]);
+
+    part_cnt++;
+    printf("\n");
+
+    pt_ofs += 16;
+  }
+  if (part_cnt == 0)
+    printf("No partitions found!\n\n");
 }
 
 unsigned int get_first_cluster_of_file(void)
@@ -1833,34 +2567,54 @@ int delete_file(char* name)
   return 0;
 }
 
-int rename_file(char* name, char* dest_name)
+// returns:
+// -1 = problems opening file-system
+// 0 = doesn't exist
+// 1 = exists
+int contains_file(char* name)
 {
   struct m65dirent de;
+
+  if (check_file_system_access() == -1)
+    return -1;
+
+  if (fat_opendir(current_dir))
+    return -1;
+
+  // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
+  while (!fat_readdir(&de)) {
+    // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_filelen);
+    // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
+    if (!strcasecmp(de.d_name, name)) {
+      // Found file, so will replace it
+      // printf("Found \"%s\" on the file system, beginning at cluster %d\n", name, (int)de.d_ino);
+      return 1;
+    }
+  }
+  // if dir-sector = -1, that means we got to the end of the directory entries without finding a match
+  if (dir_sector == -1)
+    return 0;
+
+  return 0;
+}
+
+int rename_file(char* name, char* dest_name)
+{
   int retVal = 0;
   do {
 
-    if (check_file_system_access() == -1)
+    if (!contains_file(name)) {
+      printf("ERROR: File %s does not exist.\n", name);
       return -1;
+    }
 
-    if (fat_opendir(current_dir)) {
-      retVal = -1;
-      break;
+    if (contains_file(dest_name) == 1) {
+      printf("ERROR: Cannot rename to \"%s\", as this file already exists.\n", dest_name);
+      return -2;
     }
-    // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-    while (!fat_readdir(&de)) {
-      // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_filelen);
-      // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
-      if (!strcasecmp(de.d_name, name)) {
-        // Found file, so will replace it
-        printf("%s already exists on the file system, beginning at cluster %d\n", name, (int)de.d_ino);
-        break;
-      }
-    }
-    if (dir_sector == -1) {
-      printf("File %s does not exist.\n", name);
-      retVal = -1;
-      break;
-    }
+
+    // need to call this again to set various global variable details for the found file properly
+    contains_file(name);
 
     // Write name
     for (int i = 0; i < 11; i++)
@@ -1893,9 +2647,11 @@ int rename_file(char* name, char* dest_name)
   return retVal;
 }
 
-#ifdef USE_LFN
+// #ifdef USE_LFN
+// returns: 0 = doesn't need long name, 1 = needs long name
 int normalise_long_name(char* long_name, char* short_name, char* dir_name)
 {
+  struct m65dirent de;
   int base_len = 0;
   int ext_len = 0;
   int dot_count = 0;
@@ -1905,12 +2661,12 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
 
   // Handle . and .. special cases
   if (!strcmp(long_name, ".")) {
-    bcopy(".          ", short_name);
-    return;
+    bcopy(".          ", short_name, 8 + 3);
+    return 0;
   }
   if (!strcmp(long_name, "..")) {
-    bcopy("..         ", short_name);
-    return;
+    bcopy("..         ", short_name, 8 + 3);
+    return 0;
   }
 
   for (int i = 0; long_name[i]; i++) {
@@ -1959,8 +2715,8 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
       snprintf(temp, 8 - ofs, "~%d", i);
       bcopy(temp, &short_name[ofs], 8 - ofs);
       printf("  considering short-name '%s'...\n", short_name);
-      if (fat_opendir(dir)) {
-        fprintf(stderr, "ERROR: Could not open directory '%s' to check for LFN uniqueness.\n", dir);
+      if (fat_opendir(dir_name)) {
+        fprintf(stderr, "ERROR: Could not open directory '%s' to check for LFN uniqueness.\n", dir_name);
         // So just assume its unique
         break;
       }
@@ -1973,7 +2729,8 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
           // rather than calling fat_readdir(). Else we can make fat_readdir()
           // store the unmodified short-name (and eventually long-name)?
           fprintf(stderr, "ERROR: Not implemented.\n");
-          exit(-1);
+          return -1;
+          // exit(-1);
         }
       }
     }
@@ -1992,7 +2749,7 @@ unsigned char lfn_checksum(const unsigned char* pFCBName)
 
   return sum;
 }
-#endif
+// #endif
 
 int upload_file(char* name, char* dest_name)
 {
@@ -2000,15 +2757,15 @@ int upload_file(char* name, char* dest_name)
   int retVal = 0;
   do {
 
-#ifdef USE_LFN
-    unsigned char short_name[8 + 3 + 1];
+    // #ifdef USE_LFN
+    char short_name[8 + 3 + 1];
 
     // Normalise dest_name into 8.3 format.
-    normalise_long_name(dest_name, short_name);
+    normalise_long_name(dest_name, short_name, current_dir);
 
     // Calculate checksum of 8.3 name
-    unsigned char lfn_csum = lfn_checksum(short_name);
-#endif
+    unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
+    // #endif
 
     time_t upload_start = time(0);
 
@@ -2033,7 +2790,7 @@ int upload_file(char* name, char* dest_name)
       }
       struct m65dirent de;
       while (!fat_readdir(&de)) {
-        if (!de.d_name[0]) {
+        if (!de.d_name[0] && de.d_type == M65DT_FREESLOT) {
           if (0)
             printf("Found empty slot at dir_sector=%d, dir_sector_offset=%d\n", dir_sector, dir_sector_offset);
 

@@ -70,7 +70,11 @@ void set_serial_speed(int fd, int serial_speed);
 #endif
 void open_the_serial_port(char* serial_port);
 int switch_to_c64mode(void);
-void close_tcp_port(void);
+PORT_TYPE open_tcp_port(char* portname);
+void close_tcp_port(PORT_TYPE localfd);
+void close_default_tcp_port(void);
+void do_write(PORT_TYPE localfd, char* str);
+int do_read(PORT_TYPE localfd, char* str, int max);
 
 #ifdef WINDOWS
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
@@ -79,6 +83,7 @@ void do_usleep(__int64 usec);
 #else
 #include <termios.h>
 void do_usleep(unsigned long usec);
+int stricmp(const char *a, const char *b);
 #endif
 
 #ifdef __APPLE__
@@ -95,5 +100,7 @@ extern PORT_TYPE fd;
 extern int serial_speed;
 extern int saw_c64_mode;
 extern int saw_c65_mode;
+extern int saw_openrom;
+extern int xemu_flag;
 
 #endif // M65COMMON_H

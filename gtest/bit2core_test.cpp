@@ -41,7 +41,7 @@ void generate_dummy_bit_file(const char* name, const char* m65targetname)
   fputc('b', f);
 
   // fpga part-id
-  int len = strlen(fpga_part)+1;
+  int len = strlen(fpga_part) + 1;
   fputc((len >> 8) & 0xff, f);
   fputc(len & 0xff, f);
   fprintf(f, fpga_part);

@@ -29,6 +29,13 @@ else
 	CC65_PREFIX=$(PWD)/cc65/bin/
 endif
 
+BUILD_STATIC=-Wl,-Bstatic
+
+ifeq ($(DO_STATIC), 0)
+	# Does user want compile dynamically? (faster, better during development)
+	BUILD_STATIC=
+endif
+
 CC65=  $(CC65_PREFIX)cc65
 CA65=  $(CC65_PREFIX)ca65 --cpu 4510
 LD65=  $(CC65_PREFIX)ld65 -t none
@@ -100,27 +107,29 @@ SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 
 all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
 
+SUBMODULEUPDATE= \
+	@if [ -z "$(DO_SMU)" ] || [ "$(DO_SMU)" -eq "1" ] ; then \
+	echo "Updating Submodules... (set env-var DO_SMU=0 to turn this behaviour off)" ; \
+	git submodule update --init ; \
+	fi
+
 $(SDCARD_DIR)/FREEZER.M65:
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	( cd src/mega65-freezemenu && make FREEZER.M65 )
 	cp src/mega65-freezemenu/FREEZER.M65 $(SDCARD_DIR)
 
 $(CBMCONVERT):
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	( cd cbmconvert && make -f Makefile.unix )
 
 ifndef USE_LOCAL_CC65
 $(CC65):
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	( cd cc65 && make -j 8 )
 endif
 
 $(OPHIS):
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 
 # c-programs
 tools:	$(TOOLS)
@@ -241,23 +250,19 @@ $(UTILDIR)/mega65_config.prg:       $(UTILDIR)/mega65_config.o $(CC65)
 	$(LD65) $< --mapfile $*.map -o $*.prg
 
 $(UTILDIR)/megaflash.prg:       $(UTILDIR)/megaflash.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(UTILDIR)/megaphonenorflash.prg:       $(UTILDIR)/megaphonenorflash.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(TESTDIR)/floppyread.s $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s $(TESTDIR)/floppyread.s
 
 $(UTILDIR)/c65toc64wrapper.prg:	$(UTILDIR)/c65toc64wrapper.asm $(ACME)
@@ -267,56 +272,46 @@ $(EXAMPLEDIR)/verticalrasters.prg:	$(EXAMPLEDIR)/verticalrasters.asm $(ACME)
 	$(ACME) --setpc 0x0801 --cpu m65 --format cbm --outfile $(EXAMPLEDIR)/verticalrasters.prg $(EXAMPLEDIR)/verticalrasters.asm
 
 $(UTILDIR)/fastload.prg:       $(UTILDIR)/fastload.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(EXAMPLEDIR)/modplay.prg:       $(EXAMPLEDIR)/modplay.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/r3_production_test.prg:       $(TESTDIR)/r3_production_test.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(B65DIR)/wirekrill.prg:       $(EXAMPLEDIR)/wirekrill.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 bin/wirekrill:	$(EXAMPLEDIR)/wirekrill.c
 	$(CC) $(COPT) -DNATIVE_TEST -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/wirekrill $(EXAMPLEDIR)/wirekrill.c -lpcap
 
 $(B65DIR)/cartload.prg:       $(UTILDIR)/cartload.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(B65DIR)/rompatch.prg:       $(UTILDIR)/rompatch.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(EXAMPLEDIR)/raycaster.prg:       $(EXAMPLEDIR)/raycaster.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/ultrasoundtest.prg:       $(TESTDIR)/ultrasoundtest.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/opcodes65.prg:       $(TESTDIR)/opcodes65.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(UTILDIR)/avtest.prg:       $(UTILDIR)/avtest.c $(CC65)
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 
@@ -376,8 +371,7 @@ $(SRCDIR)/open-roms/build/mega65.rom:	$(SRCDIR)/open-roms/assets/8x8font.png
 	( cd $(SRCDIR)/open-roms ; make build/mega65.rom )
 
 $(SRCDIR)/open-roms/assets/8x8font.png:
-	git submodule init
-	git submodule update
+	$(SUBMODULEUPDATE)
 	( cd $(SRCDIR)/open-roms ; git submodule init ; git submodule update )
 
 $(BINDIR)/asciifont.bin:	$(BINDIR)/pngprepare $(ASSETS)/ascii00-ff.png
@@ -400,7 +394,7 @@ $(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
 	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
 
 $(BINDIR)/romdiff.exe:	$(TOOLDIR)/romdiff.c Makefile
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/romdiff.exe $(TOOLDIR)/romdiff.c -Wl,-Bstatic -Wl,-Bdynamic
+	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/romdiff.exe $(TOOLDIR)/romdiff.c $(BUILD_STATIC) -Wl,-Bdynamic
 
 $(BINDIR)/romdiff.osx:	$(TOOLDIR)/romdiff.c Makefile
 	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -o $(BINDIR)/romdiff.osx $(TOOLDIR)/romdiff.c
@@ -424,10 +418,11 @@ $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
 	echo "Could not find the program 'convert'. Try the following:"
 	echo "sudo apt-get install imagemagick"
 
-$(TOOLDIR)/version.c: .FORCE
-	echo 'const char *version_string="'`./gitversion.sh`'";' > $(TOOLDIR)/version.c
-
-.FORCE:
+MAKE_VERSION= \
+	@if [ -z "$(DO_MKVER)" ] || [ "$(DO_MKVER)" -eq "1" ] ; then \
+	echo "Retrieving Git version string... (set env-var DO_MKVER=0 to turn this behaviour off)" ; \
+	echo 'const char *version_string="'`./gitversion.sh`'";' > $(TOOLDIR)/version.c ; \
+	fi
 
 $(SDCARD_DIR)/BANNER.M65:	$(BINDIR)/pngprepare $(ASSETS)/mega65_320x64.png /usr/bin/convert
 	/usr/bin/convert -colors 128 -depth 8 +dither $(ASSETS)/mega65_320x64.png $(BINDIR)/mega65_320x64_128colour.png
@@ -439,15 +434,18 @@ $(BINDIR)/m65ftp_test:	$(TESTDIR)/m65ftp_test.c
 $(BINDIR)/mfm-decode:	$(TOOLDIR)/mfm-decode.c
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/mfm-decode $(TOOLDIR)/mfm-decode.c
 
-$(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+$(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+	$(MAKE_VERSION)
 	$(CC) $(COPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/m65 $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
-$(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+$(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+	$(MAKE_VERSION)
 	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/m65.osx $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
 
-$(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude `pkg-config --cflags libusb-1.0` -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
+$(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+	$(MAKE_VERSION)
+	$(WINCC) $(WINCOPT) -g -Wall -Iinclude `pkg-config --cflags libusb-1.0` -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c $(BUILD_STATIC) -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
 $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
@@ -458,41 +456,65 @@ $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 
 define LINUX_AND_MINGW_GTEST_TARGETS
 $(1): $(2)
-	$$(CXX) $$(COPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) -lreadline -lncurses -lgtest_main -lgtest -lpthread
+	$$(MAKE_VERSION)
+	$$(CXX) $$(COPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread
 
 $(1).exe: $(2)
-	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) -lreadline -lncurses -lgtest_main -lgtest -lpthread -Wl,-Bstatic -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
+	$$(MAKE_VERSION)
+	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $$(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
 endef
+
+MEGA65FTP_SRC=$(TOOLDIR)/mega65_ftp.c \
+							$(TOOLDIR)/m65common.c \
+							$(TOOLDIR)/ftphelper.c \
+							$(TOOLDIR)/filehost.c \
+							$(TOOLDIR)/diskman.c
 
 # Gives two targets of:
 # - gtest/bin/mega65_ftp.test
 # - gtest/bin/mega65_ftp.test.exe
-$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c Makefile))
+$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(MEGA65FTP_SRC) Makefile))
 
 # Gives two targets of:
 # - gtest/bin/bit2core.test
 # - gtest/bin/bit2core.test.exe
-$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/bit2core.test, $(GTESTDIR)/bit2core_test.cpp $(TOOLDIR)/bit2core.c $(TOOLDIR)/version.c))
+$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/bit2core.test, $(GTESTDIR)/bit2core_test.cpp $(TOOLDIR)/bit2core.c))
 
 test: $(GTESTBINDIR)/mega65_ftp.test $(GTESTBINDIR)/bit2core.test
+	@echo ""
+	@echo "TESTING: MEGA65_FTP..."
+	@echo "======================"
 	$(GTESTBINDIR)/mega65_ftp.test
+	@echo ""
+	@echo "TESTING: BIT2CORE..."
+	@echo "===================="
 	$(GTESTBINDIR)/bit2core.test
 
 test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTBINDIR)/bit2core.test.exe
+	@echo ""
+	@echo "TESTING: MEGA65_FTP..."
+	@echo "======================"
 	$(GTESTBINDIR)/mega65_ftp.test.exe
+	@echo ""
+	@echo "TESTING: BIT2CORE..."
+	@echo "===================="
 	$(GTESTBINDIR)/bit2core.test.exe
 
-$(BINDIR)/mega65_ftp:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c
-	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c -Wl,-Bstatic -lreadline -lncurses -ltinfo -Wl,-Bdynamic
+$(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) Makefile
+	$(MAKE_VERSION)
+	$(CC) $(COPT) -Iinclude -o $(BINDIR)/mega65_ftp $(MEGA65FTP_SRC) $(TOOLDIR)/version.c $(BUILD_STATIC) -lreadline -lncurses -ltinfo -Wl,-Bdynamic
 
-$(BINDIR)/mega65_ftp.static:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c Makefile $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
-	$(CC) $(COPT) -Iinclude -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap
+$(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
+	$(MAKE_VERSION)
+	$(CC) $(COPT) -Iinclude -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap
 
-$(BINDIR)/mega65_ftp.exe:	$(TOOLDIR)/mega65_ftp.c Makefile $(TOOLDIR)/ftphelper.c $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c -lusb-1.0 -Wl,-Bstatic -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
+$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) Makefile 
+	$(MAKE_VERSION)
+	$(WINCC) $(WINCOPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
 
-$(BINDIR)/mega65_ftp.osx:	$(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/ftphelper.c Makefile $(TOOLDIR)/m65common.c $(TOOLDIR)/version.c
-	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/mega65_ftp.osx $(TOOLDIR)/mega65_ftp.c $(TOOLDIR)/m65common.c $(TOOLDIR)/ftphelper.c $(TOOLDIR)/version.c -lusb-1.0 -lz -lpthread -lreadline
+$(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) Makefile 
+	$(MAKE_VERSION)
+	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/mega65_ftp.osx $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 -lz -lpthread -lreadline
 
 $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile 
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
@@ -503,16 +525,18 @@ $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 # arg2 = pre-requisites
 define LINUX_AND_MINGW_TARGETS
 $(1): $(2)
-	$$(CC) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
+	$$(MAKE_VERSION)
+	$$(CC) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^) $(TOOLDIR)/version.c
 
 $(1).exe: $(2)
-	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
+	$$(MAKE_VERSION)
+	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^) $(TOOLDIR)/version.c
 endef
 
 # Creates 2 targets:
 # - bin/bit2core (for linux)
 # - bin/bit2core.exe (for mingw)
-$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c $(TOOLDIR)/version.c Makefile))
+$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c Makefile))
 
 $(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile 
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c

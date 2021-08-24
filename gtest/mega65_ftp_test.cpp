@@ -4,8 +4,11 @@
 
 int parse_command(const char* str, const char* format, ...);
 int upload_file(char* name, char* dest_name);
+int rename_file(char* name, char* dest_name);
 int delete_file(char* name);
 int download_file(char* dest_name, char* local_name, int showClusters);
+int open_file_system(void);
+int contains_file(char* name);
 int is_fragmented(char* filename);
 
 #define SECTOR_SIZE 512
@@ -21,6 +24,8 @@ unsigned char sdcard[SDSIZE] = { 0 };
 
 void init_sdcard_data(void)
 {
+  memset(sdcard, 0, SDSIZE);
+
   // MBR
   // ===
   // - Describe the 1st (and only) partition
@@ -183,21 +188,31 @@ class Mega65FtpTestFixture : public ::testing::Test {
   protected:
   char* file4kb = "4kbtest.tmp";
   char* file8kb = "8kbtest.d81";
+  bool suppressflag = 0;
 
   void SetUp() override
   {
     // suppress the chatty output
     ::testing::internal::CaptureStderr();
     ::testing::internal::CaptureStdout();
+    suppressflag = 1;
 
     generate_dummy_file(file4kb, 4096);
     generate_dummy_file(file8kb, 8192);
   }
 
+  void ReleaseStdOut(void)
+  {
+    if (suppressflag) {
+      suppressflag = 0;
+      testing::internal::GetCapturedStderr();
+      testing::internal::GetCapturedStdout();
+    }
+  }
+
   void TearDown() override
   {
-    testing::internal::GetCapturedStderr();
-    testing::internal::GetCapturedStdout();
+    ReleaseStdOut();
 
     // cleanup
     delete_local_file(file4kb);
@@ -236,9 +251,78 @@ TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
   //         +----------+----------+----------+----------+----------+-----
   upload_file(file8kb, file8kb);
 
+  ReleaseStdOut();
   ASSERT_EQ(0, is_fragmented("4kb1.tmp"));
   ASSERT_EQ(0, is_fragmented("4kb3.tmp"));
   ASSERT_EQ(0, is_fragmented(file8kb));
 }
+
+TEST_F(Mega65FtpTestFixture, RenameToNonExistingFilenameShouldBePermitted)
+{
+  init_sdcard_data();
+  upload_file(file4kb, file4kb);
+  rename_file(file4kb, file8kb);
+
+  ReleaseStdOut();
+  ASSERT_EQ(1, contains_file(file8kb));
+}
+
+TEST_F(Mega65FtpTestFixture, RenameToExistingFilenameShouldNotBePermitted)
+{
+  init_sdcard_data();
+  upload_file(file4kb, file4kb);
+  upload_file(file8kb, file8kb);
+  int ret = rename_file(file4kb, file8kb);
+  // this should result in an error
+
+  ReleaseStdOut();
+  ASSERT_EQ(ret, -2);
+}
+
+/*
+TEST(Mega65FtpTest, UploadNewLFNShouldOfferShortName)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  // assess_shortname = "LONGFI~1.D81"
+}
+
+TEST(Mega65FtpTest, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  // examine dir-entries for file and assess validity of LFN and 8.3 ShortName
+}
+
+TEST(Mega65FtpTest, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  // as with test above, assure the dir-entries exist
+  delete_file("LongFileName.d81");
+  // now assess that dir-entries have been removed
+}
+
+TEST(Mega65FtpTest, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDirEntries)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  // as with test above, assure the dir-entries exist
+  rename_file("LongFileName.d81", "AnotherLongFileName.d81");
+  // now assess that dir-entries for LFN and 8.3 shortname have been updated
+}
+
+TEST(Mega65FtpTest, UploadSameLFNWithExistingShortNameShouldOverwrite)
+{
+  upload_file("LongFileName.d81", "LongFileName.d81");
+  upload_file("LongFileName2.d81", "LongFileName.d81");
+  download_file("LongFileName.d81");
+  // it should match the contents of LongFileName2.d81
+}
+
+TEST(Mega65FtpTest, UploadDifferentLFNWithExistingShortNameShouldUseDifferentName)
+{
+  upload_file("LongFileName.d81"); // This will be 'LONGFI~1.D81'
+  upload_file("LongFish.d81");   // This should be 'LONGFI~2.D81'
+  download("LONGFI~2.D81");
+  // assure its contents matches 'LongFish.d81'
+}
+*/
 
 } // namespace mega65_ftp

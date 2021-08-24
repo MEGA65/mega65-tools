@@ -110,6 +110,7 @@ int no_rxbuff = 1;
 
 int saw_c64_mode = 0;
 int saw_c65_mode = 0;
+int saw_openrom = 0;
 
 int serial_speed = 2000000;
 
@@ -170,6 +171,17 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
     }
   }
   return 0;
+}
+
+void do_write(PORT_TYPE localfd, char* str)
+{
+  int len = strlen(str);
+  do_serial_port_write(localfd, (uint8_t*)str, len, NULL, NULL, 0);
+}
+
+int do_read(PORT_TYPE localfd, char* str, int max)
+{
+  return do_serial_port_read(localfd, (uint8_t*)str, max, NULL, NULL, 0);
 }
 
 int do_slow_write_safe(PORT_TYPE fd, char* d, int l, const char* func, const char* file, int line)
@@ -571,7 +583,7 @@ int dump_bytes(int col, char* msg, unsigned char* bytes, int length)
       if (i + j < length)
         fprintf(stderr, " %02X", bytes[i + j]);
       else
-        fprintf(stderr, "   ");
+        fprintf(stderr, " | ");
     fprintf(stderr, "  ");
     for (int j = 0; j < 16; j++)
       if (i + j < length)
@@ -895,7 +907,7 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       if (no_rxbuff)
         do_usleep(1000 * SLOW_FACTOR);
       if (xemu_flag)
-        do_usleep(5000 * SLOW_FACTOR);
+        do_usleep(50000 * SLOW_FACTOR);
       int n = b;
       unsigned char* p = &buffer[offset];
       while (n > 0) {
@@ -903,9 +915,12 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
         if (w > 0) {
           p += w;
           n -= w;
+          if (xemu_flag)
+            do_usleep(50000 * SLOW_FACTOR);
         }
-        else
+        else {
           do_usleep(1000 * SLOW_FACTOR);
+        }
       }
     }
     wait_for_string(cmd);
@@ -1055,6 +1070,7 @@ int detect_mode(void)
   */
   saw_c65_mode = 0;
   saw_c64_mode = 0;
+  saw_openrom = 0;
 
   unsigned char mem_buff[8192];
 
@@ -1065,6 +1081,7 @@ int detect_mode(void)
     int date_code = atoi((const char*)&mem_buff[1]);
     if (date_code > 2000000) {
       fprintf(stderr, "Detected OpenROM version %d\n", date_code);
+      saw_openrom = 1;
       saw_c64_mode = 1;
       return 0;
     }
@@ -1550,16 +1567,21 @@ int hostname_to_ip(char* hostname, char* ip)
 }
 
 #ifdef WINDOWS
-int open_tcp_port(char* portname)
+PORT_TYPE open_tcp_port(char* portname)
 {
+  xemu_flag = 1;
+  PORT_TYPE localfd = { WINPORT_TYPE_INVALID, 0 };
   char hostname[128] = "localhost";
   char port[128] = "4510"; // assume a default port of 4510
   if (portname[3] == '#')  // did user provide a hostname and port number?
   {
-    sscanf(&portname[4], "%s:%s", hostname, port);
+    sscanf(&portname[4], "%[^:]:%s", hostname, port);
+  }
+  else if (portname[3] == '\\' && portname[4] == '#') {
+    sscanf(&portname[5], "%[^:]:%s", hostname, port);
   }
 
-  fd.type = WINPORT_TYPE_SOCK;
+  localfd.type = WINPORT_TYPE_SOCK;
 
   WSADATA wsaData;
   struct addrinfo *result = NULL, *ptr = NULL, hints;
@@ -1583,16 +1605,16 @@ int open_tcp_port(char* portname)
 
   // attempt to connect to an address until one succeeds
   for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
-    fd.fdsock = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-    if (fd.fdsock == INVALID_SOCKET) {
+    localfd.fdsock = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+    if (localfd.fdsock == INVALID_SOCKET) {
       printf("socket failed with error: %d\n", WSAGetLastError());
       WSACleanup();
-      return 1;
+      exit(1);
     }
-    iResult = connect(fd.fdsock, ptr->ai_addr, (int)ptr->ai_addrlen);
+    iResult = connect(localfd.fdsock, ptr->ai_addr, (int)ptr->ai_addrlen);
     if (iResult == SOCKET_ERROR) {
-      closesocket(fd.fdsock);
-      fd.fdsock = INVALID_SOCKET;
+      closesocket(localfd.fdsock);
+      localfd.fdsock = INVALID_SOCKET;
       continue;
     }
     break;
@@ -1600,26 +1622,27 @@ int open_tcp_port(char* portname)
 
   freeaddrinfo(result);
 
-  if (fd.fdsock == INVALID_SOCKET) {
+  if (localfd.fdsock == INVALID_SOCKET) {
     printf("Unable to connect to server!\n");
     WSACleanup();
     exit(1);
   }
 
-  return 1;
+  return localfd;
 }
 
-void close_tcp_port(void)
+void close_tcp_port(PORT_TYPE localfd)
 {
-  if (fd.fdsock != INVALID_SOCKET) {
-    closesocket(fd.fdsock);
+  if (localfd.fdsock != INVALID_SOCKET) {
+    closesocket(localfd.fdsock);
     WSACleanup();
   }
 }
 
 #else // linux/mac-osx
-int open_tcp_port(char* portname)
+PORT_TYPE open_tcp_port(char* portname)
 {
+  int localfd;
   xemu_flag = 1;
   char hostname[128] = "localhost";
   int port = 4510;        // assume a default port of 4510
@@ -1630,8 +1653,8 @@ int open_tcp_port(char* portname)
 
   struct sockaddr_in sock_st;
 
-  fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (fd < 0) {
+  localfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (localfd < 0) {
     printf("error %d creating tcp/ip socket: %s\n", errno, strerror(errno));
     return 0;
   }
@@ -1645,26 +1668,44 @@ int open_tcp_port(char* portname)
   sock_st.sin_family = AF_INET;
   sock_st.sin_port = htons(port);
 
-  if (connect(fd, (struct sockaddr*)&sock_st, sizeof(sock_st)) < 0) {
+  if (connect(localfd, (struct sockaddr*)&sock_st, sizeof(sock_st)) < 0) {
     printf("error %d connecting to tcp/ip socket %s:%d: %s\n", errno, hostname, port, strerror(errno));
-    close(fd);
-    return 0;
+    close(localfd);
+    exit(1);
   }
 
-  return 1;
+  return localfd;
 }
 
-void close_tcp_port(void)
+void close_tcp_port(PORT_TYPE localfd)
 {
   // TODO: do I need to do any nice closing of the socket in linux too?
 }
 
+// provide an implementation of stricmp for linux/mac
+int stricmp(const char *a, const char *b)
+{
+  int ca, cb;
+  do {
+     ca = (unsigned char) *a++;
+     cb = (unsigned char) *b++;
+     ca = tolower(toupper(ca));
+     cb = tolower(toupper(cb));
+   } while (ca == cb && ca != '\0');
+   return ca - cb;
+}
+
 #endif
+
+void close_default_tcp_port(void)
+{
+  close_tcp_port(fd);
+}
 
 void open_the_serial_port(char* serial_port)
 {
   if (!strncasecmp(serial_port, "tcp", 3)) {
-    open_tcp_port(serial_port);
+    fd = open_tcp_port(serial_port);
     return;
   }
 #ifdef WINDOWS
