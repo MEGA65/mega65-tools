@@ -268,7 +268,7 @@ void wait_for_prompt(void)
       // There is a bug in the MEGA65 where it sometimes reports
       // this repeatedly. It is worked around by simply sending a newline.
       printf("WARNING: Break or watchpoint trigger seen.\n");
-      serialport_write(fd,"\r",1);
+      serialport_write(fd,(uint8_t*)"\r",1);
     }
     if (strstr((char*)read_buff, ".")) {
       break;
