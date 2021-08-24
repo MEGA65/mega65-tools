@@ -356,6 +356,7 @@ void gap_histogram(void)
 }
 
 char read_message[41];
+unsigned char n,sector_order[10];
 
 void read_all_sectors()
 {
@@ -406,6 +407,17 @@ void read_all_sectors()
       break;
     }
 
+    // Work out sector order
+    n=0;
+    c=PEEK(0xD6A4);
+    while(c==PEEK(0xD6A4)) continue;
+    for(n=0;n<10;n++) {
+      c=PEEK(0xD6A4);
+      while(n&&c==sector_order[n-1]) c=PEEK(0xD6A4);
+      sector_order[n]=c;
+    }
+    for(n=0;n<10;n++) sector_order[n]&=0x7f;
+    
     for (t = 0; t < 85; t++) {
       if (PEEK(0xD610))
         break;
@@ -420,12 +432,13 @@ void read_all_sectors()
       for (h = 0; h < 2; h++) {
         if (PEEK(0xD610))
           break;
+	n=0;
         for (ss = 1; ss <= 10; ss++) {
 
-          // Interleave reads, as by the time we have updated the display,
-          // the drive is most likely already into the following sector.
-          unsigned char sector_order[10] = { 1, 3, 5, 7, 9, 2, 4, 6, 8, 10 };
-          s = sector_order[ss - 1];
+	  // Read every 3rd sector, as we aren't quite fast enough to read every
+	  // 2nd and certainly not every sector
+          s = sector_order[n];
+	  n+=3; if (n>9) n-=10;
 
           if (PEEK(0xD610))
             break;
