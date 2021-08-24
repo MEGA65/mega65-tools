@@ -572,8 +572,8 @@ int execute_command(char* cmd)
     perform_filehost_get(fhnum);
   }
   else if (!strcasecmp(cmd, "help")) {
-    printf("MEGA65 File Transfer Program Command Reference:\n");
-    printf("\n");
+    printf("MEGA65 File Transfer Program Command Reference:\n\n");
+
     printf("dir [directory|wildcardpattern] - show contents of current or specified sdcard directory. Can use a wildcard "
            "pattern on current directory.\n");
     printf("ldir [wildcardpattern] - shows the contents of current local directory.\n");
