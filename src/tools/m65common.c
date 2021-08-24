@@ -294,7 +294,7 @@ void wait_for_string(char *s)
   int b = 1;
   while (1) {
     b = serialport_read(fd, read_buff, strlen(s));
-    if (b>0) dump_bytes(0,"wait_for_string",read_buff,b);
+    //    if (b>0) dump_bytes(0,"wait_for_string",read_buff,b);
     if (b < 0 || b > 8191)
       continue;
     read_buff[b] = 0;
@@ -945,7 +945,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
   char next_addr_str[8192];
   int ofs = 0;
 
-  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
+  //  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
 
   //  monitor_sync();
   while (addr < (address + count)) {
@@ -960,7 +960,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
 	  snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
 	  end_addr = addr + 0x100;
 	}
-	printf("Sending '%s'\n",cmd);
+	//	printf("Sending '%s'\n",cmd);
 	slow_write_safe(fd, cmd, strlen(cmd));
 	last_rx=time(0);
       }
@@ -968,11 +968,11 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
       if (b <= 0)
         b = 0;
-      else
-	printf("%s\n", read_buff);
+      //      else
+      //	printf("%s\n", read_buff);
       if ((ofs + b) > 8191)
         b = 8191 - ofs;
-      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
+      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
       read_buff[ofs + b] = 0;
       ofs += b;
       char* s = strstr((char*)read_buff, next_addr_str);
@@ -980,7 +980,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
         char b = s[42];
         s[42] = 0;
         if (0) {
-          printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
+	  printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
         }
         s[42] = b;
         for (int i = 0; i < 16; i++) {
@@ -1005,7 +1005,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
     }
   }
   if (addr >= (address + count)) {
-    fprintf(stderr,"Memory read complete at $%lx\n",addr);
+    //    fprintf(stderr,"Memory read complete at $%lx\n",addr);
     return 0;
   }
   else {
