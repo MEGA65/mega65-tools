@@ -418,7 +418,7 @@ int execute_command(char* cmd)
   else if (parse_command(cmd, "put %s %s", src, dst) == 2) {
     upload_file(src, dst);
   }
-  else if (parse_command(cmd, "wput %s", src) == 1) {
+  else if (parse_command(cmd, "dput %s", src) == 1) {
     wrap_upload(src);
   }
   else if (parse_command(cmd, "del %s", src) == 1) {
@@ -581,7 +581,7 @@ int execute_command(char* cmd)
     printf("lcd [directory] - change current local working directory.\n");
     printf("put <file> [destination name] - upload file to SD card, and optionally rename it destination file.\n");
     printf("get <file> [destination name] - download file from SD card, and optionally rename it destination file.\n");
-    printf("wput <file> - upload .prg file wrapped into a .d81 file\n");
+    printf("dput <file> - upload .prg file wrapped into a .d81 file\n");
     printf("del <file> - delete a file from SD card.\n");
     printf("mkdir <dirname> - create a directory on the SD card.\n");
     printf("cd <dirname> - change directory on the SD card. (aka. 'chdir')\n");
