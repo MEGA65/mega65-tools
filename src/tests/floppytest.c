@@ -799,7 +799,7 @@ void format_disk(void)
 
   lfill(0xFF80000L,0x01,4000);
   
-  for(track_num=0;track_num<85;track_num++) {
+  for(track_num=0;track_num<80;track_num++) {
     // Seek to the requested track
     snprintf(peak_msg, 40, "Formatting track %d",track_num);
     print_text(0, 3, 15, peak_msg);
