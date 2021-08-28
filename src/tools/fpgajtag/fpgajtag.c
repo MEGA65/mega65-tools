@@ -718,6 +718,15 @@ static void read_config_memory(int fd, uint32_t size)
   EXIT();
 }
 
+void trim_path_component(char *s)
+{
+  int len=strlen(s);
+  for(int i=len-1;i>=0;i--) {
+    if (s[i]=='/') { s[i]=0; return; }
+  }
+  
+}
+
 void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idcode)
 {
   ENTER();
@@ -806,7 +815,64 @@ void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idc
             int len = readlink(path, link, sizeof(link));
             link[len] = 0;
             fprintf(stderr, "  Checking '%s' -> '%s'\n", path, link);
+
+	    int vendor=0, product=0,isDigilent=0;
+	    
+	    // Now get vendor and product IDs
+	    char temp[8192];
+	    strcpy(temp,&link[4]);
+	    temp[0]='/';
+	    temp[1]='s';
+	    temp[2]='y';
+	    temp[3]='s';
+	    trim_path_component(temp);
+	    trim_path_component(temp);
+	    strcat(temp,"/idVendor");	    
+	    {
+	      FILE *f=fopen(temp,"r");
+	      if (f) {
+		char line[1024];
+		fread(line,1024,1,f);
+		sscanf(line,"%x",&vendor);
+		fclose(f);
+	      }
+	    }
+	    trim_path_component(temp);
+	    strcat(temp,"/idProduct");	    
+	    {
+	      FILE *f=fopen(temp,"r");
+	      if (f) {
+		char line[1024];
+		fread(line,1024,1,f);
+		sscanf(line,"%x",&product);
+		fclose(f);
+	      }
+	    }
+	    
+	    trim_path_component(temp);
+	    strcat(temp,"/manufacturer");	    
+	    {
+	      FILE *f=fopen(temp,"r");
+	      if (f) {
+		char line[1024];
+		fread(line,1024,1,f);
+		if (strstr(line,"Digilent")) isDigilent=1;
+		fclose(f);
+	      }
+	    }	    
+
             char match[1024];
+	    
+	    fprintf(stderr,"USB vendor:product is %04x:%04x (%d)\n",vendor,product,isDigilent);
+	    if (vendor==0x0403&&product==0x6010&&isDigilent) {
+	      snprintf(match, 1024, "/%d-%d/%d-%d:1.1", bus, port, bus, port);
+            //		fprintf(stderr,"    match is '%s'\n",match);
+	      snprintf(serial_path, 1024, "/dev/%s", de->d_name);
+              timestamp_msg("");
+              fprintf(stderr, "Auto-detected serial port '%s'\n", serial_path);
+              serial_port = strdup(serial_path);	      
+	    }
+	    
             snprintf(match, 1024, "/%d-%d/%d-%d:1.1", bus, port, bus, port);
             //		fprintf(stderr,"    match is '%s'\n",match);
             snprintf(serial_path, 1024, "/dev/%s", de->d_name);
@@ -815,6 +881,8 @@ void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idc
               fprintf(stderr, "Auto-detected serial port '%s'\n", serial_path);
               serial_port = strdup(serial_path);
             }
+	    
+	    
           }
           closedir(d);
           if (!serial_port) {
