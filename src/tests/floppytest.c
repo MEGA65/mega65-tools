@@ -442,7 +442,7 @@ void read_all_sectors(unsigned char HD)
         if (PEEK(0xD610))
           break;
 	n=0;
-	s=0;
+	s=1;
         for (ss = 1; ss <= 10*(1+HD); ss++) {
 
           if (PEEK(0xD610))
