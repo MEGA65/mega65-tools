@@ -365,12 +365,14 @@ void gap_histogram(void)
 char read_message[41];
 unsigned char n,sector_order[10];
 
-void read_all_sectors()
+void read_all_sectors(unsigned char HD)
 {
   unsigned char t, s, ss, h;
   unsigned char xx, yy, y;
   unsigned int x, c;
 
+  if (HD) POKE(0xD6A2,0x28); else POKE(0xD6A2,0x51);
+  
   // Floppy motor on
   POKE(0xD080, 0x68);
 
@@ -418,14 +420,14 @@ void read_all_sectors()
     n=0;
     c=PEEK(0xD6A4);
     while(c==PEEK(0xD6A4)) continue;
-    for(n=0;n<10;n++) {
+    for(n=0;n<(10*(1+HD));n++) {
       c=PEEK(0xD6A4);
       while(n&&c==sector_order[n-1]) c=PEEK(0xD6A4);
       sector_order[n]=c;
     }
-    for(n=0;n<10;n++) sector_order[n]&=0x7f;
+    for(n=0;n<10*(1+HD);n++) sector_order[n]&=0x7f;
     
-    for (t = 0; t < 85; t++) {
+    for (t = 0; t < 80; t++) {
       if (PEEK(0xD610))
         break;
 
@@ -440,12 +442,8 @@ void read_all_sectors()
         if (PEEK(0xD610))
           break;
 	n=0;
-        for (ss = 1; ss <= 10; ss++) {
-
-	  // Read every 3rd sector, as we aren't quite fast enough to read every
-	  // 2nd and certainly not every sector
-          s = sector_order[n];
-	  n+=3; if (n>9) n-=10;
+	s=0;
+        for (ss = 1; ss <= 10*(1+HD); ss++) {
 
           if (PEEK(0xD610))
             break;
@@ -473,9 +471,10 @@ void read_all_sectors()
 
           x = t * 7;
           y = 16 + (s - 1) * 8 + (h * 80);
+          if (HD) y = 16 + (s - 1) * 4 + (h * 80);
 
           for (xx = 0; xx < 6; xx++)
-            for (yy = 0; yy < 7; yy++)
+            for (yy = 0; yy < 7-(4*HD); yy++)
               plot_pixel(x + xx, y + yy, 14);
 
           activate_double_buffer();
@@ -496,7 +495,7 @@ void read_all_sectors()
             if (t > 79)
               c = 7; // extra tracks aren't expected to be read
             for (xx = 0; xx < 6; xx++)
-              for (yy = 0; yy < 7; yy++)
+	      for (yy = 0; yy < 7-(4*HD); yy++)
                 plot_pixel(x + xx, y + yy, c);
           }
           else {
@@ -504,11 +503,16 @@ void read_all_sectors()
             if (((t / 10) + h) & 1)
               c = 13;
             for (xx = 0; xx < 6; xx++)
-              for (yy = 0; yy < 7; yy++)
+	      for (yy = 0; yy < 7-(4*HD); yy++)
                 plot_pixel(x + xx, y + yy, c);
           }
           activate_double_buffer();
           //	  lcopy(0xffd6000L,0x4e200L,0x200);
+
+	  // Read every 2nd sector for better interleaving
+	  s+=2; if (s>(10*(1+HD))) s-=(10*(1+HD))-1;
+
+	  
         }
       }
 
@@ -747,7 +751,7 @@ unsigned short crc16(unsigned short crc, unsigned short b)
     return crc;
 }
 
-unsigned char header_crc_bytes[20];
+unsigned char header_crc_bytes[20*2];
 unsigned char data_crc_bytes[20][2];
 unsigned char track_num=0;
 unsigned char side=0;
@@ -794,9 +798,10 @@ void format_disk(unsigned char HD)
   print_text(0, 0, 7, "Formatting disk...");
 
   POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Seek to track 0
-  print_text(0, 2, 15, "Seeking to track 0");
+  print_text(0, 2, 15, "Seeking to track 0 .....");
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
     usleep(6000);
@@ -823,7 +828,7 @@ void format_disk(unsigned char HD)
       
       // Pre-calculate CRC bytes
       crc16_init();
-      for(i=0;i<=9;i++)
+      for(i=0;i<10*(1+HD);i++)
 	{
 	  // Calculate initial CRC of sync bytes and $FE header marker
 	  crc=crc16(0xFFFF,0xa1);
@@ -1021,6 +1026,8 @@ If you do, the final CRC value should be 0.
       // We count x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
       for(sector_num=0;sector_num<10*2*(1+HD);sector_num+=2) {
 
+	POKE(0xC0A0+sector_num,track_num+(side<<7));
+	
 	s=(sector_num>>1);
 	
 	POKE(0xC04d,0);
@@ -1071,7 +1078,7 @@ If you do, the final CRC value should be 0.
 	while(!(PEEK(0xD082)&0x40)) {
 	  if (!(PEEK(0xD082)&0x80)) break;
 	}
-	POKE(0xD087,1+(sector_num>>1)); 
+	POKE(0xD087,1+s);
 	
 	POKE(0xC04c,4);
 	
@@ -1500,13 +1507,14 @@ void main(void)
     printf("%cMEGA65 Floppy Test Utility.\n\n", 0x93);
 
     printf("1. MFM Histogram and seeking tests.\n");
-    printf("2. Test all sectors on disk.\n");
+    printf("2. Test all sectors on DD disk.\n");
     printf("3. Test formatting of DD disk.\n");
     printf("4. Format disk continuously.\n");
     printf("5. Read raw track 0 to $5xxxx.\n");
     printf("6. Wipe disk (clear all flux reversals).");
     printf("7. Sector write testing.\n");
     printf("8. Test formatting of HD disk.\n");
+    printf("9. Test all sectors on HD disk.\n");
 
     while (!PEEK(0xD610))
       continue;
@@ -1517,7 +1525,7 @@ void main(void)
       break;
     case '2':
       POKE(0xD610, 0);
-      read_all_sectors();
+      read_all_sectors(0);
       break;
     case '3':
       POKE(0xD610,0);
@@ -1544,6 +1552,10 @@ void main(void)
     case '8':
       POKE(0xD610,0);
       format_disk(1);
+      break;
+    case '9':
+      POKE(0xD610, 0);
+      read_all_sectors(1);
       break;
     default:
       break;
