@@ -760,6 +760,12 @@ unsigned char s;
 unsigned char sector_data[20][512];
 char msg[80];
 
+unsigned char header_1581[32]=
+  {
+   0x28, 0x03, 0x44, 0x00, 0x4D, 0x45, 0x47, 0x41, 0x36, 0x35, 0xa0, 0xa0, 0x20, 0x20, 0x20, 0x20,
+   0x20, 0x20, 0x20, 0x20, 0xa0, 0xa0, 0x36, 0x35, 0xa0, 0x33, 0x44, 0xa0, 0xa0, 0xa0, 0xa0, 0x00
+};
+
 void format_disk(unsigned char HD)
 {
   // First seek to the correct track
@@ -776,6 +782,7 @@ void format_disk(unsigned char HD)
 
   // Disable auto-tracking
   POKE(0xD689, PEEK(0xD689) | 0x10);
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -798,7 +805,6 @@ void format_disk(unsigned char HD)
   print_text(0, 0, 7, "Formatting disk...");
 
   POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
-  POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Seek to track 0
   print_text(0, 2, 15, "Seeking to track 0 .....");
@@ -848,12 +854,63 @@ void format_disk(unsigned char HD)
       // have come from.
       for(s=0;s<10*(1+HD);s++) {
 	bzero(sector_data[s],512);
-	for(i=0;i<512;) {
-	  snprintf(msg,80,"Offset $%x, Track %d, Sector %d. ",i,track_num,s+1);
-	  if (strlen(msg)+i<512) {
-	    lcopy((unsigned long)msg,(unsigned long)&sector_data[s][i],strlen(msg));
-	    i+=strlen(msg);
-	  } else break;	   
+	if (track_num!=39) {
+	  for(i=0;i<512;) {
+	    snprintf(msg,80,"Offset $%x, Track %d, Sector %d. ",i,track_num,s+1);
+	    if (strlen(msg)+i<512) {
+	      lcopy((unsigned long)msg,(unsigned long)&sector_data[s][i],strlen(msg));
+	      i+=strlen(msg);
+	    } else break;	   
+	  }
+	} else {
+	  if (!side) {
+	    switch(s) {
+	    case 0:
+	      // Header
+	      for(i=0;i<32;i++) sector_data[s][i]=header_1581[i];
+	      // BAM sector 0
+	      sector_data[s][0x100]=0x28;
+	      sector_data[s][0x101]=0x02;
+	      sector_data[s][0x102]=0x44;
+	      sector_data[s][0x103]=0xBB;
+	      sector_data[s][0x104]=0x36;
+	      sector_data[s][0x105]=0x35;
+	      sector_data[s][0x106]=0xC0;
+	      for(i=0;i<40;i++) {
+		sector_data[s][0x110+i*6+0]=0x28;
+		sector_data[s][0x110+i*6+1]=0xFF;
+		sector_data[s][0x110+i*6+2]=0xFF;
+		sector_data[s][0x110+i*6+3]=0xFF;
+		sector_data[s][0x110+i*6+4]=0xFF;
+		sector_data[s][0x110+i*6+5]=0xFF;
+	      }
+	      // Allocate BAMs and directory
+	      sector_data[s][0x1FA]=0x24;
+	      sector_data[s][0x1FB]=0xF0;
+	      break;
+	    case 1:
+	      // BAM sector 1
+	      sector_data[s][0x00]=0x00;
+	      sector_data[s][0x01]=0xFF;
+	      sector_data[s][0x02]=0x44;
+	      sector_data[s][0x03]=0xBB;
+	      sector_data[s][0x04]=0x36;
+	      sector_data[s][0x05]=0x35;
+	      sector_data[s][0x06]=0xC0;
+	      for(i=0;i<40;i++) {
+		sector_data[s][0x10+i*6+0]=0x28;
+		sector_data[s][0x10+i*6+1]=0xFF;
+		sector_data[s][0x10+i*6+2]=0xFF;
+		sector_data[s][0x10+i*6+3]=0xFF;
+		sector_data[s][0x10+i*6+4]=0xFF;
+		sector_data[s][0x10+i*6+5]=0xFF;
+	      }
+	      // Empty and end of directory
+	      sector_data[s][0x100]=0x00;
+	      sector_data[s][0x101]=0xFF;
+	      break;
+	    }
+	  }
 	}
 	
 	crc16_init();
@@ -1197,6 +1254,7 @@ void wipe_disk(void)
 
   // Disable auto-tracking
   POKE(0xD689, PEEK(0xD689) | 0x10);
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
