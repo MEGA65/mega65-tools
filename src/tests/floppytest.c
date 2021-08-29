@@ -238,7 +238,8 @@ void gap_histogram(void)
         continue;
       // Stop as soon as a single histogram bin fills
       if (histo_bins[interval_length] == 255) {
-        snprintf(peak_msg, 40, "Peak @ %d, auto-tune=%d     ", interval_length, PEEK(0xD689) & 0x10);
+        snprintf(peak_msg, 40, "Peak @ %d, auto-tune=%d, %s     ", interval_length, PEEK(0xD689) & 0x10,
+		 (PEEK(0xD6A2)==0x51)?"DD":"HD");
         print_text(0, 2, 7, peak_msg);
         break;
       }
@@ -267,11 +268,11 @@ void gap_histogram(void)
     if ((PEEK(0xD6A3) & 0x7f) != last_track_seen) {
       last_track_seen = PEEK(0xD6A3) & 0x7f;
       // Zero out list of sectors seen
-      snprintf(read_sectors, 41, "Sectors read:      ....................");
+      snprintf(read_sectors, 41, "Sect: ................................");
     }
     else {
       // Note this sector
-      read_sectors[18 + (PEEK(0xD6A5) & 0x1) * 10 + (PEEK(0xD6A4) & 0x1f)] = 0x52;
+      read_sectors[6 + (PEEK(0xD6A4) & 0x1f)] = '0'+(PEEK(0xD6A4)%10);
       POKE(0xD080, PEEK(0xD080) & 0xf7 + (PEEK(0xD012) & 8));
     }
     read_sectors[40] = 0;
@@ -330,6 +331,12 @@ void gap_histogram(void)
         // Auto-tune on
         POKE(0xD689, PEEK(0xD689) & 0xEF);
         break;
+      case 0x48: case 0x68: // (H)D disk
+	POKE(0xD6A2,0x28);
+	break;
+      case 0x44: case 0x64: // (D)D disk
+	POKE(0xD6A2,0x51);
+	break;
       case 0x52: // (R)ead a sector
       case 0x72:
         // Schedule a sector read
@@ -741,18 +748,20 @@ unsigned short crc16(unsigned short crc, unsigned short b)
 }
 
 unsigned char header_crc_bytes[20];
-unsigned char data_crc_bytes[10][2];
+unsigned char data_crc_bytes[20][2];
 unsigned char track_num=0;
 unsigned char side=0;
 
 unsigned char s;
-unsigned char sector_data[10][512];
+unsigned char sector_data[20][512];
 char msg[80];
 
-void format_disk(void)
+void format_disk(unsigned char HD)
 {
   // First seek to the correct track
 
+  if (HD) POKE(0xD6A2,0x28); else POKE(0xD6A2,0x51);
+  
   // Connect to real floppy drive
   while(!(lpeek(0xffd36a1L) & 1)) {
     lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
@@ -832,7 +841,7 @@ void format_disk(void)
       // Now also calculate CRC of data sectors
       // We fill the data sectors with info that makes it easy to see where mis-reads
       // have come from.
-      for(s=0;s<10;s++) {
+      for(s=0;s<10*(1+HD);s++) {
 	bzero(sector_data[s],512);
 	for(i=0;i<512;) {
 	  snprintf(msg,80,"Offset $%x, Track %d, Sector %d. ",i,track_num,s+1);
@@ -1010,7 +1019,7 @@ If you do, the final CRC value should be 0.
       }
       
       // We count x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
-      for(sector_num=0;sector_num<10*2;sector_num+=2) {
+      for(sector_num=0;sector_num<10*2*(1+HD);sector_num+=2) {
 
 	s=(sector_num>>1);
 	
@@ -1492,11 +1501,12 @@ void main(void)
 
     printf("1. MFM Histogram and seeking tests.\n");
     printf("2. Test all sectors on disk.\n");
-    printf("3. Test formatting of disk.\n");
+    printf("3. Test formatting of DD disk.\n");
     printf("4. Format disk continuously.\n");
     printf("5. Read raw track 0 to $5xxxx.\n");
     printf("6. Wipe disk (clear all flux reversals).");
     printf("7. Sector write testing.\n");
+    printf("8. Test formatting of HD disk.\n");
 
     while (!PEEK(0xD610))
       continue;
@@ -1511,12 +1521,12 @@ void main(void)
       break;
     case '3':
       POKE(0xD610,0);
-      format_disk();
+      format_disk(0);
       break;
     case '4':
       POKE(0xD610,0);
       // Format in a loop to try to trigger bug
-      while(!PEEK(0xD610)) format_disk();
+      while(!PEEK(0xD610)) format_disk(0);
       break;
     case '5':
       // Read track 0
@@ -1530,6 +1540,10 @@ void main(void)
     case '7':
       POKE(0xD610,0);
       read_write_test();
+      break;
+    case '8':
+      POKE(0xD610,0);
+      format_disk(1);
       break;
     default:
       break;
