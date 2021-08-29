@@ -319,6 +319,21 @@ type_fileloc* find_in_list(int addr)
   return NULL;
 }
 
+int find_addr_in_list(char* file, int line)
+{
+  type_fileloc* iter = lstFileLoc;
+
+  while (iter != NULL)
+  {
+    if (!strcmp(file, iter->file) && iter->lineno == line)
+      return iter->addr;
+
+    iter = iter->next;
+  }
+
+  return -1;
+}
+
 type_fileloc* find_lineno_in_list(int lineno)
 {
   type_fileloc* iter = lstFileLoc;
@@ -1028,12 +1043,17 @@ void show_location(type_fileloc* fl)
     fgets(line, 1024, f);
     if (cnt >= (fl->lineno - dis_scope + dis_offs) && cnt <= (fl->lineno + dis_scope + dis_offs) )
     {
+      int addr = find_addr_in_list(fl->file, cnt);
+      char saddr[16] = "       ";
+      if (addr != -1)
+        sprintf(saddr, "[$%04X]", addr);
+
       if (cnt == fl->lineno)
       {
-        printf("%s> %d: %s%s", KINV, cnt, line, KNRM);
+        printf("%s> L%d: %s %s%s", KINV, cnt, saddr, line, KNRM);
       }
       else
-        printf("> %d: %s", cnt, line);
+        printf("> L%d: %s %s", cnt, saddr, line);
       //break;
     }
     cnt++;

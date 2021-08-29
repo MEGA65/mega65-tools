@@ -174,16 +174,8 @@ static char** my_completion(const char * text, int start, int end)
     return( matches );
 }
 
-/** Look for a "~/.m65dbginit" file.
- *
- * If one exists, load it and run the commands within it.
-*/
-void run_m65dbg_init_file_commands()
+void load_init_file(char* filepath)
 {
-  // file exists
-  char* HOME = getenv("HOME");
-  char filepath[256];
-  sprintf(filepath, "%s/.m65dbg_init", HOME);
   if( access( filepath, F_OK ) != -1 )
   {
     printf("Loading \"%s\"...\n", filepath);
@@ -215,6 +207,21 @@ void run_m65dbg_init_file_commands()
   }
 }
 
+/** Look for a global "~/.m65dbg_init" file.
+ *  Also look for a local/project specific ".m65dbg_init" in current path
+ *
+ * If either exists, load it and run the commands within it.
+*/
+void run_m65dbg_init_file_commands()
+{
+  // file exists
+  char* HOME = getenv("HOME");
+  char filepath[256];
+  sprintf(filepath, "%s/.m65dbg_init", HOME);
+
+  load_init_file(filepath);
+  load_init_file(".m65dbg_init");
+}
 
 /**
  * main entry point of program
