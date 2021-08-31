@@ -792,7 +792,7 @@ void precalc_sector_header_crcs(void)
     }
 }
 
-void format_single_track_side(/* unsigned char track_num,unsigned char side, */unsigned char sector_count)
+void format_single_track_side(/* unsigned char track_num,unsigned char side, */unsigned char sector_count,unsigned char with_gaps)
 {
 
   precalc_sector_header_crcs();
@@ -1083,21 +1083,23 @@ If you do, the final CRC value should be 0.
       if (!(PEEK(0xD082)&0x80)) break;
     }
     POKE(0xD087,header_crc_bytes[sector_num+0]); 
-    
-    // 23 gap bytes
-    for (i=0;i<23;i++) {
-      while(!(PEEK(0xD082)&0x40)) {
-	if (!(PEEK(0xD082)&0x80)) break;
+
+    if (with_gaps) {
+      // 23 gap bytes
+      for (i=0;i<23;i++) {
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
+	POKE(0xD087,0x4E); 
       }
-      POKE(0xD087,0x4E); 
-    }
-    
-    // 12 gap bytes
-    for (i=0;i<12;i++) {
-      while(!(PEEK(0xD082)&0x40)) {
-	if (!(PEEK(0xD082)&0x80)) break;
+      
+      // 12 gap bytes
+      for (i=0;i<12;i++) {
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
+	POKE(0xD087,0x00); 
       }
-      POKE(0xD087,0x00); 
     }
     
     // Write 3 sync bytes
@@ -1134,13 +1136,14 @@ If you do, the final CRC value should be 0.
     }
     POKE(0xD087,data_crc_bytes[s][0]); 
     
-    
-    // 24 gap bytes
-    for (i=0;i<24;i++) {
-      while(!(PEEK(0xD082)&0x40)) {
-	if (!(PEEK(0xD082)&0x80)) break;
+    if (with_gaps) {
+      // 24 gap bytes
+      for (i=0;i<24;i++) {
+	while(!(PEEK(0xD082)&0x40)) {
+	  if (!(PEEK(0xD082)&0x80)) break;
+	}
+	POKE(0xD087,0x4E);
       }
-      POKE(0xD087,0x4E);
     }
     
   }
@@ -1213,7 +1216,7 @@ void format_disk(unsigned char HD)
       else
 	POKE(0xD080, 0x68);
 
-      format_single_track_side(/* track_num,side, */ 10*(1+HD));
+      format_single_track_side(/* track_num,side, */ 10*(1+HD),1 /* = with inter-sector gaps */);
 
     }
     
