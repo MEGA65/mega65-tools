@@ -213,7 +213,7 @@ m65data.append(numRows)  # 5 : number of rows
 m65data.append(numColumns)  # 6 : number of columns
 # 7 : options (b0: RLE compressed; b1: sys palette reserved)
 m65data.append(gCompress+(2*gReserve))
-m65data.append(len(vic4_palette))  # 8 : palette size
+m65data.append(len(vic4_palette)-1)  # 8 : palette size
 
 if not gExcludePalette:
     for entry in vic4_palette:
