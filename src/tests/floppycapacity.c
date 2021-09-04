@@ -610,7 +610,7 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   while (PEEK(0xD082) & 0x80) {
     // Read sector data non-buffered while we wait for comparison
     if (PEEK(0xD082)&0x40) { POKE(0xE000+i,PEEK(0xD087)); i++; i&=0x1fff; }
-    POKE(0xc000,PEEK(0xc000)+1);
+    POKE(0x0400,PEEK(0x0400)+1);
   }
 
   if (PEEK(0xD082) & 0x18) {
@@ -924,7 +924,7 @@ If you do, the final CRC value should be 0.
     
     s=(sector_num>>1);
 
-    POKE(0x0400+s,0x21);
+    POKE(0x0400+s,PEEK(0x0400+s));
     
     // Write 3 sync bytes
     for(i=0;i<3;i++) {
@@ -1264,8 +1264,8 @@ void main(void)
 	{
 	 40,40,40,40,40,40,40,40,40,40,
 	 40,40,40,40,40,40,40,40,40,40,
-	 40,40,40,40,40,38,37,35,34,33,31,
-	 30
+	 40,40,40,40,39,38,37,35,34,33,
+	 31,30
 	};
 
       for(track_num=0;track_num<80;track_num++) {
@@ -1345,6 +1345,8 @@ void main(void)
 	  for(sector_num=1;sector_num<=sector_count;sector_num++) {
 	    if (read_a_sector(track_num,side,sector_num)) { errors++; }
 	    //	    else { printf("%d",sector_num%10); }
+	    // No point continuing if we hit an error -- just abort early to speed things up a lot
+	    if (errors) break;
 	  }
 	  //	  printf(" %d/%d",sector_count-errors,sector_count);
 	  if (!errors) best=sector_count; // printf(" %d",sector_count);
