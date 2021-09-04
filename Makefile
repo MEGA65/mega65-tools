@@ -265,6 +265,16 @@ $(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(TESTDIR)/floppyread.s
 	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s $(TESTDIR)/floppyread.s
 
+$(TESTDIR)/floppydrivetest.prg:       $(TESTDIR)/floppydrivetest.c $(TESTDIR)/floppyread.s $(CC65)
+	$(SUBMODULEUPDATE)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o temp.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s $(TESTDIR)/floppyread.s
+	cat src/utilities/c65toc64wrapper.prg temp.prg > $*.prg
+
+$(TESTDIR)/floppycapacity.prg:       $(TESTDIR)/floppycapacity.c $(TESTDIR)/floppyread.s $(CC65)
+	$(SUBMODULEUPDATE)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o temp.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s $(TESTDIR)/floppyread.s
+	cat src/utilities/c65toc64wrapper.prg temp.prg > $*.prg
+
 $(UTILDIR)/c65toc64wrapper.prg:	$(UTILDIR)/c65toc64wrapper.asm $(ACME)
 	$(ACME) --setpc 0x2001 --cpu m65 --format cbm --outfile $(UTILDIR)/c65toc64wrapper.prg $(UTILDIR)/c65toc64wrapper.asm
 
