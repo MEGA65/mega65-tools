@@ -699,8 +699,8 @@ void load_map(const char* fname)
 
       int addr;
       char sym[1024];
-      sscanf(line, "$%04X %s", &addr, sym);
-      sscanf(line, "%s", sval);
+      sscanf(line, "$%04X | %s", &addr, sym);
+      sscanf(line, "| %s", sval);
 
       //printf("%s : %04X\n", sym, addr);
       type_symmap_entry sme;
@@ -852,6 +852,8 @@ void load_list(char* fname)
       char file[1024];
       int lineno;
       strcpy(file, &strtok(s, ":")[1]);
+      if (strrchr(line, '/'))
+        strcpy(file, strrchr(file, '/') + 1);
       sscanf(strtok(NULL, ":"), "%d", &lineno);
       sscanf(line, " %X", &addr);
 
