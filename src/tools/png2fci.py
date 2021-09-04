@@ -18,12 +18,10 @@ gExcludePalette = False
 gVersion = "1.0"
 gPreserveBackgroundColour = False
 
-
 def vprint(*values):
     global gVerbose
     if gVerbose == True:
         print(*values)
-
 
 def showUsage():
     print("usage: "+sys.argv[0]+" [-rv] infile outfile")
@@ -178,13 +176,15 @@ except:
 
 vic4_palette = []
 
+currentPaletteIndex = 0
+
 if gExcludePalette:
     vprint("excluding palette data")
 else:
     if gReserve:
-        if len(palette) > 240:
+        if len(palette) > 239:
             print("error: can't reserve system palette because source PNG "
-                  "has >240 palette entries.")
+                  "has >239 palette entries.")
             exit(2)
 
         # add placeholders for system colours
@@ -195,9 +195,11 @@ else:
         else:
             maxC = 16
         for i in range(maxC):
+            currentPaletteIndex=i
             vic4_palette.append((0, 0, 0))
 
     for i in palette:
+        currentPaletteIndex+=1
         vic4_palette.append((i[0], i[1], i[2]))
 
     vprint("outfile has", len(vic4_palette), "palette entries")
