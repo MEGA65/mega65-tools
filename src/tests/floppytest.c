@@ -260,7 +260,7 @@ void read_all_sectors(unsigned char HD)
     // Seek back to track 0
     while (!(PEEK(0xD082) & 1)) {
       POKE(0xD081, 0x10);
-      usleep(6000);
+      while (PEEK(0xD082) & 0x80) continue;
     }
 
     if (PEEK(0xD610)) {
@@ -795,6 +795,14 @@ void precalc_sector_header_crcs(void)
 void format_single_track_side(/* unsigned char track_num,unsigned char side, */unsigned char sector_count,unsigned char with_gaps)
 {
 
+  // Use new hardware-accelerated formatting
+#if 1
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
+  while (PEEK(0xD082) & 0x80) continue;
+  POKE(0xD084,track_num);
+  POKE(0xD081,0xa0); // $A0= with gaps, $A4 = without gaps
+  while (PEEK(0xD082) & 0x80) continue;
+#else  
   precalc_sector_header_crcs();
   
   // Now calculate CRC of data sectors
@@ -1145,8 +1153,8 @@ If you do, the final CRC value should be 0.
 	POKE(0xD087,0x4E);
       }
     }
-    
   }
+#endif    
 }
 
 
@@ -1157,15 +1165,12 @@ void format_disk(unsigned char HD)
   if (HD) POKE(0xD6A2,0x28); else POKE(0xD6A2,0x51);
   
   // Connect to real floppy drive
-  while(!(lpeek(0xffd36a1L) & 1)) {
-    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
-  }
+  POKE(0xD631,0x01);
   
   // Floppy 0 motor on
   POKE(0xD080, 0x68);
 
-  // Disable auto-tracking
-  POKE(0xD689, PEEK(0xD689) | 0x10);
+  // Disable auto-tracking, or we can't force seeking to track 0
   POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
@@ -1188,13 +1193,14 @@ void format_disk(unsigned char HD)
   
   print_text(0, 0, 7, "Formatting disk...");
 
-  POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+
 
   // Seek to track 0
+  while (PEEK(0xD082) & 0x80) continue;
   print_text(0, 2, 15, "Seeking to track 0 .....");
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
-    usleep(6000);
+    while (PEEK(0xD082) & 0x80) continue;
 
     snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     print_text(0, 24, 7, peak_msg);
@@ -1268,7 +1274,7 @@ void wipe_disk(void)
   print_text(0, 2, 15, "Seeking to track 0");
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
-    usleep(6000);
+    while (PEEK(0xD082) & 0x80) continue;
 
     snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     print_text(0, 24, 7, peak_msg);
@@ -1364,7 +1370,7 @@ void read_write_test(void)
   // Seek to track 0
   while(!(PEEK(0xD082)&0x01)) {
     POKE(0xD081,0x10);
-    usleep(6000);
+    while (PEEK(0xD082) & 0x80) continue;
 
     snprintf(peak_msg, 80, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     print_text80x40(0, 39, 7, peak_msg);
