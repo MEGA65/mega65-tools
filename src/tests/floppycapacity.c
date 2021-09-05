@@ -228,7 +228,7 @@ void read_all_sectors(unsigned char HD)
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD689, PEEK(0xD689) | 0x10);
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -560,7 +560,7 @@ void read_track(unsigned char track_number,unsigned char side)
 
     print_text(0, 0, 7, "Reading track...");
     
-    POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+    POKE(0xD696,0x00);  // also disable auto-seek on new address
       
     // Seek to track 0
     print_text(0, 2, 15, "Seeking to track 0");
@@ -626,7 +626,7 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
 unsigned char write_a_sector(unsigned char track_number,unsigned char side, unsigned char sector)
 {
   // Disable auto-seek, or we can't force seeking to track 0    
-  POKE(0xD689,PEEK(0xD689)|0x10); 
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Connect to real floppy drive
   while(!(lpeek(0xffd36a1L) & 1)) {
@@ -1060,7 +1060,6 @@ void format_disk(unsigned char HD)
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD689, PEEK(0xD689) | 0x10);
   POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
@@ -1083,7 +1082,7 @@ void format_disk(unsigned char HD)
   
   print_text(0, 0, 7, "Formatting disk...");
 
-  POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Seek to track 0
   print_text(0, 2, 15, "Seeking to track 0 .....");
@@ -1134,7 +1133,6 @@ void wipe_disk(void)
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD689, PEEK(0xD689) | 0x10);
   POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
@@ -1157,7 +1155,7 @@ void wipe_disk(void)
   
   print_text(0, 0, 7, "Wiping disk (erasing magnetic reversals)...");
 
-  POKE(0xD689,PEEK(0xD689)|0x10); // Disable auto-seek, or we can't force seeking to track 0
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
 
   // Seek to track 0
   print_text(0, 2, 15, "Seeking to track 0");
@@ -1279,7 +1277,7 @@ void main(void)
 
 	printf(" T%d:",track_num);
 
-	for(sector_count=24;sector_count<=31;sector_count++) {
+	for(sector_count=22;sector_count<=31;sector_count++) {
 	  	 
 	  // Floppy 0 motor on
 	  POKE(0xD080, 0x68);	  
@@ -1338,9 +1336,19 @@ void main(void)
 	  //	  printf("Writing track at rate %d\n",bit_interval);
 	  bit_interval=rate_for_sector_count_no_gaps[sector_count];
 	  POKE(0xD6A2,bit_interval);
-	  format_single_track_side(sector_count,with_gaps);
+	  //	  format_single_track_side(sector_count,with_gaps);
 	  
-	  //	  printf("Reading back %d sectors:\n",sector_count);
+	  // Format track using new hardware-accelerated track formatting
+	  printf("Formatting track...\n");
+	  POKE(0xD696,0x00);  // also disable auto-seek on new address
+          while (PEEK(0xD082) & 0x80) continue;
+	  POKE(0xD084,track_num);
+	  POKE(0xD081,0xa0); // $A0= with gaps, $A4 = without gaps
+          while (PEEK(0xD082) & 0x80) continue;
+
+	  while(1) POKE(0xD020,PEEK(0xD020)+1);
+	  
+	  printf("Reading back %d sectors:\n",sector_count);
 	  errors=0; 
 	  for(sector_num=1;sector_num<=sector_count;sector_num++) {
 	    if (read_a_sector(track_num,side,sector_num)) { errors++; }
