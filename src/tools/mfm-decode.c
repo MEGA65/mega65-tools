@@ -25,6 +25,12 @@ int sync_count=0;
 int field_ofs=0;
 unsigned char data_field[1024];
 
+#define MAX_SIGNALS 64
+#define MAX_SAMPLES 65536
+float traces[MAX_SIGNALS][MAX_SAMPLES];
+int sample_counts[MAX_SIGNALS]={0};
+float max_time=0;
+
 // CRC16 algorithm from:
 // https://github.com/psbhlw/floppy-disk-ripper/blob/master/fdrc/mfm.cpp
 // GPL3+, Copyright (C) 2014, psb^hlw, ts-labs.
@@ -58,9 +64,9 @@ void describe_data(void)
   case 0xfe:
     // Sector header
     fprintf(stdout,"SECTOR HEADER: Track=%d, Side=%d, Sector=%d, Size=%d (%d bytes) ",
-	    data_field[1],data_field[2],data_field[3],data_field[4],
-	    128<<(data_field[4]),
-	    data_field[5],data_field[6]);
+	    data_field[1],data_field[2],data_field[3],
+	    128<<(data_field[4]));
+
     unsigned short crc=0xffff;
     for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
     for(int i=0;i<7;i++) {
@@ -137,7 +143,7 @@ void emit_bit(int b)
       field_ofs=1;
       data_field[0]=byte;
     } else  {
-      printf(" $%02x", byte);
+      //      printf(" $%02x", byte);
       if (field_ofs<1024) data_field[field_ofs++]=byte;
     }
     bytes_emitted++;
@@ -229,94 +235,167 @@ void mfm_decode(float gap)
 
 int main(int argc, char** argv)
 {
-  if (argc != 2) {
-    fprintf(stderr, "usage: mfm-decode <MEGA65 FDC read capture>\n");
+  if (argc < 2) {
+    fprintf(stderr, "usage: mfm-decode <MEGA65 FDC read capture ...>\n");
     exit(-1);
   }
 
-  FILE* f = fopen(argv[1], "r");
-  unsigned char buffer[65536];
-  int count = fread(buffer, 1, 65536, f);
-  printf("Read %d bytes\n", count);
+  for(int arg=1;arg<argc;arg++) {
+    FILE* f = fopen(argv[arg], "r");
+    unsigned char buffer[65536];
+    int count = fread(buffer, 1, 65536, f);
+    printf("Read %d bytes\n", count);
+    
+    crc16_init();
+    
+    int i;
+    
+    // Check if data looks like it is a $D6AC capture
+    int a=buffer[0]>>2;
+    int b=buffer[1]>>2;
+    int c=buffer[2]>>2;
+    int d=buffer[3]>>2;
+    if (a==63) { b+=64; c+=64; d+=64; }
+    if (b==63) { c+=64; d+=64; }
+    if (c==63) { d+=64; }
+    if ((argc<3)&&b>=a&&c>=b&&d>=c&&buffer[0]!=buffer[3]&&buffer[0]!=buffer[2]) {
+      fprintf(stderr,"NOTE: File appears to be $D6AC capture\n");
+      
+      int last_counter=(a-1)&0x1f;
+      
+      for(i=0;i<count;i++) {
+	int counter_val=(buffer[i]>>2)&0x1f;
+	if (counter_val!=(last_counter+1)) {
+	  fprintf(stderr,"WARNING: Byte %d : counter=%d, expected %d\n",
+		  i,counter_val,last_counter+1);
+	}
+	last_counter=counter_val;
+	if (last_counter==31) last_counter=-1;
+	
+	switch(buffer[i]&3) {
+	case 0: mfm_decode(1.0); break;
+	case 1: mfm_decode(1.5); break;
+	case 2: mfm_decode(2.0); break;
+	case 3: mfm_decode(1.0); break; // invalidly short or long gap, just lie and call it a short gap
+	}
+      }
+      exit(-1);
+    }
+    
+    if (
+	((((buffer[1]>>4)+1)&0xf)==(buffer[3]>>4))
+	&&
+	((((buffer[3]>>4)+1)&0xf)==(buffer[5]>>4))
+	&&
+	((((buffer[5]>>4)+1)&0xf)==(buffer[7]>>4))
+	&&
+	((((buffer[7]>>4)+1)&0xf)==(buffer[9]>>4))) {
+      fprintf(stderr,"NOTE: Auto-detect $D699/$D69A log.\n");
+      
+      int last_count=buffer[1]>>4;
+      
+      for (i = 0; i < count; i+=2) {
+	int this_count=buffer[i+1]>>4;
+	if (this_count!=last_count) {
+	  fprintf(stderr,"ERROR: Saw count %d instead of %d at offset %d\n",
+		  this_count,last_count,i);
+	  last_count=this_count+1;	
+	} else 
+	  last_count++;
+	if (last_count>0xf) last_count=0;
+	
+	int gap_len=buffer[i]+((buffer[i+1]&0xf)<<8);
+	float qgap=gap_len*1.0/162.0;
+	// printf("  gap=%.1f (%d)\n",qgap,gap_len);
+	mfm_decode(qgap);
+      }
+      
+      exit(-1);
+    }
+    
+    
+    fprintf(stderr,"NOTE: Assuming raw $D6A0 capture.\n");
+    
+    /* Work out divisor.
+       Rate is provided as rate/40.5MHz
+       File sample rate is 40.5Mz/3 = 13.5MHz
+       
+    */
+    float rate=40;
+    // Obtain data rate from filename if present
+    sscanf(argv[arg],"rate%f",&rate);
+    float divisor=2*rate/3;
+    fprintf(stderr,"Rate = %f\n",rate);
+    
+    for (i = 1; i < count; i++) {
+      if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
+	if (last_pulse) // ignore pseudo-pulse caused by start of file
+	  {
+	    float gap=i-last_pulse;
+	    gap/=divisor;
+	    //	    printf("%.2f\n",gap);
 
-  crc16_init();
+	    // Log the trace
+	    if (sample_counts[arg]) {
+	      // Calculate cumulative time
+	      traces[arg][sample_counts[arg]++]=gap+traces[arg][sample_counts[arg]];
+	    } else
+	      traces[arg][sample_counts[arg]++]=gap;
+	    if (traces[arg][sample_counts[arg]-1]>max_time)
+	      max_time=traces[arg][sample_counts[arg]-1];	      
+	    
+	    mfm_decode(gap);
+	  } 
+	last_pulse = i;
+      }
+    }
+    
+    printf("\n");
+  }
+
+  FILE *f=fopen("gaps.vcd","w");
+  if (!f) return -1;
   
-  int i;
-
-  // Check if data looks like it is a $D6AC capture
-  int a=buffer[0]>>2;
-  int b=buffer[1]>>2;
-  int c=buffer[2]>>2;
-  int d=buffer[3]>>2;
-  if (a==63) { b+=64; c+=64; d+=64; }
-  if (b==63) { c+=64; d+=64; }
-  if (c==63) { d+=64; }
-  if (b>=a&&c>=b&&d>=c&&buffer[0]!=buffer[3]&&buffer[0]!=buffer[2]) {
-    fprintf(stderr,"NOTE: File appears to be $D6AC capture\n");
-
-    int last_counter=(a-1)&0x1f;
+  fprintf(f,"$date\n"
+	  "   Mon Feb 17 15:29:53 2020\n"
+	  "\n"
+	  "$end\n"
+	  "$version\n"
+	  "   MEGA65 Floppy Decode Trace Tool.\n"
+	  "$end\n"
+	  "$comment\n"
+	  "   No comment.\n"
+	  "$end\n"
+	  "$timescale 1us $end\n"
+	  "$scope module logic $end\n");
     
-    for(i=0;i<count;i++) {
-      int counter_val=(buffer[i]>>2)&0x1f;
-      if (counter_val!=(last_counter+1)) {
-	fprintf(stderr,"WARNING: Byte %d : counter=%d, expected %d\n",
-		i,counter_val,last_counter+1);
-      }
-      last_counter=counter_val;
-      if (last_counter==31) last_counter=-1;
-					   
-      switch(buffer[i]&3) {
-      case 0: mfm_decode(1.0); break;
-      case 1: mfm_decode(1.5); break;
-      case 2: mfm_decode(2.0); break;
-      case 3: mfm_decode(1.0); break; // invalidly short or long gap, just lie and call it a short gap
+  for(int arg=1;arg<argc;arg++) 
+    fprintf(f,"$var wire 1 %c %s $end\n",
+	    '@'+arg,argv[arg]);
+  
+  fprintf(f,"$upscope $end\n"
+	  "$enddefinitions $end\n"
+	  "$dumpvars\n");
+  for(int arg=1;arg<argc;arg++) fprintf(f,"x%c\n",'@'+arg);
+  fprintf(f,"$end\n"
+	  "\n");
+
+  float time=0;
+  int ofs[MAX_SIGNALS]={0};
+  for(time=0;time<(max_time+0.01);time+=0.01) {
+    printf("@ %.2f\n",time);
+    for(int arg=1;arg<argc;arg++) {
+      if (ofs[arg]<sample_counts[arg]) {
+	if (traces[arg][ofs[arg]]+0.01<=time) {
+	  fprintf(f,"#%d\n0%c\n",(int)(time*100),'@'+arg);
+	  ofs[arg]++;
+	} else if (traces[arg][ofs[arg]]<=time) {
+	  fprintf(f,"#%d\n1%c\n",(int)(time*100),'@'+arg);
+	}
       }
     }
-    exit(-1);
   }
-
-  if (
-      ((((buffer[1]>>4)+1)&0xf)==(buffer[3]>>4))
-      &&
-      ((((buffer[3]>>4)+1)&0xf)==(buffer[5]>>4))
-      &&
-      ((((buffer[5]>>4)+1)&0xf)==(buffer[7]>>4))
-      &&
-      ((((buffer[7]>>4)+1)&0xf)==(buffer[9]>>4))) {
-    fprintf(stderr,"NOTE: Auto-detect $D699/$D69A log.\n");
-
-    int last_count=buffer[1]>>4;
+  fclose(f);
     
-    for (i = 0; i < count; i+=2) {
-      int this_count=buffer[i+1]>>4;
-      if (this_count!=last_count) {
-	fprintf(stderr,"ERROR: Saw count %d instead of %d at offset %d\n",
-		this_count,last_count,i);
-	last_count=this_count+1;	
-      } else 
-	last_count++;
-      if (last_count>0xf) last_count=0;
-
-      int gap_len=buffer[i]+((buffer[i+1]&0xf)<<8);
-      float qgap=gap_len*1.0/162.0;
-      // printf("  gap=%.1f (%d)\n",qgap,gap_len);
-      mfm_decode(qgap);
-    }
-      
-    exit(-1);
-  }
-      
-      
-  fprintf(stderr,"NOTE: Assuming raw $D6A0 capture.\n");
-  for (i = 1; i < count; i++) {
-    if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
-      if (last_pulse) // ignore pseudo-pulse caused by start of file
-        mfm_decode((i - last_pulse) / 25.0 / 2.7);
-
-      last_pulse = i;
-    }
-  }
-
-  printf("\n");
   return 0;
 }
