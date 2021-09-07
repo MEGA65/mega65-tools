@@ -240,6 +240,10 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
+  for(int i=0;i<MAX_SIGNALS;i++) {
+    sample_counts[i]=0;
+  }    
+  
   for(int arg=1;arg<argc;arg++) {
     FILE* f = fopen(argv[arg], "r");
     unsigned char buffer[65536];
@@ -326,6 +330,8 @@ int main(int argc, char** argv)
     sscanf(argv[arg],"rate%f",&rate);
     float divisor=2*rate/3;
     fprintf(stderr,"Rate = %f\n",rate);
+
+    last_pulse=0;
     
     for (i = 1; i < count; i++) {
       if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
@@ -338,9 +344,11 @@ int main(int argc, char** argv)
 	    // Log the trace
 	    if (sample_counts[arg]) {
 	      // Calculate cumulative time
-	      traces[arg][sample_counts[arg]++]=gap+traces[arg][sample_counts[arg]];
-	    } else
+	      traces[arg][sample_counts[arg]++]=gap+traces[arg][sample_counts[arg]-1];
+	    } else {
 	      traces[arg][sample_counts[arg]++]=gap;
+	      printf("#%d : first gap = %.2f\n",arg,gap);
+	    }
 	    if (traces[arg][sample_counts[arg]-1]>max_time)
 	      max_time=traces[arg][sample_counts[arg]-1];	      
 	    
@@ -382,15 +390,22 @@ int main(int argc, char** argv)
 
   float time=0;
   int ofs[MAX_SIGNALS]={0};
+  int asserted[MAX_SIGNALS]={0};
+  for(int arg=1;arg<argc;arg++) {
+    for(int i=0;i<sample_counts[arg];i++)
+      printf("#%d : %.2f\n",arg,traces[arg][i]);
+  }
+  
   for(time=0;time<(max_time+0.01);time+=0.01) {
-    printf("@ %.2f\n",time);
     for(int arg=1;arg<argc;arg++) {
       if (ofs[arg]<sample_counts[arg]) {
-	if (traces[arg][ofs[arg]]+0.01<=time) {
+	if (asserted[arg]) {
 	  fprintf(f,"#%d\n0%c\n",(int)(time*100),'@'+arg);
+	  asserted[arg]=0;
 	  ofs[arg]++;
 	} else if (traces[arg][ofs[arg]]<=time) {
 	  fprintf(f,"#%d\n1%c\n",(int)(time*100),'@'+arg);
+	  asserted[arg]=1;	  
 	}
       }
     }
