@@ -103,6 +103,7 @@ type_command_details command_details[] =
   { "fastmode", cmdFastMode, "0/1", "Used to quickly switch between 2,000,000bps (slow-mode: default) or 4,000,000bps (fast-mode: used in ftp-mode)" },
   { "scope", cmdScope, "<int>", "the scope-size of the listing to show alongside the disassembly" },
   { "offs", cmdOffs, "<int>", "the offset of the listing to show alongside the disassembly" },
+  { "val", cmdPrintValue, "<$hex/dec/\%bin/>", "print the given value in hex, decimal and binary" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -917,6 +918,7 @@ void load_bsa_list(char* fname)
           int addr;
           char sval[256];
           sscanf(line, "%X", &addr);
+          sscanf(sval, "$%04X", &addr);
           sme.addr = addr;
           sme.sval = sval;
           sme.symbol = tok;
@@ -2685,6 +2687,73 @@ void cmdOffs(void)
   if (autocls)
     cmdClearScreen();
   cmdDisassemble();
+}
+
+int parseBinaryString(char* str)
+{
+  int val = 0;
+  int weight = 1;
+  for (int k = strlen(str)-1; k >=0; k--)
+  {
+    if (str[k] == '1')
+      val += weight;
+    weight <<= 1;
+  }
+  return val;
+}
+
+char* toBinaryString(int val)
+{
+  static char str[64];
+
+  int maxbit = (1 << 31);
+  if (val/65536 == 0)
+    maxbit = (1 << 15);
+  if (val/256 == 0)
+    maxbit = (1 << 7);
+
+  int cnt = 0;
+  int bitcnt = 0;
+  for (int k = maxbit; k > 0; k >>= 1)
+  {
+    if (val & k)
+      str[cnt] = '1';
+    else
+      str[cnt] = '0';
+
+    cnt++;
+    bitcnt++;
+    if ( (bitcnt % 4) == 0)
+    {
+      str[cnt] = ' ';
+      cnt++;
+    }
+  }
+  str[cnt] = '\0';
+  return str;
+}
+
+void cmdPrintValue(void)
+{
+  char* strVal = strtok(NULL, " ");
+
+  if (strVal == NULL)
+  {
+    printf("Missing <value> parameter!\n");
+    return;
+  }
+
+  int val = 0;
+  if (strVal[0] == '$')
+    val = get_sym_value(strVal+1);
+  else if (strVal[0] == '%')
+    val = parseBinaryString(strVal+1);
+  else if (isdigit(strVal[0]))
+    sscanf(strVal, "%d", &val);
+  else
+    val = get_sym_value(strVal);
+
+  printf("  $%04X  /  %d  /  %%%s\n", val, val, toBinaryString(val));
 }
 
 int isCpuStopped(void)
