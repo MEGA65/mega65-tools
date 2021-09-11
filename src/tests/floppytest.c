@@ -352,13 +352,21 @@ void read_all_sectors(unsigned char HD)
 	// Start with no sectors read
 	max_sector=10*(1+HD);
 	sectors_read=0;
-	for(ss=1;ss<=max_sector;ss++) sector_read[ss]=0;
 	if (HD) {
 	  // If HD disk, wait until we get info about the track
 	  while((!PEEK(0xD6A8))&&(PEEK(0xD6A7)==0x28)) {	  
 	    continue;
 	  }
+	  max_sector=20;
+	  // XXX also check gaps/no gaps
+	  switch(PEEK(0xD6A7)) {
+	  case 0x1d: max_sector=31;
+	  case 0x1e: max_sector=30;
+	  case 0x1f: max_sector=29;
+	  case 0x20: max_sector=29;
+	  }	  
 	}
+	for(ss=1;ss<=max_sector;ss++) sector_read[ss]=0;
 	while(sectors_read<max_sector) {
 	  // Try to read the next sector that will come under the head
 	  s=PEEK(0xD6A4)+1;
@@ -396,10 +404,10 @@ void read_all_sectors(unsigned char HD)
 	  
 	  x = t * 7;
 	  y = 16 + (s - 1) * 8 + (h * 80);
-	  if (HD) y = 16 + (s - 1) * 4 + (h * 80);
+	  if (HD) y = 16 + (s - 1) * 2 + (h * 80);
 	  
 	  for (xx = 0; xx < 6; xx++)
-	    for (yy = 0; yy < 7-(4*HD); yy++)
+	    for (yy = 0; yy < 7-(6*HD); yy++)
 	      plot_pixel(x + xx, y + yy, 14);
 	  
 	  activate_double_buffer();
@@ -420,7 +428,7 @@ void read_all_sectors(unsigned char HD)
 	    if (t > 79)
 	      c = 7; // extra tracks aren't expected to be read
 	    for (xx = 0; xx < 6; xx++)
-	      for (yy = 0; yy < 7-(4*HD); yy++)
+	      for (yy = 0; yy < 7-(6*HD); yy++)
 		plot_pixel(x + xx, y + yy, c);
 	  }
 	  else {
@@ -428,7 +436,7 @@ void read_all_sectors(unsigned char HD)
 	    if (((t / 10) + h) & 1)
 	      c = 13;
 	    for (xx = 0; xx < 6; xx++)
-	      for (yy = 0; yy < 7-(4*HD); yy++)
+	    for (yy = 0; yy < 7-(6*HD); yy++)
 		plot_pixel(x + xx, y + yy, c);
 	  }
 	  activate_double_buffer();
