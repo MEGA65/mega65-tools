@@ -360,10 +360,10 @@ void read_all_sectors(unsigned char HD)
 	  max_sector=20;
 	  // XXX also check gaps/no gaps
 	  switch(PEEK(0xD6A7)) {
-	  case 0x1d: max_sector=31;
-	  case 0x1e: max_sector=30;
-	  case 0x1f: max_sector=29;
-	  case 0x20: max_sector=29;
+	  case 0x1d: max_sector=29; break;
+	  case 0x1e: max_sector=28; break;
+	  case 0x1f: max_sector=27; break;
+	  case 0x20: max_sector=27; break;
 	  }	  
 	}
 	for(ss=1;ss<=max_sector;ss++) sector_read[ss]=0;
