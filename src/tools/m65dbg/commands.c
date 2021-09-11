@@ -2753,7 +2753,11 @@ void cmdPrintValue(void)
   else
     val = get_sym_value(strVal);
 
-  printf("  $%04X  /  %d  /  %%%s\n", val, val, toBinaryString(val));
+  char charval[64] = "";
+  if (val >= 32 && val < 256)
+    sprintf(charval, "(char='%c')", val);
+
+  printf("  $%04X  /  %d  /  %%%s %s\n", val, val, toBinaryString(val), charval);
 }
 
 int isCpuStopped(void)
