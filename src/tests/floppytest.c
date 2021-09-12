@@ -64,15 +64,15 @@ void goto_track0(void)
 void get_interval(void)
 {
   // Make sure we start measuring a fresh interval
-  a = PEEK(0xD6AA);
-  while (a == PEEK(0xD6AA))
+  a = PEEK(0xD6AB);
+  while (a == PEEK(0xD6AB))
     continue;
 
   do {
-    a = PEEK(0xD6A9);
-    b = PEEK(0xD6AA);
-    c = PEEK(0xD6A9);
-    d = PEEK(0xD6AA);
+    a = PEEK(0xD6AA);
+    b = PEEK(0xD6AB);
+    c = PEEK(0xD6AA);
+    d = PEEK(0xD6AB);
   } while (a != c || b != d);
   interval_length = a + ((b & 0xf) << 8);
 }
@@ -456,6 +456,7 @@ void read_all_sectors(unsigned char HD)
 
 unsigned char reformat_trackP=0;
 unsigned char formatting_enabled=0;
+unsigned char precomp_a,precomp_b,precomp_15;
 void gap_histogram(void)
 {
 
@@ -538,8 +539,8 @@ void gap_histogram(void)
 
     print_text(0, 4, 7, peak_msg);
 
-    snprintf(peak_msg, 41, "WPC: $%02x/$%02x, DataRate: $%02x",
-	     PEEK(0xD6A8),PEEK(0xD6A7),PEEK(0xD6A2));
+    snprintf(peak_msg, 41, "WPC: %02x/%02x/%02x, DataRate: $%02x/TIB:%02x",
+	     precomp_a,precomp_b,precomp_15,PEEK(0xD6A2),PEEK(0xD6A7));
     print_text(0, 7, 7, peak_msg);
 
     snprintf(peak_msg, 40, "Target track %-5d is T:$%02X, prev $%02X", random_seek_count, random_target, last_random_target);
@@ -602,22 +603,30 @@ void gap_histogram(void)
 	POKE(0xD6A7,0x08);
 	reformat_trackP=1;
 	break;
-      case 0x55: case 0x75:
-	POKE(0xD6A6,PEEK(0xD6A6)-1);
+      case 0x55: case 0x75: // U
+	precomp_b--;
 	reformat_trackP=1;
 	break;
-      case 0x49: case 0x69:
-	POKE(0xD6A6,PEEK(0xD6A6)+1);
+      case 0x49: case 0x69: // I
+	precomp_b++;
 	reformat_trackP=1;
 	break;		
-      case 0x54: case 0x74:
-	POKE(0xD6A7,PEEK(0xD6A7)-1);
+      case 0x54: case 0x74: // T
+	precomp_a--;
 	reformat_trackP=1;
 	break;
-      case 0x59: case 0x79:
-	POKE(0xD6A7,PEEK(0xD6A7)+1);
+      case 0x59: case 0x79: // Y
+	precomp_a++;
 	reformat_trackP=1;
-	break;		
+	break;
+      case 0x4b: case 0x6b: // K
+	precomp_15--;
+	reformat_trackP=1;
+	break;
+      case 0x4c: case 0x6c: // L
+	precomp_15++;
+	reformat_trackP=1;
+	break;
       case 0x46: case 0x66: // F = Format this track/side
 
 	formatting_enabled^=1;
@@ -673,6 +682,12 @@ void gap_histogram(void)
 	
 	// Select internal floppy drive
 	POKE(0xD6A1,0x01);
+	// Disable auto rate setting
+	POKE(0xD6AE,PEEK(0xD6AE)&0xDF);
+	// Setup precomp
+	POKE(0xD6A3,precomp_a);
+	POKE(0xD6A4,precomp_b);
+	POKE(0xD6A5,precomp_15);
 	// Use new hardware-accelerated formatting
 	POKE(0xD084,request_track);
 	POKE(0xD086,0);
