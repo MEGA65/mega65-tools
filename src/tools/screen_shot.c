@@ -410,7 +410,9 @@ void get_video_state(void)
 {
 
   fetch_ram_invalidate();
+  printf("Calling fetch_ram\n");
   fetch_ram(0xffd3000, 0x0400, vic_regs);
+  printf("Got video regs\n");
 
   screen_address = vic_regs[0x60] + (vic_regs[0x61] << 8) + (vic_regs[0x62] << 16);
   charset_address = vic_regs[0x68] + (vic_regs[0x69] << 8) + (vic_regs[0x6A] << 16);
@@ -801,11 +803,16 @@ int do_screen_shot(void)
 {
   printf("Syncing to monitor.\n");
   monitor_sync();
-
+  printf("Synced to monitor\n");
+  
   get_video_state();
 
+  printf("Got video state.\n");
+  
   do_screen_shot_ascii();
 
+  printf("Got ASCII screenshot.\n");
+  
   FILE* f = NULL;
   char filename[1024];
   for (int n = 0; n < 1000000; n++) {

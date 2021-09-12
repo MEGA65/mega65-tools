@@ -837,7 +837,8 @@ int breakpoint_wait(void)
 {
   char read_buff[8192];
   char pattern[16];
-
+  time_t start=time(0);
+  
   snprintf(pattern, 16, "\n,077");
 
   int match_state = 0;
@@ -848,6 +849,12 @@ int breakpoint_wait(void)
   while (1) {
     int b = serialport_read(fd, (unsigned char*)read_buff, 8192);
 
+    // Poll for PC value, as sometimes breakpoint doesn't always auto-present it
+    if (time(0)!=start) {
+      slow_write(fd,"r\r",2);
+      start=time(0);
+    }
+    
     for (int i = 0; i < b; i++) {
       if (read_buff[i] == pattern[match_state]) {
         if (match_state == 4) {
@@ -948,10 +955,11 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
   //  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
 
   //  monitor_sync();
+  time_t last_rx=0;
   while (addr < (address + count)) {
-    time_t last_rx=0;
-    while (addr != end_addr) {
-      if (last_rx<time(0)) {
+    {
+      if ((last_rx<time(0))||(addr==end_addr)) {
+	//	printf("no response for 1 sec: Requesting more.\n");
 	if ((address + count - addr) < 17) {
 	  snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
 	  end_addr = addr + 0x10;
@@ -968,8 +976,8 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
       if (b <= 0)
         b = 0;
-      //      else
-      //	printf("%s\n", read_buff);
+      //            else
+      //	      printf("%s\n", read_buff);
       if ((ofs + b) > 8191)
         b = 8191 - ofs;
       //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
@@ -1001,6 +1009,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
         int s_offset = (long long)s - (long long)read_buff + 42;
         bcopy(&read_buff[s_offset], &read_buff[0], 8192 - (ofs - s_offset));
         ofs -= s_offset;
+
       }
     }
   }
