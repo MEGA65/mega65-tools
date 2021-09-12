@@ -14,7 +14,19 @@ main:
 	lda #65
 	sta 0
 
+keywait:
+	inc $d020
+	lda $d610
+	cmp #$20
+	beq start
+	bne keywait
+	cmp #0
+	beq keywait
+	sta $d610
+	jmp keywait
+	
 start:
+	inc $0400
 	// Copy load routine down to tape buffer, just so we don't crash after loading
 	ldx #$3f
 loopy:	
@@ -36,12 +48,14 @@ loadroutine:
 	// Get Load address into $00ZZYYXX
 	// We load over the screen so it is visibly obvious
 	ldx #$00
-	ldy #$04
+	ldy #$00
 	// ldz #$00
 	.byte $a3,$00
 
 	// Ask hypervisor to do the load
-	lda #$36
+	// $36 for chip RAM at $00ZZYYXX
+	// $3E for Attic RAM at $8000000 + $00ZZYYXX
+	lda #$3e
 	sta $D640		
 	nop
 	// XXX Check for error (carry would be clear)
