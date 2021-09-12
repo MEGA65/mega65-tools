@@ -9,8 +9,13 @@ float quantise_gap(float gap)
     gap = 1.5;
   if (gap > 1.75 && gap < 2.25)
     gap = 2.0;
-  if (gap < 1.0 || gap > 2.0)
-    gap = 99;
+
+  // Give invalid gaps pseudo sensible values
+  if (gap <= 0.7 )
+    gap = 1.0;
+  if (gap >= 2.25)
+    gap = 2.0;
+  
   return gap;
 }
 
@@ -143,7 +148,7 @@ void emit_bit(int b)
       field_ofs=1;
       data_field[0]=byte;
     } else  {
-      //      printf(" $%02x", byte);
+      printf(" $%02x", byte);
       if (field_ofs<1024) data_field[field_ofs++]=byte;
     }
     bytes_emitted++;
@@ -154,6 +159,8 @@ void emit_bit(int b)
 
 float recent_gaps[4];
 float sync_gaps[4] = { 2.0, 1.5, 2.0, 1.5 };
+
+int found_sync3=0;
 
 void mfm_decode(float gap)
 {
@@ -179,7 +186,7 @@ void mfm_decode(float gap)
       sync_count=0;
     }
     sync_count++;
-    if (sync_count==3) printf("SYNC MARK (3x $A1)\n");
+    if (sync_count==3) { printf("SYNC MARK (3x $A1)\n"); found_sync3++; }
     printf("Sync $A1 x #%d\n",sync_count);
     bits = 0;
     byte = 0;
@@ -232,6 +239,41 @@ void mfm_decode(float gap)
 
   last_gap = gap;
 }
+
+struct precomp_rule {
+  float before,me,after;
+  float shift;
+};
+
+float absf(float f)
+{
+  if (f<0) return -f;
+  return f;
+}
+
+#define RULE_COUNT 13
+struct precomp_rule rules[RULE_COUNT]
+={
+  { 1.0,1.0,1.5,+0.10 }, //
+  { 1.0,1.0,2.0,+0.15 }, //
+
+  { 1.0,1.5,1.0,-0.20 }, //
+  { 1.0,1.5,1.5,-0.15 },
+  { 1.0,1.5,2.0,-0.05 },
+
+  { 1.0,2.0,1.0,-0.25 }, //
+  { 1.0,2.0,1.5,-0.20 }, 
+  
+  { 1.5,1.0,1.0,+0.10 },
+  { 1.5,1.0,2.0,+0.20 }, //
+
+  { 1.5,1.5,1.0,-0.05 }, //
+  { 1.5,2.0,1.0,-0.15 }, //
+  
+  { 2.0,1.0,1.00,+0.15},
+  { 2.0,1.0,1.50,+0.20}  //
+};
+
 
 int main(int argc, char** argv)
 {
@@ -325,13 +367,14 @@ int main(int argc, char** argv)
        File sample rate is 40.5Mz/3 = 13.5MHz
        
     */
-    float rate=40;
+    float rate=29;
     // Obtain data rate from filename if present
     sscanf(argv[arg],"rate%f",&rate);
     float divisor=2*rate/3;
     fprintf(stderr,"Rate = %f\n",rate);
 
     last_pulse=0;
+    found_sync3=0;
     
     for (i = 1; i < count; i++) {
       if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
@@ -339,15 +382,21 @@ int main(int argc, char** argv)
 	  {
 	    float gap=i-last_pulse;
 	    gap/=divisor;
-	    //	    printf("%.2f\n",gap);
+	    printf("%.2f\n",gap);
 
+	    if (found_sync3==1) {
+	      printf("Harmonising at Sync3 after %d samples\n",
+		     sample_counts[arg]);
+	      sample_counts[arg]=0;
+	      found_sync3++;
+	    }
+	    
 	    // Log the trace
 	    if (sample_counts[arg]) {
 	      // Calculate cumulative time
 	      traces[arg][sample_counts[arg]++]=gap+traces[arg][sample_counts[arg]-1];
 	    } else {
 	      traces[arg][sample_counts[arg]++]=gap;
-	      printf("#%d : first gap = %.2f\n",arg,gap);
 	    }
 	    if (traces[arg][sample_counts[arg]-1]>max_time)
 	      max_time=traces[arg][sample_counts[arg]-1];	      
@@ -377,27 +426,101 @@ int main(int argc, char** argv)
 	  "$timescale 1us $end\n"
 	  "$scope module logic $end\n");
     
-  for(int arg=1;arg<argc;arg++) 
-    fprintf(f,"$var wire 1 %c %s $end\n",
-	    '@'+arg,argv[arg]);
+  for(int arg=1;arg<argc+2;arg++) {
+    if (arg<argc)
+      fprintf(f,"$var wire 1 %c %s $end\n",
+	      '@'+arg,argv[arg]);
+    else if (arg==argc) 
+      fprintf(f,"$var wire 1 %c model $end\n",
+	      '@'+arg,argv[arg]);
+    else
+      fprintf(f,"$var wire 1 %c modelerr $end\n",
+	      '@'+arg,argv[arg]);
+  }
   
   fprintf(f,"$upscope $end\n"
 	  "$enddefinitions $end\n"
 	  "$dumpvars\n");
-  for(int arg=1;arg<argc;arg++) fprintf(f,"x%c\n",'@'+arg);
+  for(int arg=1;arg<argc+2;arg++) fprintf(f,"0%c\n",'@'+arg);
   fprintf(f,"$end\n"
 	  "\n");
 
+  printf("Determining average time base for fastest rate...\n");
+  float sum=0;
+  int count=0;
+  for(int i=1;i<sample_counts[1];i++)
+    {
+      float diff=traces[1][i]-traces[1][i-1];
+      if (diff>=0.91&&diff<=1.09) { sum+=diff; count++; }      
+    }
+  printf("%d samples for slowest rate.\n",sample_counts[argc-1]);
+  if (count) printf("Renormalising %d samples : 1.0 step on average = %.2f to 1.0\n",sample_counts[1],sum/count);
+  // Renormalise trace 1 to be exactly 1.0 per MFM bit
+  for(int i=1;i<sample_counts[1];i++) traces[1][i]/=sum/count;      
+
+  
+  // Generate modeled distorted high-data-rate signal
+  // Rule #1: short then long makes the short late, and the long early (draws them together)
+  // Rule #2: long then short makes the long early and short late (pushes them apart)
+  // Rule #3: Double early and double late make no difference
+  // Rule #4: Presumably early + late = ontime ("The Deutsche Bahn Rule")
+  printf("Surrounding gaps:\n");  
+  for(int i=0;i<sample_counts[argc-1];i++)
+    {
+      float gap_before=1.0;
+      float gap_me=1.0;
+      float gap_after=1.0;
+      if (i>1) {
+	gap_before=traces[argc-1][i-1]-traces[argc-1][i-2];
+      }
+      if (i) {
+	gap_me=traces[argc-1][i]-traces[argc-1][i-1];
+      }
+      if (i<(sample_counts[argc-1]-1)) {
+	gap_after=traces[argc-1][i+1]-traces[argc-1][i];
+      }
+      gap_before=quantise_gap(gap_before);
+      gap_me=quantise_gap(gap_me);
+      gap_after=quantise_gap(gap_after);
+
+      float gap_munged=gap_me;
+
+      for(int j=0;j<RULE_COUNT;j++) {
+	if (gap_before==rules[j].before
+	    &&gap_me==rules[j].me
+	    &&gap_after==rules[j].after)
+	  gap_munged+=rules[j].shift;
+	    
+      }
+
+      traces[argc][i]=gap_munged;
+      float ref_gap=1.0;
+      if (i) {
+        ref_gap=traces[1][i]-traces[1][i-1];
+	//	traces[argc+1][i]=quantise_gap(ref_gap)-gap_munged;
+	traces[argc+1][i]=ref_gap-gap_munged;
+	traces[argc][i]+=traces[argc][i-1];
+      }            
+      printf("#%-5d : %.2f : %.2f : %.2f : %.2f : M=%.2f vs R=%.2f (%.2f)",
+	     i,traces[argc-1][i], gap_before,gap_me,gap_after,
+	     gap_munged,
+	     ref_gap, traces[argc-1][i]);
+      if (absf(traces[argc+1][i])>=0.06) printf("  E=%.2f",traces[argc+1][i]);
+      printf("\n");
+    }
+  
   float time=0;
   int ofs[MAX_SIGNALS]={0};
   int asserted[MAX_SIGNALS]={0};
-  for(int arg=1;arg<argc;arg++) {
+  for(int arg=1;arg<argc+2;arg++) {
     for(int i=0;i<sample_counts[arg];i++)
-      printf("#%d : %.2f\n",arg,traces[arg][i]);
+      printf("#%d : %.2f : %.2f\n",arg,
+	     traces[arg][i],
+	     i?traces[arg][i]-traces[arg][i-1]:traces[arg][i]);
   }
   
   for(time=0;time<(max_time+0.01);time+=0.01) {
-    for(int arg=1;arg<argc;arg++) {
+    for(int arg=1;arg<argc+2;arg++) {
       if (ofs[arg]<sample_counts[arg]) {
 	if (asserted[arg]) {
 	  fprintf(f,"#%d\n0%c\n",(int)(time*100),'@'+arg);
@@ -411,6 +534,17 @@ int main(int argc, char** argv)
     }
   }
   fclose(f);
-    
+
+  f=fopen("gaps.csv","w");
+  if (!f) return -1;
+  for(int i=0;i<sample_counts[1];i++) {
+    fprintf(f,"%5d, ",i);
+    for(int arg=1;arg<argc+2;arg++) {
+      fprintf(f,"%.2f, ",traces[arg][i]-(i?traces[arg][i-1]:0));
+    }
+    fprintf(f,"\n");
+  }
+  fclose(f);
+  
   return 0;
 }
