@@ -610,7 +610,9 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   while (PEEK(0xD082) & 0x80) {
     // Read sector data non-buffered while we wait for comparison
     if (PEEK(0xD082)&0x40) { POKE(0xE000+i,PEEK(0xD087)); i++; i&=0x1fff; }
-    POKE(0x0400,PEEK(0x0400)+1);
+    POKE(0x0400,PEEK(0xD6A3));
+    POKE(0x0401,PEEK(0xD6A4));
+    POKE(0x0402,PEEK(0xD6A5));
   }
 
   if (PEEK(0xD082) & 0x18) {
@@ -716,332 +718,28 @@ unsigned short crc16(unsigned short crc, unsigned short b)
 }
 
 #define MAX_SECTORS 64
-unsigned char header_crc_bytes[MAX_SECTORS*2];
-unsigned char data_crc_bytes[MAX_SECTORS][2];
 unsigned char track_num=0;
 unsigned char side=0;
 
 unsigned char s;
-unsigned char sector_data[512];
 char msg[80];
 
-void precalc_sector_header_crcs(void)
-{
-  // Pre-calculate header CRC bytes
-  crc16_init();
-  for(i=0;i<MAX_SECTORS;i++)
-    {
-      // Calculate initial CRC of sync bytes and $FE header marker
-      crc=crc16(0xFFFF,0xa1);
-      crc=crc16(crc,0xa1);
-      crc=crc16(crc,0xa1);
-      crc=crc16(crc,0xfe);
-      crc=crc16(crc,track_num);
-      crc=crc16(crc,side);
-      crc=crc16(crc,i+1);
-      crc=crc16(crc,2); // 512 byte sectors
-      header_crc_bytes[i*2+0]=crc&0xff;
-      header_crc_bytes[i*2+1]=crc>>8;
-    }
-}
 
 void format_single_track_side(/* unsigned char track_num,unsigned char side, */unsigned char sector_count,unsigned char with_gaps)
 {
-
-  precalc_sector_header_crcs();
-  
-  // Now calculate CRC of data sectors
-  // We fill the data sectors with info that makes it easy to see where mis-reads
-  // have come from.
-  for(s=0;s<sector_count;s++) {
-    bzero(sector_data,512);
-    
-    crc16_init();
-    crc=crc16(0xFFFF,0xa1);
-    crc=crc16(crc,0xa1);
-    crc=crc16(crc,0xa1);
-    crc=crc16(crc,0xfb);
-    for(i=0;i<512;i++) crc=crc16(crc,sector_data[i]);
-    data_crc_bytes[s][0]=crc&0xff;
-    data_crc_bytes[s][1]=crc>>8;
-    
-  }      
-  
-  /*
-    From the C65 Specifications Manual:
-    
-    Write Track Unbuffered
-    
-    write FF hex to clock register
-    issue "write track unbuffered" command
-    write FF hex to data register
-    wait for first DRQ flag
-    write A1 hex to data register
-    write FB hex to clock register
-    wait for next DRQ flag
-    write A1 hex to data register
-    wait for next DRQ flag
-    write A1 hex to data register
-    wait for next DRQ flag
-    write FF hex to clock register
-    loop: write data byte to the data register
-    check BUSY flag for completion
-    wait for next DRQ flag
-    go to loop
-    
-    Formatting a track
-
-     In order to be able to read or write sectored data on a diskette,
-the diskette MUST be properly formatted. If, for any reason, marks are
-missing  or  have  improper  clocks,  track,  sector,  side, or length
-information are incorrect,  or the CRC bytes are in error, any attempt
-to  perform  a  sectored read or write operation will terminate with a
-RNF error.
-
-     Formatting  a  track  is  simply  writing a track with a strictly
-specified  series  of  bytes.  A  given  track must be divided into an
-integer number of sectors,  which are 128,  256,  512,  or  1024 bytes
-long.  Each  sector  must  consist  of  the following information. All
-clocks, are FF hex, where not specified.  Data and clock values are in
-hexadecimal  notation.  Fill  any left-over bytes in the track with 4E
-data.
-
-  quan      data/clock      description
-  ----      ----------      -----------
-    12      00              gap 3*
-    3       A1/FB           Marks
-            FE              Header mark
-            (track)         Track number
-            (side)          Side number
-            (sector)        Sector number
-            (length)        Sector Length (0=128,1=256,2=512,3=1024)
-
-    2       (crc)           CRC bytes
-    23      4E              gap 2
-    12      00              gap 2
-    3       A1/FB           Marks
-    FB              Data mark
- 128,
-    256,
-    512, or
-    1024    00              Data bytes (consistent with length)
-    2       (crc)           CRC bytes
-    24      4E              gap 3*
-
-    * you may reduce the size of gap 3 to increase diskette capacity,
-      however the sizes shown are suggested.
-
-
-Generating the CRC
-
-     The  CRC  is a sixteen bit value that must be generated serially,
-one  bit  at  a  time.  Think of it as a 16 bit shift register that is
-broken in two places. To CRC a byte of data, you must do the following
-eight  times,  (once  for each bit) beginning with the MSB or bit 7 of
-the input byte.
-
-     1. Take the exclusive OR of the MSB of the input byte and CRC
-        bit 15. Call this INBIT.
-     2. Shift the entire 16 bit CRC left (toward MSB) 1 bit position,
-        shifting a 0 into CRC bit 0.
-     3. If INBIT is a 1, toggle CRC bits 0, 5, and 12.
-
-     To  Generate a CRC value for a header,  or for a data field,  you
-must  first  initialize the CRC to all 1's (FFFF hex).  Be sure to CRC
-all bytes of the header or data field, beginning with the first of the
-three  A1  marks,  and ending with the before the two CRC bytes.  Then
-output  the  most  significant CRC byte (bits 8-15) and then the least
-significant CRC byte  (bits 7-0).  You may also CRC the two CRC bytes.
-If you do, the final CRC value should be 0.
-
-     Shown below is an example of code required to CRC bytes of data.
-;
-; CRC a byte. Assuming byte to CRC in accumulator and cumulative
-;             CRC value in CRC (lsb) and CRC+1 (msb).
-
-        CRCBYTE LDX  #8          ; CRC eight bits
-                STA  TEMP
-        CRCLOOP ASL  TEMP        ; shift bit into carry
-                JSR  CRCBIT      ; CRC it
-                DEX
-                BNE  CRCLOOP
-                RTS
-
-;
-; CRC a bit. Assuming bit to CRC in carry, and cumulative CRC
-;            value in CRC (lsb) and CRC+1 (msb).
-
-       CRCBIT   ROR
-                EOR CRC+1       ; MSB contains INBIT
-                PHP
-                ASL CRC
-                ROL CRC+1       ; shift CRC word
-                PLP
-                BPL RTS
-                LDA CRC         ; toggle bits 0, 5, and 12 if INBIT is 1.
-                EOR #$21
-                STA CRC
-                LDA CRC+1
-                EOR #$10
-                STA CRC+1
-       RTS      RTS
-
-       
-
-       From a practical perspective, we need to wait for the index pulse to
-       pass, as the write gate gets cleared by edges on it.
-
-       Then we can schedule an unbuffered format operation, and start feeding
-       the appropriate data to the clock and data byte registers, interlocked
-       by the DRQ signal.
-
-       See also the wttrk routine from dos.src of C65 ROM source code.
-	   
-  */
-
-  POKE(0xD020,0x06);
-  
-  // Data byte = $00 (first of 12 post-index gap bytes)
-  POKE(0xD087,0x4E);
-  // Clock byte = $FF
-  POKE(0xD088,0xFF);
-  
-  // Begin unbuffered write
-  POKE(0xD081,0xA1);  
-
-  // Write 12 gap bytes
-  POKE(0xD020,15);
-  for(i=0;i<12;i++) {
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-      continue;
-    }
-    POKE(0xD087,0x00);
+  // Use new hardware-accelerated formatting
+  POKE(0xD696,0x00);  // also disable auto-seek on new address
+  while (PEEK(0xD082) & 0x80) continue;
+  POKE(0xD084,track_num);
+  POKE(0xD086,side);
+  if (with_gaps) {
+    POKE(0xD081,0xa4); // $A4 = format with write-precompensation   
+  } else {
+    POKE(0xD081,0xaC); // $A4 = format with write-precompensation, bit 3 = no gaps, i.e., Amiga-style track-at-once
   }
+    
   
-  // We count x2 so that sector_num is also the offset in header_crc_bytes[] to get the CRC bytes
-  for(sector_num=0;sector_num<(sector_count*2);sector_num+=2) {
-    
-    s=(sector_num>>1);
-
-    POKE(0x0400+s,PEEK(0x0400+s));
-    
-    // Write 3 sync bytes
-    for(i=0;i<3;i++) {
-      while(!(PEEK(0xD082)&0x40)) {
-	if (!(PEEK(0xD082)&0x80)) break;
-	continue;
-      }
-      POKE(0xD087,0xA1);
-      POKE(0xD088,0xFB);
-    }
-    
-    // Header mark
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-      continue;
-    }
-    POKE(0xD087,0xFE); 
-    POKE(0xD088,0xFF);
-    
-    // Track number
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-      continue;
-    }
-    POKE(0xD087,track_num); 
-    
-    // Side number
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-    }
-    POKE(0xD087,side); 
-    
-    // Sector number
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-    }
-    POKE(0xD087,1+s);
-    
-    // Sector length
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-    }
-    POKE(0xD087,0x02); 
-    
-    // Sector header CRC
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-    }
-    POKE(0xD087,header_crc_bytes[sector_num+1]); 
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-    }
-    POKE(0xD087,header_crc_bytes[sector_num+0]); 
-
-    if (with_gaps) {
-      // 23 gap bytes
-      for (i=0;i<23;i++) {
-	while(!(PEEK(0xD082)&0x40)) {
-	  if (!(PEEK(0xD082)&0x80)) break;
-	}
-	POKE(0xD087,0x4E); 
-      }
-      
-      // 12 gap bytes
-      for (i=0;i<12;i++) {
-	while(!(PEEK(0xD082)&0x40)) {
-	  if (!(PEEK(0xD082)&0x80)) break;
-	}
-	POKE(0xD087,0x00); 
-      }
-    }
-    
-    // Write 3 sync bytes
-    for(i=0;i<3;i++) {
-      while(!(PEEK(0xD082)&0x40)) {
-	if (!(PEEK(0xD082)&0x80)) break;
-      }
-      POKE(0xD087,0xA1);
-      POKE(0xD088,0xFB);
-    }
-    
-    // Data mark
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-    }
-    POKE(0xD087,0xFB); 
-    POKE(0xD088,0xFF);    
-    
-    // Data bytes
-    for (i=0;i<512;i++) {
-      while(!(PEEK(0xD082)&0x40)) {
-	if (!(PEEK(0xD082)&0x80)) break;
-      }
-      POKE(0xD087,sector_data[i]); 
-    }
-    
-    // Write data CRC bytes
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-    }
-    POKE(0xD087,data_crc_bytes[s][1]); 
-    while(!(PEEK(0xD082)&0x40)) {
-      if (!(PEEK(0xD082)&0x80)) break;
-    }
-    POKE(0xD087,data_crc_bytes[s][0]); 
-    
-    if (with_gaps) {
-      // 24 gap bytes
-      for (i=0;i<24;i++) {
-	while(!(PEEK(0xD082)&0x40)) {
-	  if (!(PEEK(0xD082)&0x80)) break;
-	}
-	POKE(0xD087,0x4E);
-      }
-    }
-    
-  }
+  while (PEEK(0xD082) & 0x80) continue;
 }
 
 
@@ -1249,36 +947,48 @@ void main(void)
 
     {
       // How many sectors per track without gaps (i.e., amiga style)
-      unsigned char sectors_by_rate_no_gaps[40+1]
+      unsigned char sectors_by_rate_no_gaps[42+1]
 	={
 	  0,0,0,0,0,0,0,0,0,0,
 	  0,0,0,0,0,0,0,0,0,0,
-	  0,0,0,0,0,0,0,0,0,0,
+	  40,40,40,40,40,40,40,40,32,32,
 	  31,30,29,29,28,27,26,26,25,24,
-	  24					   
+	  24,24,24					   
+      };
+      unsigned char sectors_by_rate_with_gaps[42+1]
+	={
+	  0,0,0,0,0,0,0,0,0,0,
+	  0,0,0,0,0,0,0,0,0,0,
+	  40,40,40,40,40,40,40,31,30,29,
+	  28,27,27,26,25,24,24,23,23,22,
+	  21,21,21
       };
 
       unsigned char rate_for_sector_count_no_gaps[31+1]=
 	{
 	 40,40,40,40,40,40,40,40,40,40,
 	 40,40,40,40,40,40,40,40,40,40,
-	 40,40,40,40,39,38,37,35,34,33,
+	 40,40,
+
+	 30,30,
+	 
+	 39,38,37,35,34,33,
 	 31,30
 	};
 
-      for(track_num=0;track_num<80;track_num++) {
+      for(track_num=0;track_num<85;track_num++) {
 	
 	// 36 + no gaps works on track 79 without errors = 26 sectors per track
-	unsigned char bit_interval=35; // Standard HD 3.5" floppy is 500Kbit/second = 1mhz MFM rate (2 clocks per MFM bit)
+	unsigned char bit_interval=40; // Standard HD 3.5" floppy is 500Kbit/second = 1mhz MFM rate (2 clocks per MFM bit)
 	unsigned char sector_count=50;
 	unsigned char with_gaps=0;
 	unsigned char sector_num,errors,best=0;
 	side=0;
 
-	printf(" T%d:",track_num);
+	printf(" T%d: ",track_num);
 
-	for(sector_count=22;sector_count<=31;sector_count++) {
-	  	 
+	for(bit_interval=27;bit_interval<=40;bit_interval++) {
+	
 	  // Floppy 0 motor on
 	  POKE(0xD080, 0x68);	  
 
@@ -1331,36 +1041,38 @@ void main(void)
 	    POKE(0xD087,0x00);
 	    POKE(0xD088,0x00);
 	  }
-	  
-	  // Write the track at the desired rate
-	  //	  printf("Writing track at rate %d\n",bit_interval);
-	  bit_interval=rate_for_sector_count_no_gaps[sector_count];
-	  POKE(0xD6A2,bit_interval);
-	  //	  format_single_track_side(sector_count,with_gaps);
-	  
-	  // Format track using new hardware-accelerated track formatting
-	  printf("Formatting track...\n");
-	  POKE(0xD696,0x00);  // also disable auto-seek on new address
-          while (PEEK(0xD082) & 0x80) continue;
-	  POKE(0xD084,track_num);
-	  POKE(0xD081,0xa0); // $A0= with gaps, $A4 = without gaps
-          while (PEEK(0xD082) & 0x80) continue;
 
-	  while(1) POKE(0xD020,PEEK(0xD020)+1);
+	  // Disable auto-setting data rate while we are formatting
+	  POKE(0xD6AE,PEEK(0xD6AE)&0xDF);
 	  
-	  printf("Reading back %d sectors:\n",sector_count);
+	  POKE(0xD6A2,bit_interval);
+	  POKE(0xD6A6,0x04); POKE(0xD6A7,0x08); // Set sensible write precomp defaults
+	  format_single_track_side(sector_count,with_gaps);
+
+	  //	  printf("<%d>",bit_interval);
+
+	  sector_count=with_gaps?sectors_by_rate_with_gaps[bit_interval]
+	    :sectors_by_rate_no_gaps[bit_interval];
+	  printf("\nReading back %d sectors @%d\n",sector_count,bit_interval);
 	  errors=0; 
 	  for(sector_num=1;sector_num<=sector_count;sector_num++) {
-	    if (read_a_sector(track_num,side,sector_num)) { errors++; }
-	    //	    else { printf("%d",sector_num%10); }
-	    // No point continuing if we hit an error -- just abort early to speed things up a lot
-	    if (errors) break;
+	    if (read_a_sector(track_num,side,sector_num))
+	      {
+		printf("[%d]",sector_num-1);
+		if ((sector_num-1)>best) best=sector_num-1;
+		break;
+	      }
+	    else { printf("%d",sector_num%10); }
 	  }
-	  //	  printf(" %d/%d",sector_count-errors,sector_count);
-	  if (!errors) best=sector_count; // printf(" %d",sector_count);
+
+	  if (sector_num>sector_count) {
+	    printf("[%d]",sector_num);
+	    break;
+	  }
+	  	  
 	}
 	//	printf("\n");
-	printf("%d",best);
+	//	printf("%d",best);
       }
     }
     
