@@ -266,7 +266,7 @@ void clear_list(void)
     if (ptr->cur)
       free(ptr->cur); // delete the file-info
 
-    tlist_item* tmp = ptr->next;
+    tlist_item* tmp = (tlist_item*)ptr->next;
 
     if (ptr != &lst_finfos) // i shouldn't delete the first one, just my silly logic, sorry :)
       free(ptr);

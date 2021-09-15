@@ -267,14 +267,18 @@ void wait_for_prompt(void)
 {
   unsigned char read_buff[8192];
   int b = 1;
+  int offset = 0;
   while (1) {
-    b = serialport_read(fd, read_buff, 8191);
-    //    if (b>0) dump_bytes(0,"wait_for_prompt",read_buff,b);
+    b = serialport_read(fd, read_buff + offset, 8191 - offset);
+    // if (b > 0) dump_bytes(0, "wait_for_prompt", read_buff, b + offset);
     if (b < 0 || b > 8191)
       continue;
-    read_buff[b] = 0;
+    read_buff[b + offset] = 0;
 
     check_for_vf011_jobs(read_buff, b);
+
+    if (b > 0)
+      offset += b;
 
     if (strstr((char*)read_buff, "!\r\n")) {
       // Watch or break point triggered.
@@ -293,14 +297,18 @@ void wait_for_string(char* s)
 {
   unsigned char read_buff[8192];
   int b = 1;
+  int offset = 0;
   while (1) {
-    b = serialport_read(fd, read_buff, strlen(s));
-    //    if (b>0) dump_bytes(0,"wait_for_string",read_buff,b);
+    b = serialport_read(fd, read_buff + offset, strlen(s) - offset);
+    // if (b > 0) dump_bytes(0, "wait_for_string", read_buff, b + offset);
     if (b < 0 || b > 8191)
       continue;
-    read_buff[b] = 0;
+    read_buff[b + offset] = 0;
 
     check_for_vf011_jobs(read_buff, b);
+
+    if (b > 0)
+      offset += b;
 
     if (strstr((char*)read_buff, s)) {
       break;
