@@ -31,8 +31,8 @@ void get_interval(void)
 
 void text80x40_clear_screen(void)
 {
-  lfill(0xC000L, 0x20, 80*40);
-  lfill(0xff80000L, 0xf, 80*40);
+  lfill(0xC000L, 0x20, 80 * 40);
+  lfill(0xff80000L, 0xf, 80 * 40);
 }
 
 void text80x40_mode(void)
@@ -165,10 +165,9 @@ void print_text80x40(unsigned char x, unsigned char y, unsigned char colour, cha
     POKE(pixel_addr + 0, char_code);
     lpoke(0xff80000 - 0xc000 + pixel_addr + 0, colour);
     msg++;
-    pixel_addr ++;
+    pixel_addr++;
   }
 }
-
 
 void activate_double_buffer(void)
 {
@@ -214,7 +213,7 @@ void seek_random_track(void)
 }
 
 char read_message[41];
-unsigned char n,sector_order[10];
+unsigned char n, sector_order[10];
 
 void read_all_sectors(unsigned char HD)
 {
@@ -222,13 +221,16 @@ void read_all_sectors(unsigned char HD)
   unsigned char xx, yy, y;
   unsigned int x, c;
 
-  if (HD) POKE(0xD6A2,0x28); else POKE(0xD6A2,0x51);
-  
+  if (HD)
+    POKE(0xD6A2, 0x28);
+  else
+    POKE(0xD6A2, 0x51);
+
   // Floppy motor on
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD696,0x00);  // also disable auto-seek on new address
+  POKE(0xD696, 0x00); // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -251,7 +253,7 @@ void read_all_sectors(unsigned char HD)
   //  lcopy(0xffd6000L,0x4e200L,0x200);
 
   graphics_clear_double_buffer();
-  
+
   {
     print_text(0, 0, 1, "Reading all sectors...");
     print_text(0, 22, 15, "GREEN = good, RED = bad");
@@ -264,33 +266,36 @@ void read_all_sectors(unsigned char HD)
     }
 
     // Work out sector order
-    n=0;
-    c=PEEK(0xD6A4);
-    while(c==PEEK(0xD6A4)) continue;
-    for(n=0;n<(10*(1+HD));n++) {
-      c=PEEK(0xD6A4);
-      while(n&&c==sector_order[n-1]) c=PEEK(0xD6A4);
-      sector_order[n]=c;
+    n = 0;
+    c = PEEK(0xD6A4);
+    while (c == PEEK(0xD6A4))
+      continue;
+    for (n = 0; n < (10 * (1 + HD)); n++) {
+      c = PEEK(0xD6A4);
+      while (n && c == sector_order[n - 1])
+        c = PEEK(0xD6A4);
+      sector_order[n] = c;
     }
-    for(n=0;n<10*(1+HD);n++) sector_order[n]&=0x7f;
+    for (n = 0; n < 10 * (1 + HD); n++)
+      sector_order[n] &= 0x7f;
 
     for (t = 0; t < 80; t++) {
       if (PEEK(0xD610))
         break;
 
       // Clear display for reading this track
-      x = t * 7; y=16;
+      x = t * 7;
+      y = 16;
       for (xx = 0; xx < 6; xx++)
-	for (yy = 0; yy < 160; yy++)
-	  plot_pixel(x + xx, y + yy, 0);
+        for (yy = 0; yy < 160; yy++)
+          plot_pixel(x + xx, y + yy, 0);
 
-      
       for (h = 0; h < 2; h++) {
         if (PEEK(0xD610))
           break;
-	n=0;
-	s=1;
-        for (ss = 1; ss <= 10*(1+HD); ss++) {
+        n = 0;
+        s = 1;
+        for (ss = 1; ss <= 10 * (1 + HD); ss++) {
 
           if (PEEK(0xD610))
             break;
@@ -298,14 +303,13 @@ void read_all_sectors(unsigned char HD)
           snprintf(read_message, 40, "Trying T:$%02x, S:$%02x, H:$%02x", t, s, h);
           print_text(0, 1, 7, read_message);
 
-	  
           // Schedule a sector read
           POKE(0xD081, 0x00); // Cancel previous action
 
           // Select track, sector, side
           POKE(0xD084, t);
           POKE(0xD085, s);
-          POKE(0xD086, 1-h); // Side flag is inverted
+          POKE(0xD086, 1 - h); // Side flag is inverted
 
           // Select correct side of the disk
           if (h)
@@ -314,16 +318,17 @@ void read_all_sectors(unsigned char HD)
             POKE(0xD080, 0x60);
 
           // Issue read command
-	  POKE(0xD081, 0x01); // but first reset buffers
+          POKE(0xD081, 0x01); // but first reset buffers
 
           POKE(0xD081, 0x40);
 
           x = t * 7;
           y = 16 + (s - 1) * 8 + (h * 80);
-          if (HD) y = 16 + (s - 1) * 4 + (h * 80);
+          if (HD)
+            y = 16 + (s - 1) * 4 + (h * 80);
 
           for (xx = 0; xx < 6; xx++)
-            for (yy = 0; yy < 7-(4*HD); yy++)
+            for (yy = 0; yy < 7 - (4 * HD); yy++)
               plot_pixel(x + xx, y + yy, 14);
 
           activate_double_buffer();
@@ -344,7 +349,7 @@ void read_all_sectors(unsigned char HD)
             if (t > 79)
               c = 7; // extra tracks aren't expected to be read
             for (xx = 0; xx < 6; xx++)
-	      for (yy = 0; yy < 7-(4*HD); yy++)
+              for (yy = 0; yy < 7 - (4 * HD); yy++)
                 plot_pixel(x + xx, y + yy, c);
           }
           else {
@@ -352,24 +357,21 @@ void read_all_sectors(unsigned char HD)
             if (((t / 10) + h) & 1)
               c = 13;
             for (xx = 0; xx < 6; xx++)
-	      for (yy = 0; yy < 7-(4*HD); yy++)
+              for (yy = 0; yy < 7 - (4 * HD); yy++)
                 plot_pixel(x + xx, y + yy, c);
           }
           activate_double_buffer();
           //	  lcopy(0xffd6000L,0x4e200L,0x200);
 
-	  // Read every 2nd sector for better interleaving
-	  s+=2; if (s>(10*(1+HD))) s-=(10*(1+HD))-1;
-
-
-    
-	  
-	  
+          // Read every 2nd sector for better interleaving
+          s += 2;
+          if (s > (10 * (1 + HD)))
+            s -= (10 * (1 + HD)) - 1;
         }
       }
 
       // Seek to next track
-      POKE(0xD081,0x18);
+      POKE(0xD081, 0x18);
       usleep(10000);
     }
   }
@@ -401,7 +403,7 @@ void gap_histogram(void)
       // Stop as soon as a single histogram bin fills
       if (histo_bins[interval_length] == 255) {
         snprintf(peak_msg, 40, "Peak @ %d, auto-tune=%d, %s     ", interval_length, PEEK(0xD689) & 0x10,
-		 (PEEK(0xD6A2)==0x51)?"DD":"HD");
+            (PEEK(0xD6A2) == 0x51) ? "DD" : "HD");
         print_text(0, 2, 7, peak_msg);
         break;
       }
@@ -434,7 +436,7 @@ void gap_histogram(void)
     }
     else {
       // Note this sector
-      read_sectors[6 + (PEEK(0xD6A4) & 0x1f)] = '0'+(PEEK(0xD6A4)%10);
+      read_sectors[6 + (PEEK(0xD6A4) & 0x1f)] = '0' + (PEEK(0xD6A4) % 10);
       POKE(0xD080, PEEK(0xD080) & 0xf7 + (PEEK(0xD012) & 8));
     }
     read_sectors[40] = 0;
@@ -493,12 +495,14 @@ void gap_histogram(void)
         // Auto-tune on
         POKE(0xD689, PEEK(0xD689) & 0xEF);
         break;
-      case 0x48: case 0x68: // (H)D disk
-	POKE(0xD6A2,0x28);
-	break;
-      case 0x44: case 0x64: // (D)D disk
-	POKE(0xD6A2,0x51);
-	break;
+      case 0x48:
+      case 0x68: // (H)D disk
+        POKE(0xD6A2, 0x28);
+        break;
+      case 0x44:
+      case 0x64: // (D)D disk
+        POKE(0xD6A2, 0x51);
+        break;
       case 0x52: // (R)ead a sector
       case 0x72:
         // Schedule a sector read
@@ -524,33 +528,34 @@ void gap_histogram(void)
   }
 }
 
-unsigned char sector_num=0;
+unsigned char sector_num = 0;
 
-void read_track(unsigned char track_number,unsigned char side)
+void read_track(unsigned char track_number, unsigned char side)
 {
   // First seek to the correct track
 
-  if (track_number!=255) {
+  if (track_number != 255) {
 
     graphics_mode();
     graphics_clear_double_buffer();
     activate_double_buffer();
-    
+
     // Connect to real floppy drive
-    while(!(lpeek(0xffd36a1L) & 1)) {
-      lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+    while (!(lpeek(0xffd36a1L) & 1)) {
+      lpoke(0xffd36a1L, lpeek(0xffd36a1L) | 0x01);
     }
-    
+
     // Floppy motor on, and select side
     POKE(0xD080, 0x68);
-    if (side) POKE(0xD080,0x60);
-    
+    if (side)
+      POKE(0xD080, 0x60);
+
     // Map FDC sector buffer, not SD sector buffer
     POKE(0xD689, PEEK(0xD689) & 0x7f);
-    
+
     // Disable matching on any sector, use real drive
     POKE(0xD6A1, 0x01);
-    
+
     // Wait until busy flag clears
     while (PEEK(0xD082) & 0x80) {
       snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
@@ -559,89 +564,93 @@ void read_track(unsigned char track_number,unsigned char side)
     }
 
     print_text(0, 0, 7, "Reading track...");
-    
-    POKE(0xD696,0x00);  // also disable auto-seek on new address
-      
+
+    POKE(0xD696, 0x00); // also disable auto-seek on new address
+
     // Seek to track 0
     print_text(0, 2, 15, "Seeking to track 0");
-    while(!(PEEK(0xD082)&0x01)) {
-      POKE(0xD081,0x10);
+    while (!(PEEK(0xD082) & 0x01)) {
+      POKE(0xD081, 0x10);
       usleep(6000);
-      
+
       snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
       print_text(0, 24, 7, peak_msg);
-      
     }
-    
+
     // Seek to the requested track
     print_text(0, 3, 15, "Seeking to target track");
-    for(i=0;i<track_number;i++) {
-      POKE(0xD081,0x18);
-      usleep(6000);	
-    }        
+    for (i = 0; i < track_number; i++) {
+      POKE(0xD081, 0x18);
+      usleep(6000);
+    }
     print_text(0, 4, 15, "Seek complete");
   }
-  else 
+  else
     print_text(0, 0, 7, "Reading current track...");
-  
+
   print_text(0, 4, 7, "Starting track read");
-  
+
   // Call routine to read a complete track of data into $50000-$5FFFF
   readtrackgaps();
-  
+
   print_text(0, 5, 7, "Track read complete");
-     
 }
 
-unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsigned char sector)
+unsigned char read_a_sector(unsigned char track_number, unsigned char side, unsigned char sector)
 {
-  
+
   // Now select the side, and try to read the sector
   POKE(0xD084, track_number);
   POKE(0xD085, sector);
-  POKE(0xD086, side?1:0);
+  POKE(0xD086, side ? 1 : 0);
 
   // Issue read command
   POKE(0xD081, 0x01); // but first reset buffers
   POKE(0xD081, 0x40);
 
   // Wait for busy flag to clear
-  i=0xe000;
+  i = 0xe000;
   while (PEEK(0xD082) & 0x80) {
     // Read sector data non-buffered while we wait for comparison
-    if (PEEK(0xD082)&0x40) { POKE(0xE000+i,PEEK(0xD087)); i++; i&=0x1fff; }
-    POKE(0x0400,PEEK(0xD6A3));
-    POKE(0x0401,PEEK(0xD6A4));
-    POKE(0x0402,PEEK(0xD6A5));
+    if (PEEK(0xD082) & 0x40) {
+      POKE(0xE000 + i, PEEK(0xD087));
+      i++;
+      i &= 0x1fff;
+    }
+    POKE(0x0400, PEEK(0xD6A3));
+    POKE(0x0401, PEEK(0xD6A4));
+    POKE(0x0402, PEEK(0xD6A5));
   }
 
   if (PEEK(0xD082) & 0x18) {
     // Read failed
-    POKE(0xD020,PEEK(0xD020)+1);
+    POKE(0xD020, PEEK(0xD020) + 1);
     return 1;
-  } else {
+  }
+  else {
     // Read succeeded
     return 0;
   }
 }
 
-unsigned char write_a_sector(unsigned char track_number,unsigned char side, unsigned char sector)
+unsigned char write_a_sector(unsigned char track_number, unsigned char side, unsigned char sector)
 {
-  // Disable auto-seek, or we can't force seeking to track 0    
-  POKE(0xD696,0x00);  // also disable auto-seek on new address
+  // Disable auto-seek, or we can't force seeking to track 0
+  POKE(0xD696, 0x00); // also disable auto-seek on new address
 
   // Connect to real floppy drive
-  while(!(lpeek(0xffd36a1L) & 1)) {
-    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+  while (!(lpeek(0xffd36a1L) & 1)) {
+    lpoke(0xffd36a1L, lpeek(0xffd36a1L) | 0x01);
   }
-  
+
   // Floppy motor on, and select side
   POKE(0xD080, 0x68);
-  if (side) POKE(0xD080,0x60);
-  
+  if (side)
+    POKE(0xD080, 0x60);
+
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
-  
+
   // Disable matching on any sector, use real drive
   POKE(0xD6A1, 0x01);
 
@@ -651,21 +660,23 @@ unsigned char write_a_sector(unsigned char track_number,unsigned char side, unsi
   }
 
   // Seek to track 0
-  while(!(PEEK(0xD082)&0x01)) {
-    POKE(0xD081,0x10);
-    while(PEEK(0xD082)&0x80) continue;
+  while (!(PEEK(0xD082) & 0x01)) {
+    POKE(0xD081, 0x10);
+    while (PEEK(0xD082) & 0x80)
+      continue;
   }
 
   // Seek to the requested track
-  for(i=0;i<track_number;i++) {
-    POKE(0xD081,0x18);
-    while(PEEK(0xD082)&0x80) continue;
-    }        
+  for (i = 0; i < track_number; i++) {
+    POKE(0xD081, 0x18);
+    while (PEEK(0xD082) & 0x80)
+      continue;
+  }
 
   // Now select the side, and try to read the sector
   POKE(0xD084, track_number);
   POKE(0xD085, sector);
-  POKE(0xD086, side?1:0);
+  POKE(0xD086, side ? 1 : 0);
 
   // Issue write command
   POKE(0xD081, 0x01); // but first reset buffers
@@ -673,92 +684,94 @@ unsigned char write_a_sector(unsigned char track_number,unsigned char side, unsi
 
   // Wait for busy flag to clear
   while (PEEK(0xD082) & 0x80) {
-    POKE(0xc000,PEEK(0xc000)+1);
+    POKE(0xc000, PEEK(0xc000) + 1);
 
-    i=0xc050+PEEK(0xD694);
-    POKE(i,PEEK(i)+1);
+    i = 0xc050 + PEEK(0xD694);
+    POKE(i, PEEK(i) + 1);
   }
 
   if (PEEK(0xD082) & 0x10) {
     // Write failed
-    POKE(0xD020,PEEK(0xD020)+1);
+    POKE(0xD020, PEEK(0xD020) + 1);
     return 1;
-  } else {
+  }
+  else {
     // Write succeeded
     return 0;
   }
 }
-
-
 
 // CRC16 algorithm from:
 // https://github.com/psbhlw/floppy-disk-ripper/blob/master/fdrc/mfm.cpp
 // GPL3+, Copyright (C) 2014, psb^hlw, ts-labs.
 // crc16 table
 unsigned short crc_ccitt[256];
-unsigned short crc=0;
+unsigned short crc = 0;
 
 // crc16 init table
 void crc16_init()
 {
-    for (i = 0; i < 256; i++)
-    {
-        uint16_t w = i << 8;
-        for (a = 0; a < 8; a++)
-            w = (w << 1) ^ ((w & 0x8000) ? 0x1021 : 0);
-        crc_ccitt[i] = w;
-    }
+  for (i = 0; i < 256; i++) {
+    uint16_t w = i << 8;
+    for (a = 0; a < 8; a++)
+      w = (w << 1) ^ ((w & 0x8000) ? 0x1021 : 0);
+    crc_ccitt[i] = w;
+  }
 }
 
 // calc crc16 for 1 byte
 unsigned short crc16(unsigned short crc, unsigned short b)
 {
-    crc = (crc << 8) ^ crc_ccitt[((crc >> 8) & 0xff) ^ b];
-    return crc;
+  crc = (crc << 8) ^ crc_ccitt[((crc >> 8) & 0xff) ^ b];
+  return crc;
 }
 
 #define MAX_SECTORS 64
-unsigned char track_num=0;
-unsigned char side=0;
+unsigned char track_num = 0;
+unsigned char side = 0;
 
 unsigned char s;
 char msg[80];
 
-
-void format_single_track_side(/* unsigned char track_num,unsigned char side, */unsigned char sector_count,unsigned char with_gaps)
+void format_single_track_side(
+    /* unsigned char track_num,unsigned char side, */ unsigned char sector_count, unsigned char with_gaps)
 {
   // Use new hardware-accelerated formatting
-  POKE(0xD696,0x00);  // also disable auto-seek on new address
-  while (PEEK(0xD082) & 0x80) continue;
-  POKE(0xD084,track_num);
-  POKE(0xD086,side);
+  POKE(0xD696, 0x00); // also disable auto-seek on new address
+  while (PEEK(0xD082) & 0x80)
+    continue;
+  POKE(0xD084, track_num);
+  POKE(0xD086, side);
   if (with_gaps) {
-    POKE(0xD081,0xa4); // $A4 = format with write-precompensation   
-  } else {
-    POKE(0xD081,0xaC); // $A4 = format with write-precompensation, bit 3 = no gaps, i.e., Amiga-style track-at-once
+    POKE(0xD081, 0xa4); // $A4 = format with write-precompensation
   }
-    
-  
-  while (PEEK(0xD082) & 0x80) continue;
-}
+  else {
+    POKE(0xD081, 0xaC); // $A4 = format with write-precompensation, bit 3 = no gaps, i.e., Amiga-style track-at-once
+  }
 
+  while (PEEK(0xD082) & 0x80)
+    continue;
+}
 
 void format_disk(unsigned char HD)
 {
   // First seek to the correct track
 
-  if (HD) POKE(0xD6A2,0x28); else POKE(0xD6A2,0x51);
-  
+  if (HD)
+    POKE(0xD6A2, 0x28);
+  else
+    POKE(0xD6A2, 0x51);
+
   // Connect to real floppy drive
-  while(!(lpeek(0xffd36a1L) & 1)) {
-    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+  while (!(lpeek(0xffd36a1L) & 1)) {
+    lpoke(0xffd36a1L, lpeek(0xffd36a1L) | 0x01);
   }
-  
+
   // Floppy 0 motor on
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD696,0x00);  // also disable auto-seek on new address
+  POKE(0xD696, 0x00); // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -777,61 +790,56 @@ void format_disk(unsigned char HD)
     continue;
   }
 
-  
   print_text(0, 0, 7, "Formatting disk...");
 
-  POKE(0xD696,0x00);  // also disable auto-seek on new address
+  POKE(0xD696, 0x00); // also disable auto-seek on new address
 
   // Seek to track 0
   print_text(0, 2, 15, "Seeking to track 0 .....");
-  while(!(PEEK(0xD082)&0x01)) {
-    POKE(0xD081,0x10);
+  while (!(PEEK(0xD082) & 0x01)) {
+    POKE(0xD081, 0x10);
     usleep(6000);
 
     snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     print_text(0, 24, 7, peak_msg);
-    
   }
 
-  lfill(0xFF80000L,0x01,4000);
-  
-  for(track_num=0;track_num<80;track_num++) {
+  lfill(0xFF80000L, 0x01, 4000);
+
+  for (track_num = 0; track_num < 80; track_num++) {
     // Seek to the requested track
-    snprintf(peak_msg, 40, "Formatting track %d",track_num);
+    snprintf(peak_msg, 40, "Formatting track %d", track_num);
     print_text(0, 3, 15, peak_msg);
 
-    for(side=0;side<2;side++) {
+    for (side = 0; side < 2; side++) {
 
       // Select head side
       if (side)
-	POKE(0xD080, 0x60);
+        POKE(0xD080, 0x60);
       else
-	POKE(0xD080, 0x68);
+        POKE(0xD080, 0x68);
 
-      format_single_track_side(/* track_num,side, */ 10*(1+HD),1 /* = with inter-sector gaps */);
-
+      format_single_track_side(/* track_num,side, */ 10 * (1 + HD), 1 /* = with inter-sector gaps */);
     }
-    
-  // Seek to next track
-  POKE(0xD081,0x18);
-  usleep(20000);
 
+    // Seek to next track
+    POKE(0xD081, 0x18);
+    usleep(20000);
   }
-
 }
 
 void wipe_disk(void)
 {
   // Connect to real floppy drive
-  while(!(lpeek(0xffd36a1L) & 1)) {
-    lpoke(0xffd36a1L,lpeek(0xffd36a1L)|0x01);
+  while (!(lpeek(0xffd36a1L) & 1)) {
+    lpoke(0xffd36a1L, lpeek(0xffd36a1L) | 0x01);
   }
-  
+
   // Floppy 0 motor on
   POKE(0xD080, 0x68);
 
   // Disable auto-tracking
-  POKE(0xD696,0x00);  // also disable auto-seek on new address
+  POKE(0xD696, 0x00); // also disable auto-seek on new address
 
   // Map FDC sector buffer, not SD sector buffer
   POKE(0xD689, PEEK(0xD689) & 0x7f);
@@ -850,76 +858,71 @@ void wipe_disk(void)
     continue;
   }
 
-  
   print_text(0, 0, 7, "Wiping disk (erasing magnetic reversals)...");
 
-  POKE(0xD696,0x00);  // also disable auto-seek on new address
+  POKE(0xD696, 0x00); // also disable auto-seek on new address
 
   // Seek to track 0
   print_text(0, 2, 15, "Seeking to track 0");
-  while(!(PEEK(0xD082)&0x01)) {
-    POKE(0xD081,0x10);
+  while (!(PEEK(0xD082) & 0x01)) {
+    POKE(0xD081, 0x10);
     usleep(6000);
 
     snprintf(peak_msg, 40, "Sector under head T:$%02X S:%02X H:%02x", PEEK(0xD6A3), PEEK(0xD6A4), PEEK(0xD6A5));
     print_text(0, 24, 7, peak_msg);
-    
   }
 
-  lfill(0xFF80000L,0x01,4000);
-  
-  a=0;
-  for(track_num=0;track_num<85;track_num++) {
+  lfill(0xFF80000L, 0x01, 4000);
+
+  a = 0;
+  for (track_num = 0; track_num < 85; track_num++) {
     // Seek to the requested track
-    snprintf(peak_msg, 40, "Erasing track %d",track_num);
+    snprintf(peak_msg, 40, "Erasing track %d", track_num);
     print_text(0, 3, 15, peak_msg);
 
-    for(side=0;side<2;side++) {
+    for (side = 0; side < 2; side++) {
 
       // Select head side
       if (side)
-	POKE(0xD080, 0x68);
+        POKE(0xD080, 0x68);
       else
-	POKE(0xD080, 0x60);
-      
-      POKE(0xD020,0x06);
+        POKE(0xD080, 0x60);
+
+      POKE(0xD020, 0x06);
 
       // Write no data with no clock
-      POKE(0xD087,0x00);
-      POKE(0xD088,0x00);
+      POKE(0xD087, 0x00);
+      POKE(0xD088, 0x00);
 
       // Begin unbuffered write
-      POKE(0xD081,0xA1);  
-      
+      POKE(0xD081, 0xA1);
+
       // Write 87+512 x 10 sectors = 5,990
-      POKE(0xD020,15);
-      
-      for(i=0;i<5990;i++) {
-	  while(!(PEEK(0xD082)&0x40)) {
-	    if (!(PEEK(0xD082)&0x80)) break;
-	    if (PEEK(0xD082)<0x40) {
-	      a++;
-	      snprintf(peak_msg, 40, "i=%d, track=%d, count=%d",i,track_num,a);
-	      print_text(0,5,2,peak_msg);
-	    }
-	    continue;
-	  }
-	  POKE(0xD087,0x00);
-	  POKE(0xD088,0x00);
+      POKE(0xD020, 15);
+
+      for (i = 0; i < 5990; i++) {
+        while (!(PEEK(0xD082) & 0x40)) {
+          if (!(PEEK(0xD082) & 0x80))
+            break;
+          if (PEEK(0xD082) < 0x40) {
+            a++;
+            snprintf(peak_msg, 40, "i=%d, track=%d, count=%d", i, track_num, a);
+            print_text(0, 5, 2, peak_msg);
+          }
+          continue;
+        }
+        POKE(0xD087, 0x00);
+        POKE(0xD088, 0x00);
       }
-      
     }
-    
+
     // Seek to next track
-    POKE(0xD081,0x18);
+    POKE(0xD081, 0x18);
     usleep(20000);
-    
   }
-  
 }
 
-unsigned short tries=0,auto_tracking=0;
-
+unsigned short tries = 0, auto_tracking = 0;
 
 void main(void)
 {
@@ -929,10 +932,10 @@ void main(void)
   POKE(0xD02F, 0x53);
 
   // Black background, white text
-  POKE(0x286,1);
-  POKE(0xD020,0);
-  POKE(0xD021,0);
-  
+  POKE(0x286, 1);
+  POKE(0xD020, 0);
+  POKE(0xD021, 0);
+
   while (1) {
     // Revert video mode
     POKE(0xD054, 0);
@@ -942,10 +945,11 @@ void main(void)
     POKE(0xD062, 0);
     POKE(0xD011, 0x1b);
     POKE(0xD018, 0x16);
-    
+
     printf("%cMEGA65 Floppy Drive Capacity Testing.\n\n", 0x93);
 
     {
+// clang-format off
       // How many sectors per track without gaps (i.e., amiga style)
       unsigned char sectors_by_rate_no_gaps[42+1]
 	={
@@ -975,107 +979,112 @@ void main(void)
 	 39,38,37,35,34,33,
 	 31,30
 	};
+// clang-format on
 
-      for(track_num=0;track_num<85;track_num++) {
-	
-	// 36 + no gaps works on track 79 without errors = 26 sectors per track
-	unsigned char bit_interval=40; // Standard HD 3.5" floppy is 500Kbit/second = 1mhz MFM rate (2 clocks per MFM bit)
-	unsigned char sector_count=50;
-	unsigned char with_gaps=0;
-	unsigned char sector_num,errors,best=0;
-	side=0;
+      for (track_num = 0; track_num < 85; track_num++) {
 
-	printf(" T%d: ",track_num);
+        // 36 + no gaps works on track 79 without errors = 26 sectors per track
+        unsigned char bit_interval = 40; // Standard HD 3.5" floppy is 500Kbit/second = 1mhz MFM rate (2 clocks per MFM bit)
+        unsigned char sector_count = 50;
+        unsigned char with_gaps = 0;
+        unsigned char sector_num, errors, best = 0;
+        side = 0;
 
-	for(bit_interval=27;bit_interval<=40;bit_interval++) {
-	
-	  // Floppy 0 motor on
-	  POKE(0xD080, 0x68);	  
+        printf(" T%d: ", track_num);
 
-	  // Seek to track 0
-	  while (!(PEEK(0xD082) & 1)) {
-	    POKE(0xD081, 0x10);
-	    usleep(6000);
-	  }
-	  
-	  // Seek to the desired track
-	  for(i=0;i<track_num;i++) {
-	    POKE(0xD081,0x18);
-	    while(PEEK(0xD082)&0x80) continue;
-	  }        
-	  	
-	  // Disable auto-tracking
-	  POKE(0xD696,0x00);  // also disable auto-seek on new address
-	  
-	  // Map FDC sector buffer, not SD sector buffer
-	  POKE(0xD689, PEEK(0xD689) & 0x7f);
-	  
-	  // Disable matching on any sector, use real drive
-	  POKE(0xD6A1, 0x01);
-	  
-	  // Select the specified side
-	  POKE(0xD086, 1-side); // Side flag is inverted
-	  
-	  //	  printf("Pre-erasing track.\n");
-	  
-	  // Wipe the track
-	  // Write no data with no clock
-	  POKE(0xD087,0x00);
-	  POKE(0xD088,0x00);
-	  
-	  // Erase the track at standard HD data rate
-	  POKE(0xD6A2,40);
-	  
-	  // Begin unbuffered write
-	  POKE(0xD081,0xA1);  
-	  
-	  // Write absolutely nothing on the whole track
-	  for(i=0;i<30000;i++) {
-	    while(!(PEEK(0xD082)&0x40)) {
-	      if (!(PEEK(0xD082)&0x80)) break;
-	      if (PEEK(0xD082)<0x40) {
-		a++;
-	      }
-	      continue;
-	    }
-	    POKE(0xD087,0x00);
-	    POKE(0xD088,0x00);
-	  }
+        for (bit_interval = 27; bit_interval <= 40; bit_interval++) {
 
-	  // Disable auto-setting data rate while we are formatting
-	  POKE(0xD6AE,PEEK(0xD6AE)&0xDF);
-	  
-	  POKE(0xD6A2,bit_interval);
-	  POKE(0xD6A6,0x04); POKE(0xD6A7,0x08); // Set sensible write precomp defaults
-	  format_single_track_side(sector_count,with_gaps);
+          // Floppy 0 motor on
+          POKE(0xD080, 0x68);
 
-	  //	  printf("<%d>",bit_interval);
+          // Seek to track 0
+          while (!(PEEK(0xD082) & 1)) {
+            POKE(0xD081, 0x10);
+            usleep(6000);
+          }
 
-	  sector_count=with_gaps?sectors_by_rate_with_gaps[bit_interval]
-	    :sectors_by_rate_no_gaps[bit_interval];
-	  printf("\nReading back %d sectors @%d\n",sector_count,bit_interval);
-	  errors=0; 
-	  for(sector_num=1;sector_num<=sector_count;sector_num++) {
-	    if (read_a_sector(track_num,side,sector_num))
-	      {
-		printf("[%d]",sector_num-1);
-		if ((sector_num-1)>best) best=sector_num-1;
-		break;
-	      }
-	    else { printf("%d",sector_num%10); }
-	  }
+          // Seek to the desired track
+          for (i = 0; i < track_num; i++) {
+            POKE(0xD081, 0x18);
+            while (PEEK(0xD082) & 0x80)
+              continue;
+          }
 
-	  if (sector_num>sector_count) {
-	    printf("[%d]",sector_num);
-	    break;
-	  }
-	  	  
-	}
-	//	printf("\n");
-	//	printf("%d",best);
+          // Disable auto-tracking
+          POKE(0xD696, 0x00); // also disable auto-seek on new address
+
+          // Map FDC sector buffer, not SD sector buffer
+          POKE(0xD689, PEEK(0xD689) & 0x7f);
+
+          // Disable matching on any sector, use real drive
+          POKE(0xD6A1, 0x01);
+
+          // Select the specified side
+          POKE(0xD086, 1 - side); // Side flag is inverted
+
+          //	  printf("Pre-erasing track.\n");
+
+          // Wipe the track
+          // Write no data with no clock
+          POKE(0xD087, 0x00);
+          POKE(0xD088, 0x00);
+
+          // Erase the track at standard HD data rate
+          POKE(0xD6A2, 40);
+
+          // Begin unbuffered write
+          POKE(0xD081, 0xA1);
+
+          // Write absolutely nothing on the whole track
+          for (i = 0; i < 30000; i++) {
+            while (!(PEEK(0xD082) & 0x40)) {
+              if (!(PEEK(0xD082) & 0x80))
+                break;
+              if (PEEK(0xD082) < 0x40) {
+                a++;
+              }
+              continue;
+            }
+            POKE(0xD087, 0x00);
+            POKE(0xD088, 0x00);
+          }
+
+          // Disable auto-setting data rate while we are formatting
+          POKE(0xD6AE, PEEK(0xD6AE) & 0xDF);
+
+          POKE(0xD6A2, bit_interval);
+          POKE(0xD6A6, 0x04);
+          POKE(0xD6A7, 0x08); // Set sensible write precomp defaults
+          format_single_track_side(sector_count, with_gaps);
+
+          //	  printf("<%d>",bit_interval);
+
+          sector_count = with_gaps ? sectors_by_rate_with_gaps[bit_interval] : sectors_by_rate_no_gaps[bit_interval];
+          printf("\nReading back %d sectors @%d\n", sector_count, bit_interval);
+          errors = 0;
+          for (sector_num = 1; sector_num <= sector_count; sector_num++) {
+            if (read_a_sector(track_num, side, sector_num)) {
+              printf("[%d]", sector_num - 1);
+              if ((sector_num - 1) > best)
+                best = sector_num - 1;
+              break;
+            }
+            else {
+              printf("%d", sector_num % 10);
+            }
+          }
+
+          if (sector_num > sector_count) {
+            printf("[%d]", sector_num);
+            break;
+          }
+        }
+        //	printf("\n");
+        //	printf("%d",best);
       }
     }
-    
-    while(1) continue;
+
+    while (1)
+      continue;
   }
 }

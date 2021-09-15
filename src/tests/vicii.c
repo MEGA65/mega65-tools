@@ -478,13 +478,13 @@ void d018_timing_tests(void)
   // After next frame, check for colission
   v = PEEK(0xD01FU);
   if (v != 0x01) {
-        __asm__("sei");
+    __asm__("sei");
 
     restore_screen();
     sprites_on(0);
 
     unit_test_fail("changing $d018 at raster 57 should switch first row to alternate screen, but original screen appeared "
-         "to be there");
+                   "to be there");
     printf("\nFAIL: Changing $D018 at raster 57 should switch first row to alternate screen, but original screen appeared "
            "to be there.\n");
     printf("\nFAIL: *$D01F != $01: Saw $%x\n", v);
@@ -507,7 +507,7 @@ void d018_timing_tests(void)
     restore_screen();
     sprites_on(0);
     unit_test_fail("Changing $D018 at raster 58 should switch first row to alternate screen, but original screen appeared "
-         "to be there");
+                   "to be there");
     //    printf("\nFAIL: Changing $D018 at raster 58 should switch first row to alternate screen, but original screen
     //    appeared "
     // "to be there.\n");
@@ -531,7 +531,7 @@ void d018_timing_tests(void)
     restore_screen();
     sprites_on(0);
     unit_test_fail("changing $d018 at raster 59 should *not* switch first row to alternate screen, but alternate screen "
-         "appeared to be there");
+                   "appeared to be there");
     // printf("\nFAIL: Changing $D018 at raster 59 should NOT switch first row to alternate screen, but alternate screen "
     //           "appeared to be there.\n");
     //    printf("\nFAIL: *$D01F != $00: Saw $%x\n", v);
@@ -571,7 +571,7 @@ int main(void)
   // Enable MEGA65 IO to support MEGA65 unit test framework
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
-  unit_test_setup("vic-ii",ISSUE_NUM);
+  unit_test_setup("vic-ii", ISSUE_NUM);
   unit_test_log("hello from mega65!");
 
   // Prepare sprites

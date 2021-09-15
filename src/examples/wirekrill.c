@@ -11,41 +11,45 @@ struct m65_tm tm;
 #include <pcap/pcap.h>
 #include <stdlib.h>
 
-pcap_t *p=NULL;
+pcap_t* p = NULL;
 
-#define POKE(X,Y)
+#define POKE(X, Y)
 // Make PEEK(0xD6E1) always indicate that a packet is always ready to be received
 #define PEEK(X) 0x20
 
 void lcopy(long src, long dst, int count)
 {
-  if (src==0xFFDE800L) {
+  if (src == 0xFFDE800L) {
     // Read next packet from pcap file
-    struct pcap_pkthdr h;    
+    struct pcap_pkthdr h;
 
-    char *packet=pcap_next(p,&h);
-    if (!packet) exit(0);
-    ((char *)dst)[0]=h.len;
-    ((char *)dst)[1]=h.len>>8;
-    bcopy(packet,(void *)dst + 2,count-1);
-  } else {
-    bcopy((void *)src,(void *)dst,count);
+    char* packet = pcap_next(p, &h);
+    if (!packet)
+      exit(0);
+    ((char*)dst)[0] = h.len;
+    ((char*)dst)[1] = h.len >> 8;
+    bcopy(packet, (void*)dst + 2, count - 1);
+  }
+  else {
+    bcopy((void*)src, (void*)dst, count);
   }
 }
 
-void lpoke(long addr,int val) {
+void lpoke(long addr, int val)
+{
   // Ignore POKEs to upper memory
 }
 
-void lfill(long addr,int val,int count) {
+void lfill(long addr, int val, int count)
+{
   // Ignore POKEs to upper memory
 }
 
-int lpeek(long addr) {
+int lpeek(long addr)
+{
   return 0;
 }
 #endif
-
 
 void m65_io_enable(void)
 {
@@ -202,15 +206,14 @@ void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* 
   }
 }
 
-//this should print the decimal version of an arbitrary number of bytes
-//probably already something in c stdlib or this repo but i couldnt find anything
+// this should print the decimal version of an arbitrary number of bytes
+// probably already something in c stdlib or this repo but i couldnt find anything
 int to_decimal(unsigned char* src, int bytes)
 {
   int out = 0;
   int i;
   int x;
-  for(i = 0; i < bytes; i++)
-  {
+  for (i = 0; i < bytes; i++) {
     x = src[bytes - i - 1];
     out |= (x << (8 * i));
   }
@@ -224,17 +227,16 @@ void clear_text80(void)
 {
 }
 
-void println_text80(unsigned char colour,char *msg)
+void println_text80(unsigned char colour, char* msg)
 {
-  fprintf(stdout,"%s\n",msg);
+  fprintf(stdout, "%s\n", msg);
 }
-
 
 unsigned char safe_char(unsigned char in)
 {
-  if (in>=' '&&in<0x7d) return in;
+  if (in >= ' ' && in < 0x7d)
+    return in;
   return 0x2e;
-
 }
 
 #else
@@ -258,7 +260,6 @@ void println_text80(unsigned char colour, char* msg)
     text_row++;
 }
 
-
 unsigned char safe_char(unsigned char in)
 {
   if (!in)
@@ -269,23 +270,21 @@ unsigned char safe_char(unsigned char in)
 
 #endif
 
-
 unsigned short mdio0 = 0, mdio1 = 0, last_mdio0 = 0, last_mdio1 = 0, frame_count = 0;
 unsigned char phy, last_frame_num = 0, show_hex = 0, last_d6ef = 0;
 
 #ifdef NATIVE_TEST
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-  if (argc!=2) {
-    fprintf(stderr,"usage: wirekrill <file.pcap>\n");
+  if (argc != 2) {
+    fprintf(stderr, "usage: wirekrill <file.pcap>\n");
     exit(-1);
   }
-  
+
   char errbuf[8192];
-  p=pcap_open_offline(argv[1],errbuf);
+  p = pcap_open_offline(argv[1], errbuf);
   if (!p) {
-    fprintf(stderr,"ERROR: Failed to open PCAP capture file '%s'\nPCAP said: %s\n",
-	    argv[1],errbuf);
+    fprintf(stderr, "ERROR: Failed to open PCAP capture file '%s'\nPCAP said: %s\n", argv[1], errbuf);
     exit(-1);
   }
 
@@ -294,9 +293,9 @@ void main(void)
 {
 #endif
   unsigned short len;
-  //since the start of the header varies depending on whether the IPv4 options field is present
+  // since the start of the header varies depending on whether the IPv4 options field is present
   unsigned short start_of_protocol_header;
-  //looping
+  // looping
   int i;
 
   POKE(0x0286, 0x01);
@@ -382,16 +381,19 @@ void main(void)
             println_text80(13, msg);
             //      show_hex=0;
           }
-          else if(frame_buffer[16 + 20] == 0x03)//DESTINATION UNREACHABLE
+          else if (frame_buffer[16 + 20] == 0x03) // DESTINATION UNREACHABLE
           {
-          printf("  ICMP: Destination Unreachable, code=%d, nexthopMTU=%d", frame_buffer[start_of_protocol_header + 1], to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
+            printf("  ICMP: Destination Unreachable, code=%d, nexthopMTU=%d", frame_buffer[start_of_protocol_header + 1],
+                to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
           }
-          else if(frame_buffer[16 + 20] == 0x05)//redirect
+          else if (frame_buffer[16 + 20] == 0x05) // redirect
           {
-            printf("  ICMP: Redirect, code=%d, ipaddress=%d.%d.%d.%d,", frame_buffer[start_of_protocol_header + 1], frame_buffer[start_of_protocol_header + 4], frame_buffer[start_of_protocol_header + 5],frame_buffer[start_of_protocol_header + 6], frame_buffer[start_of_protocol_header + 7]);
-          } 
+            printf("  ICMP: Redirect, code=%d, ipaddress=%d.%d.%d.%d,", frame_buffer[start_of_protocol_header + 1],
+                frame_buffer[start_of_protocol_header + 4], frame_buffer[start_of_protocol_header + 5],
+                frame_buffer[start_of_protocol_header + 6], frame_buffer[start_of_protocol_header + 7]);
+          }
         }
-        else if(frame_buffer[16 + 9] == 0x06)//TCP
+        else if (frame_buffer[16 + 9] == 0x06) // TCP
         {
           printf("  TCP Protocol:\n");
           printf("    source port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 0], 2));
@@ -400,91 +402,75 @@ void main(void)
           printf("    ackknowledement number is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 8], 4));
           printf("    data offset is %d\n", frame_buffer[start_of_protocol_header + 12] >> 4);
           printf("    flags: ");
-          if(frame_buffer[start_of_protocol_header + 12] & 1)
-          {
+          if (frame_buffer[start_of_protocol_header + 12] & 1) {
             printf("NS ");
           }
-          if((frame_buffer[start_of_protocol_header + 13] >> 7) & 1)
-          {
-              printf("CWR ");
+          if ((frame_buffer[start_of_protocol_header + 13] >> 7) & 1) {
+            printf("CWR ");
           }
-          if((frame_buffer[start_of_protocol_header + 13] >> 6) & 1)
-          {
-              printf("ECE ");
+          if ((frame_buffer[start_of_protocol_header + 13] >> 6) & 1) {
+            printf("ECE ");
           }
-          if((frame_buffer[start_of_protocol_header + 13] >> 5) & 1)
-          {
-              printf("URG ");
+          if ((frame_buffer[start_of_protocol_header + 13] >> 5) & 1) {
+            printf("URG ");
           }
-          if((frame_buffer[start_of_protocol_header + 13] >> 4) & 1)
-          {
-              printf("ACK ");
+          if ((frame_buffer[start_of_protocol_header + 13] >> 4) & 1) {
+            printf("ACK ");
           }
-          if((frame_buffer[start_of_protocol_header + 13] >> 3) & 1)
-          {
-              printf("PSH ");
+          if ((frame_buffer[start_of_protocol_header + 13] >> 3) & 1) {
+            printf("PSH ");
           }
-          if((frame_buffer[start_of_protocol_header + 13] >> 2) & 1)
-          {
-              printf("RST ");
+          if ((frame_buffer[start_of_protocol_header + 13] >> 2) & 1) {
+            printf("RST ");
           }
-          if((frame_buffer[start_of_protocol_header + 13] >> 1) & 1)
-          {
-             printf("SYN ");
+          if ((frame_buffer[start_of_protocol_header + 13] >> 1) & 1) {
+            printf("SYN ");
           }
-          if((frame_buffer[start_of_protocol_header + 13] >> 0) & 1)
-          {
-             printf("FIN ");
+          if ((frame_buffer[start_of_protocol_header + 13] >> 0) & 1) {
+            printf("FIN ");
           }
           printf("\n");
           printf("    window size is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 14], 2));
           printf("    checksum is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 16], 2));
           printf("    urgent pointer is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 18], 2));
 
-          //data offset gives us the sie of the tcp header in 32 bit words,
-          //ie to get to the payload we increment by dataoffset * 4 bytes
+          // data offset gives us the sie of the tcp header in 32 bit words,
+          // ie to get to the payload we increment by dataoffset * 4 bytes
           start_of_protocol_header += ((frame_buffer[start_of_protocol_header + 12] >> 4) * 4);
 
-          //HTTP tests
-          //evaulate the payload
-          if(frame_buffer[start_of_protocol_header + 0] == 'P' &&
-             frame_buffer[start_of_protocol_header + 1] == 'O' &&
-             frame_buffer[start_of_protocol_header + 2] == 'S' &&
-             frame_buffer[start_of_protocol_header + 3] == 'T')
-          {
+          // HTTP tests
+          // evaulate the payload
+          if (frame_buffer[start_of_protocol_header + 0] == 'P' && frame_buffer[start_of_protocol_header + 1] == 'O'
+              && frame_buffer[start_of_protocol_header + 2] == 'S' && frame_buffer[start_of_protocol_header + 3] == 'T') {
             printf("HTTP: Post\n");
-            for(i = 5; frame_buffer[start_of_protocol_header + i] != ' '; i++)
-            {
+            for (i = 5; frame_buffer[start_of_protocol_header + i] != ' '; i++) {
               putchar(frame_buffer[start_of_protocol_header + i]);
             }
             putchar('\n');
           }
-          else if(frame_buffer[start_of_protocol_header + 0] == 'G' &&
-                  frame_buffer[start_of_protocol_header + 1] == 'E' &&
-                  frame_buffer[start_of_protocol_header + 2] == 'T')
-          {
+          else if (frame_buffer[start_of_protocol_header + 0] == 'G' && frame_buffer[start_of_protocol_header + 1] == 'E'
+                   && frame_buffer[start_of_protocol_header + 2] == 'T') {
             printf("HTTP: Get\n");
-            for(i = 4; frame_buffer[start_of_protocol_header + i] != ' '; i++)
-            {
-               putchar(frame_buffer[start_of_protocol_header + i]);
+            for (i = 4; frame_buffer[start_of_protocol_header + i] != ' '; i++) {
+              putchar(frame_buffer[start_of_protocol_header + i]);
             }
             putchar('\n');
           }
         }
-        else if(frame_buffer[16 + 9] == 0x11)//UDP
+        else if (frame_buffer[16 + 9] == 0x11) // UDP
         {
           printf("  UDP Protocol:\n");
-          //udp contains a source port
+          // udp contains a source port
           printf("    source port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 0], 2));
-          //a destination port
+          // a destination port
           printf("    destination port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 2], 2));
-          //length
+          // length
           printf("    length is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 4], 2));
-          //checksum
-          printf("    checksum is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));	
+          // checksum
+          printf("    checksum is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
         }
       }
-      else if(frame_buffer[15] == 0x06)//ARP
+      else if (frame_buffer[15] == 0x06) // ARP
       {
         start_of_protocol_header = 16;
         printf("  ARP protocol:\n");
@@ -493,20 +479,20 @@ void main(void)
         printf("    Hardware address length: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 4], 1));
         printf("    Protocol address length: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 5], 1));
         printf("    Opcode: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
-        printf("    Sender Hardware Address: %02x:%02x:%02x:%02x:%02x:%02x\n",
-        frame_buffer[start_of_protocol_header + 8], frame_buffer[start_of_protocol_header + 9],
-        frame_buffer[start_of_protocol_header + 10], frame_buffer[start_of_protocol_header + 11],
-        frame_buffer[start_of_protocol_header + 12], frame_buffer[start_of_protocol_header + 13]);
-        printf("    Sender IP address: %d.%d.%d.%d\n",
-        frame_buffer[start_of_protocol_header + 14], frame_buffer[start_of_protocol_header + 15],
-        frame_buffer[start_of_protocol_header + 16], frame_buffer[start_of_protocol_header + 17]);
-        printf("    Target Hardware Address: %02x:%02x:%02x:%02x:%02x:%02x\n",
-        frame_buffer[start_of_protocol_header + 18], frame_buffer[start_of_protocol_header + 19],
-        frame_buffer[start_of_protocol_header + 20], frame_buffer[start_of_protocol_header + 21],
-        frame_buffer[start_of_protocol_header + 22], frame_buffer[start_of_protocol_header + 23]);
-        printf("    Target IP address: %d.%d.%d.%d\n",
-        frame_buffer[start_of_protocol_header + 24], frame_buffer[start_of_protocol_header + 25],
-        frame_buffer[start_of_protocol_header + 26], frame_buffer[start_of_protocol_header + 27]);
+        printf("    Sender Hardware Address: %02x:%02x:%02x:%02x:%02x:%02x\n", frame_buffer[start_of_protocol_header + 8],
+            frame_buffer[start_of_protocol_header + 9], frame_buffer[start_of_protocol_header + 10],
+            frame_buffer[start_of_protocol_header + 11], frame_buffer[start_of_protocol_header + 12],
+            frame_buffer[start_of_protocol_header + 13]);
+        printf("    Sender IP address: %d.%d.%d.%d\n", frame_buffer[start_of_protocol_header + 14],
+            frame_buffer[start_of_protocol_header + 15], frame_buffer[start_of_protocol_header + 16],
+            frame_buffer[start_of_protocol_header + 17]);
+        printf("    Target Hardware Address: %02x:%02x:%02x:%02x:%02x:%02x\n", frame_buffer[start_of_protocol_header + 18],
+            frame_buffer[start_of_protocol_header + 19], frame_buffer[start_of_protocol_header + 20],
+            frame_buffer[start_of_protocol_header + 21], frame_buffer[start_of_protocol_header + 22],
+            frame_buffer[start_of_protocol_header + 23]);
+        printf("    Target IP address: %d.%d.%d.%d\n", frame_buffer[start_of_protocol_header + 24],
+            frame_buffer[start_of_protocol_header + 25], frame_buffer[start_of_protocol_header + 26],
+            frame_buffer[start_of_protocol_header + 27]);
       }
       if (show_hex) {
         for (i = 0; i < 256 && i < len; i += 16) {
@@ -514,8 +500,7 @@ void main(void)
           snprintf(msg, 160,
               "       %04x: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x  "
               "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",
-              i,
-		   frame_buffer[14 + i], frame_buffer[15 + i], frame_buffer[16 + i], frame_buffer[17 + i],
+              i, frame_buffer[14 + i], frame_buffer[15 + i], frame_buffer[16 + i], frame_buffer[17 + i],
               frame_buffer[18 + i], frame_buffer[19 + i], frame_buffer[20 + i], frame_buffer[21 + i], frame_buffer[22 + i],
               frame_buffer[23 + i], frame_buffer[24 + i], frame_buffer[25 + i], frame_buffer[26 + i], frame_buffer[27 + i],
               frame_buffer[28 + i], frame_buffer[29 + i],

@@ -199,9 +199,8 @@ void print_items(char* searchterm)
   tlist_item* ptr = &lst_finfos;
   while (ptr != NULL) {
     tfile_info* pfinfo = (tfile_info*)ptr->cur;
-    if (!searchterm || is_match(pfinfo->title, searchterm) ||
-        is_match(pfinfo->filename, searchterm) || is_match(pfinfo->author, searchterm))
-    {
+    if (!searchterm || is_match(pfinfo->title, searchterm) || is_match(pfinfo->filename, searchterm)
+        || is_match(pfinfo->author, searchterm)) {
       printf("%d: %s - \"%s\" - author: %s\n", cnt, pfinfo->title, pfinfo->filename, pfinfo->author);
     }
 
@@ -266,13 +265,12 @@ void clear_list(void)
   while (ptr != NULL) {
     if (ptr->cur)
       free(ptr->cur); // delete the file-info
-    
+
     tlist_item* tmp = ptr->next;
 
     if (ptr != &lst_finfos) // i shouldn't delete the first one, just my silly logic, sorry :)
       free(ptr);
-    else
-    {
+    else {
       // again, first one workaround, sorry ;)
       ptr->cur = NULL;
       ptr->next = NULL;

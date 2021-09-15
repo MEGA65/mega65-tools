@@ -2440,7 +2440,7 @@ void list_all_roms(void)
 
       if (sector_number == -1)
         break;
-      
+
       if (read_sector(sector_number, show_buf, CACHE_YES, 128)) {
         printf("ERROR: Failed to read to sector %d\n", sector_number);
         break;
@@ -2449,15 +2449,13 @@ void list_all_roms(void)
       char version[64] = "???";
 
       // closed-rom?
-      if (show_buf[0x16] == 'V')
-      {
-        strncpy(version, (char*)show_buf+0x16,7);
+      if (show_buf[0x16] == 'V') {
+        strncpy(version, (char*)show_buf + 0x16, 7);
         version[7] = '\0';
       }
       // open-rom
-      else if (show_buf[0x10] == 'O' || show_buf[0x10] == 'V')
-      {
-        strncpy(version, (char*)show_buf+0x10,9);
+      else if (show_buf[0x10] == 'O' || show_buf[0x10] == 'V') {
+        strncpy(version, (char*)show_buf + 0x10, 9);
         version[9] = '\0';
       }
 
@@ -2483,7 +2481,7 @@ void wrap_upload(char* fname)
   }
 }
 
-void perform_filehost_get(int num, char *destname)
+void perform_filehost_get(int num, char* destname)
 {
   char* fname = download_file_from_filehost(num);
 
@@ -2506,11 +2504,10 @@ void perform_filehost_get(int num, char *destname)
 // borrowed from mega65-core's "megaflash.c"
 // - should probably be in some common library that can be
 //   used on the m65 and pc side.
-typedef struct
-{
+typedef struct {
   int model_id;
   char* name;
-  int slot_size;  // in MB
+  int slot_size; // in MB
   int slot_count;
   char fpga_part[16];
   char qspi_part[32];
@@ -2537,14 +2534,13 @@ models_type* get_model(uint8_t model_id)
   uint8_t k;
   uint8_t l = sizeof(models) / sizeof(models_type);
 
-  for (k = 0; k < l; k++)
-  {
+  for (k = 0; k < l; k++) {
     if (model_id == models[k].model_id) {
       return &models[k];
     }
   }
 
-  return &models[l-1];  // the last item is '? unknown ?'
+  return &models[l - 1]; // the last item is '? unknown ?'
 }
 
 int get_model_id_from_core_file(char* corefile)
@@ -2573,8 +2569,7 @@ int check_model_id_field(char* corefile)
   printf(".COR file model id: $%02X - %s\n", core_model_id, get_model(core_model_id)->name);
   printf(" Hardware model id: $%02X - %s\n\n", hardware_model_id, get_model(hardware_model_id)->name);
 
-  if (hardware_model_id == core_model_id)
-  {
+  if (hardware_model_id == core_model_id) {
     printf("Verified .COR file matches hardware.\n"
            "Safe to flash.\n");
     return 1;
@@ -2589,13 +2584,13 @@ int check_model_id_field(char* corefile)
     scanf("%s", inp);
     if (strcmp(inp, "y") != 0)
       return 0;
-    
+
     printf("Ok, will proceed to flash\n");
     return 1;
   }
 
   printf("Verification error!\n"
-        "This .COR file is not intended for this hardware.\n");
+         "This .COR file is not intended for this hardware.\n");
   return 0;
 }
 
@@ -2610,7 +2605,7 @@ void write_tcl_script(models_type* mdl)
   sprintf(hwcfg, "[ get_property PROGRAM.HW_CFGMEM %s]", fpga);
   sprintf(hwcfgtype, "[ get_property PROGRAM.HW_CFGMEM_TYPE %s]", fpga);
 
-  FILE *f = fopen("write-flash.tcl", "wt");
+  FILE* f = fopen("write-flash.tcl", "wt");
   fprintf(f, "open_hw\n");
   fprintf(f, "connect_hw_server\n");
   fprintf(f, "open_hw_target\n");
@@ -2631,7 +2626,10 @@ void write_tcl_script(models_type* mdl)
   fprintf(f, "set_property PROGRAM.VERIFY  1 %s\n", hwcfg);
   fprintf(f, "set_property PROGRAM.CHECKSUM  0 %s\n", hwcfg);
   fprintf(f, "startgroup\n");
-  fprintf(f, "if {![string equal %s [get_property MEM_TYPE [get_property CFGMEM_PART %s]]] }  { create_hw_bitstream -hw_device %s [get_property PROGRAM.HW_CFGMEM_BITFILE %s]; program_hw_devices %s; };\n", hwcfgtype, hwcfg, fpga, fpga, fpga);
+  fprintf(f,
+      "if {![string equal %s [get_property MEM_TYPE [get_property CFGMEM_PART %s]]] }  { create_hw_bitstream -hw_device %s "
+      "[get_property PROGRAM.HW_CFGMEM_BITFILE %s]; program_hw_devices %s; };\n",
+      hwcfgtype, hwcfg, fpga, fpga, fpga);
   fprintf(f, "program_hw_cfgmem -hw_cfgmem %s\n", hwcfg);
   fprintf(f, "endgroup\n");
   fprintf(f, "quit\n");
@@ -2654,7 +2652,7 @@ void perform_filehost_flash(int fhnum, int slotnum)
   uint8_t hardware_model_id = mega65_peek(0xFFD3629);
   models_type* mdl = get_model(hardware_model_id);
   if (slotnum >= mdl->slot_count) {
-    printf("- Valid slots on your hardware range from 0 to %d.\n", mdl->slot_count-1);
+    printf("- Valid slots on your hardware range from 0 to %d.\n", mdl->slot_count - 1);
     return;
   }
 
@@ -2701,7 +2699,7 @@ void perform_filehost_flash(int fhnum, int slotnum)
   printf("\nIf all went well, \"%s\" has been flashed to slot %d.\n\n"
          "Please power cycle your device.\n\n"
          "The 'mega65_ftp' tool will exit now. To start another session, re-run after power-cycling.\n\n",
-         fname, slotnum);
+      fname, slotnum);
 
   // exit mega65_ftp (as a new session will need to be created after the power-cycle anyway)
   exit(0);

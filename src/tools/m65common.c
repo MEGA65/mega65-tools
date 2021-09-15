@@ -140,16 +140,17 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
   int i;
-  if (debug_serial&&0)
-  {
+  if (debug_serial && 0) {
     printf("\nWriting ");
-    for(i=0;i<l;i++)
-      {
-	if (d[i]>=' ') printf("%c",d[i]); else printf("[$%02X]",d[i]);
-      }
+    for (i = 0; i < l; i++) {
+      if (d[i] >= ' ')
+        printf("%c", d[i]);
+      else
+        printf("[$%02X]", d[i]);
+    }
     printf("\n");
     char line[1024];
-    fgets(line,1024,stdin);
+    fgets(line, 1024, stdin);
   }
 
   for (i = 0; i < l; i++) {
@@ -280,7 +281,7 @@ void wait_for_prompt(void)
       // There is a bug in the MEGA65 where it sometimes reports
       // this repeatedly. It is worked around by simply sending a newline.
       printf("WARNING: Break or watchpoint trigger seen.\n");
-      serialport_write(fd,(uint8_t*)"\r",1);
+      serialport_write(fd, (uint8_t*)"\r", 1);
     }
     if (strstr((char*)read_buff, ".")) {
       break;
@@ -288,7 +289,7 @@ void wait_for_prompt(void)
   }
 }
 
-void wait_for_string(char *s)
+void wait_for_string(char* s)
 {
   unsigned char read_buff[8192];
   int b = 1;
@@ -837,8 +838,8 @@ int breakpoint_wait(void)
 {
   char read_buff[8192];
   char pattern[16];
-  time_t start=time(0);
-  
+  time_t start = time(0);
+
   snprintf(pattern, 16, "\n,077");
 
   int match_state = 0;
@@ -850,11 +851,11 @@ int breakpoint_wait(void)
     int b = serialport_read(fd, (unsigned char*)read_buff, 8192);
 
     // Poll for PC value, as sometimes breakpoint doesn't always auto-present it
-    if (time(0)!=start) {
-      slow_write(fd,"r\r",2);
-      start=time(0);
+    if (time(0) != start) {
+      slow_write(fd, "r\r", 2);
+      start = time(0);
     }
-    
+
     for (int i = 0; i < b; i++) {
       if (read_buff[i] == pattern[match_state]) {
         if (match_state == 4) {
@@ -955,22 +956,22 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
   //  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
 
   //  monitor_sync();
-  time_t last_rx=0;
+  time_t last_rx = 0;
   while (addr < (address + count)) {
     {
-      if ((last_rx<time(0))||(addr==end_addr)) {
-	//	printf("no response for 1 sec: Requesting more.\n");
-	if ((address + count - addr) < 17) {
-	  snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
-	  end_addr = addr + 0x10;
-	}
-	else {
-	  snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
-	  end_addr = addr + 0x100;
-	}
-	//	printf("Sending '%s'\n",cmd);
-	slow_write_safe(fd, cmd, strlen(cmd));
-	last_rx=time(0);
+      if ((last_rx < time(0)) || (addr == end_addr)) {
+        //	printf("no response for 1 sec: Requesting more.\n");
+        if ((address + count - addr) < 17) {
+          snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
+          end_addr = addr + 0x10;
+        }
+        else {
+          snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
+          end_addr = addr + 0x100;
+        }
+        //	printf("Sending '%s'\n",cmd);
+        slow_write_safe(fd, cmd, strlen(cmd));
+        last_rx = time(0);
       }
       snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
       int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
@@ -988,7 +989,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
         char b = s[42];
         s[42] = 0;
         if (0) {
-	  printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
+          printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
         }
         s[42] = b;
         for (int i = 0; i < 16; i++) {
@@ -1009,7 +1010,6 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
         int s_offset = (long long)s - (long long)read_buff + 42;
         bcopy(&read_buff[s_offset], &read_buff[0], 8192 - (ofs - s_offset));
         ofs -= s_offset;
-
       }
     }
   }
@@ -1315,7 +1315,7 @@ int win_serial_port_write(HANDLE port, uint8_t* buffer, size_t size, const char*
   BOOL success;
   //  printf("Calling WriteFile(%d)\n",size);
 
-  if (debug_serial&&0) {
+  if (debug_serial && 0) {
     fprintf(stderr, "%s:%d:%s(): ", file, line, func);
     dump_bytes(0, "serial write (windows)", buffer, size);
   }
@@ -1657,8 +1657,7 @@ PORT_TYPE open_tcp_port(char* portname)
   {
     sscanf(&portname[4], "%[^:]:%d", hostname, &port);
   }
-  else if (portname[3] == '\\' && portname[4] == '#')
-  {
+  else if (portname[3] == '\\' && portname[4] == '#') {
     sscanf(&portname[5], "%[^:]:%d", hostname, &port);
   }
 
@@ -1694,16 +1693,16 @@ void close_tcp_port(PORT_TYPE localfd)
 }
 
 // provide an implementation of stricmp for linux/mac
-int stricmp(const char *a, const char *b)
+int stricmp(const char* a, const char* b)
 {
   int ca, cb;
   do {
-     ca = (unsigned char) *a++;
-     cb = (unsigned char) *b++;
-     ca = tolower(toupper(ca));
-     cb = tolower(toupper(cb));
-   } while (ca == cb && ca != '\0');
-   return ca - cb;
+    ca = (unsigned char)*a++;
+    cb = (unsigned char)*b++;
+    ca = tolower(toupper(ca));
+    cb = tolower(toupper(cb));
+  } while (ca == cb && ca != '\0');
+  return ca - cb;
 }
 
 #endif

@@ -23,7 +23,6 @@ void do_usleep(unsigned long usec);
 #include <IOKit/IOBSD.h>
 #endif
 
-
 #define FILE_SIZE 128 * 1024
 // Use just a little part for testing
 //#define FILE_SIZE 8*1024
@@ -168,27 +167,26 @@ char* normalise(char* s)
 int main(int argc, char** argv)
 {
   if (argc == 3) {
-    FILE *f=fopen(argv[1],"rb");
+    FILE* f = fopen(argv[1], "rb");
 
     if (!f) {
       fprintf(stderr, "ERROR: Could not diff file '%s'\n", argv[1]);
       perror("fopen");
       exit(-1);
     }
-    diff_len=fread(diff, 1,4*FILE_SIZE, f);
+    diff_len = fread(diff, 1, 4 * FILE_SIZE, f);
     fclose(f);
 
-    char *reffile=(char *)&diff[32];
+    char* reffile = (char*)&diff[32];
 
-    if (strncmp("MEGA65ROMPATCH01",(char *)diff,16)) {
-      fprintf(stderr,"ERROR: Input file is not a MEGA65 ROM Diff File\n");
+    if (strncmp("MEGA65ROMPATCH01", (char*)diff, 16)) {
+      fprintf(stderr, "ERROR: Input file is not a MEGA65 ROM Diff File\n");
       exit(-1);
     }
-    
-    fprintf(stderr,"Diff file is %d bytes long. Reffile is '%s'\n",
-	    diff_len,reffile);
-    
-    f=fopen(reffile,"rb");
+
+    fprintf(stderr, "Diff file is %d bytes long. Reffile is '%s'\n", diff_len, reffile);
+
+    f = fopen(reffile, "rb");
     if (!f) {
       fprintf(stderr, "ERROR: Could not read reference ROM file '%s'\n", reffile);
       perror("fopen");
@@ -199,20 +197,20 @@ int main(int argc, char** argv)
       exit(-1);
     }
     fclose(f);
-    fprintf(stderr,"Read reference ROM '%s'\n",reffile);
-    decode_diff(ref, &diff[0x100], diff_len-256, out);
-    f=fopen(argv[2],"wb");
+    fprintf(stderr, "Read reference ROM '%s'\n", reffile);
+    decode_diff(ref, &diff[0x100], diff_len - 256, out);
+    f = fopen(argv[2], "wb");
     if (!f) {
       fprintf(stderr, "ERROR: Could not write output file '%s'\n", argv[2]);
       perror("fopen");
-      exit(-1);      
+      exit(-1);
     }
     fwrite(out, FILE_SIZE, 1, f);
     fclose(f);
-    fprintf(stderr,"Successfully wrote '%s'\n",argv[2]);
+    fprintf(stderr, "Successfully wrote '%s'\n", argv[2]);
     return 0;
   }
-  
+
   if (argc != 4) {
     fprintf(stderr, "usage: romdiff <reference ROM> <new ROM> <output file>\n");
     fprintf(stderr, "       romdiff <rom diff file> <outputfile>\n");

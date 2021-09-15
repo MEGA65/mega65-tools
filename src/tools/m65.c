@@ -61,7 +61,7 @@ extern int pending_vf011_sector;
 extern int pending_vf011_side;
 
 extern int debug_serial;
-int debug_load_memory=0;
+int debug_load_memory = 0;
 
 extern unsigned char recent_bytes[4];
 
@@ -1485,7 +1485,7 @@ int main(int argc, char** argv)
   while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:uU:v:V:w:XyZ:?")) != -1) {
     switch (opt) {
     case 'y':
-      debug_load_memory=1;
+      debug_load_memory = 1;
       break;
     case 'D':
       debug_serial = 1;
@@ -1680,17 +1680,17 @@ int main(int argc, char** argv)
       fclose(f);
     }
     fprintf(stderr, "INFO: Using fpga_id %x\n", fpga_id);
-    if (!checkUSBPermissions())
-      {
-	fprintf(stderr,"WARNING: May not be able to auto-detect USB port due to insufficient permissions.\n");
-	fprintf(stderr,
-		"         You may be able to solve this problem via the following:\n"
-		"           sudo usermode -a -G dialout <your username>\n"
-		"         and then:\n"
-		"           echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | sudo tee /etc/udev/rules.d/40-xilinx.rules\n"
-		"         and then log out, and log back in again, or failing that, reboot your computer and try again.\n"
-		"\n");
-      }
+    if (!checkUSBPermissions()) {
+      fprintf(stderr, "WARNING: May not be able to auto-detect USB port due to insufficient permissions.\n");
+      fprintf(stderr,
+          "         You may be able to solve this problem via the following:\n"
+          "           sudo usermode -a -G dialout <your username>\n"
+          "         and then:\n"
+          "           echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
+          "sudo tee /etc/udev/rules.d/40-xilinx.rules\n"
+          "         and then log out, and log back in again, or failing that, reboot your computer and try again.\n"
+          "\n");
+    }
     init_fpgajtag(NULL, bitstream, fpga_id);
   }
 
@@ -1756,38 +1756,40 @@ int main(int argc, char** argv)
       push_ram(0x0800,2000,buf);
     }
 #endif
-    
-    // Switch to a graphics mode, and do similar with graphics screen and larger transfers
-    mega65_poke(0xffd3031,0x00); // 40 columns
-    mega65_poke(0xFFD3060,0x12000>>0);
-    mega65_poke(0xFFD3061,0x12000>>8);
-    mega65_poke(0xFFD3062,0x12000>>16);
-    mega65_poke(0xffd3054,0x05); 
-    
-    // Setup screen memory in columns
-    for(int y=0;y<25;y++) for(int x=0;x<40;x++) {
-	buf[y*40*2+x*2+0]=(0x1000 + y + x*25)>>0;
-	buf[y*40*2+x*2+1]=(0x1000 + y + x*25)>>8;
-      }
-    push_ram(0x12000L,4000,buf);
-    for(int y=0;y<25;y++) for(int x=0;x<40;x++) {
-	buf[y*40*2+x*2+0]=0x00;
-	buf[y*40*2+x*2+1]=0x00;
-      }
-    push_ram(0xff80000L,4000,buf);
 
-    for(int i=0;319;i++) {
-      for(int x=0;x<320;x++) {
-	for(int y=0;y<200;y++) {
-	  buf[y*8+(x>>3)*64*25+(x&7)]=i+x;
-	}
+    // Switch to a graphics mode, and do similar with graphics screen and larger transfers
+    mega65_poke(0xffd3031, 0x00); // 40 columns
+    mega65_poke(0xFFD3060, 0x12000 >> 0);
+    mega65_poke(0xFFD3061, 0x12000 >> 8);
+    mega65_poke(0xFFD3062, 0x12000 >> 16);
+    mega65_poke(0xffd3054, 0x05);
+
+    // Setup screen memory in columns
+    for (int y = 0; y < 25; y++)
+      for (int x = 0; x < 40; x++) {
+        buf[y * 40 * 2 + x * 2 + 0] = (0x1000 + y + x * 25) >> 0;
+        buf[y * 40 * 2 + x * 2 + 1] = (0x1000 + y + x * 25) >> 8;
       }
-      push_ram(0x40000L,320*200,buf);
+    push_ram(0x12000L, 4000, buf);
+    for (int y = 0; y < 25; y++)
+      for (int x = 0; x < 40; x++) {
+        buf[y * 40 * 2 + x * 2 + 0] = 0x00;
+        buf[y * 40 * 2 + x * 2 + 1] = 0x00;
+      }
+    push_ram(0xff80000L, 4000, buf);
+
+    for (int i = 0; 319; i++) {
+      for (int x = 0; x < 320; x++) {
+        for (int y = 0; y < 200; y++) {
+          buf[y * 8 + (x >> 3) * 64 * 25 + (x & 7)] = i + x;
+        }
+      }
+      push_ram(0x40000L, 320 * 200, buf);
     }
-    
+
     exit(0);
   }
-  
+
   if (zap) {
     char cmd[1024];
     monitor_sync();

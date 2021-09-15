@@ -63,7 +63,7 @@ struct tile_set* ts = NULL;
 /* ============================================================= */
 
 int x, y;
-int screen_x=0, screen_y=0;
+int screen_x = 0, screen_y = 0;
 
 int width, height;
 png_byte color_type;
@@ -101,12 +101,12 @@ struct rgb {
 
 // We only have 128KB of tile RAM, so we can't have more than 128K different
 // coloured pixels
-#define MAX_COLOURS (128*1024)
+#define MAX_COLOURS (128 * 1024)
 
 // If we have >256 colours, though, we do need to reduce the final palette down
 // to 256 colours.
-int second_pass_required=0;
-int pass_num=1;
+int second_pass_required = 0;
+int pass_num = 1;
 
 struct tile_set {
   struct tile* tiles;
@@ -122,71 +122,66 @@ struct tile_set {
   struct tile_set* next;
 };
 
-int find_nearest_colour(struct tile_set *ts,int c)
+int find_nearest_colour(struct tile_set* ts, int c)
 {
-  int nearest_id=0;
-  int error=999999999;
-  
-  for(int i=0;i<ts->colour_count;i++) 
+  int nearest_id = 0;
+  int error = 999999999;
+
+  for (int i = 0; i < ts->colour_count; i++)
     // Has colour been remapped already, or is it the same colour we are looking to approximate?
-    if ((i!=c)&&ts->target_colours[i]==i) {
-      int this_error=0
-	+abs(ts->colours[i].r-ts->colours[c].r)*abs(ts->colours[i].r-ts->colours[c].r)
-	+abs(ts->colours[i].g-ts->colours[c].g)*abs(ts->colours[i].g-ts->colours[c].g)
-	+abs(ts->colours[i].b-ts->colours[c].b)*abs(ts->colours[i].b-ts->colours[c].b);
-      if (this_error<error) { nearest_id=i; error=this_error; }
+    if ((i != c) && ts->target_colours[i] == i) {
+      int this_error = 0 + abs(ts->colours[i].r - ts->colours[c].r) * abs(ts->colours[i].r - ts->colours[c].r)
+                     + abs(ts->colours[i].g - ts->colours[c].g) * abs(ts->colours[i].g - ts->colours[c].g)
+                     + abs(ts->colours[i].b - ts->colours[c].b) * abs(ts->colours[i].b - ts->colours[c].b);
+      if (this_error < error) {
+        nearest_id = i;
+        error = this_error;
+      }
     }
 
   return nearest_id;
 }
 
-void quantise_colours(struct tile_set *ts)
+void quantise_colours(struct tile_set* ts)
 {
   // Start with all colours mapped to themselves.
-  for(int i=0;i<ts->colour_count;i++)
-    ts->target_colours[i]=i;
+  for (int i = 0; i < ts->colour_count; i++)
+    ts->target_colours[i] = i;
 
-  int colour_count=ts->colour_count;
-  while(colour_count>255) {
-    int freq=999999999;
-    int colour_num=99999999;
+  int colour_count = ts->colour_count;
+  while (colour_count > 255) {
+    int freq = 999999999;
+    int colour_num = 99999999;
     // Don't remap the C64 normal 16 colours
-    for(int i=16;i<ts->colour_count;i++) {
+    for (int i = 16; i < ts->colour_count; i++) {
       // Has colour been remapped already?
-      if (ts->target_colours[i]==i) {
-	// No, so check its frequency to see if it is the next rarest colour
-	if (ts->colour_counts[i]<freq) {
-	  freq=ts->colour_counts[i];
-	  colour_num=i;
-	}
+      if (ts->target_colours[i] == i) {
+        // No, so check its frequency to see if it is the next rarest colour
+        if (ts->colour_counts[i] < freq) {
+          freq = ts->colour_counts[i];
+          colour_num = i;
+        }
       }
     }
-    
+
     // Find the nearest colour to this one
-    int nearest_colour=find_nearest_colour(ts,colour_num);
-    ts->target_colours[colour_num]=nearest_colour;
+    int nearest_colour = find_nearest_colour(ts, colour_num);
+    ts->target_colours[colour_num] = nearest_colour;
 
     // Increase the weighting of the colour we have switched to
-    ts->colour_counts[nearest_colour]+=ts->colour_counts[colour_num];
+    ts->colour_counts[nearest_colour] += ts->colour_counts[colour_num];
 
-    printf("Removing rarely used colour #%d (used %d times): Mapping #%02x%02x%02x -> #%02x%02x%02x\n",
-	   colour_num,freq,
-	   ts->colours[colour_num].r,
-	   ts->colours[colour_num].g,
-	   ts->colours[colour_num].b,
-	   ts->colours[nearest_colour].r,
-	   ts->colours[nearest_colour].g,
-	   ts->colours[nearest_colour].b
-	   );
-    
-    
+    printf("Removing rarely used colour #%d (used %d times): Mapping #%02x%02x%02x -> #%02x%02x%02x\n", colour_num, freq,
+        ts->colours[colour_num].r, ts->colours[colour_num].g, ts->colours[colour_num].b, ts->colours[nearest_colour].r,
+        ts->colours[nearest_colour].g, ts->colours[nearest_colour].b);
+
     colour_count--;
   }
 }
 
-void palette_c64_init(struct tile_set *ts)
+void palette_c64_init(struct tile_set* ts)
 {
-    // Pre-load in C64 palette, so that those colours can be re-used if required
+  // Pre-load in C64 palette, so that those colours can be re-used if required
 
   ts->colours[0] = (struct rgb) { .r = 0, .g = 0, .b = 0 };
   ts->colours[1] = (struct rgb) { .r = 0xff, .g = 0xff, .b = 0xff };
@@ -205,7 +200,7 @@ void palette_c64_init(struct tile_set *ts)
   ts->colours[14] = (struct rgb) { .r = 0xaa, .g = 0x9d, .b = 0xef };
   ts->colours[15] = (struct rgb) { .r = 0xb8, .g = 0xb8, .b = 0xb8 };
   ts->colour_count = 16;
-  fprintf(stderr,"Setup C64 palette.\n");
+  fprintf(stderr, "Setup C64 palette.\n");
 }
 
 int palette_lookup(struct tile_set* ts, int r, int g, int b)
@@ -216,11 +211,12 @@ int palette_lookup(struct tile_set* ts, int r, int g, int b)
   for (i = 0; i < ts->colour_count; i++) {
     if (r == ts->colours[i].r && g == ts->colours[i].g && b == ts->colours[i].b) {
       // It's a colour we have seen before, so return the index
-      if (pass_num==1) ts->colour_counts[i]++;
-      if (pass_num==2) {
-	// Resolve remapped/merged colours
-	while(ts->target_colours[i]!=i)
-	  i=ts->target_colours[i];
+      if (pass_num == 1)
+        ts->colour_counts[i]++;
+      if (pass_num == 2) {
+        // Resolve remapped/merged colours
+        while (ts->target_colours[i] != i)
+          i = ts->target_colours[i];
       }
       return i;
     }
@@ -229,14 +225,14 @@ int palette_lookup(struct tile_set* ts, int r, int g, int b)
   // new colour, check if palette has space
   if (ts->colour_count == 256) {
     fprintf(stderr, "WARNING: Image has many colours. A second pass will be required.\n");
-    second_pass_required=1;
+    second_pass_required = 1;
   }
 
   // allocate the new colour
   ts->colours[ts->colour_count].r = r;
   ts->colours[ts->colour_count].g = g;
   ts->colours[ts->colour_count].b = b;
-  ts->colour_counts[ts->colour_count]=1;
+  ts->colour_counts[ts->colour_count] = 1;
   return ts->colour_count++;
 }
 
@@ -375,44 +371,46 @@ struct screen* png_to_screen(int id, struct tile_set* ts)
 {
   int x, y;
 
-  struct screen* s = new_screen(id, ts, 1+ ( width / 8),1 +( height / 8));
+  struct screen* s = new_screen(id, ts, 1 + (width / 8), 1 + (height / 8));
 
   for (y = 0; y < height; y += 8)
     for (x = 0; x < width; x += 8) {
       int transparent_tile = 1;
       struct tile t;
       for (int yy = 0; yy < 8; yy++) {
-	if ((yy+y)<height) {
-	  png_byte* row = row_pointers[yy + y];
-	  for (int xx = 0; xx < 8; xx++) {
-	    int r, g, b, a, c;
-	    if ((xx+x)<width) {
-	      png_byte* ptr = &(row[(xx + x) * multiplier]);
-	      r = ptr[0];
-	      g = ptr[1];
-	      b = ptr[2];
-	      if (multiplier == 4)
-		a = ptr[3];
-	      else
-		a = 0xff;
-	      if (a) {
-		transparent_tile = 0;
-		c = palette_lookup(ts, r, g, b);
-	      }
-	      else
-		c = 0;
-	    } else {
-	      // Off edge of image
-	      c=0;
-	    }
-	    t.bytes[xx][yy] = c;
-	  }
-	} else {
-	  // Off edge of image
-	  for (int xx = 0; xx < 8; xx++) {
-	    t.bytes[xx][yy] = 0;
-	  }
-	}
+        if ((yy + y) < height) {
+          png_byte* row = row_pointers[yy + y];
+          for (int xx = 0; xx < 8; xx++) {
+            int r, g, b, a, c;
+            if ((xx + x) < width) {
+              png_byte* ptr = &(row[(xx + x) * multiplier]);
+              r = ptr[0];
+              g = ptr[1];
+              b = ptr[2];
+              if (multiplier == 4)
+                a = ptr[3];
+              else
+                a = 0xff;
+              if (a) {
+                transparent_tile = 0;
+                c = palette_lookup(ts, r, g, b);
+              }
+              else
+                c = 0;
+            }
+            else {
+              // Off edge of image
+              c = 0;
+            }
+            t.bytes[xx][yy] = c;
+          }
+        }
+        else {
+          // Off edge of image
+          for (int xx = 0; xx < 8; xx++) {
+            t.bytes[xx][yy] = 0;
+          }
+        }
       }
       if (transparent_tile) {
         // Set screen and colour bytes to all $00 to indicate
@@ -427,15 +425,15 @@ struct screen* png_to_screen(int id, struct tile_set* ts)
         // or lookup to see if it is already there.
         int tile_number = tile_lookup(ts, &t);
 
-	// Adjust tile number in screen data for address of tile in RAM
-	tile_number += (0x40000 / 0x40);
-	
+        // Adjust tile number in screen data for address of tile in RAM
+        tile_number += (0x40000 / 0x40);
+
         s->screen_rows[y / 8][x / 8 * 2 + 0] = tile_number & 0xff;
         s->screen_rows[y / 8][x / 8 * 2 + 1] = (tile_number >> 8) & 0xff;
         s->colourram_rows[y / 8][x / 8 * 2 + 0] = 0x00;
-	// FG colour
-	// XXX Must be <$10, as we have VIC-III attributes enabled
-        s->colourram_rows[y / 8][x / 8 * 2 + 1] = 0x00; 
+        // FG colour
+        // XXX Must be <$10, as we have VIC-III attributes enabled
+        s->colourram_rows[y / 8][x / 8 * 2 + 1] = 0x00;
       }
     }
   return s;
@@ -515,149 +513,153 @@ void read_png_file(char* file_name)
 /* ============================================================= */
 
 // Only 24KB colour RAM and screen RAM available
-#define MAX_COLOURRAM_SIZE (24*1024)
+#define MAX_COLOURRAM_SIZE (24 * 1024)
 
 int i, x = 0, y = 0;
-int colour=14; // C64 light blue by default
+int colour = 14; // C64 light blue by default
 unsigned char text_colour = 14;
 unsigned char text_colour_saved = 14;
 unsigned char indent = 0;
 unsigned char attributes = 0;
 unsigned char screen_ram[MAX_COLOURRAM_SIZE];
 unsigned char colour_ram[MAX_COLOURRAM_SIZE];
-const int max_lines = (MAX_COLOURRAM_SIZE / (80*2));
-unsigned int screen_ram_used=0;
-unsigned int in_paragraph=0;
+const int max_lines = (MAX_COLOURRAM_SIZE / (80 * 2));
+unsigned int screen_ram_used = 0;
+unsigned int in_paragraph = 0;
 #define MAX_URLS 255
 #define MAX_URL_LEN 255
 char urls[MAX_URLS][MAX_URL_LEN];
 int url_addrs[MAX_URLS];
-int url_count=0;
-int bounding_box_count=0;
+int url_count = 0;
+int bounding_box_count = 0;
 struct bounding_box {
   int url_id;
-  int x1,x2,y1,y2;
+  int x1, x2, y1, y2;
 };
 #define MAX_LINKS 4096
 struct bounding_box url_boxes[MAX_LINKS];
-int link_count=0;
+int link_count = 0;
 
-void register_box(int url_id,int x1,int y1,int x2,int y2)
+void register_box(int url_id, int x1, int y1, int x2, int y2)
 {
-  for(int i=0;i<link_count;i++) {
-    if (url_boxes[i].url_id==url_id
-	&&url_boxes[i].x1==x1
-	&&url_boxes[i].y1==y1
-	&&url_boxes[i].x2==x2
-	&&url_boxes[i].y2==y2) return;
+  for (int i = 0; i < link_count; i++) {
+    if (url_boxes[i].url_id == url_id && url_boxes[i].x1 == x1 && url_boxes[i].y1 == y1 && url_boxes[i].x2 == x2
+        && url_boxes[i].y2 == y2)
+      return;
   }
-  if (link_count>=MAX_LINKS) {
-    fprintf(stderr,"ERROR: Too many link sources. Increase MAX_LINKS?\n");
+  if (link_count >= MAX_LINKS) {
+    fprintf(stderr, "ERROR: Too many link sources. Increase MAX_LINKS?\n");
     exit(-1);
   }
 
-  url_boxes[link_count].url_id=url_id;
-  url_boxes[link_count].x1=x1;
-  url_boxes[link_count].y1=y1;
-  url_boxes[link_count].x2=x2;
-  url_boxes[link_count++].y2=y2;
-  
+  url_boxes[link_count].url_id = url_id;
+  url_boxes[link_count].x1 = x1;
+  url_boxes[link_count].y1 = y1;
+  url_boxes[link_count].x2 = x2;
+  url_boxes[link_count++].y2 = y2;
 }
 
-int register_url(char *url)
+int register_url(char* url)
 {
-  for(int i=0;i<url_count;i++) {
-    if (!strcmp(url,urls[i])) return i;
+  for (int i = 0; i < url_count; i++) {
+    if (!strcmp(url, urls[i]))
+      return i;
   }
-  if (url_count>=MAX_URLS) {
-    fprintf(stderr,"ERROR: Too many URLs. Increase MAX_URLS?\n");
+  if (url_count >= MAX_URLS) {
+    fprintf(stderr, "ERROR: Too many URLs. Increase MAX_URLS?\n");
     exit(-1);
   }
-  strcpy(urls[url_count++],url);
-  return url_count-1;
+  strcpy(urls[url_count++], url);
+  return url_count - 1;
 }
 
 #define MAX_ATTRIBUTES 16
 char attribute_keys[MAX_ATTRIBUTES][1024];
 char attribute_values[MAX_ATTRIBUTES][1024];
-int attribute_count=0;
+int attribute_count = 0;
 
-void parse_attributes(char *in)
+void parse_attributes(char* in)
 {
-  fprintf(stderr,"Parsing attribute string '%s'\n",in);
-  attribute_count=0;
+  fprintf(stderr, "Parsing attribute string '%s'\n", in);
+  attribute_count = 0;
   char key[1024];
   char value[1024];
-  int klen=0;
-  int vlen=0;
-  int state=0;
-  for(int i=0;in[i];i++) {
-    switch(state) {
+  int klen = 0;
+  int vlen = 0;
+  int state = 0;
+  for (int i = 0; in[i]; i++) {
+    switch (state) {
     case 0:
-      switch(in[i]) {
+      switch (in[i]) {
       case ',': // next attribute (end of keyword)
-	if (klen) {
-	  if (attribute_count>=MAX_ATTRIBUTES) {
-	    fprintf(stderr,"ERROR: Too many attributes in attribute string '%s'\n",in);
-	    exit(-1);
-	  }
-	  strcpy(attribute_keys[attribute_count],key);
-	  attribute_values[attribute_count++][0]=0;
-	  klen=0;
-	}
-	break;
+        if (klen) {
+          if (attribute_count >= MAX_ATTRIBUTES) {
+            fprintf(stderr, "ERROR: Too many attributes in attribute string '%s'\n", in);
+            exit(-1);
+          }
+          strcpy(attribute_keys[attribute_count], key);
+          attribute_values[attribute_count++][0] = 0;
+          klen = 0;
+        }
+        break;
       case '=': // value follows
-	state=1;
-	break;
+        state = 1;
+        break;
       default:
-	if (klen<1023) key[klen++]=in[i];
-	key[klen]=0;
+        if (klen < 1023)
+          key[klen++] = in[i];
+        key[klen] = 0;
       }
       break;
     case 1: // value of key=val pair
-      switch(in[i]) {
+      switch (in[i]) {
       case ',':
-	// End of attribute
-	if (attribute_count>=MAX_ATTRIBUTES) {
-	  fprintf(stderr,"ERROR: Too many attributes in attribute string '%s'\n",in);
-	  exit(-1);
-	}
-	strcpy(attribute_keys[attribute_count],key);
-	strcpy(attribute_values[attribute_count++],value);
-	fprintf(stderr,"Attrib tag: '%s'='%s'\n",key,value);
-	klen=0; vlen=0;
-	state=0;
-	break;
+        // End of attribute
+        if (attribute_count >= MAX_ATTRIBUTES) {
+          fprintf(stderr, "ERROR: Too many attributes in attribute string '%s'\n", in);
+          exit(-1);
+        }
+        strcpy(attribute_keys[attribute_count], key);
+        strcpy(attribute_values[attribute_count++], value);
+        fprintf(stderr, "Attrib tag: '%s'='%s'\n", key, value);
+        klen = 0;
+        vlen = 0;
+        state = 0;
+        break;
       default:
-	if (vlen<1023) value[vlen++]=in[i];
-	value[vlen]=0;
-    }
+        if (vlen < 1023)
+          value[vlen++] = in[i];
+        value[vlen] = 0;
+      }
     }
   }
-  if (state==1) {
-    strcpy(attribute_keys[attribute_count],key);
-    strcpy(attribute_values[attribute_count++],value);
-    fprintf(stderr,"Attrib tag: '%s'='%s'\n",key,value);
+  if (state == 1) {
+    strcpy(attribute_keys[attribute_count], key);
+    strcpy(attribute_values[attribute_count++], value);
+    fprintf(stderr, "Attrib tag: '%s'='%s'\n", key, value);
   }
-
 }
 
-char *get_attribute(char *key)
+char* get_attribute(char* key)
 {
-  for(int i=0;i<attribute_count;i++) {
-    if (!strcmp(key,attribute_keys[i])) return attribute_values[i];
+  for (int i = 0; i < attribute_count; i++) {
+    if (!strcmp(key, attribute_keys[i]))
+      return attribute_values[i];
   }
   return NULL;
 }
-  
+
 void emit_paragraph(void)
 {
   // End a previous paragraph, if one was started.
   if (in_paragraph) {
-    if (screen_x) screen_y+=2; else screen_y++;
-    screen_x=0;
-    in_paragraph=0;
-    indent=0;
+    if (screen_x)
+      screen_y += 2;
+    else
+      screen_y++;
+    screen_x = 0;
+    in_paragraph = 0;
+    indent = 0;
   }
 }
 
@@ -665,10 +667,11 @@ void emit_paragraph_no_gap(void)
 {
   // End a previous paragraph, if one was started.
   if (in_paragraph) {
-    if (screen_x) screen_y+=1;
-    screen_x=0;
-    in_paragraph=0;
-    indent=0;
+    if (screen_x)
+      screen_y += 1;
+    screen_x = 0;
+    in_paragraph = 0;
+    indent = 0;
   }
 }
 
@@ -676,12 +679,13 @@ unsigned char ascii_to_screen_code(unsigned char c)
 {
   // Nothing to do when using the ASCII font
   return c;
-  
+
   // XXX Fold lower to upper case for now
   // if (c>='a'&&c<='z') c=c^0x20;
 }
 
-void emit_word(char *word) {
+void emit_word(char* word)
+{
   /* Check for special formatting options:
      - Begins with * = enable bold/italic etc
      - Begins with ! = show image
@@ -697,159 +701,173 @@ void emit_word(char *word) {
      In fact, initially, we will support only bold = **text goes here**
   */
 
-  int start=0,x1,y1;
-  int end=strlen(word);
+  int start = 0, x1, y1;
+  int end = strlen(word);
 
-  in_paragraph=1;
-  
-  if (word[0]=='*'&&word[1]=='*') {
+  in_paragraph = 1;
+
+  if (word[0] == '*' && word[1] == '*') {
     // Bold
-    text_colour_saved=text_colour;
-    text_colour=7; // bold = yellow
-    start=2;
-  } else if (word[0]=='[') {
-    char text[2048]="",theurl[2048]="";
+    text_colour_saved = text_colour;
+    text_colour = 7; // bold = yellow
+    start = 2;
+  }
+  else if (word[0] == '[') {
+    char text[2048] = "", theurl[2048] = "";
     // [text](url) -- A link
     // NOT have any spaces in at the moment.
-    if (sscanf(word,"[%[^]]](%[^)])",text,theurl)==2) {
+    if (sscanf(word, "[%[^]]](%[^)])", text, theurl) == 2) {
       // Emit word and get the dimensions for it
-      attributes=0x80; // underline links
-      text_colour_saved=text_colour;
-      text_colour=0x04; // purple text
-      x1=screen_x; y1=screen_y;
+      attributes = 0x80; // underline links
+      text_colour_saved = text_colour;
+      text_colour = 0x04; // purple text
+      x1 = screen_x;
+      y1 = screen_y;
       emit_word(text);
-      if (screen_y>y1) { x1=0; y1=screen_y; }
-      text_colour=text_colour_saved;
-      attributes=0;
-      word[0]=0; end=0;
-      
-      int url_id=register_url(theurl);
-      register_box(url_id,x1,y1,screen_x,screen_y);
+      if (screen_y > y1) {
+        x1 = 0;
+        y1 = screen_y;
+      }
+      text_colour = text_colour_saved;
+      attributes = 0;
+      word[0] = 0;
+      end = 0;
+
+      int url_id = register_url(theurl);
+      register_box(url_id, x1, y1, screen_x, screen_y);
     }
-  } else if (word[0]=='!'&&word[1]=='[') {
-    char alttext[2048]="",imgname[2048]="";
+  }
+  else if (word[0] == '!' && word[1] == '[') {
+    char alttext[2048] = "", imgname[2048] = "";
     // ![alt-text](imagefile.png)
     // Currently we only support PNG images, and the alt text must
     // NOT have any spaces in at the moment.
-    if (sscanf(word,"![%[^]]](%[^)])",alttext,imgname)==2) {
+    if (sscanf(word, "![%[^]]](%[^)])", alttext, imgname) == 2) {
       read_png_file(imgname);
       struct screen* s = png_to_screen(0, ts);
 
       // Check if the image has a link
       parse_attributes(alttext);
       if (get_attribute("href")) {
-	int url_id=register_url(get_attribute("href"));
-	register_box(url_id,screen_x,screen_y,screen_x+s->width-1,screen_y+s->height-1);
-      }
-      
-      if (s->width>80||(s->height+screen_y)>max_lines) {
-	fprintf(stderr,"WARNING: Not enough space left on page to fit image '%s'\n",
-		imgname);
-      } else {
-	// Make sure we are on a fresh line before displaying an image,
-	// but don't force a blank line, so images and text can be placed
-	// flush
-	emit_paragraph_no_gap();
-
-	// Draw the image on the screen and colour RAM
-	for (y = 0; y < s->height; y++) {
-	  bcopy(&s->screen_rows[y][0], &screen_ram[(screen_y+y)*80*2],s->width*2);
-	  bcopy(&s->colourram_rows[y][0], &colour_ram[(screen_y+y)*80*2],s->width*2);
-	}
-	// Now advance our draw point to after the image
-	screen_y+=s->height;
+        int url_id = register_url(get_attribute("href"));
+        register_box(url_id, screen_x, screen_y, screen_x + s->width - 1, screen_y + s->height - 1);
       }
 
-      
-    } else {
-      fprintf(stderr,"WARNING: Could not parse image reference:\n  %s\n",word);
-      fprintf(stderr,"         (Don't forget alt text must be present, and NOT have any spaces in it).\n");
-      fprintf(stderr,"         imgname='%s', alttext='%s'\n",imgname,alttext);
+      if (s->width > 80 || (s->height + screen_y) > max_lines) {
+        fprintf(stderr, "WARNING: Not enough space left on page to fit image '%s'\n", imgname);
+      }
+      else {
+        // Make sure we are on a fresh line before displaying an image,
+        // but don't force a blank line, so images and text can be placed
+        // flush
+        emit_paragraph_no_gap();
+
+        // Draw the image on the screen and colour RAM
+        for (y = 0; y < s->height; y++) {
+          bcopy(&s->screen_rows[y][0], &screen_ram[(screen_y + y) * 80 * 2], s->width * 2);
+          bcopy(&s->colourram_rows[y][0], &colour_ram[(screen_y + y) * 80 * 2], s->width * 2);
+        }
+        // Now advance our draw point to after the image
+        screen_y += s->height;
+      }
+    }
+    else {
+      fprintf(stderr, "WARNING: Could not parse image reference:\n  %s\n", word);
+      fprintf(stderr, "         (Don't forget alt text must be present, and NOT have any spaces in it).\n");
+      fprintf(stderr, "         imgname='%s', alttext='%s'\n", imgname, alttext);
     }
     // Don't output the image markdown
-    word[0]=0;
-    end=0;
-    start=0;
-  } 
-  if (word[end-2]=='*'&&word[end-1]=='*') {
-    end-=2;
+    word[0] = 0;
+    end = 0;
+    start = 0;
+  }
+  if (word[end - 2] == '*' && word[end - 1] == '*') {
+    end -= 2;
   }
 
-  int len=end-start;
-  if ((80-screen_x)<len) {
-    screen_y++; screen_x=indent;
+  int len = end - start;
+  if ((80 - screen_x) < len) {
+    screen_y++;
+    screen_x = indent;
   }
-  for(int xx=start;xx<end;xx++) {
-    if (screen_x>=80) {
-      screen_x=0; screen_y++;
+  for (int xx = start; xx < end; xx++) {
+    if (screen_x >= 80) {
+      screen_x = 0;
+      screen_y++;
     }
-    if (screen_y*160+screen_x*2<MAX_COLOURRAM_SIZE) {
-      screen_ram[screen_y*160+screen_x*2+0]=ascii_to_screen_code(word[xx]);
-      colour_ram[screen_y*160+screen_x*2+0]=0;
-      colour_ram[screen_y*160+screen_x*2+1]=text_colour+attributes;
+    if (screen_y * 160 + screen_x * 2 < MAX_COLOURRAM_SIZE) {
+      screen_ram[screen_y * 160 + screen_x * 2 + 0] = ascii_to_screen_code(word[xx]);
+      colour_ram[screen_y * 160 + screen_x * 2 + 0] = 0;
+      colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
     }
     screen_x++;
   }
 
-  end=strlen(word);
-  if (word[end-2]=='*'&&word[end-1]=='*') {
-    text_colour=text_colour_saved; // end of bold
+  end = strlen(word);
+  if (word[end - 2] == '*' && word[end - 1] == '*') {
+    text_colour = text_colour_saved; // end of bold
   }
-  
 }
 
-void emit_text(char *text)
+void emit_text(char* text)
 {
   // Emit the text
-  int last_was_word=0;
+  int last_was_word = 0;
   char word[1024];
-  int word_len=0;
+  int word_len = 0;
 
-  if (screen_x>indent) {
+  if (screen_x > indent) {
     // Emit a space before the text, if we are not the first
     // thing on the line.
-    colour_ram[screen_y*160+screen_x*2+1]=text_colour+attributes;      
+    colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
     screen_x++;
-    if (screen_x>=80) { screen_y++; screen_x=indent; }
+    if (screen_x >= 80) {
+      screen_y++;
+      screen_x = indent;
+    }
   }
-  
+
   // Emit word at a time, so that we can find special token
-  for(int i=0;text[i];i++) {
-    if (text[i]==' '||text[i]=='\t'||text[i]=='\n'||text[i]=='\r') {
-      word[word_len]=0;
+  for (int i = 0; text[i]; i++) {
+    if (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r') {
+      word[word_len] = 0;
       if (word_len) {
-	emit_word(word);
-	last_was_word=1;
+        emit_word(word);
+        last_was_word = 1;
       }
-      word_len=0;
-    } else word[word_len++]=text[i];
+      word_len = 0;
+    }
+    else
+      word[word_len++] = text[i];
 
     if (last_was_word) {
-      if (text[i]==' '||text[i]=='\t') {
-	// Emit a space after the word if required.
-	colour_ram[screen_y*160+screen_x*2+1]=text_colour+attributes;      
-	screen_x++;
-	if (screen_x>=80) { screen_y++; screen_x=indent; }
+      if (text[i] == ' ' || text[i] == '\t') {
+        // Emit a space after the word if required.
+        colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
+        screen_x++;
+        if (screen_x >= 80) {
+          screen_y++;
+          screen_x = indent;
+        }
       }
-      last_was_word=0;
+      last_was_word = 0;
     }
-    
   }
 
   // Output any final word
   if (word_len) {
-    word[word_len]=0;
+    word[word_len] = 0;
     emit_word(word);
-
   }
 }
 
-int do_pass(char **argv)
-{  
+int do_pass(char** argv)
+{
   unsigned char block_header[8];
 
-  screen_x=0; screen_y=0;
-  
+  screen_x = 0;
+  screen_y = 0;
+
   // Initialise screen and colour RAM
   bzero(colour_ram, sizeof(colour_ram));
   for (i = 0; i < MAX_COLOURRAM_SIZE; i += 2) {
@@ -874,28 +892,30 @@ int do_pass(char **argv)
   line[0] = 0;
   fgets(line, 1024, infile);
   while (line[0]) {
-    if (line[0]=='#') {
+    if (line[0] == '#') {
       emit_paragraph();
       // Heading
-      text_colour=1; // white text for headings
-      attributes=0x80; // underline for headings
+      text_colour = 1;   // white text for headings
+      attributes = 0x80; // underline for headings
       emit_text(&line[2]);
-      text_colour=14;
+      text_colour = 14;
       emit_paragraph();
-    } else if (line[0]=='\n'||line[0]=='\r') {
+    }
+    else if (line[0] == '\n' || line[0] == '\r') {
       // Blank line = paragraph break
       emit_paragraph();
-    } else {      
+    }
+    else {
       // Normal text
-      attributes=0; // cancel underline from a heading
-      emit_text(&line[0]);      
+      attributes = 0; // cancel underline from a heading
+      emit_text(&line[0]);
     }
     line[0] = 0;
     fgets(line, 1024, infile);
   }
 
-  screen_ram_used=screen_y*160+screen_x*2;
-  
+  screen_ram_used = screen_y * 160 + screen_x * 2;
+
   printf("Writing headers...\n");
   unsigned char header[128];
   bzero(header, sizeof(header));
@@ -932,7 +952,7 @@ int do_pass(char **argv)
   // $D016 value
   // ($C9 for 80 colums, $C8 for 40 columns for VIC-III but compatibility)
   header[16] = 0xC9;
-  
+
   // Write header out
   fwrite(header, 128, 1, outfile);
 
@@ -994,7 +1014,7 @@ int do_pass(char **argv)
   block_header[7] = 0x00;
   fwrite(block_header, 8, 1, outfile);
   // Colour RAM
-  fwrite(ascii_font, 0x0800, 1, outfile);  
+  fwrite(ascii_font, 0x0800, 1, outfile);
 
   if (ts->tile_count) {
     // Header for tiles at $40000
@@ -1007,29 +1027,29 @@ int do_pass(char **argv)
     block_header[6] = ((ts->tile_count * 64) >> 16) & 0xff;
     block_header[7] = ((ts->tile_count * 64) >> 24) & 0xff;
     fwrite(block_header, 8, 1, outfile);
-    
+
     printf("Writing tiles");
     fflush(stdout);
     for (i = 0; i < ts->tile_count; i++) {
       unsigned char tile[64];
       for (y = 0; y < 8; y++)
-	for (x = 0; x < 8; x++)
-	  tile[y * 8 + x] = ts->tiles[i].bytes[x][y];
+        for (x = 0; x < 8; x++)
+          tile[y * 8 + x] = ts->tiles[i].bytes[x][y];
       fwrite(tile, 64, 1, outfile);
       printf(".");
       fflush(stdout);
     }
     printf("\n");
   }
-  
+
   /* Build and write URL list
      Build and write hyperlink bounding box list.
 
      These both live in a shared 30KB segment in BANK 1 from
      $18000 to $1F7FF.
 
-     The URLs can actually go anywhere in BANK 1, but the 
-     list of bounding boxes has to start at $18000 and grows 
+     The URLs can actually go anywhere in BANK 1, but the
+     list of bounding boxes has to start at $18000 and grows
      upwards.  $18000 and $18001 is the number of bounding
      boxes.  Then each box consists of 6 bytes:
            (url_addr (16 bits), x1, y1, x2, y2)
@@ -1038,38 +1058,39 @@ int do_pass(char **argv)
      XXX - We use all 32KB regardless of how much we need, which
      increases file size unnecessarily.
   */
-  fprintf(stderr,"File contains %d link bounding boxes, pointing to %d URLs.\n",link_count,url_count);
+  fprintf(stderr, "File contains %d link bounding boxes, pointing to %d URLs.\n", link_count, url_count);
   if (link_count) {
-    unsigned char url_data[30*1024];
-    bzero(url_data,30*1024);
-    int url_data_ofs=30*1024;
-    for(int i=0;i<url_count;i++) {
-      url_data_ofs-=1+strlen(urls[i]);
-      if (url_data_ofs<2) {
-	fprintf(stderr,"ERROR: URLs are too big. Split page or use relativel links perhaps?\n");
-	exit(-1);
+    unsigned char url_data[30 * 1024];
+    bzero(url_data, 30 * 1024);
+    int url_data_ofs = 30 * 1024;
+    for (int i = 0; i < url_count; i++) {
+      url_data_ofs -= 1 + strlen(urls[i]);
+      if (url_data_ofs < 2) {
+        fprintf(stderr, "ERROR: URLs are too big. Split page or use relativel links perhaps?\n");
+        exit(-1);
       }
-      url_addrs[i]=url_data_ofs;
-      bcopy(urls[i],&url_data[url_data_ofs],1+strlen(urls[i]));
-      printf("'%s' @ $%04x\n",urls[i],url_data_ofs);
+      url_addrs[i] = url_data_ofs;
+      bcopy(urls[i], &url_data[url_data_ofs], 1 + strlen(urls[i]));
+      printf("'%s' @ $%04x\n", urls[i], url_data_ofs);
     }
     // Number of links
-    url_data[0]=link_count>>0;
-    url_data[1]=link_count>>8;
+    url_data[0] = link_count >> 0;
+    url_data[1] = link_count >> 8;
     // The 6 byte records per link
-    int url_box_ofs=2;
-    for(int i=0;i<link_count;i++) {
-      if ((url_box_ofs+5)>=url_data_ofs) {
-	fprintf(stderr,"ERROR: URL area overflowed: Reduce number and/or length of URLs, and/or length and number of links.\n");
-	exit(-1);
+    int url_box_ofs = 2;
+    for (int i = 0; i < link_count; i++) {
+      if ((url_box_ofs + 5) >= url_data_ofs) {
+        fprintf(
+            stderr, "ERROR: URL area overflowed: Reduce number and/or length of URLs, and/or length and number of links.\n");
+        exit(-1);
       }
-      url_data[url_box_ofs+0]=url_addrs[url_boxes[i].url_id]>>0;
-      url_data[url_box_ofs+1]=url_addrs[url_boxes[i].url_id]>>8;
-      url_data[url_box_ofs+2]=url_boxes[i].x1;
-      url_data[url_box_ofs+3]=url_boxes[i].y1;
-      url_data[url_box_ofs+4]=url_boxes[i].x2;
-      url_data[url_box_ofs+5]=url_boxes[i].y2;
-      url_box_ofs+=6;
+      url_data[url_box_ofs + 0] = url_addrs[url_boxes[i].url_id] >> 0;
+      url_data[url_box_ofs + 1] = url_addrs[url_boxes[i].url_id] >> 8;
+      url_data[url_box_ofs + 2] = url_boxes[i].x1;
+      url_data[url_box_ofs + 3] = url_boxes[i].y1;
+      url_data[url_box_ofs + 4] = url_boxes[i].x2;
+      url_data[url_box_ofs + 5] = url_boxes[i].y2;
+      url_box_ofs += 6;
     }
     // Header for URL data at $18000
     block_header[0] = 0x00;
@@ -1081,18 +1102,18 @@ int do_pass(char **argv)
     block_header[6] = 0x00;
     block_header[7] = 0x00;
     fwrite(block_header, 8, 1, outfile);
-    fwrite(url_data,30*1024,1,outfile);
+    fwrite(url_data, 30 * 1024, 1, outfile);
   }
-  
+
   // Write end of file marker
   bzero(block_header, 8);
   fwrite(block_header, 8, 1, outfile);
 
   // Write 1500 bytes of nulls at the end, to work around WeeIP data-on-close
   // bug
-  bzero(screen_ram,1500);
-  fwrite(screen_ram,1500,1,outfile);
-  
+  bzero(screen_ram, 1500);
+  fwrite(screen_ram, 1500, 1, outfile);
+
   if (outfile != NULL) {
     fclose(outfile);
     outfile = NULL;
@@ -1114,14 +1135,13 @@ int main(int argc, char** argv)
   // Allow upto 128KB of tiles
   ts = new_tileset(128 * 1024 / 64);
   palette_c64_init(ts);
-  
+
   do_pass(argv);
-  pass_num=2;
+  pass_num = 2;
   if (second_pass_required) {
-    fprintf(stderr,"Quantising colours for 2nd pass.\n");
+    fprintf(stderr, "Quantising colours for 2nd pass.\n");
     quantise_colours(ts);
-    fprintf(stderr,"Running 2nd pass.\n");
+    fprintf(stderr, "Running 2nd pass.\n");
     do_pass(argv);
   }
 }
-
