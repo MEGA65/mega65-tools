@@ -958,59 +958,57 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
   //  monitor_sync();
   time_t last_rx = 0;
   while (addr < (address + count)) {
-    {
-      if ((last_rx < time(0)) || (addr == end_addr)) {
-        //	printf("no response for 1 sec: Requesting more.\n");
-        if ((address + count - addr) < 17) {
-          snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
-          end_addr = addr + 0x10;
-        }
-        else {
-          snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
-          end_addr = addr + 0x100;
-        }
-        //	printf("Sending '%s'\n",cmd);
-        slow_write_safe(fd, cmd, strlen(cmd));
-        last_rx = time(0);
+    if ((last_rx < time(0)) || (addr == end_addr)) {
+      //	printf("no response for 1 sec: Requesting more.\n");
+      if ((address + count - addr) < 17) {
+        snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
+        end_addr = addr + 0x10;
       }
-      snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
-      int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
-      if (b <= 0)
-        b = 0;
-      //            else
-      //	      printf("%s\n", read_buff);
-      if ((ofs + b) > 8191)
-        b = 8191 - ofs;
-      //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
-      read_buff[ofs + b] = 0;
-      ofs += b;
-      char* s = strstr((char*)read_buff, next_addr_str);
-      if (s && (strlen(s) >= 42)) {
-        char b = s[42];
-        s[42] = 0;
-        if (0) {
-          printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
-        }
-        s[42] = b;
-        for (int i = 0; i < 16; i++) {
-
-          // Don't write more bytes than requested
-          if ((addr - address + i) >= count)
-            break;
-
-          char hex[3];
-          hex[0] = s[1 + 10 + i * 2 + 0];
-          hex[1] = s[1 + 10 + i * 2 + 1];
-          hex[2] = 0;
-          buffer[addr - address + i] = strtol(hex, NULL, 16);
-        }
-        addr += 16;
-
-        // Shuffle buffer down
-        int s_offset = (long long)s - (long long)read_buff + 42;
-        bcopy(&read_buff[s_offset], &read_buff[0], 8192 - (ofs - s_offset));
-        ofs -= s_offset;
+      else {
+        snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
+        end_addr = addr + 0x100;
       }
+      //	printf("Sending '%s'\n",cmd);
+      slow_write_safe(fd, cmd, strlen(cmd));
+      last_rx = time(0);
+    }
+    snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
+    int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
+    if (b <= 0)
+      b = 0;
+    //            else
+    //	      printf("%s\n", read_buff);
+    if ((ofs + b) > 8191)
+      b = 8191 - ofs;
+    //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
+    read_buff[ofs + b] = 0;
+    ofs += b;
+    char* s = strstr((char*)read_buff, next_addr_str);
+    if (s && (strlen(s) >= 42)) {
+      char b = s[42];
+      s[42] = 0;
+      if (0) {
+        printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
+      }
+      s[42] = b;
+      for (int i = 0; i < 16; i++) {
+
+        // Don't write more bytes than requested
+        if ((addr - address + i) >= count)
+          break;
+
+        char hex[3];
+        hex[0] = s[1 + 10 + i * 2 + 0];
+        hex[1] = s[1 + 10 + i * 2 + 1];
+        hex[2] = 0;
+        buffer[addr - address + i] = strtol(hex, NULL, 16);
+      }
+      addr += 16;
+
+      // Shuffle buffer down
+      int s_offset = (long long)s - (long long)read_buff + 42;
+      bcopy(&read_buff[s_offset], &read_buff[0], 8192 - (ofs - s_offset));
+      ofs -= s_offset;
     }
   }
   if (addr >= (address + count)) {

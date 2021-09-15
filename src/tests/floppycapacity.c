@@ -949,7 +949,7 @@ void main(void)
     printf("%cMEGA65 Floppy Drive Capacity Testing.\n\n", 0x93);
 
     {
-// clang-format off
+      // clang-format off
       // How many sectors per track without gaps (i.e., amiga style)
       unsigned char sectors_by_rate_no_gaps[42+1]
 	={
@@ -979,7 +979,7 @@ void main(void)
 	 39,38,37,35,34,33,
 	 31,30
 	};
-// clang-format on
+      // clang-format on
 
       for (track_num = 0; track_num < 85; track_num++) {
 
