@@ -1578,7 +1578,6 @@ int hostname_to_ip(char* hostname, char* ip)
 #ifdef WINDOWS
 PORT_TYPE open_tcp_port(char* portname)
 {
-  xemu_flag = 1;
   PORT_TYPE localfd = { WINPORT_TYPE_INVALID, 0 };
   char hostname[128] = "localhost";
   char port[128] = "4510"; // assume a default port of 4510
@@ -1652,12 +1651,15 @@ void close_tcp_port(PORT_TYPE localfd)
 PORT_TYPE open_tcp_port(char* portname)
 {
   int localfd;
-  xemu_flag = 1;
   char hostname[128] = "localhost";
   int port = 4510;        // assume a default port of 4510
   if (portname[3] == '#') // did user provide a hostname and port number?
   {
-    sscanf(&portname[4], "%s:%d", hostname, &port);
+    sscanf(&portname[4], "%[^:]:%d", hostname, &port);
+  }
+  else if (portname[3] == '\\' && portname[4] == '#')
+  {
+    sscanf(&portname[5], "%[^:]:%d", hostname, &port);
   }
 
   struct sockaddr_in sock_st;
@@ -1769,6 +1771,8 @@ void open_the_serial_port(char* serial_port)
     }
   }
 #endif
+
+  xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 }
 
 int switch_to_c64mode(void)

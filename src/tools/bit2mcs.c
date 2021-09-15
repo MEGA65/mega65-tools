@@ -15,7 +15,11 @@ void error(char* fmt, ...)
   exit(1);
 }
 
+#ifdef INCLUDE_BIT2MCS
+int bit2mcs(int argc, char* argv[])
+#else
 int main(int argc, char* argv[])
+#endif
 {
   unsigned int loadAddr = 0;
   FILE* infile;
@@ -25,12 +29,18 @@ int main(int argc, char* argv[])
   unsigned char lineData[16];
   unsigned int chksum;
 
-  // loadAddr=0;
-
-  if (argc != 3) {
+  if (argc < 3 || argc > 4) {
     printf("bit2mcs - Converts XILINX bitstream files to flashable files\n"
-           "Usage: bit2mcs <input file> <output file>\nExample: bit2mcs mega65.bit mega65.mcs\n");
+           "Usage: bit2mcs <input file> <output file> [offset_in_hex]\n"
+           "  Bitstream Example:\n"
+           "    bit2mcs mega65.bit mega65.mcs\n\n"
+           "  Core-to-Slot Example:\n"
+           "    bit2mcs mega65r3.cor m65r3slot1.mcs 800000\n\n");
     exit(1);
+  }
+
+  if (argc == 4) {
+    sscanf(argv[3], "%X", &loadAddr);
   }
 
   infile = fopen(argv[1], "rb");
@@ -38,7 +48,10 @@ int main(int argc, char* argv[])
   if (infile == NULL) {
     error("cannot open input file %s", argv[1]);
   }
-  fseek(infile, 120, SEEK_SET);
+  // if old-style bitstream, then seek 120-bytes into the file before reading
+  if (argc == 3) {
+    fseek(infile, 120, SEEK_SET);
+  }
   outfile = fopen(argv[2], "wt");
   if (outfile == NULL) {
     error("cannot open output file %s", argv[2]);

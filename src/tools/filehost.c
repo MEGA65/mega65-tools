@@ -190,13 +190,20 @@ int read_rows(char* str, int strcnt)
   return 1;
 }
 
-void print_items(void)
+// borrow this from mega65_ftp.c for now...
+int is_match(char* line, char* pattern);
+
+void print_items(char* searchterm)
 {
   int cnt = 1;
   tlist_item* ptr = &lst_finfos;
   while (ptr != NULL) {
     tfile_info* pfinfo = (tfile_info*)ptr->cur;
-    printf("%d: %s - \"%s\" - author: %s\n", cnt, pfinfo->title, pfinfo->filename, pfinfo->author);
+    if (!searchterm || is_match(pfinfo->title, searchterm) ||
+        is_match(pfinfo->filename, searchterm) || is_match(pfinfo->author, searchterm))
+    {
+      printf("%d: %s - \"%s\" - author: %s\n", cnt, pfinfo->title, pfinfo->filename, pfinfo->author);
+    }
 
     ptr = (tlist_item*)ptr->next;
     cnt++;
@@ -253,9 +260,32 @@ void log_in_and_get_cookie(char* username, char* password)
   close_tcp_port(fd);
 }
 
-void read_filehost_struct(void)
+void clear_list(void)
+{
+  tlist_item* ptr = &lst_finfos;
+  while (ptr != NULL) {
+    if (ptr->cur)
+      free(ptr->cur); // delete the file-info
+    
+    tlist_item* tmp = ptr->next;
+
+    if (ptr != &lst_finfos) // i shouldn't delete the first one, just my silly logic, sorry :)
+      free(ptr);
+    else
+    {
+      // again, first one workaround, sorry ;)
+      ptr->cur = NULL;
+      ptr->next = NULL;
+    }
+
+    ptr = tmp;
+  }
+}
+
+void read_filehost_struct(char* searchterm)
 {
   char str[4096];
+  clear_list();
   PORT_TYPE fd = open_tcp_port("tcp#files.mega65.org:80");
   do_write(fd, "GET /php/readfilespublic.php HTTP/1.1\r\n");
   do_write(fd, "Host: files.mega65.org\r\n");
@@ -274,7 +304,7 @@ void read_filehost_struct(void)
       break;
   }
 
-  print_items();
+  print_items(searchterm);
 
   close_tcp_port(fd);
 }

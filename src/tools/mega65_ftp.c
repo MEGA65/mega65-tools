@@ -51,6 +51,8 @@
 #define TRUE 1
 #define FALSE 0
 
+#define BYTES_PER_MB 1048576
+
 #define SECTOR_CACHE_SIZE 4096
 int sector_cache_count = 0;
 unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
@@ -94,8 +96,10 @@ void show_secinfo(void);
 void show_mbrinfo(void);
 void show_vbrinfo(void);
 void poke_sector(void);
-void perform_filehost_read(void);
-void perform_filehost_get(int num);
+void perform_filehost_read(char* searchterm);
+void perform_filehost_get(int num, char* destname);
+void perform_filehost_flash(int fhnum, int slotnum);
+void list_all_roms(void);
 int show_directory(char* path);
 void show_local_directory(char* searchpattern);
 void change_local_dir(char* path);
@@ -122,6 +126,7 @@ BOOL create_directory_entry_for_file(char* filename);
 unsigned int calc_first_cluster_of_file(void);
 BOOL is_d81_file(char* filename);
 void wrap_upload(char* fname);
+char* get_file_extension(char* filename);
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -195,6 +200,7 @@ int poke_secnum = 0;
 int poke_offset = 0;
 int poke_value = 0;
 int fhnum = 0;
+int slotnum = 0;
 
 #define M65DT_REG 1
 #define M65DT_DIR 2
@@ -565,11 +571,23 @@ int execute_command(char* cmd)
   else if (sscanf(cmd, "poke %d %d %d", &poke_secnum, &poke_offset, &poke_value) == 3) {
     poke_sector();
   }
-  else if (!strcmp(cmd, "fh")) {
-    perform_filehost_read();
+  else if (sscanf(cmd, "fhget %d %s", &fhnum, src) == 2) {
+    perform_filehost_get(fhnum, src);
   }
   else if (sscanf(cmd, "fhget %d", &fhnum) == 1) {
-    perform_filehost_get(fhnum);
+    perform_filehost_get(fhnum, NULL);
+  }
+  else if (sscanf(cmd, "fhflash %d %d", &fhnum, &slotnum) == 2) {
+    perform_filehost_flash(fhnum, slotnum);
+  }
+  else if (sscanf(cmd, "fh %s", src) == 1) {
+    perform_filehost_read(src);
+  }
+  else if (!strcmp(cmd, "fh")) {
+    perform_filehost_read(NULL);
+  }
+  else if (!strcmp(cmd, "roms")) {
+    list_all_roms();
   }
   else if (!strcasecmp(cmd, "help")) {
     printf("MEGA65 File Transfer Program Command Reference:\n\n");
@@ -600,7 +618,9 @@ int execute_command(char* cmd)
     printf("vbrinfo - lists the VBR details of the main Mega65 partition\n");
     printf("poke <sector> <offset> <val> - poke a value into a sector, at the desired offset.\n");
     printf("fh - retrieve a list of files available on the filehost at files.mega65.org\n");
-    printf("fhget <num> - download a file from the filehost and upload it onto your sd-card\n");
+    printf("fhget <num> [destname] - download a file from the filehost and upload it onto your sd-card\n");
+    printf("fhflash <num> <slotnum> - download a cor file from the filehost and flash it to specified slot via vivado\n");
+    printf("roms - list all MEGA65x.ROM files on your sd-card along with their version information\n");
     printf("exit - leave this programme.\n");
     printf("quit - leave this programme.\n");
   }
@@ -2365,13 +2385,89 @@ int endswith(char* fname, char* ext)
   return 0;
 }
 
-void perform_filehost_read(void)
+void perform_filehost_read(char* searchterm)
 {
   if (username != NULL) {
     log_in_and_get_cookie(username, password);
   }
 
-  read_filehost_struct();
+  read_filehost_struct(searchterm);
+}
+
+int get_first_sector_of_file(char* name)
+{
+  struct m65dirent de;
+
+  if (!safe_open_dir())
+    return -1;
+
+  if (!find_file_in_curdir(name, &de)) {
+    printf("?  FILE NOT FOUND ERROR FOR \"%s\"\n", name);
+    return -1;
+  }
+
+  unsigned int cluster_num = calc_first_cluster_of_file();
+  int abs_cluster2_sector = partition_start + first_cluster_sector + (cluster_num - 2) * sectors_per_cluster;
+  return abs_cluster2_sector;
+}
+
+void list_all_roms(void)
+{
+  llist* lst_dirents = llist_new();
+  char* searchterm = "MEGA6*.ROM";
+
+  do {
+    if (!file_system_found)
+      open_file_system();
+    if (!file_system_found) {
+      fprintf(stderr, "ERROR: Could not open file system.\n");
+      break;
+    }
+
+    if (!read_direntries(lst_dirents, "/"))
+      break;
+
+    llist* cur = lst_dirents;
+    while (cur != NULL) {
+      struct m65dirent* itm = (struct m65dirent*)cur->item;
+
+      if (searchterm && !is_match(itm->d_name, searchterm)) {
+        cur = cur->next;
+        continue;
+      }
+
+      int sector_number = get_first_sector_of_file(itm->d_name);
+
+      if (sector_number == -1)
+        break;
+      
+      if (read_sector(sector_number, show_buf, CACHE_YES, 128)) {
+        printf("ERROR: Failed to read to sector %d\n", sector_number);
+        break;
+      }
+
+      char version[64] = "???";
+
+      // closed-rom?
+      if (show_buf[0x16] == 'V')
+      {
+        strncpy(version, (char*)show_buf+0x16,7);
+        version[7] = '\0';
+      }
+      // open-rom
+      else if (show_buf[0x10] == 'O' || show_buf[0x10] == 'V')
+      {
+        strncpy(version, (char*)show_buf+0x10,9);
+        version[9] = '\0';
+      }
+
+      if (itm->d_name[0] && itm->d_filelen >= 0)
+        printf("%11s - %s\n", itm->d_name, version);
+      cur = cur->next;
+    }
+  } while (0);
+
+  llist_free(lst_dirents);
 }
 
 void wrap_upload(char* fname)
@@ -2387,7 +2483,7 @@ void wrap_upload(char* fname)
   }
 }
 
-void perform_filehost_get(int num)
+void perform_filehost_get(int num, char *destname)
 {
   char* fname = download_file_from_filehost(num);
 
@@ -2397,11 +2493,218 @@ void perform_filehost_get(int num)
   }
 
   if (fname) {
-    upload_file(fname, fname);
+    if (destname)
+      upload_file(fname, destname);
+    else
+      upload_file(fname, fname);
   }
   else {
     printf("ERROR: Unable to download file from filehost!\n");
   }
+}
+
+// borrowed from mega65-core's "megaflash.c"
+// - should probably be in some common library that can be
+//   used on the m65 and pc side.
+typedef struct
+{
+  int model_id;
+  char* name;
+  int slot_size;  // in MB
+  int slot_count;
+  char fpga_part[16];
+  char qspi_part[32];
+} models_type;
+
+// clang-format off
+models_type models[] = {
+  // model_id   name                     slot_size(MB)   slot_count  fpga_part        qspi_part
+    { 0x01,   "MEGA65 R1",                      4,        4,        "xc7a200t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
+    { 0x02,   "MEGA65 R2",                      4,        8,        "xc7a100t_0", "s25fl256sxxxxxx0-spi-x1_x2_x4" },
+    { 0x03,   "MEGA65 R3",                      8,        4,        "xc7a200t_0", "s25fl256sxxxxxx0-spi-x1_x2_x4" },
+    { 0x21,   "MEGAphone R1",                   4,        4,        "xc7a200t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
+    { 0x40,   "Nexys4 PSRAM",                   4,        4,        "xc7a100t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
+    { 0x41,   "Nexys4DDR",                      4,        4,        "xc7a100t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
+    { 0x42,   "Nexys4DDR with widget board",    4,        4,        "xc7a100t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
+    { 0xFD,   "QMTECH Wukong A100T board",      4,        4,        "xc7a100t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
+    { 0xFE,   "Simulation",                     0,        0,        "",             "" },
+    { 0xFF,   "? unknown ?",                    0,        0,        "",             "" }
+};
+// clang-format on
+
+models_type* get_model(uint8_t model_id)
+{
+  uint8_t k;
+  uint8_t l = sizeof(models) / sizeof(models_type);
+
+  for (k = 0; k < l; k++)
+  {
+    if (model_id == models[k].model_id) {
+      return &models[k];
+    }
+  }
+
+  return &models[l-1];  // the last item is '? unknown ?'
+}
+
+int get_model_id_from_core_file(char* corefile)
+{
+  FILE* f = fopen(corefile, "rb");
+
+  unsigned char buffer[512];
+  bzero(buffer, 512);
+  int bytes = fread(buffer, 1, 512, f);
+
+  fclose(f);
+
+  if (bytes > 0x70)
+    return buffer[0x70];
+
+  return 0;
+}
+
+int check_model_id_field(char* corefile)
+{
+  uint8_t hardware_model_id = mega65_peek(0xFFD3629);
+  uint8_t core_model_id;
+
+  core_model_id = get_model_id_from_core_file(corefile);
+
+  printf(".COR file model id: $%02X - %s\n", core_model_id, get_model(core_model_id)->name);
+  printf(" Hardware model id: $%02X - %s\n\n", hardware_model_id, get_model(hardware_model_id)->name);
+
+  if (hardware_model_id == core_model_id)
+  {
+    printf("Verified .COR file matches hardware.\n"
+           "Safe to flash.\n");
+    return 1;
+  }
+
+  if (core_model_id == 0x00) {
+    printf(".COR file is missing model-id field.\n"
+           "Cannot confirm if .COR matches hardware.\n"
+           "Are you sure you want to flash? (y/n)\n\n");
+
+    char inp[10];
+    scanf("%s", inp);
+    if (strcmp(inp, "y") != 0)
+      return 0;
+    
+    printf("Ok, will proceed to flash\n");
+    return 1;
+  }
+
+  printf("Verification error!\n"
+        "This .COR file is not intended for this hardware.\n");
+  return 0;
+}
+
+void write_tcl_script(models_type* mdl)
+{
+  char fpga[128];
+  char qspi[128];
+  char hwcfg[128];
+  char hwcfgtype[128];
+  sprintf(fpga, "[lindex [get_hw_devices %s] 0]", mdl->fpga_part);
+  sprintf(qspi, "[lindex [get_cfgmem_parts {%s}] 0]", mdl->qspi_part);
+  sprintf(hwcfg, "[ get_property PROGRAM.HW_CFGMEM %s]", fpga);
+  sprintf(hwcfgtype, "[ get_property PROGRAM.HW_CFGMEM_TYPE %s]", fpga);
+
+  FILE *f = fopen("write-flash.tcl", "wt");
+  fprintf(f, "open_hw\n");
+  fprintf(f, "connect_hw_server\n");
+  fprintf(f, "open_hw_target\n");
+  fprintf(f, "create_hw_cfgmem -hw_device %s %s\n", fpga, qspi);
+  fprintf(f, "set_property PROGRAM.BLANK_CHECK  0 %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.ERASE  1 %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.CFG_PROGRAM  1 %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.VERIFY  1 %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.CHECKSUM  0 %s\n", hwcfg);
+  fprintf(f, "refresh_hw_device %s\n", fpga);
+  fprintf(f, "set_property PROGRAM.ADDRESS_RANGE  {use_file} %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.FILES [list \"out.mcs\" ] %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.PRM_FILE {} %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.UNUSED_PIN_TERMINATION {pull-none} %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.BLANK_CHECK  0 %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.ERASE  1 %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.CFG_PROGRAM  1 %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.VERIFY  1 %s\n", hwcfg);
+  fprintf(f, "set_property PROGRAM.CHECKSUM  0 %s\n", hwcfg);
+  fprintf(f, "startgroup\n");
+  fprintf(f, "if {![string equal %s [get_property MEM_TYPE [get_property CFGMEM_PART %s]]] }  { create_hw_bitstream -hw_device %s [get_property PROGRAM.HW_CFGMEM_BITFILE %s]; program_hw_devices %s; };\n", hwcfgtype, hwcfg, fpga, fpga, fpga);
+  fprintf(f, "program_hw_cfgmem -hw_cfgmem %s\n", hwcfg);
+  fprintf(f, "endgroup\n");
+  fprintf(f, "quit\n");
+  fclose(f);
+}
+
+int bit2mcs(int argc, char* argv[]);
+
+void perform_filehost_flash(int fhnum, int slotnum)
+{
+  // assess if running in xemu. If so, exit
+  if (xemu_flag) {
+
+    printf("%d - This command is not available for xemu.\n", xemu_flag);
+    return;
+  }
+
+  // Query m65-hardware to learn what the m65model type is
+  // Based on model-type, assess if slotnum is valid
+  uint8_t hardware_model_id = mega65_peek(0xFFD3629);
+  models_type* mdl = get_model(hardware_model_id);
+  if (slotnum >= mdl->slot_count) {
+    printf("- Valid slots on your hardware range from 0 to %d.\n", mdl->slot_count-1);
+    return;
+  }
+
+  // grab the file from the filehost
+  char* fname = download_file_from_filehost(fhnum);
+
+  // Assure this is a .cor file
+  if (stricmp(get_file_extension(fname), ".cor") != 0) {
+    printf("- This file does not have '.cor' file extension!\n");
+    return;
+  }
+  // If hardware model-id doesn't match .cor file's model-id, then don't permit
+  if (!check_model_id_field(fname))
+    return;
+
+  // If we got here, all is good, so convert .cor to .mcs via bit2mcs tool
+  char offset[16];
+  sprintf(offset, "%08X", slotnum * mdl->slot_size * BYTES_PER_MB);
+  printf("Creating 'out.mcs' at offset: %s...\n", offset);
+  char* argv[4] = { "progname", fname, "out.mcs", offset };
+  bit2mcs(4, argv);
+
+  printf("Creating 'write-flash.tcl'...\n");
+  // Then trigger the *-write-flash.tcl script to be run via vivado
+  // (pointing it to our new 'out.mcs' file)
+  write_tcl_script(mdl);
+
+  // assess vivado path
+  char vivado_path[512] = "C:\\Xilinx\\Vivado\\2021.1\\bin\\vivado";
+  if (getenv("VIVADO_PATH") == NULL) {
+    printf("- Env-var VIVADO_PATH not set, using default location of \"%s\"...\n", vivado_path);
+  }
+  else {
+    strcpy(vivado_path, getenv("VIVADO_PATH"));
+  }
+
+  printf("Running 'write-flash.tcl' via Vivado... (use VIVADO_PATH env-var to specify path)\n");
+  // NOTE: Consider permitting users to set a VIVADO_PATH to alter the default path that mega65_ftp will try use.
+  char vivado_cmd[512];
+  sprintf(vivado_cmd, "%s -mode batch -nojournal -nolog -notrace -source write-flash.tcl", vivado_path);
+  system(vivado_cmd);
+
+  // After flashing completes, remind user to power cycle their hardware
+  printf("\nIf all went well, \"%s\" has been flashed to slot %d.\n\n"
+         "Please power cycle your device.\n\n"
+         "The 'mega65_ftp' tool will exit now. To start another session, re-run after power-cycling.\n\n",
+         fname, slotnum);
+
+  // exit mega65_ftp (as a new session will need to be created after the power-cycle anyway)
+  exit(0);
 }
 
 void show_secinfo(void)
