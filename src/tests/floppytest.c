@@ -456,6 +456,7 @@ void read_all_sectors(unsigned char HD)
 
 unsigned char reformat_trackP=0;
 unsigned char formatting_enabled=0;
+unsigned char rll_encoding=0;
 unsigned char precomp_a,precomp_b,precomp_15;
 void gap_histogram(void)
 {
@@ -627,9 +628,14 @@ void gap_histogram(void)
 	precomp_15++;
 	reformat_trackP=1;
 	break;
+      case 0x45: case 0x65:
+	rll_encoding ^= 1;
+	reformat_trackP = 1;
+	break;
       case 0x46: case 0x66: // F = Format this track/side
 
 	formatting_enabled^=1;
+	reformat_trackP = 1;
 	
 	break;
       case 0x20:
@@ -683,7 +689,9 @@ void gap_histogram(void)
 	// Select internal floppy drive
 	POKE(0xD6A1,0x01);
 	// Disable auto rate setting
-	POKE(0xD6AE,PEEK(0xD6AE)&0xDF);
+	POKE(0xD6AE,PEEK(0xD6AE)&0x5F);
+	// Enable RLL encoding
+	if (rll_encoding) POKE(0xD6AE,PEEK(0xD6AE)|0x80);
 	// Setup precomp
 	POKE(0xD6A3,precomp_a);
 	POKE(0xD6A4,precomp_b);
@@ -1013,6 +1021,8 @@ void format_single_track_side(/* unsigned char track_num,unsigned char side, */u
 {
 
 #if 1
+  // Use RLL encoding
+  POKE(0xD6AE,0xF0);
   // Use new hardware-accelerated formatting
   POKE(0xD696,0x00);  // also disable auto-seek on new address
   while (PEEK(0xD082) & 0x80) continue;
@@ -1808,7 +1818,7 @@ void main(void)
     case '5':
       // Read track 0
       POKE(0xD610,0);
-      read_track(0,0);
+      read_track(0,1);
       break;
     case '6':
       POKE(0xD610,0);
