@@ -99,6 +99,7 @@ void poke_sector(void);
 void perform_filehost_read(char* searchterm);
 void perform_filehost_get(int num, char* destname);
 void perform_filehost_flash(int fhnum, int slotnum);
+void perform_flash(char* fname, int slotnum);
 void list_all_roms(void);
 int show_directory(char* path);
 void show_local_directory(char* searchpattern);
@@ -585,6 +586,9 @@ int execute_command(char* cmd)
   }
   else if (!strcmp(cmd, "fh")) {
     perform_filehost_read(NULL);
+  }
+  else if (sscanf(cmd, "flash %s %d", src, &slotnum) == 2) {
+    perform_flash(src, slotnum);
   }
   else if (!strcmp(cmd, "roms")) {
     list_all_roms();
@@ -2638,13 +2642,12 @@ void write_tcl_script(models_type* mdl)
 
 int bit2mcs(int argc, char* argv[]);
 
-void perform_filehost_flash(int fhnum, int slotnum)
+BOOL initial_flashing_checks(void)
 {
   // assess if running in xemu. If so, exit
   if (xemu_flag) {
-
     printf("%d - This command is not available for xemu.\n", xemu_flag);
-    return;
+    return FALSE;
   }
 
   // Query m65-hardware to learn what the m65model type is
@@ -2653,17 +2656,23 @@ void perform_filehost_flash(int fhnum, int slotnum)
   models_type* mdl = get_model(hardware_model_id);
   if (slotnum >= mdl->slot_count) {
     printf("- Valid slots on your hardware range from 0 to %d.\n", mdl->slot_count - 1);
-    return;
+    return FALSE;
   }
 
-  // grab the file from the filehost
-  char* fname = download_file_from_filehost(fhnum);
+  return TRUE;
+}
+
+void flash_core_to_slot(char* fname, int slotnum)
+{
+  uint8_t hardware_model_id = mega65_peek(0xFFD3629);
+  models_type* mdl = get_model(hardware_model_id);
 
   // Assure this is a .cor file
   if (stricmp(get_file_extension(fname), ".cor") != 0) {
     printf("- This file does not have '.cor' file extension!\n");
     return;
   }
+
   // If hardware model-id doesn't match .cor file's model-id, then don't permit
   if (!check_model_id_field(fname))
     return;
@@ -2703,6 +2712,26 @@ void perform_filehost_flash(int fhnum, int slotnum)
 
   // exit mega65_ftp (as a new session will need to be created after the power-cycle anyway)
   exit(0);
+}
+
+void perform_flash(char* fname, int slotnum)
+{
+  if (!initial_flashing_checks())
+    return;
+
+  flash_core_to_slot(fname, slotnum);
+}
+
+void perform_filehost_flash(int fhnum, int slotnum)
+{
+  if (!initial_flashing_checks())
+    return;
+
+  // grab the file from the filehost
+  char* fname = download_file_from_filehost(fhnum);
+
+  flash_core_to_slot(fname, slotnum);
+
 }
 
 void show_secinfo(void)
