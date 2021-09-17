@@ -1,7 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-float quantise_gap(float gap)
+int show_gaps=0;
+int show_quantised_gaps=0;
+// MEGA65 floppies contain a track info block that is always written at DD data rate.
+// When the TIB is read, the FDC switches to the indicated rate and encoding
+float rate=81;
+
+int rll_encoding=0;
+
+float quantise_gap_mfm(float gap)
 {
   if (gap > 0.7 && gap <= 1.25)
     gap = 1.0;
@@ -18,6 +27,37 @@ float quantise_gap(float gap)
   
   return gap;
 }
+
+float quantise_gap_rll27(float gap)
+{ 
+  if (gap <= 2.5)
+    gap = 2.0;
+  else if (gap < 3.5)
+    gap = 3;
+  else if (gap < 4.5)
+    gap = 4;
+  else if (gap < 5.5)
+    gap = 5;
+  else if (gap < 6.5)
+    gap = 6;
+  else if (gap < 7.5)
+    gap = 7;
+  else 
+    gap = 8;
+
+  // RLL2,7 uses convention of counting the gap length, excluding the pulse
+  // which is assumed to take up one pulse
+  gap-=1;
+  
+  return gap;
+}
+
+float quantise_gap(float gap)
+{
+  if (rll_encoding) return quantise_gap_rll27(gap);
+  else return quantise_gap_mfm(gap);
+}
+
 
 int last_pulse = 0;
 float last_gap = 0;
@@ -66,6 +106,15 @@ unsigned short crc16(unsigned short crc, unsigned short b)
 void describe_data(void)
 {
   switch(data_field[0]) {
+  case 0x65:
+    if (field_ofs>6) {
+      // MEGA65 Track Information Block
+      fprintf(stdout,"TRACK INFO BLOCK: Track=%d, Divisor=%d (%.2fMHz), Encoding=$%02x\n",
+	      data_field[1],data_field[2],40.5/data_field[2],data_field[3]);
+      rate=data_field[2];
+      rll_encoding=1;
+    }
+    break;
   case 0xfe:
     // Sector header
     fprintf(stdout,"SECTOR HEADER: Track=%d, Side=%d, Sector=%d, Size=%d (%d bytes) ",
@@ -131,7 +180,7 @@ void describe_data(void)
 
 void emit_bit(int b)
 {
-  //    printf("  bit %d\n",b);
+  //  if (rll_encoding) printf("  bit %d\n",b);
   last_bit = b;
   byte = (byte << 1) | b;
   bits++;
@@ -150,6 +199,7 @@ void emit_bit(int b)
     } else  {
       printf(" $%02x", byte);
       if (field_ofs<1024) data_field[field_ofs++]=byte;
+      if (data_field[0]==0x65&&field_ofs==7) describe_data();
     }
     bytes_emitted++;
     byte = 0;
@@ -157,8 +207,113 @@ void emit_bit(int b)
   }
 }
 
+int skip_bits=0;
+char buffered_bits[16];
+int buffered_bit_count=0;
+
+
+void buffer_bit(int bit)
+{
+  if (0) fprintf(stdout,"buffered bits before stuffing next: %d:  %s\n",
+		 buffered_bit_count,buffered_bits);
+  
+  buffered_bits[buffered_bit_count]=0;
+  if (skip_bits) { skip_bits--; return; }
+  if (buffered_bit_count<16) {
+    buffered_bits[buffered_bit_count++]=bit;
+    buffered_bits[buffered_bit_count]=0;
+  }
+}
+
+// $4E = ...000100 00001000 0100
+//                6        4    5
+
+// $FE = 1000 1000 1000 0100
+//       
+
+// 0001000100001001
+
+//    010  10 0010
+
+void bit_buffer_shuffle(int n)
+{
+  for(int i=0;i<(buffered_bit_count-n);i++)
+    buffered_bits[i]=buffered_bits[i+n];
+  buffered_bit_count-=n;
+  buffered_bits[buffered_bit_count]=0;
+}
+
+void rll27_decode_gap(float gap)
+{
+  /*
+    Input    Encoded
+
+    11       1000
+    10       0100
+    000      100100
+    010      000100
+    011      001000
+    0011     00001000
+    0010     00100100  
+  */
+
+  for(int i=0;i<gap;i++)
+    buffer_bit('0');
+  buffer_bit('1');
+
+  if (buffered_bit_count>=8) {
+    if (!strncmp("00000100",buffered_bits,8)) {
+      emit_bit(0);
+      emit_bit(0);
+      emit_bit(1);
+      emit_bit(1);
+      bit_buffer_shuffle(8);
+    }
+    else if (!strncmp("00100100",buffered_bits,8)) {
+      emit_bit(0);
+      emit_bit(0);
+      emit_bit(1);
+      emit_bit(0);
+      bit_buffer_shuffle(8);
+    }
+  }
+  if (buffered_bit_count>=6) {
+    if (!strncmp("100100",buffered_bits,6)) {
+      emit_bit(0);
+      emit_bit(0);
+      emit_bit(0);
+      bit_buffer_shuffle(6);
+    }
+    else if (!strncmp("000100",buffered_bits,6)) {
+      emit_bit(0);
+      emit_bit(1);
+      emit_bit(0);
+      bit_buffer_shuffle(6);
+    }
+    else if (!strncmp("001000",buffered_bits,6)) {
+      emit_bit(0);
+      emit_bit(1);
+      emit_bit(1);
+      bit_buffer_shuffle(6);
+    }
+  }
+  if (buffered_bit_count>=4) {
+    if (!strncmp("1000",buffered_bits,4)) {
+      emit_bit(1);
+      emit_bit(1);
+      bit_buffer_shuffle(4);
+    }
+    else if (!strncmp("0100",buffered_bits,4)) {
+      emit_bit(1);
+      emit_bit(0);
+      bit_buffer_shuffle(4);
+    }
+  }
+}
+
 float recent_gaps[4];
-float sync_gaps[4] = { 2.0, 1.5, 2.0, 1.5 };
+float sync_gaps_mfm[4] = { 2.0, 1.5, 2.0, 1.5 };
+float sync_gaps_rll27[2] = { 7.0, 2.0};
 
 int found_sync3=0;
 
@@ -166,7 +321,7 @@ void mfm_decode(float gap)
 {
   gap = quantise_gap(gap);
 
-  //  printf("%.1f\n",gap);
+  if (show_quantised_gaps) printf("%.1f\n",gap);
 
   // Look at recent gaps to see if it is a sync mark
   for (int i = 0; i < 3; i++)
@@ -174,9 +329,15 @@ void mfm_decode(float gap)
   recent_gaps[3] = gap;
 
   int i;
-  for (i = 0; i < 4; i++)
-    if (recent_gaps[i] != sync_gaps[i])
-      break;
+  if (!rll_encoding) {
+    for (i = 0; i < 4; i++)
+      if (recent_gaps[i] != sync_gaps_mfm[i])
+	break;
+  } else {
+    for (i = 2; i < 4; i++)
+      if (recent_gaps[i] != sync_gaps_rll27[i-2])
+	break;
+  }
   if (i == 4) {
     //    if (byte_count)
     //      printf("\n");
@@ -192,47 +353,56 @@ void mfm_decode(float gap)
     byte = 0;
     byte_count = 0;
     bytes_emitted = 0;
+    buffered_bits[0]='1';
+    buffered_bits[1]=0;
+    buffered_bit_count=1;
+    if (rll_encoding) skip_bits=3;
     return;
   } 
 
-  if (!last_gap) {
-    if (gap == 1.0) {
-      emit_bit(1);
-      emit_bit(1);
-    }
-    else if (gap == 1.5) {
-      emit_bit(0);
-      emit_bit(1);
-    }
-    else if (gap >= 2.0) {
-      emit_bit(1);
-      emit_bit(0);
-      emit_bit(1);
-    }
-  }
-  else {
-    if (last_bit == 1) {
-      if (gap == 1.0)
-        emit_bit(1);
+  if (rll_encoding) {
+    rll27_decode_gap(gap);
+  } else {
+    // MFM
+    if (!last_gap) {
+      if (gap == 1.0) {
+	emit_bit(1);
+	emit_bit(1);
+      }
       else if (gap == 1.5) {
-        emit_bit(0);
-        emit_bit(0);
+	emit_bit(0);
+	emit_bit(1);
       }
       else if (gap >= 2.0) {
-        emit_bit(0);
-        emit_bit(1);
+	emit_bit(1);
+	emit_bit(0);
+	emit_bit(1);
       }
     }
     else {
-      // last bit was a 0
-      if (gap == 1.0)
-        emit_bit(0);
-      else if (gap == 1.5) {
-        emit_bit(1);
+      if (last_bit == 1) {
+	if (gap == 1.0)
+	  emit_bit(1);
+	else if (gap == 1.5) {
+	  emit_bit(0);
+	  emit_bit(0);
+	}
+	else if (gap >= 2.0) {
+	  emit_bit(0);
+	  emit_bit(1);
+	}
       }
-      else if (gap == 2.0) {
-        emit_bit(0);
-        emit_bit(1);
+      else {
+	// last bit was a 0
+	if (gap == 1.0)
+	  emit_bit(0);
+	else if (gap == 1.5) {
+	  emit_bit(1);
+	}
+	else if (gap == 2.0) {
+	  emit_bit(0);
+	  emit_bit(1);
+	}
       }
     }
   }
@@ -362,27 +532,24 @@ int main(int argc, char** argv)
     
     fprintf(stderr,"NOTE: Assuming raw $D6A0 capture.\n");
     
-    /* Work out divisor.
-       Rate is provided as rate/40.5MHz
-       File sample rate is 40.5Mz/3 = 13.5MHz
-       
-    */
-    float rate=29;
     // Obtain data rate from filename if present
     sscanf(argv[arg],"rate%f",&rate);
-    float divisor=2*rate/3;
     fprintf(stderr,"Rate = %f\n",rate);
 
     last_pulse=0;
     found_sync3=0;
+
+    float divisor;
     
     for (i = 1; i < count; i++) {
+      if (!rll_encoding) divisor=2*rate/3; else divisor=rate/3;
+      
       if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
 	if (last_pulse) // ignore pseudo-pulse caused by start of file
 	  {
 	    float gap=i-last_pulse;
 	    gap/=divisor;
-	    printf("%.2f\n",gap);
+	    if (show_gaps) printf("%.2f\n",gap);
 
 	    if (found_sync3==1) {
 	      printf("Harmonising at Sync3 after %d samples\n",
