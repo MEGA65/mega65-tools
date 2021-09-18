@@ -269,7 +269,7 @@ void wait_for_prompt(void)
   int b = 1;
   int offset = 0;
   while (1) {
-    b = serialport_read(fd, read_buff + offset, 8191 - offset);
+    b = serialport_read(fd, read_buff + offset, 1);
     // if (b > 0) dump_bytes(0, "wait_for_prompt", read_buff, b + offset);
     if (b < 0 || b > 8191)
       continue;
@@ -299,7 +299,7 @@ void wait_for_string(char* s)
   int b = 1;
   int offset = 0;
   while (1) {
-    b = serialport_read(fd, read_buff + offset, strlen(s) - offset);
+    b = serialport_read(fd, read_buff + offset, 1); // let's try read it one byte at a time, to assure we don't read more than necessary
     // if (b > 0) dump_bytes(0, "wait_for_string", read_buff, b + offset);
     if (b < 0 || b > 8191)
       continue;
@@ -1408,7 +1408,7 @@ SSIZE_T win_tcp_read(SOCKET sock, uint8_t* buffer, size_t size, const char* func
     return 0;
 
   int iResult = recv(sock, (char*)buffer, size, 0);
-  if (iResult == 0) {
+  if (iResult == 0 && size != 0) {
     printf("recv: Connection closed.\n");
     exit(1);
   }
