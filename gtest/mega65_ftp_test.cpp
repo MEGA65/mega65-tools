@@ -1,4 +1,5 @@
 #include "gtest/gtest.h"
+#include "gmock/gmock.h"
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -10,6 +11,11 @@ int download_file(char* dest_name, char* local_name, int showClusters);
 int open_file_system(void);
 int contains_file(char* name);
 int is_fragmented(char* filename);
+int create_dir(char*);
+int show_directory(char* path);
+int fat_opendir(char* path);
+
+extern char current_dir[1024];
 
 #define SECTOR_SIZE 512
 #define MBR_SIZE SECTOR_SIZE
@@ -193,12 +199,19 @@ class Mega65FtpTestFixture : public ::testing::Test {
   void SetUp() override
   {
     // suppress the chatty output
-    ::testing::internal::CaptureStderr();
-    ::testing::internal::CaptureStdout();
-    suppressflag = 1;
+    CaptureStdOut();
 
     generate_dummy_file(file4kb, 4096);
     generate_dummy_file(file8kb, 8192);
+  }
+
+  void CaptureStdOut(void)
+  {
+    if (!suppressflag) {
+      suppressflag = 1;
+      testing::internal::CaptureStderr();
+      testing::internal::CaptureStdout();
+    }
   }
 
   void ReleaseStdOut(void)
@@ -277,6 +290,27 @@ TEST_F(Mega65FtpTestFixture, RenameToExistingFilenameShouldNotBePermitted)
 
   ReleaseStdOut();
   ASSERT_EQ(ret, -2);
+}
+
+TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
+{
+  init_sdcard_data();
+  create_dir("test");
+  fat_opendir("/test");
+  strcpy(current_dir, "/test");
+  upload_file(file4kb, file4kb);
+  fat_opendir("/");
+  strcpy(current_dir, "/");
+  ReleaseStdOut();
+
+  CaptureStdOut();
+  show_directory("/test");
+  fflush(stdout);
+  std::string output = testing::internal::GetCapturedStdout();
+  testing::internal::GetCapturedStderr();
+  suppressflag = 0;
+
+  EXPECT_THAT(output, testing::ContainsRegex("4kbtest.tmp"));
 }
 
 /*

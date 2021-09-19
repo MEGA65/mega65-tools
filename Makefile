@@ -471,7 +471,7 @@ $(1): $(2)
 
 $(1).exe: $(2)
 	$$(MAKE_VERSION)
-	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $$(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic
+	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $$(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic $(3)
 endef
 
 MEGA65FTP_SRC=$(TOOLDIR)/mega65_ftp.c \
@@ -484,7 +484,7 @@ MEGA65FTP_SRC=$(TOOLDIR)/mega65_ftp.c \
 # Gives two targets of:
 # - gtest/bin/mega65_ftp.test
 # - gtest/bin/mega65_ftp.test.exe
-$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(MEGA65FTP_SRC) Makefile, -DINCLUDE_BIT2MCS))
+$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(GTESTDIR)/mega65_ftp_test.cpp $(MEGA65FTP_SRC) Makefile, -DINCLUDE_BIT2MCS -fpermissive))
 
 # Gives two targets of:
 # - gtest/bin/bit2core.test

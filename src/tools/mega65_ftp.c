@@ -2243,19 +2243,28 @@ int show_directory(char* path)
       break;
     }
 
-    if (!read_direntries(lst_dirents, current_dir))
-      break;
-
-    // check if the user wants to 'dir' a sub-folder
-    if (contains_dir(lst_dirents, path)) {
-      llist_free(lst_dirents);
-      lst_dirents = llist_new();
-
+    // check if it's an absolute path to a folder
+    if (fat_opendir(path) == 0) {
+      // if so read direntries within it
       if (!read_direntries(lst_dirents, path))
         break;
     }
-    else if (strcmp(path, current_dir) != 0)
-      searchterm = path;
+    // if not abs-path, then assume it's a file/dir/wildcard for the current working directory
+    else {
+      if (!read_direntries(lst_dirents, current_dir))
+        break;
+
+      // check if the user wants to 'dir' a sub-folder
+      if (contains_dir(lst_dirents, path)) {
+        llist_free(lst_dirents);
+        lst_dirents = llist_new();
+
+        if (!read_direntries(lst_dirents, path))
+          break;
+      }
+      else if (strcmp(path, current_dir) != 0)
+        searchterm = path;
+    }
 
     llist* cur = lst_dirents;
     while (cur != NULL) {

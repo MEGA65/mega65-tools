@@ -1759,9 +1759,9 @@ int main(int argc, char** argv)
 
     // Switch to a graphics mode, and do similar with graphics screen and larger transfers
     mega65_poke(0xffd3031, 0x00); // 40 columns
-    mega65_poke(0xFFD3060, 0x12000 >> 0);
-    mega65_poke(0xFFD3061, 0x12000 >> 8);
-    mega65_poke(0xFFD3062, 0x12000 >> 16);
+    mega65_poke(0xFFD3060, (char)(0x12000 >> 0));
+    mega65_poke(0xFFD3061, (char)(0x12000 >> 8));
+    mega65_poke(0xFFD3062, (char)(0x12000 >> 16));
     mega65_poke(0xffd3054, 0x05);
 
     // Setup screen memory in columns
