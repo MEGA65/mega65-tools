@@ -70,6 +70,13 @@ int sync_count=0;
 int field_ofs=0;
 unsigned char data_field[1024];
 
+#define MAX_GAPS 16384
+float corrected_deltas[MAX_GAPS];
+float uncorrected_deltas[MAX_GAPS];
+int cdelta_count=0;
+int ucdelta_count=0;
+int start_data=0;
+
 #define MAX_SIGNALS 64
 #define MAX_SAMPLES 65536
 float traces[MAX_SIGNALS][MAX_SAMPLES];
@@ -114,6 +121,7 @@ void describe_data(void)
 	      data_field[1],data_field[2],40.5/data_field[2],data_field[3]);
       rate=data_field[2]+1;
       rll_encoding=1;
+      start_data=ucdelta_count;
         
       unsigned short crc=0xffff;
       for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
@@ -593,7 +601,10 @@ int main(int argc, char** argv)
 	    {
 	      float uncorrected_gap=i-last_pulse_uncorrected;
 	      uncorrected_gap/=divisor;
-	      if (show_quantised_gaps) printf("     uncorrected gap=%.2f\n",uncorrected_gap);
+	      float uc_delta=quantise_gap(uncorrected_gap) - uncorrected_gap + 1;
+	      if (show_quantised_gaps) printf("     uncorrected gap=%.2f, delta=%.2f\n",uncorrected_gap,uc_delta);
+	      uncorrected_deltas[ucdelta_count++]=uc_delta;
+
 	    }
 	    if (rll_encoding) {
 	      float delta=(gap-1)-quantised;
@@ -623,7 +634,8 @@ int main(int argc, char** argv)
 		pulse_adjust++;
 	      }
 	      
-	      //	      printf("delta=%.2f\n",delta);
+	      printf("     post-correction delta=%.2f\n",delta);
+	      corrected_deltas[ucdelta_count]=delta;
 	    }
 	  }
 	last_pulse = i - pulse_adjust;
@@ -767,6 +779,19 @@ int main(int argc, char** argv)
       fprintf(f,"%.2f, ",traces[arg][i]-(i?traces[arg][i-1]:0));
     }
     fprintf(f,"\n");
+  }
+  fclose(f);
+
+  f=fopen("deltacompare.csv","w");
+  float ucsum=0, csum=0, ucmax=0, cmax=0;
+  for(int i=start_data;i<ucdelta_count;i++) {
+    if (absf(uncorrected_deltas[i])> ucmax) ucmax=uncorrected_deltas[i];
+    if (absf(corrected_deltas[i])> cmax) cmax=corrected_deltas[i];
+    ucsum+=absf(uncorrected_deltas[i]);
+    csum+=absf(corrected_deltas[i]);
+    fprintf(f,"%-4d,% -5.2f,% -5.2f,% -5.2f,% -6.2f,% -5.2f,% -6.2f\n",i,uncorrected_deltas[i],corrected_deltas[i],
+	    cmax,ucmax,csum,ucsum
+	    );
   }
   fclose(f);
   
