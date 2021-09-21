@@ -3,10 +3,10 @@
 #include <string.h>
 
 int show_gaps=0;
-int show_quantised_gaps=0;
+int show_quantised_gaps=1;
 // MEGA65 floppies contain a track info block that is always written at DD data rate.
 // When the TIB is read, the FDC switches to the indicated rate and encoding
-float rate=81;
+float rate=81+1;
 
 int rll_encoding=0;
 
@@ -105,34 +105,47 @@ unsigned short crc16(unsigned short crc, unsigned short b)
 
 void describe_data(void)
 {
+  unsigned short crc_calc;
   switch(data_field[0]) {
   case 0x65:
     if (field_ofs>6) {
       // MEGA65 Track Information Block
-      fprintf(stdout,"TRACK INFO BLOCK: Track=%d, Divisor=%d (%.2fMHz), Encoding=$%02x\n",
+      fprintf(stdout,"\nTRACK INFO BLOCK: Track=%d, Divisor=%d (%.2fMHz), Encoding=$%02x\n",
 	      data_field[1],data_field[2],40.5/data_field[2],data_field[3]);
-      rate=data_field[2];
+      rate=data_field[2]+1;
       rll_encoding=1;
+        
+      unsigned short crc=0xffff;
+      for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
+      for(int i=0;i<7;i++) {
+	if (i==5) crc_calc=crc;
+	crc=crc16(crc,data_field[i]);
+      }
+      if (crc) printf("CRC FAIL! Saw $%02x%02x, Calculated $%04x\n",
+		      data_field[5],data_field[6],crc_calc);
+      else printf("CRC ok\n");
     }
     break;
   case 0xfe:
     // Sector header
-    fprintf(stdout,"SECTOR HEADER: Track=%d, Side=%d, Sector=%d, Size=%d (%d bytes) ",
+    fprintf(stdout,"\nSECTOR HEADER: Track=%d, Side=%d, Sector=%d, Size=%d (%d bytes) ",
 	    data_field[1],data_field[2],data_field[3],
-	    128<<(data_field[4]));
+	    data_field[4],128<<(data_field[4]));
 
     unsigned short crc=0xffff;
     for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
     for(int i=0;i<7;i++) {
+      if (i==5) crc_calc=crc;
       crc=crc16(crc,data_field[i]);
     }
-    if (crc) printf("CRC FAIL!\n");
+    if (crc) printf("CRC FAIL! Saw $%02x%02x, Calculated $%04x\n",
+		    data_field[5],data_field[6],crc_calc);
     else printf("CRC ok\n");
     break;
   case 0xfb:
     // Sector data
     crc=0xffff;
-    printf("SECTOR DATA:\n");
+    printf("\nSECTOR DATA:\n");
     for(int i=0;i<512;i+=16) {
       printf("  %04x :",i);
       for(int j=0;j<16;j++) {
@@ -150,7 +163,6 @@ void describe_data(void)
       printf("\n");
     }
     for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
-    unsigned short crc_calc;
     for(int i=0;i<1+512+2;i++) {
       if (i==1+512) crc_calc=crc;
       crc=crc16(crc,data_field[i]);
@@ -316,12 +328,14 @@ float sync_gaps_mfm[4] = { 2.0, 1.5, 2.0, 1.5 };
 float sync_gaps_rll27[2] = { 7.0, 2.0};
 
 int found_sync3=0;
+int reset_delta=0;
 
-void mfm_decode(float gap)
+float mfm_decode(float gap)
 {
+  float gap_in=gap;
   gap = quantise_gap(gap);
 
-  if (show_quantised_gaps) printf("%.1f\n",gap);
+  if (show_quantised_gaps) printf("%.2f (%.2f)\n",gap,gap_in);
 
   // Look at recent gaps to see if it is a sync mark
   for (int i = 0; i < 3; i++)
@@ -356,8 +370,9 @@ void mfm_decode(float gap)
     buffered_bits[0]='1';
     buffered_bits[1]=0;
     buffered_bit_count=1;
+    reset_delta=1;
     if (rll_encoding) skip_bits=3;
-    return;
+    return gap;
   } 
 
   if (rll_encoding) {
@@ -408,6 +423,7 @@ void mfm_decode(float gap)
   }
 
   last_gap = gap;
+  return gap;
 }
 
 struct precomp_rule {
@@ -540,8 +556,13 @@ int main(int argc, char** argv)
     found_sync3=0;
 
     float divisor;
+    int pulse_adjust=0;
+    int last_pulse_uncorrected=9;
+    int early=0;
+    int late=0;
     
     for (i = 1; i < count; i++) {
+      pulse_adjust=0;
       if (!rll_encoding) divisor=2*rate/3; else divisor=rate/3;
       
       if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
@@ -549,7 +570,7 @@ int main(int argc, char** argv)
 	  {
 	    float gap=i-last_pulse;
 	    gap/=divisor;
-	    if (show_gaps) printf("%.2f\n",gap);
+	    if (show_gaps) printf("%.2f (%d-%d=%d)\n",gap,i,last_pulse,i-last_pulse);
 
 	    if (found_sync3==1) {
 	      printf("Harmonising at Sync3 after %d samples\n",
@@ -568,9 +589,45 @@ int main(int argc, char** argv)
 	    if (traces[arg][sample_counts[arg]-1]>max_time)
 	      max_time=traces[arg][sample_counts[arg]-1];	      
 	    
-	    mfm_decode(gap);
-	  } 
-	last_pulse = i;
+	    float quantised=mfm_decode(gap);
+	    {
+	      float uncorrected_gap=i-last_pulse_uncorrected;
+	      uncorrected_gap/=divisor;
+	      if (show_quantised_gaps) printf("     uncorrected gap=%.2f\n",uncorrected_gap);
+	    }
+	    if (rll_encoding) {
+	      float delta=(gap-1)-quantised;
+	      if (reset_delta) {
+		delta=0; reset_delta=0;
+	      }
+	      if (delta>0&&delta<=0.5) {
+		// Pulse is a bit late, so adjust last_pulse backwards a bit
+		pulse_adjust=(int)(delta*divisor);
+		//		printf("rewind last_pulse by %d\n",pulse_adjust);
+	      }
+	      if (delta<0&&delta>=-0.5) {
+		// Pulse is a bit late, so adjust last_pulse backwards a bit
+		pulse_adjust=(int)(delta*divisor);
+		//		printf("advance last_pulse by %d\n",-pulse_adjust);
+	      }
+	      if (delta<0) early++;
+	      if (delta>0) late++;
+	      if (late>5) {
+		printf("     LATE\n");
+		late=0;
+		pulse_adjust--;
+	      }
+	      if (early>5) {
+		printf("     EARLY\n");
+		early=0;
+		pulse_adjust++;
+	      }
+	      
+	      //	      printf("delta=%.2f\n",delta);
+	    }
+	  }
+	last_pulse = i - pulse_adjust;
+	last_pulse_uncorrected = i;
       }
     }
     
