@@ -3090,7 +3090,7 @@ unsigned char lfn_checksum(const unsigned char* pFCBName)
 }
 // #endif
 
-int upload_file(char* name, char* dest_name)
+int upload_single_file(char* name, char* dest_name)
 {
   struct m65dirent de;
   int retVal = 0;
@@ -3275,6 +3275,34 @@ int upload_file(char* name, char* dest_name)
   } while (0);
 
   return retVal;
+}
+
+int upload_file(char* name, char* dest_name)
+{
+  DIR* d;
+  struct dirent* dir;
+
+  // if no wildcards in name, then just upload a single file
+  if (!strstr(name, "*"))
+    return upload_single_file(name, dest_name);
+
+  // check for wildcards in name
+  // list directories first
+  d = opendir(".");
+  if (d) {
+    while ((dir = readdir(d)) != NULL) {
+      if (dir->d_name && !is_match(dir->d_name, name))
+        continue;
+
+      struct stat file_stats;
+      if (!stat(dir->d_name, &file_stats)) {
+        if (!S_ISDIR(file_stats.st_mode))
+          upload_single_file(dir->d_name, dir->d_name);
+      }
+    }
+  }
+  closedir(d);
+  return 0;
 }
 
 // Must be a single path segment.  Creating sub-directories requires multiple chdir/cd + mkdir calls
