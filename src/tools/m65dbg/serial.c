@@ -26,6 +26,11 @@
 #include <arpa/inet.h>
 #include "serial.h"
 
+// borrow this from commands.c
+extern int peek(unsigned int address);
+
+int xemu_flag = 0;
+
 #define error_message printf
 
 #ifdef WINDOWS
@@ -154,7 +159,7 @@ bool serialOpen(char* portname)
 		char ip[100];
 		
 		hostname_to_ip(hostname , ip);
-		printf("%s resolved to %s" , hostname , ip);
+		printf("%s resolved to %s\n" , hostname , ip);
 
     sock_st.sin_addr.s_addr = inet_addr(ip);
     sock_st.sin_family = AF_INET;
@@ -209,6 +214,12 @@ bool serialOpen(char* portname)
     //fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
   }
   
+  xemu_flag = peek(0xffd360f) & 0x20 ? 0 : 1;
+  if (xemu_flag)
+    printf("Xemu detected!\n");
+  else
+    printf("Native hardware detected!\n");
+
   return true;
 }
 
@@ -272,6 +283,10 @@ void serialWrite(char* string)
   }
 
   write (fd, string, i);           // send string
+
+  // add a pause for xemu
+  if (xemu_flag)
+    usleep(10000);
 }
 
 

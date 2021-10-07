@@ -1142,6 +1142,11 @@ mem_data get_mem(int addr, bool useAddr28)
   return mem;
 }
 
+int peek(unsigned int address)
+{
+  mem_data mem = get_mem(address, true);
+  return mem.b[0];
+}
 
 // read all 16 at once (to hopefully speed things up for saving memory dumps)
 mem_data* get_mem28array(int addr)
