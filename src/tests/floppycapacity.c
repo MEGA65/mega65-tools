@@ -599,6 +599,7 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
   // Now select the side, and try to read the sector
   POKE(0xD084, track_number);
   POKE(0xD085, sector);
+  POKE(0x0403, sector);
   POKE(0xD086, side?1:0);
 
   // Issue read command
@@ -611,8 +612,13 @@ unsigned char read_a_sector(unsigned char track_number,unsigned char side, unsig
     // Read sector data non-buffered while we wait for comparison
     if (PEEK(0xD082)&0x40) { POKE(0xE000+i,PEEK(0xD087)); i++; i&=0x1fff; }
     POKE(0x0400,PEEK(0xD6A3));
-    POKE(0x0401,PEEK(0xD6A4));
+    POKE(0x0401,PEEK(0xD6A4));    
     POKE(0x0402,PEEK(0xD6A5));
+
+    POKE(0x0428,PEEK(0x428)+1);
+    if (PEEK(0xD6A4)&0x80) 
+      POKE(0xD020,PEEK(0xD020)+1);
+
   }
 
   if (PEEK(0xD082) & 0x18) {
@@ -951,15 +957,15 @@ void main(void)
 	={
 	  0,0,0,0,0,0,0,0,0,0,
 	  0,0,0,0,0,0,0,0,0,0,
-	  40,40,40,40,40,40,40,40,32,32,
-	  31,30,29,29,28,27,26,26,25,24,
+	  40,40,44,42,40,38,36,36,35,35,
+	  33,30,29,29,28,27,26,26,25,24,
 	  24,24,24					   
       };
       unsigned char sectors_by_rate_with_gaps[42+1]
 	={
 	  0,0,0,0,0,0,0,0,0,0,
 	  0,0,0,0,0,0,0,0,0,0,
-	  40,40,40,40,40,40,40,31,30,29,
+	  40,40,38,37,36,35,34,32,30,29,
 	  28,27,27,26,25,24,24,23,23,22,
 	  21,21,21
       };
@@ -976,7 +982,8 @@ void main(void)
 	 31,30
 	};
 
-      for(track_num=0;track_num<85;track_num++) {
+      
+      for(track_num=60;track_num<85;track_num++) {
 	
 	// 36 + no gaps works on track 79 without errors = 26 sectors per track
 	unsigned char bit_interval=40; // Standard HD 3.5" floppy is 500Kbit/second = 1mhz MFM rate (2 clocks per MFM bit)
@@ -987,8 +994,11 @@ void main(void)
 
 	printf(" T%d: ",track_num);
 
-	for(bit_interval=27;bit_interval<=40;bit_interval++) {
-	
+	for(bit_interval=0x19;bit_interval<=0x24;bit_interval++) {
+
+	  // RLL2,7 encoding, don't set track rate based on TIB
+	  POKE(0xD6AE,0x01);
+	  
 	  // Floppy 0 motor on
 	  POKE(0xD080, 0x68);	  
 
@@ -1046,9 +1056,18 @@ void main(void)
 	  POKE(0xD6AE,PEEK(0xD6AE)&0xDF);
 	  
 	  POKE(0xD6A2,bit_interval);
-	  POKE(0xD6A6,0x04); POKE(0xD6A7,0x08); // Set sensible write precomp defaults
+
+	  // Setup write precomp
+	  POKE(0xD6A3,0x05);
+	  POKE(0xD6A4,0x05);
+	  POKE(0xD6A5,0xfc);
+
+	  
 	  format_single_track_side(sector_count,with_gaps);
 
+	  // RLL2,7 encoding, and re-enable auto data rate
+	  POKE(0xD6AE,0xF1);
+	  
 	  //	  printf("<%d>",bit_interval);
 
 	  sector_count=with_gaps?sectors_by_rate_with_gaps[bit_interval]
