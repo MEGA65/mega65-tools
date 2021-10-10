@@ -119,8 +119,15 @@ void describe_data(void)
       // MEGA65 Track Information Block
       fprintf(stdout,"\nTRACK INFO BLOCK: Track=%d, Divisor=%d (%.2fMHz), Encoding=$%02x\n",
 	      data_field[1],data_field[2],40.5/data_field[2],data_field[3]);
-      rate=data_field[2]+1;
-      rll_encoding=1;
+      if (data_field[3]&0x40) {
+	// RLL
+	rate=data_field[2];
+	rll_encoding=1;
+      } else {
+	// MFM: Munge to use RLL decoder with it
+	rate=data_field[2]/2;
+	rll_encoding=1;
+      }
       start_data=ucdelta_count;
         
       unsigned short crc=0xffff;
@@ -568,6 +575,12 @@ int main(int argc, char** argv)
     int last_pulse_uncorrected=9;
     int early=0;
     int late=0;
+    int n=0;
+
+    FILE *raw=fopen("rawgaps.csv","w");
+    float recent[8]={0,0,0,0,0,0,0,0};
+    int recent_q[8]={0,0,0,0,0,0,0,0};
+    float esum=0;
     
     for (i = 1; i < count; i++) {
       pulse_adjust=0;
@@ -578,6 +591,68 @@ int main(int argc, char** argv)
 	  {
 	    float gap=i-last_pulse;
 	    gap/=divisor;
+	    
+	    n++;
+
+	    float v[8]={
+		    i/divisor - recent[0]  - recent_q[1] - recent_q[2] - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
+		    i/divisor - recent[1]  - recent_q[2] - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
+		    i/divisor - recent[2]  - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
+			
+		    i/divisor - recent[3]  - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
+		    i/divisor - recent[4]  - recent_q[5] - recent_q[6] - recent_q[7],
+		    i/divisor - recent[5]  - recent_q[6] - recent_q[7],
+		    i/divisor - recent[6]  - recent_q[7],
+		    i/divisor - recent[7]
+	    };
+
+	    // Rule 1: Fall-back is to average the registration against the past five pulses	   
+	    float avg=0;	    
+	    for(int i=0;i<8;i++) avg+=v[i];
+	    avg/=8;
+	    float e1,e2;
+	    e1=gap - quantise_gap(gap) - 1;
+
+	    // Rule 2: If the gap is an integer number of gaps vs any of the past five pulses,
+	    // then use the one that had the most hits
+	    int best_count=0;
+	    int best_int=0;
+	    int counts[9]={0,0,0,0,0,0,0,0,0,0};
+	    for(int i=0;i<8;i++) {
+	      if (absf(v[i])-((int)absf(v[i]))<0.02) {
+		int bin=(int)absf(v[i]);
+		if (bin>=0&&bin<10) counts[bin]++;
+	      }
+	    }
+	    for(int i=3;i<=8;i++) {
+	      if (counts[i]>best_count) { best_count=counts[i]; best_int=i; }
+	    }
+	    if (best_count>0) avg=best_int;
+
+
+	    e2=avg - quantise_gap(gap) - 1;
+	    if (n>=186) esum+=absf(e2*100)*absf(e2*100);
+	    
+	    fprintf(raw,"%-4d,% -9.2f"
+		    ",% -5.2f"		    
+		    ",% -5.2f"
+		    ",%5d"
+		    ",% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f"
+		    ",% -7.2f,% -7.2f,% -7.2f"
+		    "\n",
+		    n,i/divisor,
+		    (i-last_pulse)/divisor,
+		    avg,
+		    i-last_pulse,
+		    v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],
+		    e1,e2,esum
+		    );
+	    for(int r=0;r<(8-1);r++) recent[r]=recent[r+1];
+	    for(int r=0;r<(8-1);r++) recent_q[r]=recent_q[r+1];
+	    recent[7]=i/divisor;	    
+	    recent_q[7]=quantise_gap(gap) + 1;
+	    
+	    
 	    if (show_gaps) printf("%.2f (%d-%d=%d)\n",gap,i,last_pulse,i-last_pulse);
 
 	    if (found_sync3==1) {
@@ -642,6 +717,8 @@ int main(int argc, char** argv)
 	last_pulse_uncorrected = i;
       }
     }
+
+    fclose(raw);
     
     printf("\n");
   }
