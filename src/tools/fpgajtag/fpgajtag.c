@@ -805,6 +805,7 @@ void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idc
       //   exit(-1);
       // }
 #else
+      if (!serial_port||(!serial_port[0]||strncmp(serial_port,"tcp",3)))
       {
         DIR* d = opendir("/sys/bus/usb-serial/devices");
         if (d) {
