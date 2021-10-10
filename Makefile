@@ -82,7 +82,8 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_335.prg \
 		$(TESTDIR)/test_342.prg \
 		$(TESTDIR)/test_378.prg \
-		$(TESTDIR)/test_390.prg
+		$(TESTDIR)/test_390.prg \
+		$(TESTDIR)/test_mandelbrot.prg
 
 TOOLDIR=	$(SRCDIR)/tools
 TOOLS=	$(BINDIR)/etherload \
@@ -201,6 +202,9 @@ $(UTILDIR)/gmod2-tools.prg:       $(UTILDIR)/gmod2-tools.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/potlines.prg:       $(TESTDIR)/potlines.c $(CC65)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
+$(TESTDIR)/test_mandelbrot.prg:       $(TESTDIR)/test_mandelbrot.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/test_290.prg:       $(TESTDIR)/test_290.c $(CC65)
