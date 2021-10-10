@@ -804,15 +804,15 @@ int do_screen_shot(void)
   printf("Syncing to monitor.\n");
   monitor_sync();
   printf("Synced to monitor\n");
-  
+
   get_video_state();
 
   printf("Got video state.\n");
-  
+
   do_screen_shot_ascii();
 
   printf("Got ASCII screenshot.\n");
-  
+
   FILE* f = NULL;
   char filename[1024];
   for (int n = 0; n < 1000000; n++) {

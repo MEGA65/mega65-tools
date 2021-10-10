@@ -156,7 +156,8 @@ void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* 
 
 void activate_double_buffer(void)
 {
-  while(PEEK(0xD012)<0xe8) continue;
+  while (PEEK(0xD012) < 0xe8)
+    continue;
 
   lcopy(0x50000, 0x40000, 0x8000);
   lcopy(0x58000, 0x48000, 0x8000);
@@ -169,17 +170,17 @@ unsigned char buffer[512];
 unsigned long load_addr;
 
 unsigned char line_dmalist[256];
-unsigned char fixup_dmalist[17]={
-	0x0a, // F011A 11-byte job
-	0x83,0x08,0x85,0x08, // skip 8 bytes on source and dest
-	0x00, // End of DMA options;
-	// DMA copy job: Copy from 0x50000 + 7 + 25*64 - 8
-	// to 0x50000 + 7 and do it 200x39 = 7800 times
-	0x00, // COPY, and end of DMA list
-	(7800&0xff),(7800>>8), // 7800 = 200*39 times
-	(7+25*64-8)&0xff,(7+25*64-8)>>8,0x05, // source address
-	0x07,0x00,0x05, // destination address
-	0x00,0x00 // Modulo, not used
+unsigned char fixup_dmalist[17] = {
+  0x0a,                   // F011A 11-byte job
+  0x83, 0x08, 0x85, 0x08, // skip 8 bytes on source and dest
+  0x00,                   // End of DMA options;
+  // DMA copy job: Copy from 0x50000 + 7 + 25*64 - 8
+  // to 0x50000 + 7 and do it 200x39 = 7800 times
+  0x00,                                                   // COPY, and end of DMA list
+  (7800 & 0xff), (7800 >> 8),                             // 7800 = 200*39 times
+  (7 + 25 * 64 - 8) & 0xff, (7 + 25 * 64 - 8) >> 8, 0x05, // source address
+  0x07, 0x00, 0x05,                                       // destination address
+  0x00, 0x00                                              // Modulo, not used
 };
 
 unsigned char ofs;
@@ -425,9 +426,9 @@ void draw_line(int x1, int y1, int x2, int y2, unsigned char colour)
 
 void main(void)
 {
-  unsigned char playing = 0,c;
-  signed short x,y , goes=0;
-  unsigned char frames=0;
+  unsigned char playing = 0, c;
+  signed short x, y, goes = 0;
+  unsigned char frames = 0;
   unsigned long pixel_addr;
 
   asm("sei");
@@ -449,7 +450,7 @@ void main(void)
   graphics_clear_double_buffer();
   activate_double_buffer();
 
-    // Set up common structure of the DMA list
+  // Set up common structure of the DMA list
   ofs = 0;
   // Screen layout is in vertical stripes, so we need only to setup the
   // X offset step.  64x25 =
@@ -475,56 +476,57 @@ void main(void)
   line_dmalist[ofs++] = 0x00; // modulo
   line_dmalist[ofs++] = 0x00;
 
-
   //  print_text(0,0,1,"Line Draw Test");
 
-// before scroll:
-// .......a be......
-// c....... ........
-//    ...
-// .......d ........
+  // before scroll:
+  // .......a be......
+  // c....... ........
+  //    ...
+  // .......d ........
 
-// after scroll:
-// ......ac e.......
-// ........ ........
-//    ...
-// ......db ........
+  // after scroll:
+  // ......ac e.......
+  // ........ ........
+  //    ...
+  // ......db ........
 
-// after correct
-// ......ab e.......
-// ........ ........
-//     ...
-// ........ ........
-// ......cd ........
-  y=0;
+  // after correct
+  // ......ab e.......
+  // ........ ........
+  //     ...
+  // ........ ........
+  // ......cd ........
+  y = 0;
 
   while (1) {
-	  // Copy screen to scroll one pixel to the left.
-	  lcopy(0x50001,0x50000,320*200L);
+    // Copy screen to scroll one pixel to the left.
+    lcopy(0x50001, 0x50000, 320 * 200L);
 #ifdef WITHOUT_DMA
-	  pixel_addr=0x50000L+7;
-//	  pixel_addr+=25*64*36L; // only do the right few columns
-	  while(pixel_addr<=0x50000L+319*200L) {
-		  c=lpeek(pixel_addr + (25*64) - 8);
-		  POKE(0xD020,0x0c);
-		  if (c) c++;
-		  lpoke(pixel_addr,c);
-		  pixel_addr+=8;
-	  }
+    pixel_addr = 0x50000L + 7;
+    //	  pixel_addr+=25*64*36L; // only do the right few columns
+    while (pixel_addr <= 0x50000L + 319 * 200L) {
+      c = lpeek(pixel_addr + (25 * 64) - 8);
+      POKE(0xD020, 0x0c);
+      if (c)
+        c++;
+      lpoke(pixel_addr, c);
+      pixel_addr += 8;
+    }
 #else
-	  // Trigger fixup DMA
+    // Trigger fixup DMA
     POKE(0xD701, ((unsigned int)(&fixup_dmalist)) >> 8);
     POKE(0xD705, ((unsigned int)(&fixup_dmalist)) >> 0);
 #endif
-	  // Draw black down the right hand edge
-	  draw_line(319,0,319,199,0);
-	  y=PEEK(0xD624)>>1;
-	  y&=0x78;
-	  plot_pixel(319,y,1);
+    // Draw black down the right hand edge
+    draw_line(319, 0, 319, 199, 0);
+    y = PEEK(0xD624) >> 1;
+    y &= 0x78;
+    plot_pixel(319, y, 1);
 
-	  frames++;
-	  if (frames==8) { frames=0;
-	activate_double_buffer(); }
-
+    frames++;
+    if (frames == 8) {
+      frames = 0;
+      activate_double_buffer();
+    }
   }
 }

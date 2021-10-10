@@ -313,7 +313,7 @@ void update_speed_estimates(void)
 unsigned char single_run_opcode;
 unsigned char byte_count;
 unsigned char instruction_offset;
-unsigned char branch_taken=0;
+unsigned char branch_taken = 0;
 
 void main(void)
 {
@@ -352,8 +352,8 @@ void main(void)
       indicate_display_mode();
       break;
     case 'b':
-      branch_taken^=1;
-      POKE(0xd020,branch_taken);
+      branch_taken ^= 1;
+      POKE(0xd020, branch_taken);
       break;
     case 'p':
       POKE(0xD02FU, 0x47);
@@ -488,15 +488,16 @@ void main(void)
       test_routine[offset++] = 0x11;
       switch (opcode) {
       case 0x10:
-	if (branch_taken) {
-	  // BPL set N via CMP #$10
-	  test_routine[offset++] = 0xC9;
-	  test_routine[offset++] = 0x10;
-	} else {
-	  // BPL clear N via CMP #$90
-	  test_routine[offset++] = 0xC9;
-	  test_routine[offset++] = 0x90;
-	}
+        if (branch_taken) {
+          // BPL set N via CMP #$10
+          test_routine[offset++] = 0xC9;
+          test_routine[offset++] = 0x10;
+        }
+        else {
+          // BPL clear N via CMP #$90
+          test_routine[offset++] = 0xC9;
+          test_routine[offset++] = 0x90;
+        }
         break;
       case 0x30:
         // BMI -- nothing to do as N cleared by LDA #$11
@@ -514,13 +515,17 @@ void main(void)
         break;
       case 0x90:
         // BCC -- set carry flag via SEC
-	if (branch_taken) test_routine[offset++] = 0x18;
-        else test_routine[offset++] = 0x38;
+        if (branch_taken)
+          test_routine[offset++] = 0x18;
+        else
+          test_routine[offset++] = 0x38;
         break;
       case 0xb0:
         // BCS -- clear carry flag via CLC
-        if (branch_taken) test_routine[offset++] = 0x38;
-        else test_routine[offset++] = 0x18;
+        if (branch_taken)
+          test_routine[offset++] = 0x38;
+        else
+          test_routine[offset++] = 0x18;
         break;
       case 0xd0:
         // BNE so clear Z via CMP #$11

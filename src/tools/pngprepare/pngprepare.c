@@ -218,7 +218,7 @@ void process_file(int mode, char* outputfilename)
 
   if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_GRAY)
     multiplier = 1;
-  
+
   if (multiplier == -1) {
     fprintf(stderr, "Could not convert file to RGB or RGBA\n");
   }
@@ -265,12 +265,14 @@ void process_file(int mode, char* outputfilename)
         int r, g, b;
         if (ptr) {
           r = ptr[0];
-	  if (multiplier>1) {
-	    g = ptr[1];
-	    b = ptr[2]; // a=ptr[3];
-	  } else {
-	    g=r; b=r;
-	  }
+          if (multiplier > 1) {
+            g = ptr[1];
+            b = ptr[2]; // a=ptr[3];
+          }
+          else {
+            g = r;
+            b = r;
+          }
         }
         else {
           r = 0;
@@ -376,7 +378,10 @@ void process_file(int mode, char* outputfilename)
         for (x = 0; x < width; x++) {
           png_byte* ptr = &(row[x * multiplier]);
           int r = ptr[0], g = ptr[1], b = ptr[2]; //, a=ptr[3];
-	  if (multiplier==1) { g=r; b=r; }
+          if (multiplier == 1) {
+            g = r;
+            b = r;
+          }
 
           if (x < 8) {
             if (r > 0x7f || g > 0x7f || b > 0x7f) {
@@ -533,12 +538,14 @@ void process_file(int mode, char* outputfilename)
             int r, g, b;
             if (ptr && (yy < height) && (xx < width)) {
               r = ptr[0];
-	      if (multiplier>1) {
-		g = ptr[1];
-		b = ptr[2]; // a=ptr[3];
-	      } else {
-		g=r; b=r;
-	      }
+              if (multiplier > 1) {
+                g = ptr[1];
+                b = ptr[2]; // a=ptr[3];
+              }
+              else {
+                g = r;
+                b = r;
+              }
             }
             else {
               r = 0;
@@ -615,7 +622,10 @@ void process_file(int mode, char* outputfilename)
         png_byte* row = row_pointers[y];
         png_byte* ptr = &(row[x * multiplier]);
         int r = ptr[0], g = ptr[1], b = ptr[2]; // , a=ptr[3];
-	if (multiplier==1) { g=r; b=r; }
+        if (multiplier == 1) {
+          g = r;
+          b = r;
+        }
         int c = r + 256 * g + 65536 * b;
         for (i = 0; i < colour_count; i++)
           if (c == colours[i])
@@ -684,9 +694,10 @@ void process_file(int mode, char* outputfilename)
           png_byte* row = row_pointers[y];
           png_byte* ptr = &(row[(xx + 0) * multiplier]);
           int r = ptr[0], g = ptr[1], b = ptr[2]; // , a=ptr[3];
-	  if (multiplier==1) {
-	    g=r; b=r;
-	  }
+          if (multiplier == 1) {
+            g = r;
+            b = r;
+          }
           int c = r + 256 * g + 65536 * b;
           for (i = 0; i < colour_count; i++)
             if (c == colours[i])
@@ -694,12 +705,14 @@ void process_file(int mode, char* outputfilename)
           p1 = i;
           ptr = &(row[(xx + 2) * multiplier]);
           r = ptr[0];
-	  if (multiplier>1) {
-	    g = ptr[1];
-	    b = ptr[2]; // a=ptr[3];
-	  } else {
-	    g=r; b=r;
-	  }
+          if (multiplier > 1) {
+            g = ptr[1];
+            b = ptr[2]; // a=ptr[3];
+          }
+          else {
+            g = r;
+            b = r;
+          }
           c = r + 256 * g + 65536 * b;
           for (i = 0; i < colour_count; i++)
             if (c == colours[i])

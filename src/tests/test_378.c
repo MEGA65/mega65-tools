@@ -16,9 +16,9 @@ char msg[64 + 1];
 
 unsigned short i, j;
 unsigned char a, b, c, d;
-unsigned short errors=0;
+unsigned short errors = 0;
 
-unsigned char line_num=5;
+unsigned char line_num = 5;
 
 struct test {
   unsigned char rmw;
@@ -29,6 +29,7 @@ struct test {
   unsigned long expected;
 };
 
+// clang-format off
 struct test tests[]=
   {
    // ADC - Check carry chain works properly
@@ -59,6 +60,7 @@ struct test tests[]=
    
    {0,0x00,"END",0,0,0}
   };
+// clang-format on
 
 unsigned short abs2(signed short s)
 {
@@ -212,44 +214,41 @@ int count;
 unsigned char buffer[512];
 
 // Use tape buffer for code snippets
-unsigned char *code_buf=(unsigned char *)0x340;
+unsigned char* code_buf = (unsigned char*)0x340;
 
-  /* Setup our code snippet:
-     SEI
-     ; LDQ $0380
-     NEG
-     NEG
-     LDA $0380
-     ; Do some Q instruction
-     CLC
-     NEG
-     NEG
-     XXX $0384
-     ; Store result back
-     ; STQ $0388
-     NEG
-     NEG
-     STA $0388
-     ; And store back safely as well
-     STA $038C
-     STX $038D
-     STY $038E
-     STZ $038F
-     CLI
-     RTS
-   */
-unsigned char code_snippet[31]=
-  {
-   0x78,0x42,0x42,0xAD,0x80,0x03,0x18,0x42,0x42,0x6D,0x84,0x03,0x42,0x42,0x8d,0x88,
-   0x03,0x8d,0x8c,0x03,0x8e,0x8d,0x03,0x8c,0x8e,0x03,0x9c,0x8f,0x03,0x60,0x00
-  };
-#define INSTRUCTION_OFFSET  9				 
+/* Setup our code snippet:
+   SEI
+   ; LDQ $0380
+   NEG
+   NEG
+   LDA $0380
+   ; Do some Q instruction
+   CLC
+   NEG
+   NEG
+   XXX $0384
+   ; Store result back
+   ; STQ $0388
+   NEG
+   NEG
+   STA $0388
+   ; And store back safely as well
+   STA $038C
+   STX $038D
+   STY $038E
+   STZ $038F
+   CLI
+   RTS
+ */
+unsigned char code_snippet[31] = { 0x78, 0x42, 0x42, 0xAD, 0x80, 0x03, 0x18, 0x42, 0x42, 0x6D, 0x84, 0x03, 0x42, 0x42, 0x8d,
+  0x88, 0x03, 0x8d, 0x8c, 0x03, 0x8e, 0x8d, 0x03, 0x8c, 0x8e, 0x03, 0x9c, 0x8f, 0x03, 0x60, 0x00 };
+#define INSTRUCTION_OFFSET 9
 
 unsigned long load_addr;
 
 unsigned char line_dmalist[256];
 
-unsigned long result_q,expected;
+unsigned long result_q, expected;
 
 unsigned char ofs;
 unsigned char slope_ofs, line_mode_ofs, cmd_ofs, count_ofs;
@@ -338,33 +337,34 @@ void main(void)
   print_text(0, 4, 7, "All tests should report OK");
 
   // Pre-install code snippet
-  lcopy((long)code_snippet,(long)code_buf,31);
+  lcopy((long)code_snippet, (long)code_buf, 31);
 
   // Run each test
-  for(i=0;tests[i].opcode;i++) {
-    expected= tests[i].expected;
+  for (i = 0; tests[i].opcode; i++) {
+    expected = tests[i].expected;
     // Setup input values
     *(unsigned long*)0x380 = tests[i].val1;
     *(unsigned long*)0x384 = tests[i].val2;
-    
-    code_buf[INSTRUCTION_OFFSET]=tests[i].opcode;
-    __asm__ ( "jsr $0340");
-    if (tests[i].rmw) result_q= *(unsigned long*)0x384;
-    else result_q= *(unsigned long*)0x388;
-    if (result_q!=expected) {
-      snprintf(msg,64,"FAIL:#%d:$%02X:%s",
-	       (int)i,(int)tests[i].opcode,tests[i].instruction);
-      print_text(0,line_num++,2,msg);
-      snprintf(msg,64,"     Expect=$%08lx, Saw=$%08lx",expected,result_q);
-      print_text(0,line_num++,2,msg);
+
+    code_buf[INSTRUCTION_OFFSET] = tests[i].opcode;
+    __asm__("jsr $0340");
+    if (tests[i].rmw)
+      result_q = *(unsigned long*)0x384;
+    else
+      result_q = *(unsigned long*)0x388;
+    if (result_q != expected) {
+      snprintf(msg, 64, "FAIL:#%d:$%02X:%s", (int)i, (int)tests[i].opcode, tests[i].instruction);
+      print_text(0, line_num++, 2, msg);
+      snprintf(msg, 64, "     Expect=$%08lx, Saw=$%08lx", expected, result_q);
+      print_text(0, line_num++, 2, msg);
       errors++;
-    if (line_num>=23) {
-	print_text(0,line_num,8,"TOO MANY ERRORS: Aborting");
-	while(1) continue;
+      if (line_num >= 23) {
+        print_text(0, line_num, 8, "TOO MANY ERRORS: Aborting");
+        while (1)
+          continue;
       }
     }
   }
-  snprintf(msg,64,"%d tests complete, with %d errors.",
-	   i,errors);
-  print_text(0,24,7,msg);
+  snprintf(msg, 64, "%d tests complete, with %d errors.", i, errors);
+  print_text(0, 24, 7, msg);
 }

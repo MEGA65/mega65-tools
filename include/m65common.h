@@ -83,7 +83,7 @@ void do_usleep(__int64 usec);
 #else
 #include <termios.h>
 void do_usleep(unsigned long usec);
-int stricmp(const char *a, const char *b);
+int stricmp(const char* a, const char* b);
 #endif
 
 #ifdef __APPLE__
