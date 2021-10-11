@@ -1689,7 +1689,7 @@ PORT_TYPE open_tcp_port(char* portname)
   char ip[100];
 
   hostname_to_ip(hostname, ip);
-  printf("%s resolved to %s", hostname, ip);
+  printf("%s resolved to %s\n", hostname, ip);
 
   sock_st.sin_addr.s_addr = inet_addr(ip);
   sock_st.sin_family = AF_INET;

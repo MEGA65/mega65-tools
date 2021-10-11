@@ -1654,7 +1654,9 @@ int main(int argc, char** argv)
   // Detect only A7100T parts
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
 #if defined(__APPLE__) || defined(WINDOWS)
-  if (bitstream)
+  if (bitstream && !serial_port)
+#else
+  if (!serial_port)
 #endif
   {
     fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
