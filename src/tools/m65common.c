@@ -114,6 +114,8 @@ int saw_openrom = 0;
 
 int serial_speed = 2000000;
 
+int serial_port_is_tcp = 0;
+
 int cpu_stopped = 0;
 
 // 0 = old hard coded monitor, 1= Kenneth's 65C02 based fancy monitor
@@ -1467,8 +1469,17 @@ int do_serial_port_write(int fd, uint8_t* buffer, size_t size, const char* funct
 }
 
 size_t do_serial_port_read(int fd, uint8_t* buffer, size_t size, const char* function, const char* file, const int line)
-{
-  int count = read(fd, buffer, size);
+{  
+  int count;
+
+  if (serial_port_is_tcp) {
+#ifndef __APPLE__
+    count = recv(fd, buffer, size, MSG_DONTWAIT);
+#else
+    count = recv(fd, buffer, size, 0);
+#endif
+  } else
+    count = read(fd, buffer, size);
   if (last_read_count || count) {
     if (debug_serial) {
       fprintf(stderr, "%s:%d:%s():", file, line, function);
@@ -1720,8 +1731,10 @@ void close_default_tcp_port(void)
 
 void open_the_serial_port(char* serial_port)
 {
+  serial_port_is_tcp=0;
   if (!strncasecmp(serial_port, "tcp", 3)) {
     fd = open_tcp_port(serial_port);
+    serial_port_is_tcp=1;
     return;
   }
 #ifdef WINDOWS
