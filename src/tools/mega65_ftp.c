@@ -79,6 +79,7 @@ char current_dir[1024] = "/";
 
 #ifdef WINDOWS
 #include <windows.h>
+#include <conio.h>
 #else
 #include <termios.h>
 #include <readline/readline.h>
@@ -637,6 +638,43 @@ int execute_command(char* cmd)
 
 extern int debug_serial;
 
+#ifdef WINDOWS
+char* getpass(char* prompt)
+{
+  printf("%s", prompt);
+  static char password[128];
+  password[0] = '\0';
+  int idx = 0;
+
+  for (;;) {
+    int c = _getch();
+    switch (c)
+    {
+      case '\r':
+      case '\n':
+      case EOF:
+        _putch('\n');
+        break;
+      case 8: // backspace
+        if (idx > 0) {
+          idx--;
+          password[idx] = '\0';
+          _putch(8);
+        }
+        continue;
+      default:
+        _putch('*'); //mask
+        password[idx] = c;
+        idx++;
+        password[idx] = '\0';
+        continue;
+    }
+    break;
+  }
+  return password;
+}
+#endif
+
 int DIRTYMOCK(main)(int argc, char** argv)
 {
 #ifdef WINDOWS
@@ -690,6 +728,9 @@ int DIRTYMOCK(main)(int argc, char** argv)
   if (argc - optind == 1)
     usage();
 
+  if (username && !password) {
+    password = getpass("Password: ");
+  }
   errno = 0;
 
   open_the_serial_port(serial_port);
@@ -2132,15 +2173,25 @@ int contains_dir(llist* lst, char* path)
   return 0;
 }
 
+int compare_char(char a, char b, int case_sensitive)
+{
+  if (case_sensitive) {
+    return a == b;
+  }
+  else {
+    return tolower(a) == tolower(b);
+  }
+}
+
 // Initial effort borrowed from Robert James Mieta's snippet in this thread:
 // - https://stackoverflow.com/questions/23457305/compare-strings-with-wildcard
 // Needed a bit of refinement to get the wildcards working for me though.
-int is_match(char* line, char* pattern)
+int is_match(char* line, char* pattern, int case_sensitive)
 {
   int wildcard = 0;
 
   do {
-    if ((*pattern == *line) || (*pattern == '?')) {
+    if (compare_char(*pattern, *line, case_sensitive) || (*pattern == '?')) {
       line++;
       pattern++;
     }
@@ -2151,7 +2202,7 @@ int is_match(char* line, char* pattern)
       wildcard = 1;
     }
     else if (wildcard) {
-      if (*line == *pattern) {
+      if (compare_char(*line, *pattern, case_sensitive)) {
         wildcard = 0;
         line++;
         pattern++;
@@ -2182,7 +2233,7 @@ void show_local_directory(char* searchpattern)
   d = opendir(".");
   if (d) {
     while ((dir = readdir(d)) != NULL) {
-      if (searchpattern && !is_match(dir->d_name, searchpattern))
+      if (searchpattern && !is_match(dir->d_name, searchpattern, 1))
         continue;
 
       struct stat file_stats;
@@ -2198,7 +2249,7 @@ void show_local_directory(char* searchpattern)
   d = opendir(".");
   if (d) {
     while ((dir = readdir(d)) != NULL) {
-      if (searchpattern && !is_match(dir->d_name, searchpattern))
+      if (searchpattern && !is_match(dir->d_name, searchpattern, 1))
         continue;
 
       struct stat file_stats;
@@ -2270,7 +2321,7 @@ int show_directory(char* path)
     while (cur != NULL) {
       struct m65dirent* itm = (struct m65dirent*)cur->item;
 
-      if (searchterm && !is_match(itm->d_name, searchterm)) {
+      if (searchterm && !is_match(itm->d_name, searchterm, 1)) {
         cur = cur->next;
         continue;
       }
@@ -2444,7 +2495,7 @@ void list_all_roms(void)
     while (cur != NULL) {
       struct m65dirent* itm = (struct m65dirent*)cur->item;
 
-      if (searchterm && !is_match(itm->d_name, searchterm)) {
+      if (searchterm && !is_match(itm->d_name, searchterm, 1)) {
         cur = cur->next;
         continue;
       }
@@ -3291,7 +3342,7 @@ int upload_file(char* name, char* dest_name)
   d = opendir(".");
   if (d) {
     while ((dir = readdir(d)) != NULL) {
-      if (dir->d_name && !is_match(dir->d_name, name))
+      if (dir->d_name && !is_match(dir->d_name, name, 1))
         continue;
 
       struct stat file_stats;

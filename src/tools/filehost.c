@@ -32,6 +32,7 @@ typedef struct file_info {
   char filename[256];
   char location[256];
   char author[64];
+  char published[64];
 } tfile_info;
 
 typedef struct list_item {
@@ -59,6 +60,24 @@ void clean_copy(char* dest, char* src)
   *dptr = '\0';
 }
 
+void cleanup(char *str)
+{
+  while (*str != 0)
+  {
+    if (*str == '\\') {
+      char *s = str;
+      while (*s != '\0')
+      {
+        *s = *(s+1);
+        s++;
+      }
+    }
+    str++;
+    if (*str == '\0')
+      break;
+  }
+}
+
 void assess_key_val(tfile_info* finfo, char* key, char* val)
 {
   if (strcmp(key, "title") == 0)
@@ -71,6 +90,10 @@ void assess_key_val(tfile_info* finfo, char* key, char* val)
     clean_copy(finfo->location, val);
   if (strcmp(key, "author") == 0)
     strcpy(finfo->author, val);
+  if (strcmp(key, "published") == 0) {
+    strcpy(finfo->published, val);
+    cleanup(finfo->published);
+  }
 }
 
 int read_in_key_or_value_string(tfile_info* finfo, char c, int* iskey, int* quotestart)
@@ -191,7 +214,7 @@ int read_rows(char* str, int strcnt)
 }
 
 // borrow this from mega65_ftp.c for now...
-int is_match(char* line, char* pattern);
+int is_match(char* line, char* pattern, int case_sensitive);
 
 void print_items(char* searchterm)
 {
@@ -199,9 +222,9 @@ void print_items(char* searchterm)
   tlist_item* ptr = &lst_finfos;
   while (ptr != NULL) {
     tfile_info* pfinfo = (tfile_info*)ptr->cur;
-    if (!searchterm || is_match(pfinfo->title, searchterm) || is_match(pfinfo->filename, searchterm)
-        || is_match(pfinfo->author, searchterm)) {
-      printf("%d: %s - \"%s\" - author: %s\n", cnt, pfinfo->title, pfinfo->filename, pfinfo->author);
+    if (!searchterm || is_match(pfinfo->title, searchterm, 0) || is_match(pfinfo->filename, searchterm, 0)
+        || is_match(pfinfo->author, searchterm, 0)) {
+      printf("%d: %s - \"%s\" - author: %s - published: %s\n", cnt, pfinfo->title, pfinfo->filename, pfinfo->author, pfinfo->published);
     }
 
     ptr = (tlist_item*)ptr->next;
