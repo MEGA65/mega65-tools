@@ -3,7 +3,9 @@
 #include <string.h>
 
 int show_gaps=0;
-int show_quantised_gaps=1;
+int show_quantised_gaps=0;
+int show_post_correction=0;
+
 // MEGA65 floppies contain a track info block that is always written at DD data rate.
 // When the TIB is read, the FDC switches to the indicated rate and encoding
 float rate=81+1;
@@ -129,11 +131,17 @@ void describe_data(void)
       start_data=ucdelta_count;
         
       unsigned short crc=0xffff;
-      for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
+      printf("CRC Calc over:");
+      for(int i=0;i<3;i++) {
+	crc=crc16(crc,0xa1);
+	printf(" $%02x",0xa1);
+      }
       for(int i=0;i<7;i++) {
 	if (i==5) crc_calc=crc;
 	crc=crc16(crc,data_field[i]);
+	printf(" $%02x",data_field[i]);
       }
+      printf("\n");
       if (crc) printf("CRC FAIL! Saw $%02x%02x, Calculated $%04x\n",
 		      data_field[5],data_field[6],crc_calc);
       else printf("CRC ok\n");
@@ -214,7 +222,7 @@ void describe_data(void)
 
 void emit_bit(int b)
 {
-  //  if (rll_encoding) printf("  bit %d\n",b);
+  // if (rll_encoding) printf("  bit %d\n",b);
   last_bit = b;
   byte = (byte << 1) | b;
   bits++;
@@ -296,8 +304,11 @@ void rll27_decode_gap(float gap)
     buffer_bit('0');
   buffer_bit('1');
 
+  buffered_bits[buffered_bit_count]=0;
+  //  printf("buffered bits: [%s]\n",buffered_bits);
+  
   if (buffered_bit_count>=8) {
-    if (!strncmp("00000100",buffered_bits,8)) {
+    if (!strncmp("00001000",buffered_bits,8)) {
       emit_bit(0);
       emit_bit(0);
       emit_bit(1);
@@ -527,7 +538,11 @@ int main(int argc, char** argv)
     if (c == 63) {
       d += 64;
     }
+#if 0
     if ((argc < 3) && b >= a && c >= b && d >= c && buffer[0] != buffer[3] && buffer[0] != buffer[2]) {
+#else
+    if (0) {
+#endif
       fprintf(stderr, "NOTE: File appears to be $D6AC capture\n");
 
       int last_counter = (a - 1) & 0x1f;
@@ -609,12 +624,22 @@ int main(int argc, char** argv)
     
     for (i = 1; i < count; i++) {
       pulse_adjust=0;
+#if 0
       if (!rll_encoding) divisor=2*rate/3; else divisor=rate/3;
-      
+
       if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
 	if (last_pulse) // ignore pseudo-pulse caused by start of file
 	  {
 	    float gap=i-last_pulse;
+#else
+      if (!rll_encoding) divisor=2*rate; else divisor=rate;
+
+      {
+	{
+	      float gap=buffer[i]*2;
+#endif	  
+
+	      // printf("$%03x(%3d) ",(int)(gap*3.0/2),(int)(gap*3.0/2));
 	    gap/=divisor;
 	    
 	    n++;
@@ -724,17 +749,17 @@ int main(int argc, char** argv)
 	      if (delta<0) early++;
 	      if (delta>0) late++;
 	      if (late>5) {
-		printf("     LATE\n");
+		if (show_post_correction) printf("     LATE\n");
 		late=0;
 		pulse_adjust--;
 	      }
 	      if (early>5) {
-		printf("     EARLY\n");
+		if (show_post_correction) printf("     EARLY\n");
 		early=0;
 		pulse_adjust++;
 	      }
 	      
-	      printf("     post-correction delta=%.2f\n",delta);
+	      if (show_post_correction) printf("     post-correction delta=%.2f\n",delta);
 	      corrected_deltas[ucdelta_count]=delta;
 	    }
 	  }
