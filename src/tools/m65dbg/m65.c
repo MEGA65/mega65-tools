@@ -1294,6 +1294,7 @@ void do_type_text(char *type_text)
       fprintf(stderr,"Reading input from terminal in character mode.\n"
           "- CONTROL-Y = end session.\n"
           "- CONTROL-L = refresh ascii screenshot.\n"
+          "- CONTROL-O = take png screenshot.\n"
           "- CONTROL-R = reset mega65\n"
           "- CONTROL-F = trigger freeze menu.\n");
 
@@ -1366,6 +1367,10 @@ void do_type_text(char *type_text)
             get_video_state();
             do_screen_shot_ascii();
             printf("freeze completed!\n");
+            break;
+
+          case 0x0f:  // CTRL+O = trigger a png screenshot
+            do_screen_shot();
             break;
 
           case 0x12:  // CTRL-R = reset mega65
