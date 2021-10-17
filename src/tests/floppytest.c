@@ -15,7 +15,8 @@ unsigned short interval_length;
 
 void read_track(unsigned char track_number,unsigned char side);
 void format_single_track_side(
-    /* unsigned char track_num,unsigned char side, */ unsigned char sector_count, unsigned char with_gaps);
+			      /* unsigned char track_num,unsigned char side, */ unsigned char sector_count, unsigned char with_gaps,
+			      unsigned char RLL);
 
 void goto_track0(void)
 {
@@ -485,8 +486,9 @@ void gap_histogram(void)
   
   // Enable matching encoding rate to track info block
   // Enable display of variable rate matched sectors
-  // Don't set rate based on TIB
-  POKE(0xD6AE,0x60);
+  // DO set rate based on TIB, so that we start reading
+  // at the right rate
+  POKE(0xD6AE,0xE0);
   
   // Floppy motor on
   POKE(0xD080, request_side?0x60:0x68);
@@ -782,29 +784,67 @@ void gap_histogram(void)
 
 void do_dma(void);
 
-void lcopy_floppy_gaps(long destination_address,
-	  unsigned int count)
+struct dmagic_floppy_dmalist {
+  // Enhanced DMA options
+  unsigned char option_0b;
+  unsigned char option_0f;
+  unsigned char option_80;
+  unsigned char source_mb;
+  unsigned char option_81;
+  unsigned char dest_mb;
+  unsigned char option_90;
+  unsigned char count_msb;
+  unsigned char end_of_options;
+
+  // F018B format DMA request
+  unsigned char command;
+  unsigned int count;
+  unsigned int source_addr;
+  unsigned char source_bank;
+  unsigned int dest_addr;
+  unsigned char dest_bank;
+  unsigned char sub_cmd;  // F018B subcmd
+  unsigned int modulo;
+};
+struct dmagic_floppy_dmalist floplist;
+
+void lcopy_read_floppy_gaps(long destination_address,
+	  unsigned long count)
 {
-  dmalist.option_0b=0x0b;
+  floplist.option_0b=0x0b;
 
-  // EVIL HACK: Put the $0F code twice to tell DMAgic to read floppy gaps,
-  // instead of a normal copy.
-  dmalist.option_80=0x0f;
-  dmalist.source_mb=0x0f;
+  // Read floppy raw flux
+  floplist.option_0f=0x0f;
+
+  // How many 64KB blocks to read?
+  floplist.option_90=0x90;
+  floplist.count_msb=count>>16;
   
-  dmalist.option_81=0x81;
-  dmalist.dest_mb=(destination_address>>20);
-  dmalist.end_of_options=0x00;
-  dmalist.sub_cmd=0x00;
+  // Source address is irrelevant
+  floplist.option_80=0x80;
+  floplist.source_mb=0x00;
 
-  dmalist.command=0x03; // fill
-  dmalist.count=count;
-  dmalist.sub_cmd=0x00; 
+  // Destination is where we put it
+  floplist.option_81=0x81;
+  floplist.dest_mb=(destination_address>>20);
+  floplist.end_of_options=0x00;
+  floplist.sub_cmd=0x00;
 
-  dmalist.dest_addr=destination_address&0xffff;
-  dmalist.dest_bank=(destination_address>>16)&0x0f;
+  floplist.command=0x03; // fill
+  floplist.count=count;
+  floplist.sub_cmd=0x00; 
 
-  do_dma();
+  floplist.dest_addr=destination_address&0xffff;
+  floplist.dest_bank=(destination_address>>16)&0x0f;
+
+  //  do_dma();
+  // Now run DMA job 
+  mega65_io_enable();
+  POKE(0xd702U,0);
+  POKE(0xd704U,0x00);  // List is in $00xxxxx
+  POKE(0xd701U,((unsigned int)&floplist)>>8);
+  POKE(0xd705U,((unsigned int)&floplist)&0xff); // triggers enhanced DMA
+  
   return;
 }
 
@@ -899,11 +939,14 @@ void read_track(unsigned char track_number,unsigned char side)
   // For HD disks, we just need to record from $D6A1 using a fixed-source DMA copy
   // This gets us ~13MHz sample rate.
   lfill(0x50000,0,0);
+  // Wait for 2 revolutions to make sure we are properly settled on the track
+  while(!(PEEK(0xD6A0)&0x80)) continue;
+  while(PEEK(0xD6A0)&0x80) continue;
   while(!(PEEK(0xD6A0)&0x80)) continue;
   while(PEEK(0xD6A0)&0x80) continue;
   //  lcopy_fixed_src(0xffd36afL,0x50000,65535);
   // lcopy_fixed_src(0xffd36a0L,0x50000,65535);
-  lcopy_floppy_gaps(0x50000,65535);
+  lcopy_read_floppy_gaps(0x8000000,0x40000);
 #endif
 
   print_text(0, 5, 7, "Track read complete");
@@ -1959,6 +2002,12 @@ void main(void)
     case '5':
       // Read track 0
       POKE(0xD610,0);
+      // Make sure we leave track 0, before seeking back to it to work around
+      // some weird problem with the drive or controller
+      POKE(0xD081, 0x18);
+      while (PEEK(0xD082) & 0x80)
+        continue;
+      // Now read the track
       read_track(0,1);
       break;
     case '6':
