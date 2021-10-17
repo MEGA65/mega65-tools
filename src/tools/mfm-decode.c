@@ -32,9 +32,11 @@ float quantise_gap_mfm(float gap)
 
 float quantise_gap_rll27(float gap)
 { 
-  if (gap <= 2.5)
-    gap = 2.0;
-  else if (gap < 3.5)
+  //  printf("gap=%f\n",gap);
+  //  if (gap <= 2.5)
+  //    gap = 2.0;
+  //  else
+    if (gap < 3.5)
     gap = 3;
   else if (gap < 4.5)
     gap = 4;
@@ -60,6 +62,12 @@ float quantise_gap(float gap)
   else return quantise_gap_mfm(gap);
 }
 
+int q_gap(float gap) {
+  //  printf("qgap=%f\n",gap);
+  int a=gap;
+  int b=gap+0.1;  
+  return b;
+}
 
 int last_pulse = 0;
 float last_gap = 0;
@@ -500,13 +508,16 @@ struct precomp_rule rules[RULE_COUNT]
 };
 // clang-format on
 
+// Frequency of a gap following the two previously indicate gap values
+unsigned int gap_freqs[256][256][256];
+
 int main(int argc, char** argv)
 {
   if (argc < 2) {
     fprintf(stderr, "usage: mfm-decode <MEGA65 FDC read capture ...>\n");
     exit(-1);
   }
-
+  
   for (int i = 0; i < MAX_SIGNALS; i++) {
     sample_counts[i] = 0;
   }
@@ -772,8 +783,89 @@ int main(int argc, char** argv)
     fclose(raw);
     
     printf("\n");
-  }
 
+      // Record the gap lengths based on the previous two gaps
+      // to help tune our write pre-comp logic
+      bzero(gap_freqs,sizeof(unsigned int)*256*256*256);
+      unsigned int cs[256];
+      bzero(cs,sizeof(unsigned int)*256);
+      for (i = 2; i < count; i++) {
+	gap_freqs[buffer[i-2]][buffer[i-1]][buffer[i]]++;
+	cs[buffer[i]]++;
+      }
+      for(int c=0;c<256;c++) {
+	if (cs[c]) printf("%3d : %d\n",c,cs[c]);
+      }
+			      
+
+      int skip=1;
+      unsigned int buckets[10][10][10];
+      bzero(buckets,sizeof(unsigned int)*10*10*10);
+      unsigned int bc[10];
+      bzero(bc,sizeof(bc));
+
+      rll_encoding=1;
+      rate=rate/2; // because values are shifted right one
+      
+      for(int c=0;c<256;c++) {
+	//	if (!cs[c]) { skip=1; continue; }
+	for(int a=0;a<256;a++) {	
+	  for(int b=0;b<256;b++) {
+	    if (gap_freqs[a][b][c]) {
+	      //	      printf("%d,%d,%d\n",
+	      //		     q_gap(quantise_gap(a/rate)),q_gap(quantise_gap(b/rate)),q_gap(quantise_gap(c/rate)));
+	      buckets[q_gap(quantise_gap(a/rate))][q_gap(quantise_gap(b/rate))][q_gap(quantise_gap(c/rate))]+=gap_freqs[a][b][c];
+	      bc[q_gap(quantise_gap(c/rate))]+=gap_freqs[a][b][c];
+	    }
+	  }
+	}
+	//	printf("\n");
+      }
+
+      skip=0;
+      for(int c=0;c<10;c++) {
+	if (bc[c]) {
+	  printf("%d (%6d) : ",c,bc[c]);
+
+	  int tally[10][10];
+	  
+	  for(int c0=0;c0<256;c0++) {	
+	    int cc=q_gap(quantise_gap(c0/rate));
+	    bzero(tally,sizeof(tally));
+	    for(int a=0;a<256;a++) {	
+	      for(int b=0;b<256;b++) {
+		int aa=q_gap(quantise_gap(a/rate));
+		int bb=q_gap(quantise_gap(b/rate));
+		if (cc==c) {
+		  if (gap_freqs[a][b][c0]) {
+		    tally[aa][bb]+=gap_freqs[a][b][c0];
+		    
+		  }
+		}
+	      }
+	    }
+
+	    if (cc==c) {
+	      printf("\n      c0=%d : ",c0);
+	      for(int a=0;a<10;a++) {
+		for(int b=0;b<10;b++) {
+		  if (tally[a][b]) printf(" %d@%d,%d",tally[a][b],a,b);
+		}
+	      }
+	    }
+	    
+	    
+	  }
+	  
+	  
+	  printf("\n");
+	}
+	
+      }
+      }
+      return 0;
+
+      
   FILE* f = fopen("gaps.vcd", "w");
   if (!f)
     return -1;
