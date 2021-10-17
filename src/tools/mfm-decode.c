@@ -72,7 +72,7 @@ int sync_count = 0;
 int field_ofs = 0;
 unsigned char data_field[1024];
 
-#define MAX_GAPS 16384
+#define MAX_GAPS 65536*4
 float corrected_deltas[MAX_GAPS];
 float uncorrected_deltas[MAX_GAPS];
 int cdelta_count=0;
@@ -80,7 +80,7 @@ int ucdelta_count=0;
 int start_data=0;
 
 #define MAX_SIGNALS 64
-#define MAX_SAMPLES 65536
+#define MAX_SAMPLES 65536*4
 float traces[MAX_SIGNALS][MAX_SAMPLES];
 int sample_counts[MAX_SIGNALS] = { 0 };
 float max_time = 0;
@@ -513,8 +513,8 @@ int main(int argc, char** argv)
 
   for (int arg = 1; arg < argc; arg++) {
     FILE* f = fopen(argv[arg], "r");
-    unsigned char buffer[65536];
-    int count = fread(buffer, 1, 65536, f);
+    unsigned char buffer[MAX_SAMPLES];
+    int count = fread(buffer, 1, MAX_SAMPLES, f);
     printf("Read %d bytes\n", count);
 
     crc16_init();
@@ -602,6 +602,7 @@ int main(int argc, char** argv)
     
     
     fprintf(stderr,"NOTE: Assuming raw $D6A0 capture.\n");
+    fprintf(stderr,"      %d samples.\n",count);
     
     // Obtain data rate from filename if present
     sscanf(argv[arg],"rate%f",&rate);
@@ -639,7 +640,7 @@ int main(int argc, char** argv)
 	      float gap=buffer[i]*2;
 #endif	  
 
-	      // printf("$%03x(%3d) ",(int)(gap*3.0/2),(int)(gap*3.0/2));
+	      // printf(" $%03x(%3d) ",(int)(gap*3.0/2),(int)(gap*3.0/2));
 	    gap/=divisor;
 	    
 	    n++;
