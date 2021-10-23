@@ -1,15 +1,18 @@
 /*
-  Issue #459: adcq/sbcq/cmpq flags
+  Issue #458: base page indirect z index addressing messes up
 
-  The flags after executing a ADCQ, SBCQ, or CMPQ off.
+  In the manual all bp-ind-z-idx addressed Q opcodes should ignore Z.
+  In VHDL this is only true for STQ.
+  
+  While it can make sense that certain Q opcodes that do not operate on
+  the virtual Q register could use Z, at least the opcodes:
+  ADQ, ANDQ, CMPQ, EORQ, ORQ, SBCQ
+  must not add Z, as they do operate on Q.
 
-  At least for ADCQ carry is inverted and for all of them
-  overflow is never set. This means CMPQ is correct.
-
-  This tests checks the three commands for result and flags.
+  This test case checks this behavior.
 */
-#define ISSUE_NUM 459
-#define ISSUE_NAME "adcq/sbcq/cmpq flags"
+#define ISSUE_NUM 458
+#define ISSUE_NAME "q bp-ind-z-idx 0 or not"
 
 #include <stdio.h>
 #include <string.h>
@@ -29,6 +32,7 @@ struct test {
   unsigned char message[12]; // 11 max!
   unsigned long val1;
   unsigned long val2;
+  unsigned long val3;
   unsigned long expected;
   unsigned char flag_mask;
   unsigned char flag_val;
@@ -36,59 +40,49 @@ struct test {
 
 struct test tests[]=
   {
-    // LDQ - check if right value is loaded, and is Q ops are working
-    // 001 - 12345678 + 10fedcba = 22345678 -- NVZC all unset
-    {0, 0xad, 0x18, "ldq", 0x12345678, 0x12345678, 0x12345678, 0x00, 0x00},
+    // to test: LDQ, ADCQ, ANDQ, CMPQ, EORQ, ORQ, SBCQ, STQ
+    // LDQ - check if right value is loaded
+    // 001 - load via 16b pointer value with offset of 2
+    {0, 0xb2, 0x00, "ldq ($nn),z", 0x02345678, 0x12345678, 0xffffffff, 0xffff1234, 0x00, 0x00},
+    // 002 - load via 32b pointer value with ofsset of 2
+    {0, 0xb2, 0x01, "ldq [$nn],z", 0x02345678, 0x12345678, 0xffffffff, 0xffff1234, 0x00, 0x00},
 
-    // ADCQ - check result and flags
-    // 002 - 12345678 + 10fedcba = 22345678 -- NVZC all unset
-    {0, 0x6d, 0x18, "adcq -nvzc", 0x12345678, 0x10fedcba, 0x23333332, 0xc3, 0x00},
-    // 003 - 12345678 + ffffffff = 12345677 -- C set, NVZ unset
-    {0, 0x6d, 0x18, "adcq +c-nvz",0x12345678, 0xffffffff, 0x12345677, 0xc3, 0x01},
-    // 004 - 7f123456 + 10fedcba = 90111110 -- NV set, ZC unset
-    {0, 0x6d, 0x18, "adcq +nv-zc",0x7f123456, 0x10fedcba, 0x90111110, 0xc3, 0xc0},
-    // 005 - 81234567 + 8fedcba9 = 11111110 -- VC set, NZ unset
-    {0, 0x6d, 0x18, "adcq +vc-nz",0x81234567, 0x8fedcba9, 0x11111110, 0xc3, 0x41},
-    // 006 - 12345678 + 81fedcba = a2222219 -- N set, VZC unset
-    {0, 0x6d, 0x18, "adcq +n-vzc",0x12345678, 0x8fedcba1, 0xa2222219, 0xc3, 0x80},
-    // 007 - 12345678 + edcba988 = 00000000 -- ZC set, NV unset
-    {0, 0x6d, 0x18, "adcq +zc-nv",0x12345678, 0xedcba988, 0x00000000, 0xc3, 0x03},
-    // 008 - 80000000 + 80000000 = 00000000 -- VZC set, N unset
-    {0, 0x6d, 0x18, "adcq +n-vzc",0x81234567, 0x81234567, 0x00000000, 0xc3, 0x43},
+    // 003 - 02345678 ANDQ ($nn) aa5555aa = 02145428
+    {0, 0x32, 0x00, "andq ($nn)", 0x02345678, 0xaa5555aa, 0x00000000, 0x02145428, 0x00, 0x00},
+    // 004 - 02345678 ANDQ ($nn) aa5555aa = 02145428
+    {0, 0x32, 0x01, "andq [$nn]", 0x02345678, 0xaa5555aa, 0x00000000, 0x02145428, 0x00, 0x00},
 
-    // SBCQ - check result and flags
-    // 009 - 12345678 - 10fedcba = 22345678 -- C set, NVZ unset
-    {0, 0xed, 0x38, "sbcq +c-nvz",0x12345678, 0x10fedcba, 0x013579be, 0xc3, 0x01},
-    // 010 - 12345678 - ffffffff = 12345677 -- NVZC all unset
-    {0, 0xed, 0x38, "sbcq -nvzc", 0x12345678, 0xffffffff, 0x12345679, 0xc3, 0x00},
-    // 011 - 10fedcba - 7f123456 = 91eca864 -- N set, VZC unset
-    {0, 0xed, 0x38, "sbcq +n-vzc",0x10fedcba, 0x7f123456, 0x91eca864, 0xc3, 0x80},
-    // 012 - 10fedcba - 10fedcba = 00000000 -- ZC set, NV unset
-    {0, 0xed, 0x38, "sbcq +zc-nv",0x10fedcba, 0x10fedcba, 0x00000000, 0xc3, 0x03},
-    // 013 - 80000000 - 12345678 = 6dcba988 -- VC set, NZ unset
-    {0, 0xed, 0x38, "sbcq +vc-nz",0x80000000, 0x12345678, 0x6dcba988, 0xc3, 0x41},
-    // 014 - 7fedcba9 - fedcba98 = 81111111 -- NV set, ZC unset
-    {0, 0xed, 0x38, "sbcq +nv-zc",0x7fedcba9, 0xfedcba98, 0x81111111, 0xc3, 0xc0},
+    // 005 - 02345678 ORQ ($nn) aa55aa55 = aa7557fa
+    {0, 0x12, 0x00, "orq ($nn)",  0x02345678, 0xaa5555aa, 0xffffffff, 0xaa7557fa, 0x00, 0x00},
+    // 006 - 02345678 ORQ ($nn) aa55aa55 = aa7557fa
+    {0, 0x12, 0x01, "orq [$nn]",  0x02345678, 0xaa5555aa, 0xffffffff, 0xaa7557fa, 0x00, 0x00},
 
-    // CMPQ - check flags
-    // 015 - 12345678 cmp 12345678 (equal)
-    {0, 0xcd, 0x18, "cmpq + a=m", 0x12345678, 0x12345678, 0x12345678, 0x83, 0x03},
-    // 016 - 12345678 cmp 01234567 (a > b)
-    {0, 0xcd, 0x18, "cmpq + a>m", 0x12345678, 0x01234567, 0x12345678, 0x83, 0x01},
-    // 017 - 12345678 cmp 23456789 (a < b)
-    {0, 0xcd, 0x18, "cmpq + a<m", 0x12345678, 0x23456789, 0x12345678, 0x83, 0x00},
-    // 018 - fedcba98 cmp fedcba98 (equal)
-    {0, 0xcd, 0x18, "cmpq - a=m", 0xfedcba98, 0xfedcba98, 0xfedcba98, 0x83, 0x03},
-    // 019 - fedcba98 cmp edcba987 (a > b)
-    {0, 0xcd, 0x18, "cmpq - a>m", 0xfedcba98, 0xedcba987, 0xfedcba98, 0x83, 0x01},
-    // 020 - edcba987 cmp fedcba98 (a < b)
-    {0, 0xcd, 0x18, "cmpq - a<m", 0xedcba987, 0xfedcba98, 0xedcba987, 0x83, 0x80},
-    // 021 - 12345678 cmp edcba987 (a < b)
-    {0, 0xcd, 0x18, "cmpq +- a<m", 0x12345678, 0xedcba987, 0x12345678, 0x83, 0x00},
-    // 022 - edcba987 cmp 12345678 (a > b)
-    {0, 0xcd, 0x18, "cmpq -+ a>m", 0xedcba987, 0x12345678, 0xedcba987, 0x83, 0x81},
+    // 007 - 02345678 EORQ ($nn) aa55aa55 = a86103d2
+    {0, 0x52, 0x00, "eorq ($nn)", 0x02345678, 0xaa5555aa, 0xffffffff, 0xa86103d2, 0x00, 0x00},
+    // 008 - 02345678 EORQ ($nn) aa55aa55 = a86103d2
+    {0, 0x52, 0x01, "eorq [$nn]", 0x02345678, 0xaa5555aa, 0xffffffff, 0xa86103d2, 0x00, 0x00},
 
-    {0, 0x00, 0x18, "end", 0, 0, 0, 0 ,0}
+    // 009 - 02345678 ADCQ ($nn) 12345678 = 1468acf0
+    {0, 0x72, 0x00, "adcq ($nn)", 0x02345678, 0x12345678, 0x87654321, 0x1468acf0, 0x00, 0x00},
+    // 010 - 02345678 ADCQ ($nn) 12345678 = 1468acf0
+    {0, 0x72, 0x01, "adcq [$nn]", 0x02345678, 0x12345678, 0x87654321, 0x1468acf0, 0x00, 0x00},
+
+    // 011 - 02345678 SBCQ ($nn) 01234567 = 01111111
+    {0, 0xf2, 0x02, "sbcq ($nn)", 0x02345678, 0x01234567, 0x22222222, 0x01111111, 0x00, 0x00},
+    // 012 - 02345678 SBCQ ($nn) 01234567 = 01111111
+    {0, 0xf2, 0x03, "sbcq [$nn]", 0x02345678, 0x01234567, 0x22222222, 0x01111111, 0x00, 0x00},
+
+    // 013 - 02345678 CMPQ ($nn) 02345678 => Q unchanged, Flags -N+ZC
+    {0, 0xd2, 0x00, "cmpq ($nn)", 0x02345678, 0x02345678, 0xdddddddd, 0x02345678, 0x83, 0x03},
+    // 014 - 02345678 CMPQ ($nn) 02345678 => Q unchanged, Flags -N+ZC
+    {0, 0xd2, 0x01, "cmpq [$nn]", 0x02345678, 0x02345678, 0xdddddddd, 0x02345678, 0x83, 0x03},
+
+    // 013 - 02345678 STQ ($nn)
+    {1, 0x92, 0x00, "stq ($nn)", 0x02345678, 0xdddddddd, 0xdddddddd, 0x02345678, 0x00, 0x00},
+    // 014 - 02345678 STQ ($nn)
+    {1, 0x92, 0x01, "stq [$nn]", 0x02345678, 0xdddddddd, 0xdddddddd, 0x02345678, 0x00, 0x00},
+
+    {0, 0x00, 0x00, "end", 0, 0, 0, 0 ,0}
   };
 
 unsigned char sub = 0;
@@ -100,46 +94,55 @@ unsigned char concmsg[81] = "", flagstr[11]="", failstr[3]="";
 unsigned char* code_buf = (unsigned char*)0x340;
 
 /* Setup our code snippet:
+ * 0340-037f - test code
+ * 0380 - test value 1
+ * 0384 - test value 2 (also place where stq will store)
+ * 0388 - test value 3 (if opcode uses shift from z, it will move from 384 up here)
+ * 038c - result q (store a,x,y,z via non-q opcodes)
+ * 0390 - result f (store flags from after the op test)
+ * using real base page, we are not testing tab here
+ * c4 - pointer value 1
+ * c8 - pointer value 2
+ *
    SEI
    CLD
    ; preload registers with garbage
    lda #$fa
    ldx #$5f
    ldy #$af
-   ldz #$f5
+   ; z is 0, we want to load test value 1 unshifted
+   ldz #$00
    CLV
-   ; LDQ $0380
+   ; LDQ ($c4),Z
    NEG
    NEG
-   LDA ($0380)
-   ; Do some Q instruction
+   LDA ($c4),Z
+   ; we need extra opcode space for adcq and sbcq
+   SEC
    CLC
+   ; Do some Q instruction (clc to have place for [$nn])
    NEG
    NEG
-   XXX $0384
+   XXX ($c8),Z
    ; store flags after our op!
    PHP
    ; Store result back
-   ; not suing STQ, because we want just test the op above
-   STA $0388
-   STX $0389
-   STY $038A
-   STZ $038B
-   ; and the flags
-   PLA
    STA $038C
-   CLI
+   STX $038D
+   STY $038E
+   STZ $038F
+   ; don't forget the flags!
+   PLA
+   STA $0390
    RTS
  */
-unsigned char code_snippet[42] = {
-    0x78, 0xd8, 0xa9, 0xfa, 0xa2, 0x5f, 0xa0, 0xaf, 0xa3, 0xf5,
-    0xb8, 0x42, 0x42, 0xad, 0x80, 0x03, 0x18, 0x42, 0x42, 0x6d,
-    0x84, 0x03, 0x08, 0x03, 0x8d, 0x88, 0x03, 0x8e, 0x89, 0x03,
-    0x8c, 0x8a, 0x03, 0x9c, 0x8b, 0x03, 0x68, 0x8d, 0x8c, 0x03,
-    0x60, 0x00
+unsigned char code_snippet[40] = {
+    0x78, 0xd8, 0xa9, 0xfa, 0xa2, 0x5f, 0xa0, 0xaf, 0xa3, 0x00,
+    0xb8, 0x42, 0x42, 0xb2, 0xc4, 0x38, 0x18, 0x42, 0x42, 0xb2,
+    0xc8, 0x08, 0x8d, 0x8c, 0x03, 0x8e, 0x8d, 0x03, 0x8c, 0x8e,
+    0x03, 0x9c, 0x8f, 0x03, 0x68, 0x8d, 0x90, 0x03, 0x60, 0x00
 };
-#define INST_OFFSET_1 19
-#define INST_OFFSET_2 16
+#define INST_OFFSET 15
 
 unsigned long load_addr;
 
@@ -207,7 +210,6 @@ void h640_text_mode(void)
   
   // Clear colour RAM
   lfill(0xff80000L, 0x0E, 2000);
-
   // Disable hot registers
   POKE(0xD05D, PEEK(0xD05D) & 0x7f);
 
@@ -318,29 +320,57 @@ void main(void)
   sub++; // 0 is setup, first test is 1
 
   // Pre-install code snippet
-  lcopy((long)code_snippet, (long)code_buf, 42);
+  lcopy((long)code_snippet, (long)code_buf, 40);
+  
+  // setup zero page pointers
+  *(unsigned long*)0xc4 = 0x00000380;
+  *(unsigned long*)0xc8 = 0x00000384;
 
   // Run each test
   for (i = 0; tests[i].opcode1; i++) {
     // Setup input values
     *(unsigned long*)0x380 = tests[i].val1;
     *(unsigned long*)0x384 = tests[i].val2;
-    // preset return values with pattern
-    *(unsigned long*)0x388 = 0xb1eb1bbe;
+    *(unsigned long*)0x388 = tests[i].val3;
     *(unsigned long*)0x38c = 0xb1eb1bbe;
 
-
     // change code
-    code_buf[INST_OFFSET_1] = tests[i].opcode1;
-    code_buf[INST_OFFSET_2] = tests[i].opcode2;
+
+    if (tests[i].opcode2==0) {
+      // 16 bit prefix sec, clc, 2x neg
+      code_buf[INST_OFFSET]   = 0x38;
+      code_buf[INST_OFFSET+1] = 0x18;
+      code_buf[INST_OFFSET+2] = 0x42;
+      code_buf[INST_OFFSET+3] = 0x42;
+    } else if (tests[i].opcode2==1) {
+      // 32 bit prefix clc, 2x neg, eom
+      code_buf[INST_OFFSET]   = 0x18;
+      code_buf[INST_OFFSET+1] = 0x42;
+      code_buf[INST_OFFSET+2] = 0x42;
+      code_buf[INST_OFFSET+3] = 0xea;
+    } else if (tests[i].opcode2==2) {
+      // 16 bit prefix clc, sec, 2x neg
+      code_buf[INST_OFFSET]   = 0x18;
+      code_buf[INST_OFFSET+1] = 0x38;
+      code_buf[INST_OFFSET+2] = 0x42;
+      code_buf[INST_OFFSET+3] = 0x42;
+    } else if (tests[i].opcode2==3) {
+      // 32 bit prefix sec, 2x neg, eom
+      code_buf[INST_OFFSET]   = 0x38;
+      code_buf[INST_OFFSET+1] = 0x42;
+      code_buf[INST_OFFSET+2] = 0x42;
+      code_buf[INST_OFFSET+3] = 0xea;
+    }
+    code_buf[INST_OFFSET+4] = tests[i].opcode1;
+
     __asm__("jsr $0340");
 
     // read results
     if (tests[i].rmw == 1)
-      result_q = *(unsigned long*)0x384;
+      result_q = *(unsigned long*)0x384; // load from test value 2 location
     else
-      result_q = *(unsigned long*)0x388;
-    result_f = *(unsigned char*)0x38C;
+      result_q = *(unsigned long*)0x38c; // load non-q stored result
+    result_f = *(unsigned char*)0x390; // the flags after the op
 
     reslo = (unsigned int) (result_q&0xffff);
     reshi = (unsigned int) (result_q>>16);
@@ -383,5 +413,6 @@ void main(void)
   unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);
 
   keybuffer(1);
+
   restore_graphics();
 }
