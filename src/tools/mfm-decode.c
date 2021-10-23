@@ -3,7 +3,9 @@
 #include <string.h>
 
 int show_gaps=0;
-int show_quantised_gaps=1;
+int show_quantised_gaps=0;
+int show_post_correction=0;
+
 // MEGA65 floppies contain a track info block that is always written at DD data rate.
 // When the TIB is read, the FDC switches to the indicated rate and encoding
 float rate=81+1;
@@ -30,9 +32,11 @@ float quantise_gap_mfm(float gap)
 
 float quantise_gap_rll27(float gap)
 { 
-  if (gap <= 2.5)
-    gap = 2.0;
-  else if (gap < 3.5)
+  //  printf("gap=%f\n",gap);
+  //  if (gap <= 2.5)
+  //    gap = 2.0;
+  //  else
+    if (gap < 3.5)
     gap = 3;
   else if (gap < 4.5)
     gap = 4;
@@ -58,6 +62,12 @@ float quantise_gap(float gap)
   else return quantise_gap_mfm(gap);
 }
 
+int q_gap(float gap) {
+  //  printf("qgap=%f\n",gap);
+  int a=gap;
+  int b=gap+0.1;  
+  return b;
+}
 
 int last_pulse = 0;
 float last_gap = 0;
@@ -70,7 +80,7 @@ int sync_count = 0;
 int field_ofs = 0;
 unsigned char data_field[1024];
 
-#define MAX_GAPS 16384
+#define MAX_GAPS 65536*4
 float corrected_deltas[MAX_GAPS];
 float uncorrected_deltas[MAX_GAPS];
 int cdelta_count=0;
@@ -78,7 +88,7 @@ int ucdelta_count=0;
 int start_data=0;
 
 #define MAX_SIGNALS 64
-#define MAX_SAMPLES 65536
+#define MAX_SAMPLES 65536*4
 float traces[MAX_SIGNALS][MAX_SAMPLES];
 int sample_counts[MAX_SIGNALS] = { 0 };
 float max_time = 0;
@@ -129,11 +139,17 @@ void describe_data(void)
       start_data=ucdelta_count;
         
       unsigned short crc=0xffff;
-      for(int i=0;i<3;i++) crc=crc16(crc,0xa1);
+      printf("CRC Calc over:");
+      for(int i=0;i<3;i++) {
+	crc=crc16(crc,0xa1);
+	printf(" $%02x",0xa1);
+      }
       for(int i=0;i<7;i++) {
 	if (i==5) crc_calc=crc;
 	crc=crc16(crc,data_field[i]);
+	printf(" $%02x",data_field[i]);
       }
+      printf("\n");
       if (crc) printf("CRC FAIL! Saw $%02x%02x, Calculated $%04x\n",
 		      data_field[5],data_field[6],crc_calc);
       else printf("CRC ok\n");
@@ -214,7 +230,7 @@ void describe_data(void)
 
 void emit_bit(int b)
 {
-  //  if (rll_encoding) printf("  bit %d\n",b);
+  // if (rll_encoding) printf("  bit %d\n",b);
   last_bit = b;
   byte = (byte << 1) | b;
   bits++;
@@ -296,8 +312,11 @@ void rll27_decode_gap(float gap)
     buffer_bit('0');
   buffer_bit('1');
 
+  buffered_bits[buffered_bit_count]=0;
+  //  printf("buffered bits: [%s]\n",buffered_bits);
+  
   if (buffered_bit_count>=8) {
-    if (!strncmp("00000100",buffered_bits,8)) {
+    if (!strncmp("00001000",buffered_bits,8)) {
       emit_bit(0);
       emit_bit(0);
       emit_bit(1);
@@ -489,21 +508,24 @@ struct precomp_rule rules[RULE_COUNT]
 };
 // clang-format on
 
+// Frequency of a gap following the two previously indicate gap values
+unsigned int gap_freqs[256][256][256];
+
 int main(int argc, char** argv)
 {
   if (argc < 2) {
     fprintf(stderr, "usage: mfm-decode <MEGA65 FDC read capture ...>\n");
     exit(-1);
   }
-
+  
   for (int i = 0; i < MAX_SIGNALS; i++) {
     sample_counts[i] = 0;
   }
 
   for (int arg = 1; arg < argc; arg++) {
     FILE* f = fopen(argv[arg], "r");
-    unsigned char buffer[65536];
-    int count = fread(buffer, 1, 65536, f);
+    unsigned char buffer[MAX_SAMPLES];
+    int count = fread(buffer, 1, MAX_SAMPLES, f);
     printf("Read %d bytes\n", count);
 
     crc16_init();
@@ -527,7 +549,11 @@ int main(int argc, char** argv)
     if (c == 63) {
       d += 64;
     }
+#if 0
     if ((argc < 3) && b >= a && c >= b && d >= c && buffer[0] != buffer[3] && buffer[0] != buffer[2]) {
+#else
+    if (0) {
+#endif
       fprintf(stderr, "NOTE: File appears to be $D6AC capture\n");
 
       int last_counter = (a - 1) & 0x1f;
@@ -587,6 +613,7 @@ int main(int argc, char** argv)
     
     
     fprintf(stderr,"NOTE: Assuming raw $D6A0 capture.\n");
+    fprintf(stderr,"      %d samples.\n",count);
     
     // Obtain data rate from filename if present
     sscanf(argv[arg],"rate%f",&rate);
@@ -609,12 +636,22 @@ int main(int argc, char** argv)
     
     for (i = 1; i < count; i++) {
       pulse_adjust=0;
+#if 0
       if (!rll_encoding) divisor=2*rate/3; else divisor=rate/3;
-      
+
       if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
 	if (last_pulse) // ignore pseudo-pulse caused by start of file
 	  {
 	    float gap=i-last_pulse;
+#else
+      if (!rll_encoding) divisor=2*rate; else divisor=rate;
+
+      {
+	{
+	      float gap=buffer[i]*2;
+#endif	  
+
+	      // printf(" $%03x(%3d) ",(int)(gap*3.0/2),(int)(gap*3.0/2));
 	    gap/=divisor;
 	    
 	    n++;
@@ -724,17 +761,17 @@ int main(int argc, char** argv)
 	      if (delta<0) early++;
 	      if (delta>0) late++;
 	      if (late>5) {
-		printf("     LATE\n");
+		if (show_post_correction) printf("     LATE\n");
 		late=0;
 		pulse_adjust--;
 	      }
 	      if (early>5) {
-		printf("     EARLY\n");
+		if (show_post_correction) printf("     EARLY\n");
 		early=0;
 		pulse_adjust++;
 	      }
 	      
-	      printf("     post-correction delta=%.2f\n",delta);
+	      if (show_post_correction) printf("     post-correction delta=%.2f\n",delta);
 	      corrected_deltas[ucdelta_count]=delta;
 	    }
 	  }
@@ -746,8 +783,89 @@ int main(int argc, char** argv)
     fclose(raw);
     
     printf("\n");
-  }
 
+      // Record the gap lengths based on the previous two gaps
+      // to help tune our write pre-comp logic
+      bzero(gap_freqs,sizeof(unsigned int)*256*256*256);
+      unsigned int cs[256];
+      bzero(cs,sizeof(unsigned int)*256);
+      for (i = 2; i < count; i++) {
+	gap_freqs[buffer[i-2]][buffer[i-1]][buffer[i]]++;
+	cs[buffer[i]]++;
+      }
+      for(int c=0;c<256;c++) {
+	if (cs[c]) printf("%3d : %d\n",c,cs[c]);
+      }
+			      
+
+      int skip=1;
+      unsigned int buckets[10][10][10];
+      bzero(buckets,sizeof(unsigned int)*10*10*10);
+      unsigned int bc[10];
+      bzero(bc,sizeof(bc));
+
+      rll_encoding=1;
+      rate=rate/2; // because values are shifted right one
+      
+      for(int c=0;c<256;c++) {
+	//	if (!cs[c]) { skip=1; continue; }
+	for(int a=0;a<256;a++) {	
+	  for(int b=0;b<256;b++) {
+	    if (gap_freqs[a][b][c]) {
+	      //	      printf("%d,%d,%d\n",
+	      //		     q_gap(quantise_gap(a/rate)),q_gap(quantise_gap(b/rate)),q_gap(quantise_gap(c/rate)));
+	      buckets[q_gap(quantise_gap(a/rate))][q_gap(quantise_gap(b/rate))][q_gap(quantise_gap(c/rate))]+=gap_freqs[a][b][c];
+	      bc[q_gap(quantise_gap(c/rate))]+=gap_freqs[a][b][c];
+	    }
+	  }
+	}
+	//	printf("\n");
+      }
+
+      skip=0;
+      for(int c=0;c<10;c++) {
+	if (bc[c]) {
+	  printf("%d (%6d) : ",c,bc[c]);
+
+	  int tally[10][10];
+	  
+	  for(int c0=0;c0<256;c0++) {	
+	    int cc=q_gap(quantise_gap(c0/rate));
+	    bzero(tally,sizeof(tally));
+	    for(int a=0;a<256;a++) {	
+	      for(int b=0;b<256;b++) {
+		int aa=q_gap(quantise_gap(a/rate));
+		int bb=q_gap(quantise_gap(b/rate));
+		if (cc==c) {
+		  if (gap_freqs[a][b][c0]) {
+		    tally[aa][bb]+=gap_freqs[a][b][c0];
+		    
+		  }
+		}
+	      }
+	    }
+
+	    if (cc==c) {
+	      printf("\n      c0=%d : ",c0);
+	      for(int a=0;a<10;a++) {
+		for(int b=0;b<10;b++) {
+		  if (tally[a][b]) printf(" %d@%d,%d",tally[a][b],a,b);
+		}
+	      }
+	    }
+	    
+	    
+	  }
+	  
+	  
+	  printf("\n");
+	}
+	
+      }
+      }
+      return 0;
+
+      
   FILE* f = fopen("gaps.vcd", "w");
   if (!f)
     return -1;
