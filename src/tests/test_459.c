@@ -36,59 +36,59 @@ struct test {
 
 struct test tests[]=
   {
-   // LDQ - check if right value is loaded, and is Q ops are working
-   // 001 - 12345678 + 10fedcba = 22345678 -- NVZC all unset
-   {0, 0xad, 0x18, "ldq", 0x12345678, 0x12345678, 0x12345678, 0x00, 0x00},
+    // LDQ - check if right value is loaded, and is Q ops are working
+    // 001 - 12345678 + 10fedcba = 22345678 -- NVZC all unset
+    {0, 0xad, 0x18, "ldq", 0x12345678, 0x12345678, 0x12345678, 0x00, 0x00},
 
-   // ADCQ - check result and flags
-   // 002 - 12345678 + 10fedcba = 22345678 -- NVZC all unset
-   {0, 0x6d, 0x18, "adcq -nvzc", 0x12345678, 0x10fedcba, 0x23333332, 0xc3, 0x00},
-   // 003 - 12345678 + ffffffff = 12345677 -- C set, NVZ unset
-   {0, 0x6d, 0x18, "adcq +c-nvz",0x12345678, 0xffffffff, 0x12345677, 0xc3, 0x01},
-   // 004 - 7f123456 + 10fedcba = 90111110 -- NV set, ZC unset
-   {0, 0x6d, 0x18, "adcq +nv-zc",0x7f123456, 0x10fedcba, 0x90111110, 0xc3, 0xc0},
-   // 005 - 81234567 + 8fedcba9 = 11111110 -- VC set, NZ unset
-   {0, 0x6d, 0x18, "adcq +vc-nz",0x81234567, 0x8fedcba9, 0x11111110, 0xc3, 0x41},
-   // 006 - 12345678 + 81fedcba = a2222219 -- N set, VZC unset
-   {0, 0x6d, 0x18, "adcq +n-vzc",0x12345678, 0x8fedcba1, 0xa2222219, 0xc3, 0x80},
-   // 007 - 12345678 + edcba988 = 00000000 -- ZC set, NV unset
-   {0, 0x6d, 0x18, "adcq +zc-nv",0x12345678, 0xedcba988, 0x00000000, 0xc3, 0x03},
-   // 008 - 80000000 + 80000000 = 00000000 -- VZC set, N unset
-   {0, 0x6d, 0x18, "adcq +n-vzc",0x81234567, 0x81234567, 0x00000000, 0xc3, 0x43},
+    // ADCQ - check result and flags
+    // 002 - 12345678 + 10fedcba = 22345678 -- NVZC all unset
+    {0, 0x6d, 0x18, "adcq -nvzc", 0x12345678, 0x10fedcba, 0x23333332, 0xc3, 0x00},
+    // 003 - 12345678 + ffffffff = 12345677 -- C set, NVZ unset
+    {0, 0x6d, 0x18, "adcq +c-nvz",0x12345678, 0xffffffff, 0x12345677, 0xc3, 0x01},
+    // 004 - 7f123456 + 10fedcba = 90111110 -- NV set, ZC unset
+    {0, 0x6d, 0x18, "adcq +nv-zc",0x7f123456, 0x10fedcba, 0x90111110, 0xc3, 0xc0},
+    // 005 - 81234567 + 8fedcba9 = 11111110 -- VC set, NZ unset
+    {0, 0x6d, 0x18, "adcq +vc-nz",0x81234567, 0x8fedcba9, 0x11111110, 0xc3, 0x41},
+    // 006 - 12345678 + 81fedcba = a2222219 -- N set, VZC unset
+    {0, 0x6d, 0x18, "adcq +n-vzc",0x12345678, 0x8fedcba1, 0xa2222219, 0xc3, 0x80},
+    // 007 - 12345678 + edcba988 = 00000000 -- ZC set, NV unset
+    {0, 0x6d, 0x18, "adcq +zc-nv",0x12345678, 0xedcba988, 0x00000000, 0xc3, 0x03},
+    // 008 - 80000000 + 80000000 = 00000000 -- VZC set, N unset
+    {0, 0x6d, 0x18, "adcq +n-vzc",0x81234567, 0x81234567, 0x00000000, 0xc3, 0x43},
 
-   // SBCQ - check result and flags
-   // 009 - 12345678 - 10fedcba = 22345678 -- C set, NVZ unset
-   {0, 0xed, 0x38, "sbcq +c-nvz",0x12345678, 0x10fedcba, 0x013579be, 0xc3, 0x01},
-   // 010 - 12345678 - ffffffff = 12345677 -- NVZC all unset
-   {0, 0xed, 0x38, "sbcq -nvzc", 0x12345678, 0xffffffff, 0x12345679, 0xc3, 0x00},
-   // 011 - 10fedcba - 7f123456 = 91eca864 -- N set, VZC unset
-   {0, 0xed, 0x38, "sbcq +n-vzc",0x10fedcba, 0x7f123456, 0x91eca864, 0xc3, 0x80},
-   // 012 - 10fedcba - 10fedcba = 00000000 -- ZC set, NV unset
-   {0, 0xed, 0x38, "sbcq +zc-nv",0x10fedcba, 0x10fedcba, 0x00000000, 0xc3, 0x03},
-   // 013 - 80000000 - 12345678 = 6dcba988 -- VC set, NZ unset
-   {0, 0xed, 0x38, "sbcq +vc-nz",0x80000000, 0x12345678, 0x6dcba988, 0xc3, 0x41},
-   // 014 - 7fedcba9 - fedcba98 = 81111111 -- NV set, ZC unset
-   {0, 0xed, 0x38, "sbcq +nv-zc",0x7fedcba9, 0xfedcba98, 0x81111111, 0xc3, 0xc0},
+    // SBCQ - check result and flags
+    // 009 - 12345678 - 10fedcba = 22345678 -- C set, NVZ unset
+    {0, 0xed, 0x38, "sbcq +c-nvz",0x12345678, 0x10fedcba, 0x013579be, 0xc3, 0x01},
+    // 010 - 12345678 - ffffffff = 12345677 -- NVZC all unset
+    {0, 0xed, 0x38, "sbcq -nvzc", 0x12345678, 0xffffffff, 0x12345679, 0xc3, 0x00},
+    // 011 - 10fedcba - 7f123456 = 91eca864 -- N set, VZC unset
+    {0, 0xed, 0x38, "sbcq +n-vzc",0x10fedcba, 0x7f123456, 0x91eca864, 0xc3, 0x80},
+    // 012 - 10fedcba - 10fedcba = 00000000 -- ZC set, NV unset
+    {0, 0xed, 0x38, "sbcq +zc-nv",0x10fedcba, 0x10fedcba, 0x00000000, 0xc3, 0x03},
+    // 013 - 80000000 - 12345678 = 6dcba988 -- VC set, NZ unset
+    {0, 0xed, 0x38, "sbcq +vc-nz",0x80000000, 0x12345678, 0x6dcba988, 0xc3, 0x41},
+    // 014 - 7fedcba9 - fedcba98 = 81111111 -- NV set, ZC unset
+    {0, 0xed, 0x38, "sbcq +nv-zc",0x7fedcba9, 0xfedcba98, 0x81111111, 0xc3, 0xc0},
 
-   // CMPQ - check flags
-   // 015 - 12345678 cmp 12345678 (equal)
-   {0, 0xcd, 0x18, "cmpq + a=m", 0x12345678, 0x12345678, 0x12345678, 0x83, 0x03},
-   // 016 - 12345678 cmp 01234567 (a > b)
-   {0, 0xcd, 0x18, "cmpq + a>m", 0x12345678, 0x01234567, 0x12345678, 0x83, 0x01},
-   // 017 - 12345678 cmp 23456789 (a < b)
-   {0, 0xcd, 0x18, "cmpq + a<m", 0x12345678, 0x23456789, 0x12345678, 0x83, 0x00},
-   // 018 - fedcba98 cmp fedcba98 (equal)
-   {0, 0xcd, 0x18, "cmpq - a=m", 0xfedcba98, 0xfedcba98, 0xfedcba98, 0x83, 0x03},
-   // 019 - fedcba98 cmp edcba987 (a > b)
-   {0, 0xcd, 0x18, "cmpq - a>m", 0xfedcba98, 0xedcba987, 0xfedcba98, 0x83, 0x01},
-   // 020 - edcba987 cmp fedcba98 (a < b)
-   {0, 0xcd, 0x18, "cmpq - a<m", 0xedcba987, 0xfedcba98, 0xedcba987, 0x83, 0x80},
-   // 021 - 12345678 cmp edcba987 (a < b)
-   {0, 0xcd, 0x18, "cmpq +- a<m", 0x12345678, 0xedcba987, 0x12345678, 0x83, 0x00},
-   // 022 - edcba987 cmp 12345678 (a > b)
-   {0, 0xcd, 0x18, "cmpq -+ a>m", 0xedcba987, 0x12345678, 0xedcba987, 0x83, 0x81},
+    // CMPQ - check flags
+    // 015 - 12345678 cmp 12345678 (equal)
+    {0, 0xcd, 0x18, "cmpq + a=m", 0x12345678, 0x12345678, 0x12345678, 0x83, 0x03},
+    // 016 - 12345678 cmp 01234567 (a > b)
+    {0, 0xcd, 0x18, "cmpq + a>m", 0x12345678, 0x01234567, 0x12345678, 0x83, 0x01},
+    // 017 - 12345678 cmp 23456789 (a < b)
+    {0, 0xcd, 0x18, "cmpq + a<m", 0x12345678, 0x23456789, 0x12345678, 0x83, 0x00},
+    // 018 - fedcba98 cmp fedcba98 (equal)
+    {0, 0xcd, 0x18, "cmpq - a=m", 0xfedcba98, 0xfedcba98, 0xfedcba98, 0x83, 0x03},
+    // 019 - fedcba98 cmp edcba987 (a > b)
+    {0, 0xcd, 0x18, "cmpq - a>m", 0xfedcba98, 0xedcba987, 0xfedcba98, 0x83, 0x01},
+    // 020 - edcba987 cmp fedcba98 (a < b)
+    {0, 0xcd, 0x18, "cmpq - a<m", 0xedcba987, 0xfedcba98, 0xedcba987, 0x83, 0x80},
+    // 021 - 12345678 cmp edcba987 (a < b)
+    {0, 0xcd, 0x18, "cmpq +- a<m", 0x12345678, 0xedcba987, 0x12345678, 0x83, 0x00},
+    // 022 - edcba987 cmp 12345678 (a > b)
+    {0, 0xcd, 0x18, "cmpq -+ a>m", 0xedcba987, 0x12345678, 0xedcba987, 0x83, 0x81},
 
-   {0, 0x00, 0x18, "end", 0, 0, 0, 0 ,0}
+    {0, 0x00, 0x18, "end", 0, 0, 0, 0 ,0}
   };
 
 unsigned char sub = 0;
@@ -235,7 +235,7 @@ void restore_graphics(void) {
 
 void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
 {
-  pixel_addr = 0xC000 + x + y * 80;
+  pixel_addr = 0xC000 + x + y*80;
   while (*msg) {
     char_code = *msg;
     if (*msg >= 0xc0 && *msg <= 0xe0)

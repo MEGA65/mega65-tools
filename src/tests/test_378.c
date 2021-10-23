@@ -1,6 +1,7 @@
 /*
   Issue #378: Q virtual instruction problems
 */
+#define ISSUE_NUM 378
 
 #include <stdio.h>
 #include <string.h>
@@ -11,14 +12,14 @@
 #include <dirent.h>
 #include <fileio.h>
 #include <random.h>
+#include <tests.h>
+
+unsigned char sub = 0;
 
 char msg[64 + 1];
 
 unsigned short i, j;
 unsigned char a, b, c, d;
-unsigned short errors = 0;
-
-unsigned char line_num = 5;
 
 struct test {
   unsigned char rmw;
@@ -27,36 +28,37 @@ struct test {
   unsigned long val1;
   unsigned long val2;
   unsigned long expected;
+  unsigned char message[20];
 };
 
 // clang-format off
 struct test tests[]=
   {
    // ADC - Check carry chain works properly
-   {0,0x6d,"ADC",0x12345678,0x00000000,0x12345678},
-   {0,0x6d,"ADC",0x12345678,0x00000001,0x12345679},
-   {0,0x6d,"ADC",0x12345678,0x00000100,0x12345778},
-   {0,0x6d,"ADC",0x12345678,0x00000101,0x12345779},
-   {0,0x6d,"ADC",0x12345678,0x000000FF,0x12345777},
-   {0,0x6d,"ADC",0x12345678,0x0000FF00,0x12355578},
-   {0,0x6d,"ADC",0x12345678,0x0DCBA989,0x20000001},
+   {0,0x6d,"ADC",0x12345678,0x00000000,0x12345678,"adcq #0"},
+   {0,0x6d,"ADC",0x12345678,0x00000001,0x12345679,"adcq #1"},
+   {0,0x6d,"ADC",0x12345678,0x00000100,0x12345778,"adcq #$100"},
+   {0,0x6d,"ADC",0x12345678,0x00000101,0x12345779,"adcq"},
+   {0,0x6d,"ADC",0x12345678,0x000000FF,0x12345777,"adcq"},
+   {0,0x6d,"ADC",0x12345678,0x0000FF00,0x12355578,"adcq"},
+   {0,0x6d,"ADC",0x12345678,0x0DCBA989,0x20000001,"adcq"},
    // EOR 
-   {0,0x4d,"EOR",0x12345678,0x12340000,0x00005678},
-   {0,0x4d,"EOR",0x12345678,0x00005678,0x12340000},
+   {0,0x4d,"EOR",0x12345678,0x12340000,0x00005678,"eorq"},
+   {0,0x4d,"EOR",0x12345678,0x00005678,0x12340000,"eorq"},
    // AND 
-   {0,0x2d,"AND",0x12345678,0x0000FFFF,0x00005678},
-   {0,0x2d,"AND",0x12345678,0xFFFF0000,0x12340000},
+   {0,0x2d,"AND",0x12345678,0x0000FFFF,0x00005678,"andq"},
+   {0,0x2d,"AND",0x12345678,0xFFFF0000,0x12340000,"andq"},
    // ORA 
-   {0,0x2d,"AND",0x12340000,0x00005678,0x00000000},
-   {0,0x2d,"AND",0x12345600,0x00005678,0x00005600},
+   {0,0x2d,"AND",0x12340000,0x00005678,0x00000000,"andq"},
+   {0,0x2d,"AND",0x12345600,0x00005678,0x00005600,"andq"},
    // INC
-   {1,0xEE,"INC",0,0x12345678,0x12345679},
-   {1,0xEE,"INC",0,0x00000000,0x00000001},
-   {1,0xEE,"INC",0,0x00FFFFFF,0x01000000},
+   {1,0xEE,"INC",0,0x12345678,0x12345679,"inq"},
+   {1,0xEE,"INC",0,0x00000000,0x00000001,"inq"},
+   {1,0xEE,"INC",0,0x00FFFFFF,0x01000000,"inq"},
    // DEC
-   {1,0xCE,"DEC",0,0x12345678,0x12345677},
-   {1,0xCE,"DEC",0,0x00000000,0xFFFFFFFF},
-   {1,0xCE,"DEC",0,0x00FFFFFF,0x00FFFFFE},
+   {1,0xCE,"DEC",0,0x12345678,0x12345677,"deq"},
+   {1,0xCE,"DEC",0,0x00000000,0xFFFFFFFF,"deq"},
+   {1,0xCE,"DEC",0,0x00FFFFFF,0x00FFFFFE,"deq"},
    
    {0,0x00,"END",0,0,0}
   };
@@ -268,7 +270,7 @@ void main(void)
   POKE(0, 65);
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
-
+#if 0
   // Setup first palette (in palette bank 3, which we will also use as the chargen palette)
   // with grey gradient, and select palette bank 0 for the alternate palette.
   // top 2 bits select the memory mapped palette, so here we are setting up palette bank 3.
@@ -285,7 +287,7 @@ void main(void)
     POKE(0xD200 + i, 0);
     POKE(0xD300 + i, 0xff);
   }
-
+#endif
   while (PEEK(0xD610))
     POKE(0xD610, 0);
 
@@ -298,6 +300,7 @@ void main(void)
   POKE(0xD740, 0);
   POKE(0xD750, 0);
 
+#if 0
   graphics_mode();
   graphics_clear_screen();
 
@@ -329,12 +332,10 @@ void main(void)
   ofs += 3;
   line_dmalist[ofs++] = 0x00; // modulo
   line_dmalist[ofs++] = 0x00;
+#endif
 
-  print_text(0, 0, 1, "Issue #378: Q 32-bit virtual reg");
-  print_text(0, 1, 1, "Many instructions give incorrect");
-  print_text(0, 2, 1, "results due to timing closure");
-  print_text(0, 3, 1, "problems.");
-  print_text(0, 4, 7, "All tests should report OK");
+  unit_test_setup("q 32-bit virtual reg", ISSUE_NUM);
+  sub++; // 0 is setup, first test is 1
 
   // Pre-install code snippet
   lcopy((long)code_snippet, (long)code_buf, 31);
@@ -352,19 +353,13 @@ void main(void)
       result_q = *(unsigned long*)0x384;
     else
       result_q = *(unsigned long*)0x388;
-    if (result_q != expected) {
-      snprintf(msg, 64, "FAIL:#%d:$%02X:%s", (int)i, (int)tests[i].opcode, tests[i].instruction);
-      print_text(0, line_num++, 2, msg);
-      snprintf(msg, 64, "     Expect=$%08lx, Saw=$%08lx", expected, result_q);
-      print_text(0, line_num++, 2, msg);
-      errors++;
-      if (line_num >= 23) {
-        print_text(0, line_num, 8, "TOO MANY ERRORS: Aborting");
-        while (1)
-          continue;
-      }
-    }
+
+    unit_test_set_current_name(tests[i].message);
+    if (result_q == expected)
+      unit_test_report(ISSUE_NUM, sub++, TEST_PASS);
+    else
+      unit_test_report(ISSUE_NUM, sub++, TEST_FAIL);
   }
-  snprintf(msg, 64, "%d tests complete, with %d errors.", i, errors);
-  print_text(0, 24, 7, msg);
+
+  unit_test_report(ISSUE_NUM, sub++, TEST_DONEALL);
 }
