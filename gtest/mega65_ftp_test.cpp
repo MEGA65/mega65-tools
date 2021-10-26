@@ -13,7 +13,7 @@ int contains_file(char* name);
 int is_fragmented(char* filename);
 int create_dir(char*);
 int show_directory(char* path);
-int fat_opendir(char* path);
+int fat_opendir(char* path, int show_errmsg);
 
 extern char current_dir[1024];
 
@@ -296,10 +296,10 @@ TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
 {
   init_sdcard_data();
   create_dir("test");
-  fat_opendir("/test");
+  fat_opendir("/test", 1);
   strcpy(current_dir, "/test");
   upload_file(file4kb, file4kb);
-  fat_opendir("/");
+  fat_opendir("/", 1);
   strcpy(current_dir, "/");
   ReleaseStdOut();
 
