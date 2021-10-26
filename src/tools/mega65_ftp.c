@@ -2278,43 +2278,55 @@ void change_local_dir(char* path)
     printf("ERROR: Failed to change directory (%s)!\n", path);
 }
 
+int read_remote_dirents(llist* lst_dirents, char* path, char** psearchterm)
+{
+  if (!file_system_found)
+    open_file_system();
+  if (!file_system_found) {
+    fprintf(stderr, "ERROR: Could not open file system.\n");
+    return FALSE;
+  }
+
+  // check if it's an absolute path to a folder
+  if (fat_opendir(path) == 0) {
+    // if so read direntries within it
+    if (!read_direntries(lst_dirents, path))
+      return FALSE;
+  }
+  // if not abs-path, then assume it's a file/dir/wildcard for the current working directory
+  else {
+    if (!read_direntries(lst_dirents, current_dir))
+      return FALSE;
+
+    // check if the user wants to 'dir' a sub-folder
+    if (contains_dir(lst_dirents, path)) {
+      llist_free(lst_dirents);
+      lst_dirents = llist_new();
+
+      if (!read_direntries(lst_dirents, path))
+        return FALSE;
+    }
+    else if (strcmp(path, current_dir) != 0)
+      *psearchterm = path;
+  }
+
+  return TRUE;
+}
+
 int show_directory(char* path)
 {
+  int dir_count = 0;
+  int file_count = 0;
+
   llist* lst_dirents = llist_new();
   char* searchterm = NULL;
 
   int retVal = 0;
 
   do {
-    if (!file_system_found)
-      open_file_system();
-    if (!file_system_found) {
-      fprintf(stderr, "ERROR: Could not open file system.\n");
+    if (!read_remote_dirents(lst_dirents, path, &searchterm)) {
       retVal = -1;
       break;
-    }
-
-    // check if it's an absolute path to a folder
-    if (fat_opendir(path) == 0) {
-      // if so read direntries within it
-      if (!read_direntries(lst_dirents, path))
-        break;
-    }
-    // if not abs-path, then assume it's a file/dir/wildcard for the current working directory
-    else {
-      if (!read_direntries(lst_dirents, current_dir))
-        break;
-
-      // check if the user wants to 'dir' a sub-folder
-      if (contains_dir(lst_dirents, path)) {
-        llist_free(lst_dirents);
-        lst_dirents = llist_new();
-
-        if (!read_direntries(lst_dirents, path))
-          break;
-      }
-      else if (strcmp(path, current_dir) != 0)
-        searchterm = path;
     }
 
     llist* cur = lst_dirents;
@@ -2326,13 +2338,18 @@ int show_directory(char* path)
         continue;
       }
 
-      if (itm->d_attr & 0x10)
+      if (itm->d_attr & 0x10) {
+        dir_count++;
         printf("       <DIR> %s\n", itm->d_name);
-      else if (itm->d_name[0] && itm->d_filelen >= 0)
+      }
+      else if (itm->d_name[0] && itm->d_filelen >= 0) {
+        file_count++;
         printf("%12d %s\n", (int)itm->d_filelen, itm->d_name);
+      }
       cur = cur->next;
     }
   } while (0);
+  printf("%d Dir(s), %d File(s)\n", dir_count, file_count);
 
   llist_free(lst_dirents);
 
@@ -3338,7 +3355,7 @@ int upload_file(char* name, char* dest_name)
     return upload_single_file(name, dest_name);
 
   // check for wildcards in name
-  // list directories first
+  // list directory first
   d = opendir(".");
   if (d) {
     while ((dir = readdir(d)) != NULL) {
@@ -3347,8 +3364,10 @@ int upload_file(char* name, char* dest_name)
 
       struct stat file_stats;
       if (!stat(dir->d_name, &file_stats)) {
-        if (!S_ISDIR(file_stats.st_mode))
+        if (!S_ISDIR(file_stats.st_mode)) {
+          printf("Uploading \"%s\"...\n", dir->d_name);
           upload_single_file(dir->d_name, dir->d_name);
+        }
       }
     }
   }
@@ -3884,7 +3903,7 @@ void mount_file(char* filename)
   queue_execute();
 }
 
-int download_file(char* dest_name, char* local_name, int showClusters)
+int download_single_file(char* dest_name, char* local_name, int showClusters)
 {
   struct m65dirent de;
   int retVal = 0;
@@ -3995,4 +4014,45 @@ int download_file(char* dest_name, char* local_name, int showClusters)
   } while (0);
 
   return retVal;
+}
+
+int download_file(char* name, char* local_name, int showClusters)
+{
+  llist* lst_dirents = llist_new();
+  char* searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
+
+  // don't bother with wildcards if a unique local name has been specified (assume that this is just for a single file)
+  if (strcmp(name, local_name))
+    return download_single_file(name, local_name, showClusters);
+
+  // if no wildcards in name, then just download a single file
+  if (!strstr(name, "*"))
+    return download_single_file(name, NULL, showClusters);
+
+  // handle wildcards
+  if (!read_remote_dirents(lst_dirents, current_dir, &searchterm)) {
+    return FALSE;
+  }
+
+  llist* cur = lst_dirents;
+
+  while (cur != NULL) {
+    struct m65dirent* itm = (struct m65dirent*)cur->item;
+
+    if (searchterm && !is_match(itm->d_name, searchterm, 1)) {
+      cur = cur->next;
+      continue;
+    }
+
+    if (itm->d_attr & 0x10)
+      ; // this is a DIR
+    else if (itm->d_name[0] && itm->d_filelen >= 0) {
+      printf("Downloading \"%s\"...\n", itm->d_name);
+      download_single_file(itm->d_name, itm->d_name, showClusters);
+    }
+
+    cur = cur->next;
+  }
+
+  return 0;
 }
