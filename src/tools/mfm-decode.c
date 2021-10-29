@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-int show_gaps=0;
-int show_quantised_gaps=0;
+int show_gaps=1;
+int show_quantised_gaps=1;
 int show_post_correction=0;
 
 // MEGA65 floppies contain a track info block that is always written at DD data rate.
@@ -127,14 +127,14 @@ void describe_data(void)
       // MEGA65 Track Information Block
       fprintf(stdout,"\nTRACK INFO BLOCK: Track=%d, Divisor=%d (%.2fMHz), Encoding=$%02x\n",
 	      data_field[1],data_field[2],40.5/data_field[2],data_field[3]);
-      if (data_field[3]&0x40) {
+      if ((data_field[3]&0x0f)==0x01) {
 	// RLL
 	rate=data_field[2];
 	rll_encoding=1;
       } else {
-	// MFM: Munge to use RLL decoder with it
-	rate=data_field[2]/2;
-	rll_encoding=1;
+	// MFM
+	rate=data_field[2];
+	rll_encoding=0;
       }
       start_data=ucdelta_count;
         
@@ -230,7 +230,7 @@ void describe_data(void)
 
 void emit_bit(int b)
 {
-  // if (rll_encoding) printf("  bit %d\n",b);
+  printf("  bit %d\n",b);
   last_bit = b;
   byte = (byte << 1) | b;
   bits++;
@@ -238,7 +238,7 @@ void emit_bit(int b)
     if (byte_count < 16)
       byte_count++;
     else {
-      //      printf("\n");
+      printf("\n");
       byte_count = 0;
     }
     if (sync_count == 3) {
@@ -372,11 +372,21 @@ float sync_gaps_rll27[2] = { 7.0, 2.0};
 int reset_delta=0;
 int found_sync3 = 0;
 
+float previous_partial_gap=0;
+
 float mfm_decode(float gap)
 {
-  float gap_in=gap;
-  gap = quantise_gap(gap);
+  float gap_in=gap + previous_partial_gap;
 
+  if (gap_in<0.7) {
+    previous_partial_gap=gap;
+    printf("Accumulating short gap %.2f\n",gap);
+    return 0;
+  }
+  
+  gap = quantise_gap(gap_in);
+  previous_partial_gap=0;  
+  
   if (show_quantised_gaps) printf("%.2f (%.2f)\n",gap,gap_in);
 
   // Look at recent gaps to see if it is a sync mark
