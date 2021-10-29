@@ -8,6 +8,7 @@
 #include <fileio.h>
 #include <time.h>
 #include <targets.h>
+#include <tests.h>
 
 unsigned short i;
 unsigned char a, b, c, d;
@@ -283,6 +284,30 @@ unsigned char setup_hyperram(void)
   return 0;
 }
 
+void joy_test(unsigned char port,unsigned char maj, unsigned char min, unsigned char val,
+	      char y, char *dir)
+{
+  snprintf(msg,80,"TEST Joystick Port %d: Push %s",
+	   port?1:2,dir);
+  print_text(0, y, 7, msg);
+
+  // Wait for joystick to go idle again
+  while((PEEK(0xDC00+port)&0x1f)!=0x1f) POKE(0xD020,PEEK(0xD020)+1);
+  // Allow for de-bounce
+  usleep(50000);
+
+  while((PEEK(0xDC00+port)&0x1f)==0x1f) POKE(0xD020,PEEK(0xD020)+1);
+  if ((PEEK(0xDC00+port)&0x1f)!=val) {
+    unit_test_report(maj,min,TEST_FAIL);
+  } else {
+    unit_test_report(maj,min,TEST_PASS);
+  }
+  // Wait for joystick to go idle again
+  while((PEEK(0xDC00+port)&0x1f)!=0x1f) POKE(0xD020,PEEK(0xD020)+1);
+  // Allow for de-bounce
+  usleep(50000);
+}
+
 void main(void)
 {
   // Fast CPU, M65 IO
@@ -323,36 +348,30 @@ void main(void)
     }
   }
   activate_double_buffer();
-
-  while (1) {
+  
 
     POKE(0xD020, 1);
-    if (setup_hyperram())
+    if (setup_hyperram()) {
       print_text(0, 6, 2, "FAIL HyperRAM Probe");
-    else
-      print_text(0, 6, 5, "PASS HyperRAM Probe");
-
-    // Play two different tones out of the left and right speakers alternately
-    POKE(0xD020, 2);
-    if (PEEK(0xD7FA) & 0x40) {
-      print_text(0, 7, 7, "TEST Low tone from left speaker  ");
-      play_sine(0, 2000);
-      play_sine(3, 1);
+      unit_test_report(2, 1, TEST_FAIL);
     }
     else {
-      print_text(0, 7, 7, "TEST High tone from right speaker");
-      play_sine(0, 1);
-      play_sine(3, 3000);
+      print_text(0, 5, 5, "PASS HyperRAM Probe");
+      unit_test_report(2, 1, TEST_PASS);
     }
 
     // Internal floppy connector
     POKE(0xD020, 3);
     if (PEEK(0xD6A9) != floppy_interval_first)
       floppy_active = 1;
-    if (!floppy_active)
+    if (!floppy_active) {
       print_text(0, 2, 2, "FAIL Floppy (is a disk inserted?)");
-    else
+      unit_test_report(3, 1, TEST_FAIL);
+    }
+    else {
       print_text(0, 2, 5, "PASS Floppy                          ");
+      unit_test_report(3, 1, TEST_PASS);
+    }
 
     // Try toggling the IEC lines to make sure we can pull CLK and DATA low.
     // (ATN can't be read.)
@@ -371,35 +390,47 @@ void main(void)
           usleep(1000);
           if ((PEEK(0xDD00) & 0xc0) == 0x00) {
             iec_pass = 1;
+	    unit_test_report(4, 1, TEST_PASS);
           }
           else {
             print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK+DATA)");
+	    unit_test_report(4, 1, TEST_FAIL);
           }
+	  unit_test_report(4, 2, TEST_PASS);	  
         }
         else {
+	  unit_test_report(4, 2, TEST_FAIL);
           print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK)");
         }
+	unit_test_report(4, 3, TEST_PASS);
       }
       else {
+	unit_test_report(4, 3, TEST_FAIL);
         print_text(0, 3, 2, "FAIL IEC CLK+DATA (DATA)");
       }
+      unit_test_report(4, 4, TEST_PASS);
     }
     else {
+      unit_test_report(4, 4, TEST_FAIL);
       snprintf(msg, 80, "FAIL IEC CLK+DATA (float $%02x)", v);
       print_text(0, 3, 2, msg);
     }
-    if (iec_pass)
+    if (iec_pass) {
+      unit_test_report(4, 5, TEST_PASS);
       print_text(0, 3, 5, "PASS IEC CLK+DATA                     ");
+    } else {
+      unit_test_report(4, 5, TEST_FAIL);
+    }
 
     // Real-time clock
     POKE(0xD020, 5);
     getrtc(&tm);
     if (tm.tm_sec || tm.tm_hour || tm.tm_min) {
+      unit_test_report(5, 1, TEST_PASS);
       snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
       print_text(0, 4, 5, msg);
     }
     else {
-      print_text(0, 4, 2, "FAIL RTC Not running             ");
 
       // But try to set it running if it isn't running
       lpoke(0xffd7118, 0x41);
@@ -407,10 +438,78 @@ void main(void)
       lpoke(0xffd7110, 0x01);
       usleep(30000);
       lpoke(0xffd7118, 0x01);
+
+      // Now wait a couple of seconds and try again
+      for(a=0;a<50;a++) usleep(50000);
+      
+      getrtc(&tm);
+      if (tm.tm_sec || tm.tm_hour || tm.tm_min) {
+	unit_test_report(5, 1, TEST_PASS);
+	snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
+	print_text(0, 4, 5, msg);
+      } else {
+	unit_test_report(5, 1, TEST_FAIL);
+	print_text(0, 4, 2, "FAIL RTC Not running             ");
+      }
+      
+      
     }
 
+    // Play two different tones out of the left and right speakers alternately
+    POKE(0xD020, 2);
+
+    print_text(0, 6, 7, "TEST Left speaker (P=PASS,F=FAIL)");
+    play_sine(0, 2000);
+    play_sine(3, 1);
+    while(!PEEK(0xD610)) POKE(0xD020,PEEK(0xD020+1));
+    switch (PEEK(0xD610)) {
+    case 0x50: case 0x70:
+      unit_test_report(6, 1, TEST_PASS);
+      print_text(0, 6, 5, "PASS Left speaker               ");
+      break;
+    default:
+      unit_test_report(6, 1, TEST_FAIL);      
+      print_text(0, 6, 2, "FAIL Left speaker               ");
+    }
+    POKE(0xD610,0);
+    
+    print_text(0, 7, 7, "TEST Right speaker (P=PASS,F=FAIL)");
+    play_sine(0, 1);
+    play_sine(3, 3000);
+    while(!PEEK(0xD610)) POKE(0xD020,PEEK(0xD020+1));
+    switch (PEEK(0xD610)) {
+    case 0x50: case 0x70:
+      unit_test_report(6, 2, TEST_PASS);
+      print_text(0, 7, 5, "PASS Right speaker               ");
+      break;
+    default:
+      unit_test_report(6, 2, TEST_FAIL);      
+      print_text(0, 7, 2, "FAIL Right speaker               ");
+    }
+    POKE(0xD610,0);
+
+    // Turn off sound after
+    play_sine(0, 1);
+    play_sine(3, 1);
+
+    joy_test(1,7,1,0x1b,8,"LEFT ");
+    joy_test(1,7,2,0x17,8,"RIGHT");
+    joy_test(1,7,3,0x1e,8,"UP   ");
+    joy_test(1,7,4,0x1d,8,"DOWN ");
+    joy_test(1,7,5,0x0f,8,"FIRE ");
+    
+    joy_test(0,8,1,0x1b,8,"LEFT ");
+    joy_test(0,8,2,0x17,8,"RIGHT");
+    joy_test(0,8,3,0x1e,8,"UP   ");
+    joy_test(0,8,4,0x1d,8,"DOWN ");
+    joy_test(0,8,5,0x0f,8,"FIRE ");
+    
+
+    // Don't test ethernet, as we test it in ethtest.prg instead now
+#if 0
     // Ethernet controller
     POKE(0xD020, 6);
+    
     if (eth_pass)
       print_text(0, 5, 5, "PASS Ethernet frame RX");
     else
@@ -418,8 +517,10 @@ void main(void)
 
     if (PEEK(0xD6E1) & 0x20)
       eth_pass = 1;
-  }
+#endif
 
+  unit_test_report(10, 1, TEST_DONEALL);  
+    
   //  gap_histogram();
   // read_all_sectors();
 }
