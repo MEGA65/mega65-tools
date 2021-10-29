@@ -285,11 +285,12 @@ unsigned char setup_hyperram(void)
 }
 
 void joy_test(unsigned char port,unsigned char maj, unsigned char min, unsigned char val,
-	      char y, char *dir)
+        char y, char *dir, char *shortdir)
 {
-  snprintf(msg,80,"TEST Joystick Port %d: Push %s",
-	   port?1:2,dir);
+  snprintf(msg, 80, "TEST Joystick Port %d: Push %s", port?1:2, dir);
   print_text(0, y, 7, msg);
+  snprintf(msg, 80, "joy %d-%s", port?1:2, shortdir);
+  unit_test_set_current_name(msg);
 
   // Wait for joystick to go idle again
   while((PEEK(0xDC00+port)&0x1f)!=0x1f) POKE(0xD020,PEEK(0xD020)+1);
@@ -339,6 +340,8 @@ void main(void)
   snprintf(msg, 80, "Hardware model = %d", detect_target());
   print_text(0, 15, 1, msg);
 
+  unit_test_setup("r3prodtest", 0);
+
   floppy_interval_first = PEEK(0xD6A9);
 
   // Draw colour bars
@@ -351,6 +354,7 @@ void main(void)
   
 
     POKE(0xD020, 1);
+    unit_test_set_current_name("hyperram");
     if (setup_hyperram()) {
       print_text(0, 6, 2, "FAIL HyperRAM Probe");
       unit_test_report(2, 1, TEST_FAIL);
@@ -364,6 +368,7 @@ void main(void)
     POKE(0xD020, 3);
     if (PEEK(0xD6A9) != floppy_interval_first)
       floppy_active = 1;
+    unit_test_set_current_name("floppy");
     if (!floppy_active) {
       print_text(0, 2, 2, "FAIL Floppy (is a disk inserted?)");
       unit_test_report(3, 1, TEST_FAIL);
@@ -388,33 +393,41 @@ void main(void)
         if ((PEEK(0xDD00) & 0xc0) == 0x40) {
           POKE(0xDD00, 0x33); // pull $80 and $40 low via $30
           usleep(1000);
+          unit_test_set_current_name("iec c+d both");
           if ((PEEK(0xDD00) & 0xc0) == 0x00) {
             iec_pass = 1;
-	    unit_test_report(4, 1, TEST_PASS);
+            unit_test_report(4, 1, TEST_PASS);
           }
           else {
             print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK+DATA)");
-	    unit_test_report(4, 1, TEST_FAIL);
+            unit_test_report(4, 1, TEST_FAIL);
           }
-	  unit_test_report(4, 2, TEST_PASS);	  
+          unit_test_set_current_name("iec c+d clk");
+          unit_test_report(4, 2, TEST_PASS);
         }
         else {
-	  unit_test_report(4, 2, TEST_FAIL);
+          unit_test_set_current_name("iec c+d clk");
+          unit_test_report(4, 2, TEST_FAIL);
           print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK)");
         }
-	unit_test_report(4, 3, TEST_PASS);
+        unit_test_set_current_name("iec c+d data");
+        unit_test_report(4, 3, TEST_PASS);
       }
       else {
-	unit_test_report(4, 3, TEST_FAIL);
+        unit_test_set_current_name("iec c+d data");
+        unit_test_report(4, 3, TEST_FAIL);
         print_text(0, 3, 2, "FAIL IEC CLK+DATA (DATA)");
       }
+      unit_test_set_current_name("iec c+d float");
       unit_test_report(4, 4, TEST_PASS);
     }
     else {
+      snprintf(msg, 80, "iec c+d fl-$%02x", v);
       unit_test_report(4, 4, TEST_FAIL);
       snprintf(msg, 80, "FAIL IEC CLK+DATA (float $%02x)", v);
       print_text(0, 3, 2, msg);
     }
+    unit_test_set_current_name("iec c+d all");
     if (iec_pass) {
       unit_test_report(4, 5, TEST_PASS);
       print_text(0, 3, 5, "PASS IEC CLK+DATA                     ");
@@ -425,6 +438,7 @@ void main(void)
     // Real-time clock
     POKE(0xD020, 5);
     getrtc(&tm);
+    unit_test_set_current_name("rtc ticks");
     if (tm.tm_sec || tm.tm_hour || tm.tm_min) {
       unit_test_report(5, 1, TEST_PASS);
       snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
@@ -444,12 +458,12 @@ void main(void)
       
       getrtc(&tm);
       if (tm.tm_sec || tm.tm_hour || tm.tm_min) {
-	unit_test_report(5, 1, TEST_PASS);
-	snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
-	print_text(0, 4, 5, msg);
+        unit_test_report(5, 1, TEST_PASS);
+        snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
+        print_text(0, 4, 5, msg);
       } else {
-	unit_test_report(5, 1, TEST_FAIL);
-	print_text(0, 4, 2, "FAIL RTC Not running             ");
+        unit_test_report(5, 1, TEST_FAIL);
+        print_text(0, 4, 2, "FAIL RTC Not running             ");
       }
       
       
@@ -458,6 +472,7 @@ void main(void)
     // Play two different tones out of the left and right speakers alternately
     POKE(0xD020, 2);
 
+    unit_test_set_current_name("speaker left");
     print_text(0, 6, 7, "TEST Left speaker (P=PASS,F=FAIL)");
     play_sine(0, 2000);
     play_sine(3, 1);
@@ -473,6 +488,7 @@ void main(void)
     }
     POKE(0xD610,0);
     
+    unit_test_set_current_name("speaker right");
     print_text(0, 7, 7, "TEST Right speaker (P=PASS,F=FAIL)");
     play_sine(0, 1);
     play_sine(3, 3000);
@@ -492,17 +508,17 @@ void main(void)
     play_sine(0, 1);
     play_sine(3, 1);
 
-    joy_test(1,7,1,0x1b,8,"LEFT ");
-    joy_test(1,7,2,0x17,8,"RIGHT");
-    joy_test(1,7,3,0x1e,8,"UP   ");
-    joy_test(1,7,4,0x1d,8,"DOWN ");
-    joy_test(1,7,5,0x0f,8,"FIRE ");
+    joy_test(1,7,1,0x1b,8,"LEFT ","l");
+    joy_test(1,7,2,0x17,8,"RIGHT","r");
+    joy_test(1,7,3,0x1e,8,"UP   ","u");
+    joy_test(1,7,4,0x1d,8,"DOWN ","d");
+    joy_test(1,7,5,0x0f,8,"FIRE ","f");
     
-    joy_test(0,8,1,0x1b,8,"LEFT ");
-    joy_test(0,8,2,0x17,8,"RIGHT");
-    joy_test(0,8,3,0x1e,8,"UP   ");
-    joy_test(0,8,4,0x1d,8,"DOWN ");
-    joy_test(0,8,5,0x0f,8,"FIRE ");
+    joy_test(0,8,1,0x1b,8,"LEFT ","l");
+    joy_test(0,8,2,0x17,8,"RIGHT","r");
+    joy_test(0,8,3,0x1e,8,"UP   ","u");
+    joy_test(0,8,4,0x1d,8,"DOWN ","d");
+    joy_test(0,8,5,0x0f,8,"FIRE ","f");
     
 
     // Don't test ethernet, as we test it in ethtest.prg instead now
@@ -519,6 +535,7 @@ void main(void)
       eth_pass = 1;
 #endif
 
+  unit_test_set_current_name("r3prodtest");
   unit_test_report(10, 1, TEST_DONEALL);  
     
   //  gap_histogram();
