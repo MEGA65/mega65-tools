@@ -120,7 +120,7 @@ int write_sector(const unsigned int sector_number, unsigned char* buffer);
 int load_helper(void);
 int stuff_keybuffer(char* s);
 int create_dir(char*);
-int fat_opendir(char*);
+int fat_opendir(char*, int show_errmsg);
 int fat_readdir(struct m65dirent*);
 BOOL safe_open_dir(void);
 BOOL find_file_in_curdir(char* filename, struct m65dirent* de);
@@ -478,7 +478,7 @@ int execute_command(char* cmd)
   else if ((parse_command(cmd, "chdir %s", src) == 1) || (parse_command(cmd, "cd %s", src) == 1)) {
     if (src[0] == '/') {
       // absolute path
-      if (fat_opendir(src)) {
+      if (fat_opendir(src, TRUE)) {
         fprintf(stderr, "ERROR: Could not open directory '%s'\n", src);
       }
       strcpy(current_dir, src);
@@ -529,7 +529,7 @@ int execute_command(char* cmd)
         // Stay in current directory
       }
 
-      if (fat_opendir(temp_path)) {
+      if (fat_opendir(temp_path, TRUE)) {
         fprintf(stderr, "ERROR: Could not open directory '%s'\n", temp_path);
       }
       else
@@ -1500,7 +1500,7 @@ int dir_cluster = 0;
 int dir_sector_in_cluster = 0;
 int dir_sector_offset = 0;
 
-int fat_opendir(char* path)
+int fat_opendir(char* path, int show_errmsg)
 {
   int retVal = 0;
   do {
@@ -1553,7 +1553,8 @@ int fat_opendir(char* path)
               break;
             }
             else {
-              fprintf(stderr, "ERROR: %s is not a directory\n", path_seg);
+              if (show_errmsg)
+                fprintf(stderr, "ERROR: %s is not a directory\n", path_seg);
               retVal = -1;
               break;
             }
@@ -1562,7 +1563,8 @@ int fat_opendir(char* path)
             break;
         }
         if (!found) {
-          fprintf(stderr, "ERROR: Could not find directory segment '%s'\n", path_seg);
+          if (show_errmsg)
+            fprintf(stderr, "ERROR: Could not find directory segment '%s'\n", path_seg);
 
           dir_cluster = first_cluster;
           dir_sector = first_cluster_sector;
@@ -2147,7 +2149,7 @@ int read_direntries(llist* lst, char* path)
 {
   struct m65dirent de;
 
-  if (fat_opendir(path)) {
+  if (fat_opendir(path, TRUE)) {
     return 0;
   }
   // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
@@ -2278,43 +2280,55 @@ void change_local_dir(char* path)
     printf("ERROR: Failed to change directory (%s)!\n", path);
 }
 
+int read_remote_dirents(llist* lst_dirents, char* path, char** psearchterm)
+{
+  if (!file_system_found)
+    open_file_system();
+  if (!file_system_found) {
+    fprintf(stderr, "ERROR: Could not open file system.\n");
+    return FALSE;
+  }
+
+  // check if it's an absolute path to a folder
+  if (fat_opendir(path, FALSE) == 0) {
+    // if so read direntries within it
+    if (!read_direntries(lst_dirents, path))
+      return FALSE;
+  }
+  // if not abs-path, then assume it's a file/dir/wildcard for the current working directory
+  else {
+    if (!read_direntries(lst_dirents, current_dir))
+      return FALSE;
+
+    // check if the user wants to 'dir' a sub-folder
+    if (contains_dir(lst_dirents, path)) {
+      llist_free(lst_dirents);
+      lst_dirents = llist_new();
+
+      if (!read_direntries(lst_dirents, path))
+        return FALSE;
+    }
+    else if (strcmp(path, current_dir) != 0)
+      *psearchterm = path;
+  }
+
+  return TRUE;
+}
+
 int show_directory(char* path)
 {
+  int dir_count = 0;
+  int file_count = 0;
+
   llist* lst_dirents = llist_new();
   char* searchterm = NULL;
 
   int retVal = 0;
 
   do {
-    if (!file_system_found)
-      open_file_system();
-    if (!file_system_found) {
-      fprintf(stderr, "ERROR: Could not open file system.\n");
+    if (!read_remote_dirents(lst_dirents, path, &searchterm)) {
       retVal = -1;
       break;
-    }
-
-    // check if it's an absolute path to a folder
-    if (fat_opendir(path) == 0) {
-      // if so read direntries within it
-      if (!read_direntries(lst_dirents, path))
-        break;
-    }
-    // if not abs-path, then assume it's a file/dir/wildcard for the current working directory
-    else {
-      if (!read_direntries(lst_dirents, current_dir))
-        break;
-
-      // check if the user wants to 'dir' a sub-folder
-      if (contains_dir(lst_dirents, path)) {
-        llist_free(lst_dirents);
-        lst_dirents = llist_new();
-
-        if (!read_direntries(lst_dirents, path))
-          break;
-      }
-      else if (strcmp(path, current_dir) != 0)
-        searchterm = path;
     }
 
     llist* cur = lst_dirents;
@@ -2326,13 +2340,18 @@ int show_directory(char* path)
         continue;
       }
 
-      if (itm->d_attr & 0x10)
+      if (itm->d_attr & 0x10) {
+        dir_count++;
         printf("       <DIR> %s\n", itm->d_name);
-      else if (itm->d_name[0] && itm->d_filelen >= 0)
+      }
+      else if (itm->d_name[0] && itm->d_filelen >= 0) {
+        file_count++;
         printf("%12d %s\n", (int)itm->d_filelen, itm->d_name);
+      }
       cur = cur->next;
     }
   } while (0);
+  printf("%d Dir(s), %d File(s)\n", dir_count, file_count);
 
   llist_free(lst_dirents);
 
@@ -2913,14 +2932,14 @@ unsigned int get_first_cluster_of_file(void)
        | (dir_sector_buffer[dir_sector_offset + 0x14] << 16) | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
 }
 
-int delete_file(char* name)
+int delete_single_file(char* name)
 {
   struct m65dirent de;
 
   if (check_file_system_access() == -1)
     return -1;
 
-  if (fat_opendir(current_dir))
+  if (fat_opendir(current_dir, TRUE))
     return -1;
 
   if (!find_file_in_curdir(name, &de)) {
@@ -2957,6 +2976,52 @@ int delete_file(char* name)
   return 0;
 }
 
+int delete_file(char* name)
+{
+  llist* lst_dirents = llist_new();
+  char* searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
+
+  // if no wildcards in name, then just delete a single file
+  if (!strstr(name, "*"))
+    return delete_single_file(name);
+
+  // if wildcard on delete, confirm with user first
+  char inp[128];
+  printf("Are you sure (y/n)? ");
+  scanf("%s", inp);
+#ifdef WINDOWS
+  fflush(stdin);
+#endif
+  if (!(strcmp(inp, "Y") == 0 || strcmp(inp, "y") == 0))
+    return FALSE;
+
+  // handle wildcards
+  if (!read_remote_dirents(lst_dirents, current_dir, &searchterm)) {
+    return FALSE;
+  }
+
+  llist* cur = lst_dirents;
+
+  while (cur != NULL) {
+    struct m65dirent* itm = (struct m65dirent*)cur->item;
+
+    if (!is_match(itm->d_name, name, 1)) {
+      cur = cur->next;
+      continue;
+    }
+
+    if (itm->d_attr & 0x10)
+      ; // this is a DIR
+    else if (itm->d_name[0] && itm->d_filelen >= 0) {
+      delete_single_file(itm->d_name);
+    }
+
+    cur = cur->next;
+  }
+
+  return TRUE;
+}
+
 // returns:
 // -1 = problems opening file-system
 // 0 = doesn't exist
@@ -2968,7 +3033,7 @@ int contains_file(char* name)
   if (check_file_system_access() == -1)
     return -1;
 
-  if (fat_opendir(current_dir))
+  if (fat_opendir(current_dir, TRUE))
     return -1;
 
   // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
@@ -3105,7 +3170,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
       snprintf(temp, 8 - ofs, "~%d", i);
       bcopy(temp, &short_name[ofs], 8 - ofs);
       printf("  considering short-name '%s'...\n", short_name);
-      if (fat_opendir(dir_name)) {
+      if (fat_opendir(dir_name, TRUE)) {
         fprintf(stderr, "ERROR: Could not open directory '%s' to check for LFN uniqueness.\n", dir_name);
         // So just assume its unique
         break;
@@ -3174,7 +3239,7 @@ int upload_single_file(char* name, char* dest_name)
       // File does not (yet) exist, get ready to create it
       printf("%s does not yet exist on the file system -- searching for empty directory slot to create it in.\n", dest_name);
 
-      if (fat_opendir(current_dir)) {
+      if (fat_opendir(current_dir, TRUE)) {
         retVal = -1;
         break;
       }
@@ -3338,7 +3403,7 @@ int upload_file(char* name, char* dest_name)
     return upload_single_file(name, dest_name);
 
   // check for wildcards in name
-  // list directories first
+  // list directory first
   d = opendir(".");
   if (d) {
     while ((dir = readdir(d)) != NULL) {
@@ -3347,8 +3412,10 @@ int upload_file(char* name, char* dest_name)
 
       struct stat file_stats;
       if (!stat(dir->d_name, &file_stats)) {
-        if (!S_ISDIR(file_stats.st_mode))
+        if (!S_ISDIR(file_stats.st_mode)) {
+          printf("Uploading \"%s\"...\n", dir->d_name);
           upload_single_file(dir->d_name, dir->d_name);
+        }
       }
     }
   }
@@ -3374,7 +3441,7 @@ int create_dir(char* dest_name)
       break;
     }
 
-    if (fat_opendir(current_dir)) {
+    if (fat_opendir(current_dir, TRUE)) {
       retVal = -1;
       break;
     }
@@ -3394,7 +3461,7 @@ int create_dir(char* dest_name)
       // File does not (yet) exist, get ready to create it
       printf("%s does not yet exist on the file system -- searching for empty directory slot to create it in.\n", dest_name);
 
-      if (fat_opendir(current_dir)) {
+      if (fat_opendir(current_dir, TRUE)) {
         retVal = -1;
         break;
       }
@@ -3685,7 +3752,7 @@ BOOL safe_open_dir(void)
     return FALSE;
   }
 
-  if (fat_opendir(current_dir)) {
+  if (fat_opendir(current_dir, TRUE)) {
     return FALSE;
   }
 
@@ -3884,7 +3951,7 @@ void mount_file(char* filename)
   queue_execute();
 }
 
-int download_file(char* dest_name, char* local_name, int showClusters)
+int download_single_file(char* dest_name, char* local_name, int showClusters)
 {
   struct m65dirent de;
   int retVal = 0;
@@ -3995,4 +4062,45 @@ int download_file(char* dest_name, char* local_name, int showClusters)
   } while (0);
 
   return retVal;
+}
+
+int download_file(char* name, char* local_name, int showClusters)
+{
+  llist* lst_dirents = llist_new();
+  char* searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
+
+  // don't bother with wildcards if a unique local name has been specified (assume that this is just for a single file)
+  if (strcmp(name, local_name))
+    return download_single_file(name, local_name, showClusters);
+
+  // if no wildcards in name, then just download a single file
+  if (!strstr(name, "*"))
+    return download_single_file(name, local_name, showClusters);
+
+  // handle wildcards
+  if (!read_remote_dirents(lst_dirents, current_dir, &searchterm)) {
+    return FALSE;
+  }
+
+  llist* cur = lst_dirents;
+
+  while (cur != NULL) {
+    struct m65dirent* itm = (struct m65dirent*)cur->item;
+
+    if (!is_match(itm->d_name, name, 1)) {
+      cur = cur->next;
+      continue;
+    }
+
+    if (itm->d_attr & 0x10)
+      ; // this is a DIR
+    else if (itm->d_name[0] && itm->d_filelen >= 0) {
+      printf("Downloading \"%s\"...\n", itm->d_name);
+      download_single_file(itm->d_name, itm->d_name, showClusters);
+    }
+
+    cur = cur->next;
+  }
+
+  return 0;
 }
