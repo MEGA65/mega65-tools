@@ -228,6 +228,7 @@ void activate_double_buffer(void)
 }
 
 unsigned char histo_bins[640];
+unsigned char histo_bins_raw[640];
 char peak_msg[80 + 1];
 unsigned char random_target = 40;
 unsigned char last_random_target = 40;
@@ -401,9 +402,9 @@ void read_all_sectors(unsigned char HD)
 	  
 	  // Select correct side of the disk
 	  if (h)
-	    POKE(0xD080, 0x68);
-	  else
 	    POKE(0xD080, 0x60);
+	  else
+	    POKE(0xD080, 0x68);
 
 	  // Reset FDC buffers
 	  POKE(0xD081, 0x01); 
@@ -479,6 +480,7 @@ unsigned char formatting_enabled=0;
 unsigned char rll_encoding=0;
 unsigned char precomp_a,precomp_b,precomp_15;
 unsigned char no_gaps=0;
+unsigned char persist_mode=0;
 void gap_histogram(void)
 {
 
@@ -508,11 +510,14 @@ void gap_histogram(void)
 
   random_target = 0; // (PEEK(0xD6A3) & 0x7f);
 
+  for (i = 0; i < 640; i++)
+    histo_bins[i] = 0;
+  
   while (1) {
 
     // Clear histogram bins
     for (i = 0; i < 640; i++)
-      histo_bins[i] = 0;
+      histo_bins_raw[i] = 0;
     histo_samples = 0;
 
     // Get new histogram data
@@ -522,18 +527,32 @@ void gap_histogram(void)
       if (interval_length >= 640)
         continue;
       // Stop as soon as a single histogram bin fills
-      if (histo_bins[interval_length] == 255) {
+      if (histo_bins_raw[interval_length] == 255) {
         snprintf(peak_msg, 40, "Peak @ %d, auto-tune=%d, %s     ", interval_length, PEEK(0xD689) & 0x10,
             (PEEK(0xD6A2) == 0x51) ? "DD" : "HD");
         print_text(0, 2, 7, peak_msg);
         break;
       }
-      histo_bins[interval_length]++;
+      histo_bins_raw[interval_length]++;
       histo_samples++;
       if (histo_samples == 4096)
         break;
     }
 
+    // Persist any non-zero values
+    if (persist_mode) {
+      for(i=0;i<640;i++) {
+	if ((histo_bins_raw[i]+histo_bins[i])<=255)
+	  histo_bins[i]+=histo_bins_raw[i];
+	else
+	  histo_bins[i]=255;
+      }
+    } else {
+      for(i=0;i<640;i++) {
+	histo_bins[i]=histo_bins_raw[i];
+      }
+    }
+    
     // Re-draw histogram.
     // We use 640x200 16-colour char mode
     graphics_clear_double_buffer();
@@ -635,6 +654,9 @@ void gap_histogram(void)
       case 0x1d:
         request_track++;
         break;
+      case 0x32:
+	persist_mode^=1;
+	break;
       case 0x50: case 0x70: // P = increase data rate
 	POKE(0xD6A2,PEEK(0xD6A2)+1);
 	POKE(0xD6A6,0x04);
@@ -946,7 +968,7 @@ void read_track(unsigned char track_number,unsigned char side)
   while(PEEK(0xD6A0)&0x80) continue;
   //  lcopy_fixed_src(0xffd36afL,0x50000,65535);
   // lcopy_fixed_src(0xffd36a0L,0x50000,65535);
-  lcopy_read_floppy_gaps(0x8000000,0x40000);
+  lcopy_read_floppy_gaps(0x50000,0xFFFF);
 #endif
 
   print_text(0, 5, 7, "Track read complete");
@@ -1166,14 +1188,14 @@ void format_single_track_side(/* unsigned char track_num,unsigned char side, */u
   POKE(0xD6A5,0xfb);
   
 #if 1
-  // Use RLL encoding
+  // Use RLL encoding if required
   if (RLL) POKE(0xD6AE,0x01); else POKE(0xD6AE,0x00);
   // Use new hardware-accelerated formatting
   POKE(0xD696,0x00);  // also disable auto-seek on new address
   while (PEEK(0xD082) & 0x80) continue;
   POKE(0xD084,track_num);
   POKE(0xD085,sector_count);
-  POKE(0xD086,side);
+  POKE(0xD086,side?0:1);
   POKE(0xD081,0xa4); // $A0= no write precomp, $A4 = with write precomp
   while (PEEK(0xD082) & 0x80) continue;
 #else
@@ -1632,7 +1654,7 @@ void format_disk(unsigned char HD, unsigned char RLL)
 	else { POKE(0xD6A2,26); sector_count = 34; }
       }
       
-    }
+    } else sector_count=10;
 
     for (side = 0; side < 2; side++) {
 
@@ -1711,9 +1733,9 @@ void wipe_disk(void)
 
       // Select head side
       if (side)
-        POKE(0xD080, 0x68);
-      else
         POKE(0xD080, 0x60);
+      else
+        POKE(0xD080, 0x68);
 
       POKE(0xD020, 0x06);
 
@@ -2008,7 +2030,7 @@ void main(void)
       while (PEEK(0xD082) & 0x80)
         continue;
       // Now read the track
-      read_track(0,1);
+      read_track(0,0);
       break;
     case '6':
       POKE(0xD610, 0);
