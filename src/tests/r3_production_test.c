@@ -284,9 +284,11 @@ unsigned char setup_hyperram(void)
   return 0;
 }
 
-void joy_test(unsigned char port,unsigned char maj, unsigned char min, unsigned char val,
+unsigned char joy_test(unsigned char port,unsigned char maj, unsigned char min, unsigned char val,
         char y, char *dir, char *shortdir)
 {
+  unsigned char res=0;
+  
   snprintf(msg, 80, "TEST Joystick Port %d: Push %s", port?1:2, dir);
   print_text(0, y, 7, msg);
   snprintf(msg, 80, "joy %d-%s", port?1:2, shortdir);
@@ -299,7 +301,7 @@ void joy_test(unsigned char port,unsigned char maj, unsigned char min, unsigned 
 
   while((PEEK(0xDC00+port)&0x1f)==0x1f) POKE(0xD020,PEEK(0xD020)+1);
   if ((PEEK(0xDC00+port)&0x1f)!=val) {
-    unit_test_report(maj,min,TEST_FAIL);
+    unit_test_report(maj,min,TEST_FAIL); res=1;
   } else {
     unit_test_report(maj,min,TEST_PASS);
   }
@@ -307,7 +309,11 @@ void joy_test(unsigned char port,unsigned char maj, unsigned char min, unsigned 
   while((PEEK(0xDC00+port)&0x1f)!=0x1f) POKE(0xD020,PEEK(0xD020)+1);
   // Allow for de-bounce
   usleep(50000);
+
+  return res;
 }
+
+unsigned char errs=0;
 
 void main(void)
 {
@@ -480,11 +486,11 @@ void main(void)
     switch (PEEK(0xD610)) {
     case 0x50: case 0x70:
       unit_test_report(6, 1, TEST_PASS);
-      print_text(0, 6, 5, "PASS Left speaker               ");
+      print_text(0, 6, 5, "PASS Left speaker                ");
       break;
     default:
       unit_test_report(6, 1, TEST_FAIL);      
-      print_text(0, 6, 2, "FAIL Left speaker               ");
+      print_text(0, 6, 2, "FAIL Left speaker                ");
     }
     POKE(0xD610,0);
     
@@ -496,11 +502,11 @@ void main(void)
     switch (PEEK(0xD610)) {
     case 0x50: case 0x70:
       unit_test_report(6, 2, TEST_PASS);
-      print_text(0, 7, 5, "PASS Right speaker               ");
+      print_text(0, 7, 5, "PASS Right speaker                ");
       break;
     default:
       unit_test_report(6, 2, TEST_FAIL);      
-      print_text(0, 7, 2, "FAIL Right speaker               ");
+      print_text(0, 7, 2, "FAIL Right speaker                ");
     }
     POKE(0xD610,0);
 
@@ -508,18 +514,27 @@ void main(void)
     play_sine(0, 1);
     play_sine(3, 1);
 
-    joy_test(1,7,1,0x1b,8,"LEFT ","l");
-    joy_test(1,7,2,0x17,8,"RIGHT","r");
-    joy_test(1,7,3,0x1e,8,"UP   ","u");
-    joy_test(1,7,4,0x1d,8,"DOWN ","d");
-    joy_test(1,7,5,0x0f,8,"FIRE ","f");
+    errs+=joy_test(1,7,1,0x1b,8,"LEFT ","l");
+    errs+=joy_test(1,7,2,0x17,8,"RIGHT","r");
+    errs+=joy_test(1,7,3,0x1e,8,"UP   ","u");
+    errs+=joy_test(1,7,4,0x1d,8,"DOWN ","d");
+    errs+=joy_test(1,7,5,0x0f,8,"FIRE ","f");
     
-    joy_test(0,8,1,0x1b,8,"LEFT ","l");
-    joy_test(0,8,2,0x17,8,"RIGHT","r");
-    joy_test(0,8,3,0x1e,8,"UP   ","u");
-    joy_test(0,8,4,0x1d,8,"DOWN ","d");
-    joy_test(0,8,5,0x0f,8,"FIRE ","f");
+    errs+=joy_test(0,8,1,0x1b,8,"LEFT ","l");
+    errs+=joy_test(0,8,2,0x17,8,"RIGHT","r");
+    errs+=joy_test(0,8,3,0x1e,8,"UP   ","u");
+    errs+=joy_test(0,8,4,0x1d,8,"DOWN ","d");
+    errs+=joy_test(0,8,5,0x0f,8,"FIRE ","f");
+
+    // XXX Test POT lines
     
+    if (errs) {
+      snprintf(msg, 80, "FAIL Joysticks (%d errors)      ", errs);
+      print_text(0, 8, 2, msg);
+    } else {
+      snprintf(msg, 80, "PASS Joysticks                 ", errs);
+      print_text(0, 8, 5, msg);
+    }
 
     // Don't test ethernet, as we test it in ethtest.prg instead now
 #if 0
@@ -537,7 +552,11 @@ void main(void)
 
   unit_test_set_current_name("r3prodtest");
   unit_test_report(10, 1, TEST_DONEALL);  
-    
+
+  print_text(0,17,1,"ALL TESTS COMPLETE");
+  
+  while(1) continue;
+  
   //  gap_histogram();
   // read_all_sectors();
 }
