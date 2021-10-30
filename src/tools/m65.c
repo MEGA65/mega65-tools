@@ -70,6 +70,7 @@ int osk_enable = 0;
 int not_already_loaded = 1;
 
 int unit_test_mode = 0;
+int unit_test_timeout = UT_TIMEOUT;
 
 int halt = 0;
 
@@ -93,7 +94,8 @@ void usage(void)
       "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
       "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
       "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
-      "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] [-u]\n");
+      "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] "
+      "[-u timeout]\n");
 
   fprintf(stderr, "  -@ - Load a binary file at a specific address.\n"
                   "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n"
@@ -133,6 +135,7 @@ void usage(void)
                   "  -T - As above, but also provide carriage return\n"
                   "  -U - Flash menu file to preload at $50000-$57FFF.\n"
                   "  -u - Enable unit test mode: m65 does not terminate until it receives a response from a unit test.\n"
+                  "       (argument timeout in seconds, minimum is 10)\n"
                   "  -v - The location of the Vivado executable to use for -b on Windows.\n"
                   "  -w - Write (or append) unit test results to a logfile\n"
                   "  -V - Write JTAG change log to VCD file, instead of to stdout.\n"
@@ -1367,7 +1370,7 @@ void enterTestMode()
     fprintf(logPtr, "\n>>> begin testing %s; FILE: %s\n", ts, filename);
   }
 
-  while (time(NULL) - currentTime < UT_TIMEOUT) {
+  while (time(NULL) - currentTime < unit_test_timeout) {
 
     int b = serialport_read(fd, inbuf, 8192);
 
@@ -1482,7 +1485,7 @@ int main(int argc, char** argv)
     usage();
 
   int opt;
-  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:uU:v:V:w:XyZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:u:U:v:V:w:XyZ:?")) != -1) {
     switch (opt) {
     case 'y':
       debug_load_memory = 1;
@@ -1643,6 +1646,8 @@ int main(int argc, char** argv)
       break;
     case 'u':
       unit_test_mode = 1;
+      unit_test_timeout = atoi(optarg);
+      if (unit_test_timeout < UT_TIMEOUT) unit_test_timeout = UT_TIMEOUT;
       break;
     default: /* '?' */
       usage();
