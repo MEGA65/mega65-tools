@@ -23,10 +23,10 @@ void get_interval(void)
     continue;
 
   do {
-    a = PEEK(0xD6A9);
-    b = PEEK(0xD6AA);
-    c = PEEK(0xD6A9);
-    d = PEEK(0xD6AA);
+    a = PEEK(0xD6AA);
+    b = PEEK(0xD6AB);
+    c = PEEK(0xD6AA);
+    d = PEEK(0xD6AB);
   } while (a != c || b != d);
   interval_length = a + ((b & 0xf) << 8);
 }
@@ -348,7 +348,7 @@ void main(void)
 
   unit_test_setup("r3prodtest", 0);
 
-  floppy_interval_first = PEEK(0xD6A9);
+  floppy_interval_first = PEEK(0xD6AA);
 
   // Draw colour bars
   for (x = 0; x < 640; x++) {
@@ -372,7 +372,7 @@ void main(void)
 
     // Internal floppy connector
     POKE(0xD020, 3);
-    if (PEEK(0xD6A9) != floppy_interval_first)
+    if (PEEK(0xD6AA) != floppy_interval_first)
       floppy_active = 1;
     unit_test_set_current_name("floppy");
     if (!floppy_active) {
