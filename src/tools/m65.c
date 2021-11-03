@@ -1281,19 +1281,14 @@ void unit_test_log(unsigned char bytes[4])
   char outstring[255];
   char temp[255];
 
-  time_t currentTime;
-  char* ts;
+  struct timeval currentTime;
 
   // dump_bytes(0, "bytes", bytes, 4);
 
-  bzero(outstring, 255);
+  gettimeofday(&currentTime, NULL);
+  strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
 
-  currentTime = time(NULL);
-  ts = asctime(localtime(&currentTime));
-  ts[strlen(ts) - 1] = 0;
-  strcat(outstring, ts);
-
-  sprintf(temp, " %s (Issue#%04d, Test #%03d", test_states[bytes[3] - 0xf0], test_issue, test_sub);
+  sprintf(temp, ".%dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec/1000, test_states[bytes[3] - 0xf0], test_issue, test_sub);
   strcat(outstring, temp);
 
   // append current test name if we have one

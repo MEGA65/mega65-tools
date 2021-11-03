@@ -234,6 +234,9 @@ $(TESTDIR)/test_458.prg:       $(TESTDIR)/test_458.c $(CC65)
 $(TESTDIR)/test_459.prg:       $(TESTDIR)/test_459.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
+$(TESTDIR)/qop_test.prg:       $(TESTDIR)/qop_test.c $(CC65)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
 $(TESTDIR)/test_332.prg:       $(TESTDIR)/test_332.c $(CC65)
 $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -Iinclude/ -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
