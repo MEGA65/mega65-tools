@@ -1288,7 +1288,7 @@ void unit_test_log(unsigned char bytes[4])
   gettimeofday(&currentTime, NULL);
   strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
 
-  sprintf(temp, ".%dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec/1000, test_states[bytes[3] - 0xf0], test_issue, test_sub);
+  sprintf(temp, ".%03dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec/1000, test_states[bytes[3] - 0xf0], test_issue, test_sub);
   strcat(outstring, temp);
 
   // append current test name if we have one
