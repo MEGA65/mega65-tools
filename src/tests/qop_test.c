@@ -686,7 +686,7 @@ opcode_suite *suites[] = {
    LDX #$5f
    LDY #$af
    LDZ #$f5
-   ; Load test value to Q, LDQ $0380
+   ; Load test value1 to Q, LDQ $0380
    NEG
    NEG
    LDA $0380
@@ -711,28 +711,18 @@ opcode_suite *suites[] = {
    RTS
  */
 unsigned char code_snippet[64] = {
-    0x78, 0xd8, 0xa9, 0xfa, 0xa2, 0x5f, 0xa0, 0xaf, 0xa3, 0xf5,
-    // LDQ Val1 from 0380
-    0x42, 0x42, 0xad, 0x80, 0x03,
-    // Test Opcode at 0384 (with padding) -- this is the part that gets changed every test
-    0x18, 0x18, 0x42, 0x42, 0x8d, 0x84, 0x03,
-    // store Q to 038C and Flags to 0390
-    0x08, 0x8d, 0x8c, 0x03, 0x8e, 0x8d, 0x03, 0x8c, 0x8e, 0x03,
-    0x9c, 0x8f, 0x03, 0x68, 0x8d, 0x90, 0x03, 0x60, 0x00
+  0x78, 0xd8, 0xa9, 0xfa, 0xa2, 0x5f, 0xa0, 0xaf, 0xa3, 0xf5,
+  // LDQ Val1 from 0380
+  0x42, 0x42, 0xad, 0x80, 0x03,
+  // Test Opcode at 0384 (with padding) -- this is the part that gets changed every test
+  0x18, 0x18, 0x42, 0x42, 0x8d, 0x84, 0x03,
+  // store Q to 038C and Flags to 0390
+  0x08, 0x8d, 0x8c, 0x03, 0x8e, 0x8d, 0x03, 0x8c, 0x8e, 0x03,
+  0x9c, 0x8f, 0x03, 0x68, 0x8d, 0x90, 0x03, 0x60, 0x00
 };
 
-unsigned char issue = 0, sub = 0, failed;
-char msg[81];
-unsigned short i, line = 0, total=0, total_failed=0;
-unsigned char concmsg[81] = "", flagstr[11]="", failstr[3]="", testname[21]="";
-
-// Tape Buffer
-unsigned char *code_buf = (unsigned char*)0x340;
-
-unsigned long result_q;
-unsigned char result_f, status;
-
-unsigned int reslo, reshi;
+unsigned short line=0, total=0, total_failed=0;
+unsigned char msg[81]="";
 
 // save vic state for restoring later...
 unsigned char state[13];
@@ -853,163 +843,94 @@ unsigned char keybuffer(unsigned char wait) {
   return key;
 }
 
-void format_flags(unsigned char flags)
-{
-    flagstr[0] = '[';
-    if (flags & 0x80)
-        flagstr[1] = 'n';
-    else
-        flagstr[1] = '.';
-    if (flags & 0x40)
-        flagstr[2] = 'v';
-    else
-        flagstr[2] = '.';
-    if (flags & 0x20)
-        flagstr[3] = 'e';
-    else
-        flagstr[3] = '.';
-    if (flags & 0x10)
-        flagstr[4] = 'b';
-    else
-        flagstr[4] = '.';
-    if (flags & 0x08)
-        flagstr[5] = 'd';
-    else
-        flagstr[5] = '.';
-    if (flags & 0x04)
-        flagstr[6] = 'i';
-    else
-        flagstr[6] = '.';
-    if (flags & 0x02)
-        flagstr[7] = 'z';
-    else
-        flagstr[7] = '.';
-    if (flags & 0x01)
-        flagstr[8] = 'c';
-    else
-        flagstr[8] = '.';
-    flagstr[9] = ']';
-    flagstr[10] = 0x0;
-}
-
-void test_opcode(unsigned char issue_num, opcode_suite *suite) {
-  // each opcode starts with subissue number 1
-  unsigned char j, i, c=0;
-  sub = 1;
-  failed = 0;
+void run_suite(unsigned char issue_num, opcode_suite *suite) {
+  unsigned short reslo, reshi;
+  unsigned long result_q;
+  unsigned char result_f, status;
+  unsigned char m, t, count=0, sub=1, failed=0, fi, flagmask;
+  unsigned char concmsg[81]="", failstr[3]="", testname[21]="", status_flags[]="nvebdizc", flagstr[11]="[........]";
+  unsigned char *code_buf = (unsigned char*)0x340; // Tape Buffer
 
   // Pre-install code snippet
-  lcopy((long)code_snippet, (long)code_buf, 50);
+  lcopy((long)code_snippet, (long)code_buf, 64);
 
-  // setup zero page pointers
   // Run each test
-  for (j=0; suite->modes[j].opcode; j++) {
-    for (i=0; suite->tests[i].apply_mode; i++) {
-      if ((suite->modes[j].mode & suite->tests[i].apply_mode)) {
-      //if ((suite->modes[j].mode & suite->tests[i].apply_mode)) &&
-      //    !(suite->modes[j].mode & 0x40)) { // skip Q implied for now
-        c++; total++;
-        // Setup input values
-        *(unsigned long*)0x380 = suite->tests[i].val1;
-        *(unsigned long*)0x384 = suite->tests[i].val2;
-        *(unsigned long*)0x388 = suite->tests[i].val3;
+  for (m=0; suite->modes[m].opcode; m++) {
+    for (t=0; suite->tests[t].apply_mode; t++) {
+      if ((suite->modes[m].mode & suite->tests[t].apply_mode)) {
+      //if ((suite->modes[m].mode & suite->tests[t].apply_mode)) &&
+      //    !(suite->modes[m].mode & 0x40)) { // skip Q implied for now
+        // count for test and total
+        count++; total++;
+
+        // Setup input values, always set val1 to 0x380
+        *(unsigned long*)0x380 = suite->tests[t].val1;
+        if (suite->modes[m].mode & 0x11) { // $nn / $nn,x
+          // for base page opcodes
+          *(unsigned long*)0x60 = suite->tests[t].val1;
+          *(unsigned long*)0x64 = suite->tests[t].val2;
+          *(unsigned long*)0x68 = suite->tests[t].val3;
+        } else {
+          // for absolute opcodes
+          *(unsigned long*)0x384 = suite->tests[t].val2;
+          *(unsigned long*)0x388 = suite->tests[t].val3;
+          // setup zero page pointers - we use part of the Basic FAC range of addresses here
+          *(unsigned long*)0x60 = 0x00000380;
+          *(unsigned long*)0x64 = 0x00000384;
+        }
         // preset return value with pattern
         *(unsigned long*)0x38c = 0xb1eb1bbe;
-        // setup zero page pointers - we use part of the Basic FAC range of addresses here
-        *(unsigned long*)0x60 = 0x00000380;
-        *(unsigned long*)0x64 = 0x00000384;
 
         // change code for test
-        if (suite->modes[j].mode & 0x80)
-          code_buf[suite->offset2-1] = 0x38;
-        else 
-          code_buf[suite->offset2-1] = 0x18;
+        code_buf[suite->offset2-1] = (suite->modes[m].mode & 0x80)?0x38:0x18;
+        code_buf[suite->offset2]   = (suite->modes[m].mode & 0x08)?0x42:((suite->modes[m].mode & 0x80)?0x38:0x18);
+        //code_buf[suite->offset2+1] = 0x42;
+        code_buf[suite->offset2+2] = (suite->modes[m].mode & 0x08)?0xea:0x42;
+        code_buf[suite->offset2+3] = suite->modes[m].opcode;
 
-        // this should be optimized!!!
-        if (suite->modes[j].mode & 0x01) { // $nn
-          code_buf[suite->offset2]   = (suite->modes[j].mode & 0x80)?0x38:0x18;
-          code_buf[suite->offset2+1] = 0x42;
-          code_buf[suite->offset2+2] = 0x42;
-          code_buf[suite->offset2+3] = suite->modes[j].opcode;
+        if (suite->modes[m].mode & 0x1d) { // $nn / $nn,x / ($nn) / [$nn]
           code_buf[suite->offset2+4] = suite->basepage;
           code_buf[suite->offset2+5] = 0xea;
-          *(unsigned long*)0x60 = suite->tests[i].val1;
-          *(unsigned long*)0x64 = suite->tests[i].val2;
-          *(unsigned long*)0x68 = suite->tests[i].val3;
-        } else if (suite->modes[j].mode & 0x02) { // $nnnn
-          code_buf[suite->offset2]   = (suite->modes[j].mode & 0x80)?0x38:0x18;
-          code_buf[suite->offset2+1] = 0x42;
-          code_buf[suite->offset2+2] = 0x42;
-          code_buf[suite->offset2+3] = suite->modes[j].opcode;
+        } else if (suite->modes[m].mode & 0x22) { // $nnnn / $nnnn,x
           code_buf[suite->offset2+4] = 0x84;
           code_buf[suite->offset2+5] = 0x03;
-        } else if (suite->modes[j].mode & 0x04) { // ($nn)
-          code_buf[suite->offset2]   = (suite->modes[j].mode & 0x80)?0x38:0x18;
-          code_buf[suite->offset2+1] = 0x42;
-          code_buf[suite->offset2+2] = 0x42;
-          code_buf[suite->offset2+3] = suite->modes[j].opcode;
-          code_buf[suite->offset2+4] = suite->basepage;
-          code_buf[suite->offset2+5] = 0xea;
-        } else if (suite->modes[j].mode & 0x08) { // [$nn]
-          code_buf[suite->offset2]   = 0x42;
-          code_buf[suite->offset2+1] = 0x42;
-          code_buf[suite->offset2+2] = 0xea;
-          code_buf[suite->offset2+3] = suite->modes[j].opcode;
-          code_buf[suite->offset2+4] = suite->basepage;
-          code_buf[suite->offset2+5] = 0xea;
-        } else if (suite->modes[j].mode & 0x10) { // $nn,x
-          code_buf[suite->offset2]   = (suite->modes[j].mode & 0x80)?0x38:0x18;
-          code_buf[suite->offset2+1] = 0x42;
-          code_buf[suite->offset2+2] = 0x42;
-          code_buf[suite->offset2+3] = suite->modes[j].opcode;
-          code_buf[suite->offset2+4] = suite->basepage;
-          code_buf[suite->offset2+5] = 0xea;
-          *(unsigned long*)0x60 = suite->tests[i].val1;
-          *(unsigned long*)0x64 = suite->tests[i].val2;
-          *(unsigned long*)0x68 = suite->tests[i].val3;
-        } else if (suite->modes[j].mode & 0x20) { // $nnnn,x
-          code_buf[suite->offset2]   = (suite->modes[j].mode & 0x80)?0x38:0x18;
-          code_buf[suite->offset2+1] = 0x42;
-          code_buf[suite->offset2+2] = 0x42;
-          code_buf[suite->offset2+3] = suite->modes[j].opcode;
-          code_buf[suite->offset2+4] = 0x84;
-          code_buf[suite->offset2+5] = 0x03;
-        } else if (suite->modes[j].mode & 0x40) { // accumulator
-          code_buf[suite->offset2]   = (suite->modes[j].mode & 0x80)?0x38:0x18;
-          code_buf[suite->offset2+1] = 0x42;
-          code_buf[suite->offset2+2] = 0x42;
-          code_buf[suite->offset2+3] = suite->modes[j].opcode;
+        } else if (suite->modes[m].mode & 0x40) { // accumulator
           code_buf[suite->offset2+4] = 0xea;
           code_buf[suite->offset2+5] = 0xea;
         }
         __asm__("jsr $0340");
 
         // read results
-        if (suite->modes[j].rmw == 1)
-          result_q = *(unsigned long*)(0x384 + suite->tests[i].read_offset);
-        else if (suite->modes[j].rmw == 2)
-          result_q = *(unsigned long*)(suite->basepage + suite->tests[i].read_offset);
+        if (suite->modes[m].rmw == 1)
+          result_q = *(unsigned long*)(0x384 + suite->tests[t].read_offset);
+        else if (suite->modes[m].rmw == 2)
+          result_q = *(unsigned long*)(suite->basepage + suite->tests[t].read_offset);
         else
           result_q = *(unsigned long*)0x38c;
         result_f = *(unsigned char*)0x390;
 
         reslo = (unsigned int) (result_q&0xffff);
         reshi = (unsigned int) (result_q>>16);
-        format_flags(result_f);
+
+        // format flags
+        flagmask = 0x80;
+        for (fi=0; fi<8; flagmask>>=1, fi++)
+          flagstr[fi+1] = (result_f&flagmask)?status_flags[fi]:'.';
+
         // check return values
-        snprintf(testname, 20, "%s%s", suite->modes[j].name, suite->tests[i].name);
-        if (result_q != suite->tests[i].expected && (result_f&suite->tests[i].flag_mask) != suite->tests[i].flag_val) {
+        snprintf(testname, 20, "%s%s", suite->modes[m].name, suite->tests[t].name);
+        if (result_q != suite->tests[t].expected && (result_f&suite->tests[t].flag_mask) != suite->tests[t].flag_val) {
             snprintf(concmsg, 45, "%-.20s q=$%04x%04x %s", testname, reshi, reslo, flagstr);
             failstr[0] = 'q';
             failstr[1] = 'f';
             failstr[2] = 0x0;
             status = TEST_FAIL;
-        } else if (result_q != suite->tests[i].expected) {
+        } else if (result_q != suite->tests[t].expected) {
             snprintf(concmsg, 45, "%-.20s q=$%04x%04x", testname, reshi, reslo);
             failstr[0] = 'q';
             failstr[1] = 0x0;
             status = TEST_FAIL;
-        } else if ((result_f&suite->tests[i].flag_mask) != suite->tests[i].flag_val) {
+        } else if ((result_f&suite->tests[t].flag_mask) != suite->tests[t].flag_val) {
             snprintf(concmsg, 45, "%-.20s %s", testname, flagstr);
             failstr[0] = 'f';
             failstr[1] = 0x0;
@@ -1033,21 +954,23 @@ void test_opcode(unsigned char issue_num, opcode_suite *suite) {
   }
 
   if (failed > 0)
-    snprintf(msg, 80, "#%02d - %-4s - %d/%d tests failed", issue_num, suite->name, failed, c);
+    snprintf(msg, 80, "#%02d - %-4s - %d/%d tests failed", issue_num, suite->name, failed, count);
   else
-    snprintf(msg, 80, "#%02d - %-4s - %d tests passed", issue_num, suite->name, c);
+    snprintf(msg, 80, "#%02d - %-4s - %d tests passed", issue_num, suite->name, count);
   print_text80(0, line++, failed>0?2:5, msg);
 
   if (failed > 0)
-    snprintf(msg, 80, "%s - %d/%d tests failed", suite->name, failed, c);
+    snprintf(msg, 80, "%s - %d/%d tests failed", suite->name, failed, count);
   else
-    snprintf(msg, 80, "%s - %d tests passed", suite->name, c);
+    snprintf(msg, 80, "%s - %d tests passed", suite->name, count);
   unit_test_set_current_name(msg);
   unit_test_report(issue_num, 99, failed>0?TEST_FAIL:TEST_PASS);
 }
 
 void main(void)
 {
+  unsigned char i;
+
   asm("sei");
 
   init_mega65();
@@ -1057,8 +980,8 @@ void main(void)
   print_text80(0, line++, 7, "Q-Opcode Test Suite");
   unit_test_setup("q-opcode test", 0);
 
-  for (issue=0; suites[issue]; issue++)
-    test_opcode(issue+1, suites[issue]);
+  for (i=0; suites[i]; i++)
+    run_suite(i+1, suites[i]);
 
   if (total_failed > 0)
     snprintf(msg, 80, "Total %d/%d tests failed                                                   ", total_failed, total);
@@ -1071,7 +994,7 @@ void main(void)
   else
     snprintf(msg, 80, "total - %d tests passed", total);
   unit_test_set_current_name(msg);
-  unit_test_report(0, 99, failed>0?TEST_FAIL:TEST_PASS);
+  unit_test_report(0, 99, total_failed>0?TEST_FAIL:TEST_PASS);
 
   unit_test_set_current_name("q-opcode test");
   unit_test_report(0, 100, TEST_DONEALL);
