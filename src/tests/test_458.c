@@ -18,11 +18,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#include <hal.h>
 #include <memory.h>
-#include <dirent.h>
-#include <fileio.h>
-#include <random.h>
 #include <tests.h>
 
 struct test {
@@ -315,7 +311,7 @@ void main(void)
   keybuffer(0);
 
   snprintf(msg, 80, "unit test #%03d - %s", ISSUE_NUM, ISSUE_NAME);
-  print_text80(0, line++, 1, msg);
+  print_text80(0, line++, 7, msg);
   unit_test_setup(ISSUE_NAME, ISSUE_NUM);
   sub++; // 0 is setup, first test is 1
 
@@ -403,7 +399,7 @@ void main(void)
         snprintf(msg, 80, "*%03d - fail(%-2s) - %-11.11s q=$%04x%04x %s", sub, failstr, tests[i].message, reshi, reslo, flagstr);
       else
         snprintf(msg, 80, "*%03d - pass     - %-11.11s q=$%04x%04x %s", sub, tests[i].message, reshi, reslo, flagstr);
-      print_text80(0, line++, 1, msg);
+      print_text80(0, line++, (status == TEST_FAIL)?2:5, msg);
     }
     unit_test_set_current_name(concmsg);
     unit_test_report(ISSUE_NUM, sub++, status);
