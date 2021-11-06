@@ -356,7 +356,10 @@ fl_read_file_block:
 fl_read_from_first_half:
 	lda #(>fastload_sector_buffer)+0
 	sta fl_read_dma_page
+	lda fastload_sector_buffer+1
+	sta fl_file_next_sector
 	lda fastload_sector_buffer+0
+	sta fl_file_next_track
 	cmp #$ff
 	bne fl_1st_half_full_sector
 fl_1st_half_partial_sector:
@@ -371,7 +374,10 @@ fl_1st_half_full_sector:
 fl_read_from_second_half:
 	lda #(>fastload_sector_buffer)+1
 	sta fl_read_dma_page
+	lda fastload_sector_buffer+1
+	sta fl_file_next_sector
 	lda fastload_sector_buffer+$100
+	sta fl_file_next_track
 	cmp #$ff
 	bne fl_2nd_half_full_sector
 fl_2nd_half_partial_sector:
@@ -416,6 +422,25 @@ fl_dma_read_bytes:
 	sta $d701
 	lda #<fl_data_read_dmalist
 	sta $d705
+
+	;; Update load address
+	lda fastload_address+0
+	clc
+	adc fl_bytes_to_copy
+	sta fastload_address+0
+	lda fastload_address+1
+	adc #0
+	sta fastload_address+1
+	lda fastload_address+2
+	adc #0
+	sta fastload_address+2
+	lda fastload_address+3
+	adc #0
+	sta fastload_address+3
+	
+	;; Schedule reading of next block
+	jsr fl_read_next_sector
+	
 	rts
 
 fl_data_read_dmalist:
