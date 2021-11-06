@@ -212,35 +212,14 @@ fl_directory_scan:
 	sta fl_buffaddr+2
 
 fl_check_logical_sector:
-	ldx #$f
-zoop:	
-	lda fastload_filename,x
-	sta $0438,x
-	dex
-	bpl zoop
-	
 	ldx #$05
 fl_filenamecheckloop:
 	ldy #$00
 
-moop:
-	inc $d020
-	lda $d610
-	beq moop
-	sta $d610
-
-	;; XXX - Debug by showing
-	lda fl_buffaddr+2
-	sec
-	sbc #>fastload_sector_buffer
-	sta $040e
-	stx $040f
-	
 fl_check_loop_inner:
 
 fl_buffaddr:
 	lda fastload_sector_buffer+$100,x
-	sta $0410,y
 	
 	cmp fastload_filename,y	
 	bne fl_filename_differs
@@ -339,9 +318,11 @@ fl_logical_to_physical_sector:
 	lda #$00 		; side 0
 	sta $d086
 	lda fl_file_next_track
+	sta $0402
 	dec
 	sta $d084
 	lda fl_file_next_sector
+	sta $0403
 	lsr
 	inc
 	cmp #10
@@ -360,6 +341,101 @@ fl_read_file_block:
 	;; We have a sector from the floppy drive.
 	;; Work out which half and how many bytes,
 	;; and copy them into place.
+
+	;; Get sector from FDC
+	jsr fl_copy_sector_to_buffer
+
+	;; Assume full sector initially
+	lda #254
+	sta fl_bytes_to_copy
+	
+	;; Work out which half we care about
+	lda fl_file_next_sector
+	and #$01
+	bne fl_read_from_second_half
+fl_read_from_first_half:
+	lda #(>fastload_sector_buffer)+0
+	sta fl_read_dma_page
+	lda fastload_sector_buffer+0
+	cmp #$ff
+	bne fl_1st_half_full_sector
+fl_1st_half_partial_sector:
+	lda fastload_sector_buffer+1
+	sta fl_bytes_to_copy	
+	;; Mark end of loading
+	lda #$00
+	sta fastload_request
+fl_1st_half_full_sector:
+	jmp fl_dma_read_bytes
+	
+fl_read_from_second_half:
+	lda #(>fastload_sector_buffer)+1
+	sta fl_read_dma_page
+	lda fastload_sector_buffer+$100
+	cmp #$ff
+	bne fl_2nd_half_full_sector
+fl_2nd_half_partial_sector:
+	lda fastload_sector_buffer+$101
+	sta fl_bytes_to_copy
+	;; Mark end of loading
+	lda #$00
+	sta fastload_request
+fl_2nd_half_full_sector:
+	;; FALLTHROUGH
+fl_dma_read_bytes:
+
+	;; Update destination address
+	lda fastload_address+3
+	asl
+	asl
+	asl
+	asl
+	sta fl_data_read_dmalist+2
+	lda fastload_address+2
+	lsr
+	lsr
+	lsr
+	lsr
+	ora fl_data_read_dmalist+2
+	sta fl_data_read_dmalist+2
+	lda fastload_address+2
+	and #$0f
+	sta fl_data_read_dmalist+12
+	lda fastload_address+1
+	sta fl_data_read_dmalist+11
+	lda fastload_address+0
+	sta fl_data_read_dmalist+10
+
+	lda fl_bytes_to_copy
+	sta $0404
+	
+	;; Copy FDC data to our buffer
+	lda #$00
+	sta $d704
+	lda #>fl_data_read_dmalist
+	sta $d701
+	lda #<fl_data_read_dmalist
+	sta $d705
+	rts
+
+fl_data_read_dmalist:
+	!byte $0b	  ; F011A type list
+	!byte $81,$00	  ; Destination MB
+	!byte 0 		; no more options
+	!byte 0			; copy
+fl_bytes_to_copy:	
+	!word 0	   		; size of copy
+fl_read_page_word:	
+fl_read_dma_page = fl_read_page_word + 1
+	!word fastload_sector_buffer	; Source address
+	!byte $00		; Source bank
+	
+	!word 0			     ; Dest address
+	!byte $00		     ; Dest bank
+	
+	!byte $00		     ; sub-command
+	!word 0			     ; modulo (unused)
+	
 	rts
 	
 fl_copy_sector_to_buffer:
