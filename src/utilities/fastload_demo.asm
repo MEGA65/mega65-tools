@@ -88,6 +88,12 @@ endofname:
 	lda #$00
 	sta fastload_address+3
 
+	;; Give the fastload time to get itself sorted
+	;; (largely seeking to track 0)
+wait_for_fastload:	
+	lda fastload_request
+	bne wait_for_fastload
+	
 	;; Request fastload job
 	lda #$01
 	sta fastload_request
@@ -138,15 +144,18 @@ filename:
 	;; ------------------------------------------------------------
 	;; Actual fast-loader code
 	;; ------------------------------------------------------------
-fastload_filename
+fastload_filename:	
 	*=*+16
-fastload_filename_len
+fastload_filename_len:	
 	!byte 0
-fastload_address
+fastload_address:	
 	!byte 0,0,0,0
-fastload_request
-	!byte 0
+fastload_request:	
+	;; Start with seeking to track 0
+	!byte 4
 
+fl_current_track:	!byte 0
+	
 fl_file_next_track:	!byte 0
 fl_file_next_sector:	!byte 0
 	
@@ -158,6 +167,9 @@ fastload_irq:
 	;; This really simplifies the state machine into a series of
 	;; sector reads
 	lda fastload_request
+	bne todo
+	rts
+todo:	
 	lda $d082
 	bpl fl_fdc_not_busy
 	rts
@@ -170,6 +182,11 @@ fl_not_in_error_state:
 	;; Shift state left one bit, so that we can use it as a lookup
 	;; into a jump table.
 	;; Everything else is handled by the jump table
+	cmp #6
+	bcc fl_job_ok
+	;; Ignore request/status codes that don't correspond to actions
+	rts
+fl_job_ok:	
 	asl
 	tax
 	jmp (fl_jumptable,x)
@@ -179,12 +196,30 @@ fl_jumptable:
 	!16 fl_new_request
 	!16 fl_directory_scan
 	!16 fl_read_file_block
+	!16 fl_seek_track_0
+	!16 fl_step_track
 
 fl_idle:
 	rts
+
+fl_seek_track_0:
+	lda $d082
+	and #$01
+	bne fl_not_on_track_0
+	lda #$00
+	sta fastload_request
+	sta fl_current_track
+	rts
+fl_not_on_track_0:
+	;; Step back towards track 0
+	lda #$10
+	sta $d081
+	rts
+	
 fl_new_request:
 	;; Acknowledge fastload request
-	inc fastload_request
+	lda #2
+	sta fastload_request
 	;; Start motor
 	lda #$60
 	sta $d080
@@ -199,6 +234,7 @@ fl_new_request:
 	;; Request read
 	jsr fl_read_sector
 	rts
+	
 fl_directory_scan:
 	;; Check if our filename we want is in this sector
 	jsr fl_copy_sector_to_buffer
@@ -252,7 +288,8 @@ fl_got_file_track_and_sector:
 	;; Request reading of next track and sector
 	jsr fl_read_next_sector
 	;; Advance to next state
-	inc fastload_request
+	lda #3
+	sta fastload_request
 	rts
 	
 fl_filename_differs:
@@ -302,6 +339,11 @@ fl_read_sector:
 	lda #$40
 	sta $d081
 	rts
+
+fl_step_track:
+	lda #3
+	sta fastload_request
+	;; FALL THROUGH
 	
 fl_read_next_sector:
 	;; Check if we reached the end of the file first
@@ -311,9 +353,34 @@ fl_read_next_sector:
 fl_not_end_of_file:	
 	;; Read next sector of file
 	jsr fl_logical_to_physical_sector
+
+	lda fl_current_track
+	lda $d084
+	cmp fl_current_track
+	beq fl_on_correct_track
+	bcc fl_step_in
+fl_step_out:
+	;; We need to step first
+	lda #$18
+	sta $d081
+	inc fl_current_track
+	lda #5
+	sta fastload_request
+	rts
+fl_step_in:
+	;; We need to step first
+	lda #$10
+	sta $d081
+	dec fl_current_track
+	lda #5
+	sta fastload_request
+	rts
+	
+fl_on_correct_track:	
 	jsr fl_read_sector
 	rts
 
+	
 fl_logical_to_physical_sector:
 	;; Convert 1581 sector numbers to physical ones on the disk.
 	;; Track = Track - 1
