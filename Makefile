@@ -291,6 +291,9 @@ $(TESTDIR)/floppycapacity.prg:       $(TESTDIR)/floppycapacity.c $(TESTDIR)/flop
 $(UTILDIR)/c65toc64wrapper.prg:	$(UTILDIR)/c65toc64wrapper.asm $(ACME)
 	$(ACME) --setpc 0x2001 --cpu m65 --format cbm --outfile $(UTILDIR)/c65toc64wrapper.prg $(UTILDIR)/c65toc64wrapper.asm
 
+$(UTILDIR)/fastload_demo.prg:	$(UTILDIR)/fastload_demo.asm $(ACME)
+	$(ACME) --setpc 0x0801 --cpu m65 --format cbm --outfile $(UTILDIR)/fastload_demo.prg $(UTILDIR)/fastload_demo.asm
+
 $(EXAMPLEDIR)/verticalrasters.prg:	$(EXAMPLEDIR)/verticalrasters.asm $(ACME)
 	$(ACME) --setpc 0x0801 --cpu m65 --format cbm --outfile $(EXAMPLEDIR)/verticalrasters.prg $(EXAMPLEDIR)/verticalrasters.asm
 
