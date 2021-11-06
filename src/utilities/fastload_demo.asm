@@ -154,18 +154,25 @@ fl_new_request:
 	;; Request T40 S3 to start directory scan
 	;; (remember we have to do silly translation to real sectors)
 	lda #40-1
-	sta $d085
+	sta $d084
 	lda #(3/2)+1
-	sta $d086
+	sta $d085
 	lda #$00
-	sta $d087 		; side
+	sta $d086 		; side
 	;; Request read
 	lda #$40
 	sta $d081
 	rts
 fl_directory_scan:
+	;; Check if our filename we want is in this sector
 	inc $0401
 	jsr fl_copy_sector_to_buffer
+
+	;; Check first logical sector
+	;; (XXX we scan the last BAM sector as well, to keep the code simple.)
+	
+
+	
 	rts
 
 
