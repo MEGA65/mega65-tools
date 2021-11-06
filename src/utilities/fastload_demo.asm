@@ -1,4 +1,9 @@
+	;; A simple IRQ-able fastloader for the MEGA65 for reading from the
+	;; internal drive or a disk image.
 
+	;; XXX - Doesn't seek to tracks yet, so will not work with real disks
+	;; until implemented. Won't be hard to implement.
+	
 basic_header
 	;; Auto-detect C64/C65 mode and either way jump into the assembly
 	!byte 0x10,0x08,<2021,>2021,0x9e
@@ -44,16 +49,23 @@ program_start
 	;; Example for using the fast loader
 	
 	;; copy filename from start of screen
-	;; Expected to be PETSCIIZ at $0400
+	;; Expected to be PETSCII and $A0 padded at end, and exactly 16 chars
+	ldx #$0f
+	lda #$a0
+clearfilename:
+	sta fastload_filename,x
+	dex
+	bpl clearfilename
 	ldx #$ff
 filenamecopyloop:
 	inx
 	cpx #$10
-	beq too_long
-	lda $0400,x
+	beq endofname
+	lda filename,x
+	beq endofname
 	sta fastload_filename,x
 	bne filenamecopyloop
-too_long:
+endofname:	
 	inx
 	stx fastload_filename_len
 	
@@ -88,7 +100,7 @@ error
 done
 	inc $d020
 	jmp done
-
+	
 irq_handler
 	;; Here is our nice minimalistic IRQ handler that calls the fastload IRQ
 	
@@ -103,9 +115,20 @@ irq_handler
 
 	;; Chain to KERNAL IRQ exit
 	jmp $ea81
+
+filename:
+	;; GYRRUS for testing
+	!byte $47,$59,$52,$52,$52,$55,$53,$a0
+	!byte $a0,$a0,$a0,$a0,$a0,$a0,$a0,$a0
+
+	
+;; ----------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
 	
 	;; ------------------------------------------------------------
 	;; Actual fast-loader code
+	;; ------------------------------------------------------------
 fastload_filename
 	*=*+16
 fastload_filename_len
@@ -115,6 +138,9 @@ fastload_address
 fastload_request
 	!byte 0
 
+fl_file_next_track:	!byte 0
+fl_file_next_sector:	!byte 0
+	
 fastload_sector_buffer = $0450
 	
 fastload_irq:
@@ -122,6 +148,8 @@ fastload_irq:
 	;; This really simplifies the state machine into a series of
 	;; sector reads
 	inc $0400
+	lda fastload_request
+	sta $0401
 	lda $d082
 	bpl fl_fdc_not_busy
 	rts
@@ -142,6 +170,7 @@ fl_jumptable:
 	!16 fl_idle
 	!16 fl_new_request
 	!16 fl_directory_scan
+	!16 fl_read_file_block
 
 fl_idle:
 	rts
@@ -160,22 +189,137 @@ fl_new_request:
 	lda #$00
 	sta $d086 		; side
 	;; Request read
-	lda #$40
-	sta $d081
+	jsr fl_read_sector
 	rts
 fl_directory_scan:
 	;; Check if our filename we want is in this sector
-	inc $0401
 	jsr fl_copy_sector_to_buffer
 
-	;; Check first logical sector
 	;; (XXX we scan the last BAM sector as well, to keep the code simple.)
-	
+	;; filenames are at offset 4 in each 32-byte directory entry, padded at
+	;; the end with $A0
+	lda #<fastload_sector_buffer
+	sta fl_buffaddr+1
+	lda #>fastload_sector_buffer
+	sta fl_buffaddr+2
 
+fl_check_logical_sector:	
+	ldx #$05
+fl_filenamecheckloop:
+	ldy #$00
+fl_check_loop_inner:	
+	lda fastload_filename,y
+fl_buffaddr:	
+	cmp fastload_sector_buffer,x
+	bne fl_filename_differs
+	inx
+	iny
+	cpy #$10
+	bne fl_check_loop_inner
+	;; Filename matches
+	txa
+	sec
+	sbc #$12
+	tax
+	lda fl_buffaddr+2
+	cmp #>fastload_sector_buffer
+	bne fl_file_in_2nd_logical_sector
+	;; Y=Track, A=Sector
+	lda fastload_sector_buffer,x
+	tay
+	lda fastload_sector_buffer+1,x
+	jmp fl_got_file_track_and_sector
+fl_file_in_2nd_logical_sector:	
+	;; Y=Track, A=Sector
+	lda fastload_sector_buffer+$100,x
+	tay
+	lda fastload_sector_buffer+$101,x
+fl_got_file_track_and_sector:
+	;; Store track and sector of file
+	sty fl_file_next_track
+	sta fl_file_next_sector
+	;; Request reading of next track and sector
+	jsr fl_read_next_sector
+	;; Advance to next state
+	inc fastload_request
+	rts
 	
+fl_filename_differs:
+	txa
+	clc
+	adc #$10
+	tax
+	bcc fl_filenamecheckloop
+	inc fl_buffaddr+1
+	lda fl_buffaddr
+	cmp #>fastload_sector_buffer+1
+	beq fl_check_logical_sector
+
+	;; No matching name in this 512 byte sector.
+	;; Load the next one, or give up the search
+	inc $d085
+	lda $d085
+	cmp #11
+	bne fl_load_next_dir_sector
+	;; Ran out of sectors in directory track
+	;; (XXX only checks side 0, and assumes DD disk)
+
+	;; Mark load as failed
+	lda #$80 		; $80 = File not found
+	sta fastload_request	
 	rts
 
+fl_load_next_dir_sector:	
+	;; Request read
+	jsr fl_read_sector
+	;; No need to change state
+	rts
 
+fl_read_sector:
+	;; XXX - Check if we are already on the correct track/side
+	;; and if not, select/step as required
+	lda #$40
+	sta $d081
+	rts
+	
+fl_read_next_sector:
+	;; Read next sector of file
+	jsr fl_logical_to_physical_sector
+	jsr fl_read_sector
+	rts
+
+fl_logical_to_physical_sector:
+	;; Convert 1581 sector numbers to physical ones on the disk.
+	;; Track = Track - 1
+	;; Sector = 1 + (Sector/2)
+	;; Side = 0
+	;; If sector > 10, then sector=sector-10, side=1
+	lda #$00 		; side 0
+	sta $d086
+	lda fl_file_next_track
+	dec
+	sta $d084
+	lda fl_file_next_sector
+	lsr
+	inc
+	cmp #10
+	bcs fl_on_second_side
+	sta $d085
+	rts
+fl_on_second_side:
+	sec
+	sbc #10
+	sta $d085
+	lda #1
+	sta $d086
+	rts
+	
+fl_read_file_block:
+	;; We have a sector from the floppy drive.
+	;; Work out which half and how many bytes,
+	;; and copy them into place.
+	rts
+	
 fl_copy_sector_to_buffer:
 	;; Make sure FDC sector buffer is selected
 	lda #$80
