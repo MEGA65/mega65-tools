@@ -11,7 +11,8 @@ basic_header
 	!byte 0x00,0x00,0x00
 	
 
-program_start
+program_start:	
+
 	;; Select MEGA65 IO mode
 	lda #$47
 	sta $d02f
@@ -25,6 +26,10 @@ program_start
 	lda #$00
 	sta $d020
 	sta $d021
+
+	lda #$01
+	sta $0286
+	jsr $e544
 	
 	;; Install our raster IRQ with our fastloader
 	sei
@@ -39,6 +44,9 @@ program_start
 	lda #$01
 	sta $d01a
 	dec $d019
+
+	lda #$16
+	sta $d018
 	
 	lda #<irq_handler
 	sta $0314
@@ -118,7 +126,7 @@ irq_handler
 
 filename:
 	;; GYRRUS for testing
-	!byte $47,$59,$52,$52,$52,$55,$53,$a0
+	!byte $47,$59,$52,$52,$55,$53,$a0,$a0
 	!byte $a0,$a0,$a0,$a0,$a0,$a0,$a0,$a0
 
 	
@@ -203,14 +211,38 @@ fl_directory_scan:
 	lda #>fastload_sector_buffer
 	sta fl_buffaddr+2
 
-fl_check_logical_sector:	
+fl_check_logical_sector:
+	ldx #$f
+zoop:	
+	lda fastload_filename,x
+	sta $0438,x
+	dex
+	bpl zoop
+	
 	ldx #$05
 fl_filenamecheckloop:
 	ldy #$00
-fl_check_loop_inner:	
-	lda fastload_filename,y
-fl_buffaddr:	
-	cmp fastload_sector_buffer,x
+
+moop:
+	inc $d020
+	lda $d610
+	beq moop
+	sta $d610
+
+	;; XXX - Debug by showing
+	lda fl_buffaddr+2
+	sec
+	sbc #>fastload_sector_buffer
+	sta $040e
+	stx $040f
+	
+fl_check_loop_inner:
+
+fl_buffaddr:
+	lda fastload_sector_buffer+$100,x
+	sta $0410,y
+	
+	cmp fastload_filename,y	
 	bne fl_filename_differs
 	inx
 	iny
@@ -245,16 +277,26 @@ fl_got_file_track_and_sector:
 	rts
 	
 fl_filename_differs:
+	;; Skip same number of chars as though we had matched
+	cpy #$10
+	beq fl_end_of_name
+	inx
+	iny
+	jmp fl_filename_differs
+fl_end_of_name:
+	;; Advance to next directory entry
 	txa
 	clc
 	adc #$10
 	tax
 	bcc fl_filenamecheckloop
-	inc fl_buffaddr+1
-	lda fl_buffaddr
-	cmp #>fastload_sector_buffer+1
-	beq fl_check_logical_sector
-
+	inc fl_buffaddr+2
+	lda fl_buffaddr+2
+	cmp #(>fastload_sector_buffer)+1
+	bne fl_checked_both_halves
+	jmp fl_check_logical_sector
+fl_checked_both_halves:	
+	
 	;; No matching name in this 512 byte sector.
 	;; Load the next one, or give up the search
 	inc $d085
