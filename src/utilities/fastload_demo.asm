@@ -398,13 +398,25 @@ fl_logical_to_physical_sector:
 	cmp #10
 	bcs fl_on_second_side
 	sta $d085
-	rts
+	jmp fl_set_fdc_head
+	
 fl_on_second_side:
 	sec
 	sbc #10
 	sta $d085
 	lda #1
 	sta $d086
+
+	;; FALL THROUGH
+fl_set_fdc_head:
+	;; Select correct side of real disk drive
+	lda $d086
+	asl
+	asl
+	asl
+	and #$08
+	ora #$60
+	sta $d080
 	rts
 	
 fl_read_file_block:
