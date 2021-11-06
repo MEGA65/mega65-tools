@@ -100,7 +100,8 @@ waiting
 	lda fastload_request
 	bmi error
 	bne waiting
-
+	beq done
+	
 error
 	inc $042f
 	jmp error
@@ -149,15 +150,14 @@ fastload_request
 fl_file_next_track:	!byte 0
 fl_file_next_sector:	!byte 0
 	
-fastload_sector_buffer = $0450
+fastload_sector_buffer:
+	*=*+512
 	
 fastload_irq:
 	;; If the FDC is busy, do nothing, as we can't progress.
 	;; This really simplifies the state machine into a series of
 	;; sector reads
-	inc $0400
 	lda fastload_request
-	sta $0401
 	lda $d082
 	bpl fl_fdc_not_busy
 	rts
@@ -304,6 +304,11 @@ fl_read_sector:
 	rts
 	
 fl_read_next_sector:
+	;; Check if we reached the end of the file first
+	lda fl_file_next_track
+	bne fl_not_end_of_file
+	rts
+fl_not_end_of_file:	
 	;; Read next sector of file
 	jsr fl_logical_to_physical_sector
 	jsr fl_read_sector
@@ -318,11 +323,9 @@ fl_logical_to_physical_sector:
 	lda #$00 		; side 0
 	sta $d086
 	lda fl_file_next_track
-	sta $0402
 	dec
 	sta $d084
 	lda fl_file_next_sector
-	sta $0403
 	lsr
 	inc
 	cmp #10
@@ -360,7 +363,6 @@ fl_read_from_first_half:
 	sta fl_file_next_sector
 	lda fastload_sector_buffer+0
 	sta fl_file_next_track
-	cmp #$ff
 	bne fl_1st_half_full_sector
 fl_1st_half_partial_sector:
 	lda fastload_sector_buffer+1
@@ -374,11 +376,10 @@ fl_1st_half_full_sector:
 fl_read_from_second_half:
 	lda #(>fastload_sector_buffer)+1
 	sta fl_read_dma_page
-	lda fastload_sector_buffer+1
+	lda fastload_sector_buffer+$101
 	sta fl_file_next_sector
 	lda fastload_sector_buffer+$100
 	sta fl_file_next_track
-	cmp #$ff
 	bne fl_2nd_half_full_sector
 fl_2nd_half_partial_sector:
 	lda fastload_sector_buffer+$101
@@ -412,9 +413,6 @@ fl_dma_read_bytes:
 	lda fastload_address+0
 	sta fl_data_read_dmalist+10
 
-	lda fl_bytes_to_copy
-	sta $0404
-	
 	;; Copy FDC data to our buffer
 	lda #$00
 	sta $d704
@@ -452,7 +450,8 @@ fl_bytes_to_copy:
 	!word 0	   		; size of copy
 fl_read_page_word:	
 fl_read_dma_page = fl_read_page_word + 1
-	!word fastload_sector_buffer	; Source address
+	;; +2 is to skip track/header link
+	!word fastload_sector_buffer+2	; Source address
 	!byte $00		; Source bank
 	
 	!word 0			     ; Dest address
