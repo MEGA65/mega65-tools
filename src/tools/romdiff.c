@@ -153,7 +153,7 @@ char normalised[256];
 char* normalise(char* s)
 {
   int ofs = 0;
-  for (int i = 0; s[i]; i++) {
+  for (int i = 0; s[i] && ofs<255; i++) {
     if (s[i] == '/' || s[i] == '\\')
       ofs = 0;
     else {
@@ -170,7 +170,7 @@ int main(int argc, char** argv)
     FILE* f = fopen(argv[1], "rb");
 
     if (!f) {
-      fprintf(stderr, "ERROR: Could not diff file '%s'\n", argv[1]);
+      fprintf(stderr, "ERROR: Could not open diff file '%s'\n", argv[1]);
       perror("fopen");
       exit(-1);
     }
@@ -212,8 +212,26 @@ int main(int argc, char** argv)
   }
 
   if (argc != 4) {
-    fprintf(stderr, "usage: romdiff <reference ROM> <new ROM> <output file>\n");
-    fprintf(stderr, "       romdiff <rom diff file> <outputfile>\n");
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "       (diff mode)   romdiff <reference ROM> <new ROM> <output file>\n");
+    fprintf(stderr, "       (patch mode)  romdiff <rom diff file> <outputfile>\n\n");
+    fprintf(stderr, "Be aware that in diff mode the output file will be silently overwritten!\n\n");
+    fprintf(stderr, "In patch mode the referenced ROM file name is taken from the header of\n");
+    fprintf(stderr, "the diff file. Make sure that this file can be found in the current\n");
+    fprintf(stderr, "directory, or the patch will fail.\n");
+    exit(-1);
+  }
+
+  // check args for filename size
+  normalise(argv[1]);
+  if (strlen(normalised) > 31) {
+    fprintf(stderr, "ERROR: name of reference rom file is greater than 31 characters.\n");
+    exit(-1);
+  }
+
+  normalise(argv[2]);
+  if (strlen(normalised) > 159) {
+    fprintf(stderr, "ERROR: name of new rom file is greater than 159 characters.\n");
     exit(-1);
   }
 
@@ -402,7 +420,7 @@ int main(int argc, char** argv)
     output_size_so_far = costs[i];
   }
 
-  fprintf(stderr, "\rTotal size of diff = %d bytes.\n", costs[0]);
+  fprintf(stderr, "\rTotal size of diff = %d bytes.                              \n", costs[0]);
   int steps = 0;
   for (int ofs = 0; ofs < FILE_SIZE;) {
     if (next_pos[ofs] > FILE_SIZE) {
@@ -430,9 +448,9 @@ int main(int argc, char** argv)
   // Write header and reference file name
   unsigned char header[256];
   bzero(header, 256);
-  snprintf((char*)header, 256, "MEGA65ROMPATCH01.00");
-  snprintf((char*)&header[32], 256, "%s", normalise(argv[1]));
-  snprintf((char*)&header[32 + 64], 256, "%s", normalise(argv[2]));
+  snprintf((char*)header, 32, "MEGA65ROMPATCH01.00");
+  snprintf((char*)&header[32], 64, "%s", normalise(argv[1]));
+  snprintf((char*)&header[32 + 64], 160, "%s", normalise(argv[2]));
   fwrite(header, 256, 1, f);
   // Write diff
   fwrite(diff, diff_len, 1, f);
