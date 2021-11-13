@@ -734,6 +734,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
   errno = 0;
 
   open_the_serial_port(serial_port);
+  xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
   rxbuff_detect();
 
@@ -4049,6 +4050,13 @@ int download_single_file(char* dest_name, char* local_name, int showClusters)
 
     if (f)
       fclose(f);
+
+    int next_cluster = chained_cluster(file_cluster);
+    printf("Next cluster = $%x\n",next_cluster);
+    while(next_cluster<0xffffff0) {
+      next_cluster = chained_cluster(next_cluster);
+      printf("Next cluster = $%x\n",next_cluster);      
+    }
 
     if (time(0) == upload_start)
       upload_start = time(0) - 1;

@@ -1738,6 +1738,7 @@ int main(int argc, char** argv)
   }
 
   open_the_serial_port(serial_port);
+  xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
   rxbuff_detect();
   monitor_sync();

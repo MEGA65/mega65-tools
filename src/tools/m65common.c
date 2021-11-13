@@ -1755,7 +1755,7 @@ void open_the_serial_port(char* serial_port)
     perror("open");
     exit(-1);
   }
-
+  
   set_serial_speed(fd, serial_speed);
 
   // Also try to reduce serial port latency
@@ -1790,7 +1790,6 @@ void open_the_serial_port(char* serial_port)
   }
 #endif
 
-  xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 }
 
 int switch_to_c64mode(void)
