@@ -1,8 +1,10 @@
 /*
-  Comprehensive Q-Opcode Test Suite
+  Comprehensive Q-Opcode Test Suite mega65-core Issue #468
 
   To check if bitstream behaves as expected and to aid xemu implementation
 */
+#define ISSUE_NUM 468
+#define ISSUE_NAME "q-opcode test suite"
 
 #include <stdio.h>
 #include <string.h>
@@ -920,23 +922,23 @@ void run_suite(unsigned char issue_num, opcode_suite *suite) {
         // check return values
         snprintf(testname, 20, "%s%s", suite->modes[m].name, suite->tests[t].name);
         if (result_q != suite->tests[t].expected && (result_f&suite->tests[t].flag_mask) != suite->tests[t].flag_val) {
-            snprintf(concmsg, 45, "%-.20s q=$%04x%04x %s", testname, reshi, reslo, flagstr);
+            snprintf(concmsg, 80, "#%02d %-.20s q=$%04x%04x %s", sub, testname, reshi, reslo, flagstr);
             failstr[0] = 'q';
             failstr[1] = 'f';
             failstr[2] = 0x0;
             status = TEST_FAIL;
         } else if (result_q != suite->tests[t].expected) {
-            snprintf(concmsg, 45, "%-.20s q=$%04x%04x", testname, reshi, reslo);
+            snprintf(concmsg, 80, "#%02d %-.20s q=$%04x%04x", sub, testname, reshi, reslo);
             failstr[0] = 'q';
             failstr[1] = 0x0;
             status = TEST_FAIL;
         } else if ((result_f&suite->tests[t].flag_mask) != suite->tests[t].flag_val) {
-            snprintf(concmsg, 45, "%-.20s %s", testname, flagstr);
+            snprintf(concmsg, 80, "#%02d %-.20s %s", sub, testname, flagstr);
             failstr[0] = 'f';
             failstr[1] = 0x0;
             status = TEST_FAIL;
         } else {
-            snprintf(concmsg, 45, "%-.20s", testname);
+            snprintf(concmsg, 80, "#%02d %-.20s", sub, testname);
             failstr[0] = 0x0;
             status = TEST_PASS;
         }
@@ -948,7 +950,8 @@ void run_suite(unsigned char issue_num, opcode_suite *suite) {
         }
 
         unit_test_set_current_name(concmsg);
-        unit_test_report(issue_num, sub++, status);
+        unit_test_report(ISSUE_NUM, issue_num, status);
+        sub++;
       }
     }
   }
@@ -964,7 +967,7 @@ void run_suite(unsigned char issue_num, opcode_suite *suite) {
   else
     snprintf(msg, 80, "%s - %d tests passed", suite->name, count);
   unit_test_set_current_name(msg);
-  unit_test_report(issue_num, 99, failed>0?TEST_FAIL:TEST_PASS);
+  unit_test_report(ISSUE_NUM, issue_num, failed>0?TEST_FAIL:TEST_PASS);
 }
 
 void main(void)
@@ -977,8 +980,9 @@ void main(void)
   h640_text_mode();
   keybuffer(0);
 
-  print_text80(0, line++, 7, "Q-Opcode Test Suite");
-  unit_test_setup("q-opcode test", 0);
+  snprintf(msg, 80, "Q-Opcode Test Suite #%03d", ISSUE_NUM);
+  print_text80(0, line++, 7, msg);
+  unit_test_setup(ISSUE_NAME, ISSUE_NUM);
 
   for (i=0; suites[i]; i++)
     run_suite(i+1, suites[i]);
@@ -994,11 +998,12 @@ void main(void)
   else
     snprintf(msg, 80, "total - %d tests passed", total);
   unit_test_set_current_name(msg);
-  unit_test_report(0, 99, total_failed>0?TEST_FAIL:TEST_PASS);
+  unit_test_report(ISSUE_NUM, 0, total_failed>0?TEST_FAIL:TEST_PASS);
 
-  unit_test_set_current_name("q-opcode test");
-  unit_test_report(0, 100, TEST_DONEALL);
-  print_text80(0, (line<24)?line:24, 7, "Q-Opcode Test Finished                                                       ");
+  unit_test_set_current_name(ISSUE_NAME);
+  unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);
+  snprintf(msg, 80, "Q-Opcode Test Finished #%03d                                                  ", ISSUE_NUM);
+  print_text80(0, (line<24)?line:24, 7, msg);
 
   keybuffer(1);
   restore_graphics();
