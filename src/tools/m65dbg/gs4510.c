@@ -5,22 +5,22 @@
 char* instruction_lut[] =
 {
   // 4502 personality
-    "BRK","ORA","CLE","SEE","TSB","ORA","ASL","RMB","PHP","ORA","ASL","TSY","TSB","ORA","ASL","BBR",
-    "BPL","ORA","ORA","BPL","TRB","ORA","ASL","RMB","CLC","ORA","INC","INZ","TRB","ORA","ASL","BBR",
-    "JSR","AND","JSR","JSR","BIT","AND","ROL","RMB","PLP","AND","ROL","TYS","BIT","AND","ROL","BBR",
-    "BMI","AND","AND","BMI","BIT","AND","ROL","RMB","SEC","AND","DEC","DEZ","BIT","AND","ROL","BBR",
-    "RTI","EOR","NEG","ASR","ASR","EOR","LSR","RMB","PHA","EOR","LSR","TAZ","JMP","EOR","LSR","BBR",
-    "BVC","EOR","EOR","BVC","ASR","EOR","LSR","RMB","CLI","EOR","PHY","TAB","MAP","EOR","LSR","BBR",
-    "RTS","ADC","RTS","BSR","STZ","ADC","ROR","RMB","PLA","ADC","ROR","TZA","JMP","ADC","ROR","BBR",
-    "BVS","ADC","ADC","BVS","STZ","ADC","ROR","RMB","SEI","ADC","PLY","TBA","JMP","ADC","ROR","BBR",
-    "BRA","STA","STA","BRA","STY","STA","STX","SMB","DEY","BIT","TXA","STY","STY","STA","STX","BBS",
-    "BCC","STA","STA","BCC","STY","STA","STX","SMB","TYA","STA","TXS","STX","STZ","STA","STZ","BBS",
-    "LDY","LDA","LDX","LDZ","LDY","LDA","LDX","SMB","TAY","LDA","TAX","LDZ","LDY","LDA","LDX","BBS",
-    "BCS","LDA","LDA","BCS","LDY","LDA","LDX","SMB","CLV","LDA","TSX","LDZ","LDY","LDA","LDX","BBS",
-    "CPY","CMP","CPZ","DEW","CPY","CMP","DEC","SMB","INY","CMP","DEX","ASW","CPY","CMP","DEC","BBS",
-    "BNE","CMP","CMP","BNE","CPZ","CMP","DEC","SMB","CLD","CMP","PHX","PHZ","CPZ","CMP","DEC","BBS",
-    "CPX","SBC","LDA","INW","CPX","SBC","INC","SMB","INX","SBC","EOM","ROW","CPX","SBC","INC","BBS",
-    "BEQ","SBC","SBC","BEQ","PHW","SBC","INC","SMB","SED","SBC","PLX","PLZ","PHW","SBC","INC","BBS",
+    "BRK","ORA","CLE","SEE","TSB","ORA","ASL","RMB0","PHP","ORA","ASL","TSY","TSB","ORA","ASL","BBR0",
+    "BPL","ORA","ORA","BPL","TRB","ORA","ASL","RMB1","CLC","ORA","INC","INZ","TRB","ORA","ASL","BBR1",
+    "JSR","AND","JSR","JSR","BIT","AND","ROL","RMB2","PLP","AND","ROL","TYS","BIT","AND","ROL","BBR2",
+    "BMI","AND","AND","BMI","BIT","AND","ROL","RMB3","SEC","AND","DEC","DEZ","BIT","AND","ROL","BBR3",
+    "RTI","EOR","NEG","ASR","ASR","EOR","LSR","RMB4","PHA","EOR","LSR","TAZ","JMP","EOR","LSR","BBR4",
+    "BVC","EOR","EOR","BVC","ASR","EOR","LSR","RMB5","CLI","EOR","PHY","TAB","MAP","EOR","LSR","BBR5",
+    "RTS","ADC","RTS","BSR","STZ","ADC","ROR","RMB6","PLA","ADC","ROR","TZA","JMP","ADC","ROR","BBR6",
+    "BVS","ADC","ADC","BVS","STZ","ADC","ROR","RMB7","SEI","ADC","PLY","TBA","JMP","ADC","ROR","BBR7",
+    "BRA","STA","STA","BRA","STY","STA","STX","SMB0","DEY","BIT","TXA","STY","STY","STA","STX","BBS0",
+    "BCC","STA","STA","BCC","STY","STA","STX","SMB1","TYA","STA","TXS","STX","STZ","STA","STZ","BBS1",
+    "LDY","LDA","LDX","LDZ","LDY","LDA","LDX","SMB2","TAY","LDA","TAX","LDZ","LDY","LDA","LDX","BBS2",
+    "BCS","LDA","LDA","BCS","LDY","LDA","LDX","SMB3","CLV","LDA","TSX","LDZ","LDY","LDA","LDX","BBS3",
+    "CPY","CMP","CPZ","DEW","CPY","CMP","DEC","SMB4","INY","CMP","DEX","ASW","CPY","CMP","DEC","BBS4",
+    "BNE","CMP","CMP","BNE","CPZ","CMP","DEC","SMB5","CLD","CMP","PHX","PHZ","CPZ","CMP","DEC","BBS5",
+    "CPX","SBC","LDA","INW","CPX","SBC","INC","SMB6","INX","SBC","EOM","ROW","CPX","SBC","INC","BBS6",
+    "BEQ","SBC","SBC","BEQ","PHW","SBC","INC","SMB7","SED","SBC","PLX","PLZ","PHW","SBC","INC","BBS7",
 
     // 6502 personality
     // XXX Currently just a copy of 4502 personality

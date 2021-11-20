@@ -1412,7 +1412,8 @@ int disassemble_addr_into_string(char* str, int addr, bool useAddr28)
   }
 
   // Instruction name
-  strcat(str, instruction_lut[mem.b[0]]);
+  sprintf(s, "%-4s", instruction_lut[mem.b[0]]);
+  strcat(str, s);
 
   switch(mode_lut[mem.b[0]])
   {
