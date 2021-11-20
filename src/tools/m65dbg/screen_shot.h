@@ -1,3 +1,5 @@
+/* vim: set expandtab shiftwidth=2 tabstop=2: */
+
 #ifndef SCREENSHOT_H
 #define SCREENSHOT_H
 

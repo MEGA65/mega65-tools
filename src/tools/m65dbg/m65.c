@@ -1,3 +1,5 @@
+/* vim: set expandtab shiftwidth=2 tabstop=2: */
+
 /*
    Load the specified program into memory on the C65GS via the serial monitor.
 
@@ -150,7 +152,7 @@ void usage(void)
   fprintf(stderr,"  -K - Use DK backend for libUSB, if available\n");
   fprintf(stderr,"  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n");
   fprintf(stderr,"       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
-      "             for the bitstream, and @issue/tag for HYPPO.\n");
+                 "             for the bitstream, and @issue/tag for HYPPO.\n");
   fprintf(stderr,"  -J - Do JTAG boundary scan of attached FPGA, using the provided XDC and BSDL files.\n");
   fprintf(stderr,"       A sensitivity list can also be provided, to restrict the set of signals monitored.\n");
   fprintf(stderr,"       This will likely be required when producing VCD files, as they can only log ~80 signals.\n");
@@ -473,7 +475,7 @@ int load_file(char *filename,int load_addr,int patchHyppo)
 
     max_bytes=0x10000-(load_addr&0xffff);
     if (max_bytes>byte_limit) max_bytes=byte_limit;
-    b=fread(buf,1,max_bytes,f);	  
+    b=fread(buf,1,max_bytes,f);   
   }
 
   fclose(f);
@@ -653,8 +655,8 @@ int virtual_f011_read(int device,int track,int sector,int side)
         do_usleep(1000*SLOW_FACTOR);
         int n=0x200;
         unsigned char *p=buf;
-        //	      fprintf(stderr,"%s\n",cmd);
-        //	      dump_bytes(0,"F011 virtual sector data",p,512);
+        //        fprintf(stderr,"%s\n",cmd);
+        //        dump_bytes(0,"F011 virtual sector data",p,512);
         while(n>0) {
           int w=serialport_write(fd,p,n);
           if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
@@ -663,9 +665,9 @@ int virtual_f011_read(int device,int track,int sector,int side)
         else do_usleep(10000+6*b*SLOW_FACTOR);
 #ifdef WINDOWS       
         printf("T+%I64d ms : Block sent.\n",gettime_ms()-start);
-#else	
+#else 
         printf("T+%lld ms : Block sent.\n",gettime_ms()-start);
-#endif	
+#endif
       }
     }
 
@@ -740,7 +742,7 @@ void show_hyppo_report(void)
     printf("  sector in cluster = $%02x, ",hyppo_buffer[fd_o+10]);
     printf("  offset in sector = $%02x%02x\n",hyppo_buffer[fd_o+12],hyppo_buffer[fd_o+11]);
     //    printf("  file offset = $%02x%02x (x 256 bytes? not used?)\n",
-    //	   hyppo_buffer[fd_o+14],hyppo_buffer[fd_o+13]);
+    //     hyppo_buffer[fd_o+14],hyppo_buffer[fd_o+13]);
   }
 
   printf("Current file descriptor # = $%02x\n",hyppo_buffer[0xf4]);
@@ -797,7 +799,7 @@ int monitor_sync(void)
 
       //      if (b>0) dump_bytes(0,"read_data",read_buff,b);
       if (strstr((char *)read_buff,cmd)) {
-        //	printf("Found token. Synchronised with monitor.\n");
+        //  printf("Found token. Synchronised with monitor.\n");
         state=99;
         return 0;      
       }
@@ -889,7 +891,7 @@ int breakpoint_wait(void)
           fprintf(stderr,"Breakpoint @ $%04X triggered.\n",breakpoint_pc);
           slow_write(fd,"t1\r",3);
           cpu_stopped=1;
-          //	  printf("stopped following breakpoing.\n");
+          //    printf("stopped following breakpoing.\n");
           return 0;
         } else match_state++;
       } else {
@@ -1153,7 +1155,7 @@ void do_type_key(unsigned char key)
 
 
   switch (key)
-  {	  
+  {   
     case 0x03: c1=0x3f; break; // RUN/STOP
     case 0x1d: c1=0x02; break; // Cursor right
     case 0x9d: c1=0x02; c2=0x0f; break; // Cursor left
@@ -1217,7 +1219,7 @@ void do_type_key(unsigned char key)
                // case '': c1=0x34; break; right shift
     case '=': c1=0x35; break;
               // What was this with 0x91?
-              //	case 0x91: c1=0x36; break;
+              //  case 0x91: c1=0x36; break;
     case '/': c1=0x37; break;
 
     case '1': c1=0x38; break;
@@ -1667,8 +1669,8 @@ void set_serial_speed(int fd,int serial_speed)
 void *run_boundary_scan(void *argp)
 {
   //xilinx_boundaryscan(boundary_xdc[0]?boundary_xdc:NULL,
-  //	      boundary_bsdl[0]?boundary_bsdl:NULL,
-  //	      jtag_sensitivity[0]?jtag_sensitivity:NULL);
+  //        boundary_bsdl[0]?boundary_bsdl:NULL,
+  //        jtag_sensitivity[0]?jtag_sensitivity:NULL);
   return (void *)NULL;
 }
 
@@ -1791,7 +1793,7 @@ void download_hyppo(void)
 
 void load_bitstream(char *bitstream)
 {
-  if (vivado_bat!=NULL)	{
+  if (vivado_bat!=NULL) {
     /*  For Windows we just call Vivado to do the FPGA programming,
         while we are having horrible USB problems otherwise. */
     FILE *tclfile=fopen("temp.tcl","w");
@@ -1895,7 +1897,7 @@ extern const char *version_string;
 //  start_time=time(0);
 //
 //  fprintf(stderr,"MEGA65 Cross-Platform tool.\n"
-//	  "version: %s\n",version_string);
+//    "version: %s\n",version_string);
 //  
 //  timestamp_msg("");
 //  fprintf(stderr,"Getting started..\n");
@@ -1910,10 +1912,10 @@ extern const char *version_string;
 //    case 'K': usedk=1; break;
 //    case 'Z':
 //      {
-//	// Zap (reconfig) FPGA via MEGA65 reconfig registers
-//	sscanf(optarg,"%x",&zap_addr);
-//	fprintf(stderr,"Reconfiguring FPGA using bitstream at $%08x\n",zap_addr);
-//	zap=1;
+//  // Zap (reconfig) FPGA via MEGA65 reconfig registers
+//  sscanf(optarg,"%x",&zap_addr);
+//  fprintf(stderr,"Reconfiguring FPGA using bitstream at $%08x\n",zap_addr);
+//  zap=1;
 //      }
 //      break;
 //    case 'B': sscanf(optarg,"%x",&break_point); break;
@@ -2036,11 +2038,11 @@ extern const char *version_string;
 //    char cmd[1024];
 //    monitor_sync();
 //    snprintf(cmd,1024,"sffd36c8 %x %x %x %x\r",
-//	     (zap_addr>>0)&0xff,
-//	     (zap_addr>>8)&0xff,
-//	     (zap_addr>>16)&0xff,
-//	     (zap_addr>>24)&0xff);
-//    slow_write(fd,cmd,strlen(cmd));	  
+//       (zap_addr>>0)&0xff,
+//       (zap_addr>>8)&0xff,
+//       (zap_addr>>16)&0xff,
+//       (zap_addr>>24)&0xff);
+//    slow_write(fd,cmd,strlen(cmd));   
 //    monitor_sync();
 //    mega65_poke(0xffd36cf,0x42);
 //    fprintf(stderr,"FPGA reconfigure command issued.\n");
@@ -2060,8 +2062,8 @@ extern const char *version_string;
 //      char *temp_name="/tmp/HYPPOEXT.M65";
 //      FILE *f=fopen(temp_name,"wb");
 //      if (!f) {
-//	perror("Could not create temporary HYPPO file.");
-//	exit(-1);
+//  perror("Could not create temporary HYPPO file.");
+//  exit(-1);
 //      }
 //      fwrite(hyppo_data,0x4000,1,f);
 //      fclose(f);
@@ -2076,13 +2078,13 @@ extern const char *version_string;
 //    if (romfile||charromfile) {
 //      enter_hypervisor_mode();
 //      if (romfile) {
-//	// Un-protect
-//	mega65_poke(0xffd367d,mega65_peek(0xffd367d)&(0xff-4));
-//		    
-//	load_file(romfile,0x20000,0);
-//	// reenable ROM write protect
-//	mega65_poke(0xffd367d,mega65_peek(0xffd367d)|0x04);
-//	
+//  // Un-protect
+//  mega65_poke(0xffd367d,mega65_peek(0xffd367d)&(0xff-4));
+//        
+//  load_file(romfile,0x20000,0);
+//  // reenable ROM write protect
+//  mega65_poke(0xffd367d,mega65_peek(0xffd367d)|0x04);
+//  
 //      } 
 //      if (charromfile) load_file(charromfile,0xFF7E000,0);
 //      return_from_hypervisor_mode();
@@ -2184,15 +2186,15 @@ extern const char *version_string;
 //    while (do_go64&&(!saw_c64_mode)) {
 //      detect_mode();
 //      if (!saw_c64_mode) {
-//	fprintf(stderr,"ERROR: In C65 mode, but expected C64 mode\n");
-//	exit(-1);
+//  fprintf(stderr,"ERROR: In C65 mode, but expected C64 mode\n");
+//  exit(-1);
 //      }
 //    }
 //    while ((!do_go64)&&(!saw_c65_mode)) {
 //      detect_mode();
 //      if (!saw_c65_mode) {
-//	fprintf(stderr,"ERROR: Should be in C65 mode, but don't seem to be.\n");
-//	exit(-1);
+//  fprintf(stderr,"ERROR: Should be in C65 mode, but don't seem to be.\n");
+//  exit(-1);
 //      }
 //    }
 //    
@@ -2202,20 +2204,20 @@ extern const char *version_string;
 //      // Type LOAD command and set breakpoint to catch the ROM routine
 //      // when it executes.
 //      breakpoint_set(load_routine_addr);
-//      if (first_time) {	
-//	if (saw_c64_mode) {
-//	  // What we stuff in the keyboard buffer here is actually
-//	  // not important for ,1 loading.  That gets handled in the loading
-//	  // logic.  But we reflect it here, so that it doesn't confuse people.
-//	  if (comma_eight_comma_one)
-//	    stuff_keybuffer("Lo\"!\",8,1\r");
-//	  else
-//	    stuff_keybuffer("Lo\"!\",8\r");
-//	}
-//	else {
-//	  // Really wait for C65 to get to READY prompt
-//	  stuff_keybuffer("DLo\"!\r");
-//	}
+//      if (first_time) { 
+//  if (saw_c64_mode) {
+//    // What we stuff in the keyboard buffer here is actually
+//    // not important for ,1 loading.  That gets handled in the loading
+//    // logic.  But we reflect it here, so that it doesn't confuse people.
+//    if (comma_eight_comma_one)
+//      stuff_keybuffer("Lo\"!\",8,1\r");
+//    else
+//      stuff_keybuffer("Lo\"!\",8\r");
+//  }
+//  else {
+//    // Really wait for C65 to get to READY prompt
+//    stuff_keybuffer("DLo\"!\r");
+//  }
 //      }
 //      first_time=0;
 //      breakpoint_wait();
@@ -2224,7 +2226,7 @@ extern const char *version_string;
 //      unsigned char filename_len=mega65_peek(0xb7);
 //      if (saw_c64_mode) filename_addr= mega65_peek(0xbb)+mega65_peek(0xbc)*256;
 //      else {
-//	filename_addr= mega65_peek(0xbb)+mega65_peek(0xbc)*256+mega65_peek(0xbe)*65536;
+//  filename_addr= mega65_peek(0xbb)+mega65_peek(0xbc)*256+mega65_peek(0xbe)*65536;
 //      }
 //      char requested_name[256];
 //      fetch_ram(filename_addr,filename_len,(unsigned char *)requested_name);
@@ -2254,156 +2256,156 @@ extern const char *version_string;
 //      int load_addr=fgetc(f);
 //      load_addr|=fgetc(f)<<8;
 //      if ((load_addr==0x5350)||(load_addr==0x5352))
-//	{
-//	// It's probably a SID file
+//  {
+//  // It's probably a SID file
 //
-//	timestamp_msg("Examining SID file...\n");
+//  timestamp_msg("Examining SID file...\n");
 //
-//	// Read header
-//	unsigned char sid_header[0x7c];
-//	fread(sid_header,0x7c,1,f);
-//	
+//  // Read header
+//  unsigned char sid_header[0x7c];
+//  fread(sid_header,0x7c,1,f);
+//  
 //
-//	unsigned int start_addr=(sid_header[0x0a-0x02]<<8)+sid_header[0x0b-0x02];
-//	unsigned int play_addr=(sid_header[0x0c-0x02]<<8)+sid_header[0x0d-0x02];
-//	unsigned int play_speed=sid_header[0x12-0x02];
+//  unsigned int start_addr=(sid_header[0x0a-0x02]<<8)+sid_header[0x0b-0x02];
+//  unsigned int play_addr=(sid_header[0x0c-0x02]<<8)+sid_header[0x0d-0x02];
+//  unsigned int play_speed=sid_header[0x12-0x02];
 //
-//	char *name=&sid_header[0x16-0x02];
-//	char *author=&sid_header[0x36-0x02];
-//	char *released=&sid_header[0x56-0x02];
+//  char *name=&sid_header[0x16-0x02];
+//  char *author=&sid_header[0x36-0x02];
+//  char *released=&sid_header[0x56-0x02];
 //
-//	timestamp_msg("");
-//	fprintf(stderr,"SID tune '%s' by '%s' (%s)\n",
-//		name,author,released);
+//  timestamp_msg("");
+//  fprintf(stderr,"SID tune '%s' by '%s' (%s)\n",
+//    name,author,released);
 //
-//	// Also show player info on the screen
-//	char player_screen[1000]={
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "M65 TOOL CRUSTY SID PLAYER V00.00 ALPHA "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "0 - 9 = SELECT TRACK                    "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	  "                                        "
-//	};
-//	for(int i=0;name[i];i++) player_screen[40*6+i]=name[i];
-//	for(int i=0;author[i];i++) player_screen[40*8+i]=author[i];
-//	for(int i=0;released[i];i++) player_screen[40*10+i]=released[i];
-//	
-//	for(int i=0;i<1000;i++) {
-//	  if (player_screen[i]>='@'&&player_screen[i]<='Z') player_screen[i]&=0x1f;
-//	  if (player_screen[i]>='a'&&player_screen[i]<='z') player_screen[i]&=0x1f;
-//	}
+//  // Also show player info on the screen
+//  char player_screen[1000]={
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "M65 TOOL CRUSTY SID PLAYER V00.00 ALPHA "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "0 - 9 = SELECT TRACK                    "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//    "                                        "
+//  };
+//  for(int i=0;name[i];i++) player_screen[40*6+i]=name[i];
+//  for(int i=0;author[i];i++) player_screen[40*8+i]=author[i];
+//  for(int i=0;released[i];i++) player_screen[40*10+i]=released[i];
+//  
+//  for(int i=0;i<1000;i++) {
+//    if (player_screen[i]>='@'&&player_screen[i]<='Z') player_screen[i]&=0x1f;
+//    if (player_screen[i]>='a'&&player_screen[i]<='z') player_screen[i]&=0x1f;
+//  }
 //
-//	if (new_monitor) 
-//	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+1000)&0xffff);
-//	else
-//	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+1000-1);
-//	slow_write(fd,cmd,strlen(cmd));
-//	do_usleep(1000*SLOW_FACTOR);
-//	{
-//	  int n=1000;
-//	  unsigned char *p=player_screen;
-//	  while(n>0) {
-//	    int w=serialport_write(fd,p,n);
-//	    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
-//	  }
-//	}
-//	do_usleep(50000);
-//	
-//	// Patch load address
-//	load_addr=(sid_header[0x7d-0x02]<<8)+sid_header[0x7c-0x02];
-//	timestamp_msg("");
-//	fprintf(stderr,"SID load address is $%04x\n",load_addr);
-//	//	dump_bytes(0,"sid header",sid_header,0x7c);
-//	
-//	// Prepare simple play routine
-//	// XXX For now it is always VIC frame locked
-//	timestamp_msg("Uploading play routine\n");
-//	int b=56;
-//	unsigned char player[56]={
-//	  0x78,	  
-//	  0xa9,0x35,
-//	  0x85,0x01,
-//	  0xa9,0x01,
-//	  0x20,0x34,0x12,
-//	  0xa9,0x80,0xcd,0x12,0xd0,0xd0,0xfb,0xa9,0x01,0x8d,0x20,0xd0,
-//	  0x20,0x78,0x56,
-//	  0xa9,0x00,0x8d,0x20,0xd0,0xa9,0x80,0xcd,0x12,0xd0,0xf0,0xfb,
+//  if (new_monitor) 
+//    sprintf(cmd,"l%x %x\r",0x0400,(0x0400+1000)&0xffff);
+//  else
+//    sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+1000-1);
+//  slow_write(fd,cmd,strlen(cmd));
+//  do_usleep(1000*SLOW_FACTOR);
+//  {
+//    int n=1000;
+//    unsigned char *p=player_screen;
+//    while(n>0) {
+//      int w=serialport_write(fd,p,n);
+//      if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+//    }
+//  }
+//  do_usleep(50000);
+//  
+//  // Patch load address
+//  load_addr=(sid_header[0x7d-0x02]<<8)+sid_header[0x7c-0x02];
+//  timestamp_msg("");
+//  fprintf(stderr,"SID load address is $%04x\n",load_addr);
+//  //  dump_bytes(0,"sid header",sid_header,0x7c);
+//  
+//  // Prepare simple play routine
+//  // XXX For now it is always VIC frame locked
+//  timestamp_msg("Uploading play routine\n");
+//  int b=56;
+//  unsigned char player[56]={
+//    0x78,   
+//    0xa9,0x35,
+//    0x85,0x01,
+//    0xa9,0x01,
+//    0x20,0x34,0x12,
+//    0xa9,0x80,0xcd,0x12,0xd0,0xd0,0xfb,0xa9,0x01,0x8d,0x20,0xd0,
+//    0x20,0x78,0x56,
+//    0xa9,0x00,0x8d,0x20,0xd0,0xa9,0x80,0xcd,0x12,0xd0,0xf0,0xfb,
 //
-//	  0xad,0x10,0xd6,
-//	  0xf0,0x0b,
-//	  0x8d,0x10,0xd6,
-//	  0x29,0x0f,
-//	  0x8d,0x21,0xd0,
-//	  0x4c,0x07,0x04,
-//	  
-//	  0x4c,0x0A,0x04
-//	};
+//    0xad,0x10,0xd6,
+//    0xf0,0x0b,
+//    0x8d,0x10,0xd6,
+//    0x29,0x0f,
+//    0x8d,0x21,0xd0,
+//    0x4c,0x07,0x04,
+//    
+//    0x4c,0x0A,0x04
+//  };
 //
-//	player[6+0]=sid_header[0x11-0x02] - 1;
-//	
-//	if (start_addr) {
-//	  player[8+0]=(start_addr>>0)&0xff;
-//	  player[8+1]=(start_addr>>8)&0xff;
-//	} else {
-//	  player[7+0]=0xea;
-//	  player[7+1]=0xea;
-//	  player[7+2]=0xea;
-//	}
-//	if (play_addr) {
-//	  player[23+0]=(play_addr>>0)&0xff;
-//	  player[23+1]=(play_addr>>8)&0xff;
-//	} else {
-//	  player[22+0]=0xea;
-//	  player[22+1]=0xea;
-//	  player[22+2]=0xea;
-//	}
+//  player[6+0]=sid_header[0x11-0x02] - 1;
+//  
+//  if (start_addr) {
+//    player[8+0]=(start_addr>>0)&0xff;
+//    player[8+1]=(start_addr>>8)&0xff;
+//  } else {
+//    player[7+0]=0xea;
+//    player[7+1]=0xea;
+//    player[7+2]=0xea;
+//  }
+//  if (play_addr) {
+//    player[23+0]=(play_addr>>0)&0xff;
+//    player[23+1]=(play_addr>>8)&0xff;
+//  } else {
+//    player[22+0]=0xea;
+//    player[22+1]=0xea;
+//    player[22+2]=0xea;
+//  }
 //
-//	// Enable M65 IO for keyboard scanning
-//	slow_write(fd,"sffd302f 47\n",12);
-//	slow_write(fd,"sffd302f 53\n",12);
-//	
-//	if (new_monitor) 
-//	  sprintf(cmd,"l%x %x\r",0x0400,(0x0400+b)&0xffff);
-//	else
-//	  sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+b-1);
-//	slow_write(fd,cmd,strlen(cmd));
-//	do_usleep(1000*SLOW_FACTOR);
-//	int n=b;
-//	unsigned char *p=player;
-//	while(n>0) {
-//	  int w=serialport_write(fd,p,n);
-//	  if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
-//	}
-//	
-//	is_sid_tune=1;
-//	
+//  // Enable M65 IO for keyboard scanning
+//  slow_write(fd,"sffd302f 47\n",12);
+//  slow_write(fd,"sffd302f 53\n",12);
+//  
+//  if (new_monitor) 
+//    sprintf(cmd,"l%x %x\r",0x0400,(0x0400+b)&0xffff);
+//  else
+//    sprintf(cmd,"l%x %x\r",0x0400-1,0x0400+b-1);
+//  slow_write(fd,cmd,strlen(cmd));
+//  do_usleep(1000*SLOW_FACTOR);
+//  int n=b;
+//  unsigned char *p=player;
+//  while(n>0) {
+//    int w=serialport_write(fd,p,n);
+//    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+//  }
+//  
+//  is_sid_tune=1;
+//  
 //      } else if (!comma_eight_comma_one) {
-//	if (saw_c64_mode)
-//	  load_addr=0x0801;
-//	else
-//	  load_addr=0x2001;
-//	timestamp_msg("");
-//	fprintf(stderr,"Forcing load address to $%04X\n",load_addr);
+//  if (saw_c64_mode)
+//    load_addr=0x0801;
+//  else
+//    load_addr=0x2001;
+//  timestamp_msg("");
+//  fprintf(stderr,"Forcing load address to $%04X\n",load_addr);
 //      }
 //      else printf("Load address is $%04x\n",load_addr);
 //
@@ -2413,121 +2415,121 @@ extern const char *version_string;
 //      int max_bytes=32768;
 //      int b=fread(buf,1,max_bytes,f);     
 //      while(b>0) {
-//	timestamp_msg("");
-//	fprintf(stderr,"Read block for $%04x -- $%04x (%d bytes)\n",load_addr,load_addr+b-1,b);
+//  timestamp_msg("");
+//  fprintf(stderr,"Read block for $%04x -- $%04x (%d bytes)\n",load_addr,load_addr+b-1,b);
 //
-//	if (is_sid_tune) {
-//	  int num_sids=0;
-//	  int sid_addrs[256];
-//	  int fix_addrs[256];
-//	  int this_sid=0;
-//	  for(int i=0;i<b;i++) {
-//	    switch (buf[i]) {
-//	    case 0xD4: case 0xD5: case 0xD6: case 0xDE: case 0xDF:
-//	      // Possible SID addresses
-//	      // Check if opcode is an absolute load or store
-//	      // If so, note the SID address, so we can reallocate any
-//	      // that are out of range etc
-//	      if (i>=2) {
-//		// Look for absolute store instructions
-//		switch(buf[i-2]) {
-//		case 0x8D: //   STA $nnnn
-//		case 0x99: //   STA $nnnn,Y
-//		case 0x9D: //  STA $nnnn,X
-//		case 0x8E: //  STX $nnnn
-//		case 0x8C: //  STY $nnnn
-//		  this_sid=buf[i]<<8; this_sid|=buf[i-1];
-//		  this_sid&=0xffe0;
-//		  int j=0;
-//		  for(j=0;j<num_sids;j++)
-//		    if (this_sid==sid_addrs[j]) break;
-//		  if (j==num_sids) {
-//		    sid_addrs[num_sids++]=this_sid;
-//		    fprintf(stderr,"Tune uses SID at $%04x\n",this_sid);
-//		  }
-//		}
-//	      }
-//	      break;
-//	    }
-//	  }
-//	  fprintf(stderr,"Tune uses a total of %d SIDs.\n",num_sids);
-//	  for(int i=0;i<num_sids;i++) {
-//	    if (sid_addrs[i]>=0xd600) {
-//	      fix_addrs[i]=0xd400+0x20*i;
-//	      fprintf(stderr,"Relocating SID at $%02x to $%04x\n",
-//		      sid_addrs[i],fix_addrs[i]);
-//	    } else fix_addrs[i]=sid_addrs[i];
-//	    
-//	  }
-//	  for(int i=0;i<b;i++) {
-//	    switch (buf[i]) {
-//	    case 0xD4: case 0xD5: case 0xD6: case 0xDE: case 0xDF:
-//	      // Possible SID addresses
-//	      // Check if opcode is an absolute load or store
-//	      // If so, note the SID address, so we can reallocate any
-//	      // that are out of range etc
-//	      if (i>=2) {
-//		// Look for absolute store instructions
-//		switch(buf[i-2]) {
-//		case 0x8D: //   STA $nnnn
-//		case 0x99: //   STA $nnnn,Y
-//		case 0x9D: //  STA $nnnn,X
-//		case 0x8E: //  STX $nnnn
-//		case 0x8C: //  STY $nnnn
-//		  this_sid=buf[i]<<8; this_sid|=buf[i-1];
+//  if (is_sid_tune) {
+//    int num_sids=0;
+//    int sid_addrs[256];
+//    int fix_addrs[256];
+//    int this_sid=0;
+//    for(int i=0;i<b;i++) {
+//      switch (buf[i]) {
+//      case 0xD4: case 0xD5: case 0xD6: case 0xDE: case 0xDF:
+//        // Possible SID addresses
+//        // Check if opcode is an absolute load or store
+//        // If so, note the SID address, so we can reallocate any
+//        // that are out of range etc
+//        if (i>=2) {
+//    // Look for absolute store instructions
+//    switch(buf[i-2]) {
+//    case 0x8D: //   STA $nnnn
+//    case 0x99: //   STA $nnnn,Y
+//    case 0x9D: //  STA $nnnn,X
+//    case 0x8E: //  STX $nnnn
+//    case 0x8C: //  STY $nnnn
+//      this_sid=buf[i]<<8; this_sid|=buf[i-1];
+//      this_sid&=0xffe0;
+//      int j=0;
+//      for(j=0;j<num_sids;j++)
+//        if (this_sid==sid_addrs[j]) break;
+//      if (j==num_sids) {
+//        sid_addrs[num_sids++]=this_sid;
+//        fprintf(stderr,"Tune uses SID at $%04x\n",this_sid);
+//      }
+//    }
+//        }
+//        break;
+//      }
+//    }
+//    fprintf(stderr,"Tune uses a total of %d SIDs.\n",num_sids);
+//    for(int i=0;i<num_sids;i++) {
+//      if (sid_addrs[i]>=0xd600) {
+//        fix_addrs[i]=0xd400+0x20*i;
+//        fprintf(stderr,"Relocating SID at $%02x to $%04x\n",
+//          sid_addrs[i],fix_addrs[i]);
+//      } else fix_addrs[i]=sid_addrs[i];
+//      
+//    }
+//    for(int i=0;i<b;i++) {
+//      switch (buf[i]) {
+//      case 0xD4: case 0xD5: case 0xD6: case 0xDE: case 0xDF:
+//        // Possible SID addresses
+//        // Check if opcode is an absolute load or store
+//        // If so, note the SID address, so we can reallocate any
+//        // that are out of range etc
+//        if (i>=2) {
+//    // Look for absolute store instructions
+//    switch(buf[i-2]) {
+//    case 0x8D: //   STA $nnnn
+//    case 0x99: //   STA $nnnn,Y
+//    case 0x9D: //  STA $nnnn,X
+//    case 0x8E: //  STX $nnnn
+//    case 0x8C: //  STY $nnnn
+//      this_sid=buf[i]<<8; this_sid|=buf[i-1];
 //
-//		  int j=0;
-//		  for(j=0;j<num_sids;j++)
-//		    if ((this_sid&0xffe0)==sid_addrs[j]) break;
-//		  if (fix_addrs[j]!=sid_addrs[j]) {
-//		    fprintf(stderr,"@ $%04X Patching $%04X to $%04X\n",
-//			    i+load_addr,
-//			    this_sid,fix_addrs[j]|(this_sid&0x1f));
-//		    int fixed_addr=fix_addrs[j]|(this_sid&0x1f);
-//		    buf[i-1]=fixed_addr&0xff;
-//		    buf[i]=fixed_addr>>8;
-//		  }
-//		}
-//	      }
-//	      break;
-//	    }
-//	  }
-//	}
-//	
+//      int j=0;
+//      for(j=0;j<num_sids;j++)
+//        if ((this_sid&0xffe0)==sid_addrs[j]) break;
+//      if (fix_addrs[j]!=sid_addrs[j]) {
+//        fprintf(stderr,"@ $%04X Patching $%04X to $%04X\n",
+//          i+load_addr,
+//          this_sid,fix_addrs[j]|(this_sid&0x1f));
+//        int fixed_addr=fix_addrs[j]|(this_sid&0x1f);
+//        buf[i-1]=fixed_addr&0xff;
+//        buf[i]=fixed_addr>>8;
+//      }
+//    }
+//        }
+//        break;
+//      }
+//    }
+//  }
+//  
 //#ifdef WINDOWS_GUS
-//	// Windows doesn't seem to work with the l fast-load monitor command
-//	printf("Asking Gus to write data...\n");
-//	for(int i=0;i<b;i+=16) {
-//	  int ofs=0;
-//	  sprintf(cmd,"s%x",load_addr+i); ofs=strlen(cmd);
-//	  for(int j=0;(j<16)&&(i+j)<b;j++) { sprintf(&cmd[ofs]," %x",buf[i+j]); ofs=strlen(cmd); }
-//	  sprintf(&cmd[ofs],"\r"); ofs=strlen(cmd);
-//	  slow_write(fd,cmd,strlen(cmd));
-//	}
-//#else	  
-//	// load_addr=0x400;
-//	if (new_monitor) 
-//	  sprintf(cmd,"l%x %x\r",load_addr,(load_addr+b)&0xffff);
-//	else
-//	  sprintf(cmd,"l%x %x\r",load_addr-1,load_addr+b-1);
-//	slow_write(fd,cmd,strlen(cmd));
-//	do_usleep(1000*SLOW_FACTOR);
-//	int n=b;
-//	unsigned char *p=buf;
-//	while(n>0) {
-//	  int w=serialport_write(fd,p,n);
-//	  if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
-//	}
-//	if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
-//	  else if (serial_speed==2000000)
-//	    // 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
-//	    do_usleep(6*b*SLOW_FACTOR2);
-//	  else
-//	    // 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
-//	    do_usleep(3*b*SLOW_FACTOR2);
+//  // Windows doesn't seem to work with the l fast-load monitor command
+//  printf("Asking Gus to write data...\n");
+//  for(int i=0;i<b;i+=16) {
+//    int ofs=0;
+//    sprintf(cmd,"s%x",load_addr+i); ofs=strlen(cmd);
+//    for(int j=0;(j<16)&&(i+j)<b;j++) { sprintf(&cmd[ofs]," %x",buf[i+j]); ofs=strlen(cmd); }
+//    sprintf(&cmd[ofs],"\r"); ofs=strlen(cmd);
+//    slow_write(fd,cmd,strlen(cmd));
+//  }
+//#else   
+//  // load_addr=0x400;
+//  if (new_monitor) 
+//    sprintf(cmd,"l%x %x\r",load_addr,(load_addr+b)&0xffff);
+//  else
+//    sprintf(cmd,"l%x %x\r",load_addr-1,load_addr+b-1);
+//  slow_write(fd,cmd,strlen(cmd));
+//  do_usleep(1000*SLOW_FACTOR);
+//  int n=b;
+//  unsigned char *p=buf;
+//  while(n>0) {
+//    int w=serialport_write(fd,p,n);
+//    if (w>0) { p+=w; n-=w; } else do_usleep(1000*SLOW_FACTOR);
+//  }
+//  if (serial_speed==230400) do_usleep(10000+50*b*SLOW_FACTOR);
+//    else if (serial_speed==2000000)
+//      // 2mbit/sec / 11bits/char (inc space) = ~5.5usec per char
+//      do_usleep(6*b*SLOW_FACTOR2);
+//    else
+//      // 4mbit/sec / 11bits/char (inc space) = ~2.6usec per char
+//      do_usleep(3*b*SLOW_FACTOR2);
 //#endif
-//	load_addr+=b;
-//	b=fread(buf,1,max_bytes,f);	  
+//  load_addr+=b;
+//  b=fread(buf,1,max_bytes,f);   
 //      }
 //      fclose(f); f=NULL;
 //
@@ -2549,28 +2551,28 @@ extern const char *version_string;
 //      // We need to set X and Y to load address before
 //      // returning: LDX #$ll / LDY #$yy / CLC / RTS
 //      sprintf(cmd,"s380 a2 %x a0 %x 18 60\r",
-//	      load_addr&0xff,(load_addr>>8)&0xff);
+//        load_addr&0xff,(load_addr>>8)&0xff);
 //      timestamp_msg("");
 //      fprintf(stderr,"Returning top of load address = $%04X\n",load_addr);
 //      slow_write(fd,cmd,strlen(cmd));
 //      monitor_sync();
 //
 //      if ((!is_sid_tune)||(!do_run)) {
-//	sprintf(cmd,"g0380\r");
+//  sprintf(cmd,"g0380\r");
 //      } else
-//	sprintf(cmd,"g0400\r");
+//  sprintf(cmd,"g0400\r");
 //
 //#if 1
 //      slow_write(fd,cmd,strlen(cmd)); 
 //      //      monitor_sync();
 //      
 //      if (!halt) {
-//	start_cpu();
+//  start_cpu();
 //      }
 //      
 //      if (do_run) {
-//	stuff_keybuffer("RUN:\r");
-//	timestamp_msg("RUNning.\n");
+//  stuff_keybuffer("RUN:\r");
+//  timestamp_msg("RUNning.\n");
 //      }
 //#endif
 //      

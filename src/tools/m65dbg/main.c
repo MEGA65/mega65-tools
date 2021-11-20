@@ -1,3 +1,5 @@
+/* vim: set expandtab shiftwidth=2 tabstop=2: */
+
 /**
  * m65dbg - An enhanced remote serial debugger/monitor for the mega65 project
  **/
@@ -94,7 +96,7 @@ void parse_command(void)
     serialRead(inbuf, BUFSIZE);
     printf("%s", inbuf);
   }
-  
+
   if (strInput != NULL)
   {
     free(strInput);

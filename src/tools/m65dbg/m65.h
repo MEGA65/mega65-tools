@@ -1,3 +1,5 @@
+/* vim: set expandtab shiftwidth=2 tabstop=2: */
+
 #ifndef M65_H
 #define M65_H
 
