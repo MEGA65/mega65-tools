@@ -48,6 +48,8 @@ void cmdFastMode(void);
 void cmdScope(void);
 void cmdOffs(void);
 void cmdPrintValue(void);
+void cmdForwardDis(void);
+void cmdBackwardDis(void);
 int doOneShotAssembly(char* strCommand);
 int  cmdGetCmdCount(void);
 char* cmdGetCmdName(int idx);

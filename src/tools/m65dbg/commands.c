@@ -104,6 +104,8 @@ type_command_details command_details[] =
   { "scope", cmdScope, "<int>", "the scope-size of the listing to show alongside the disassembly" },
   { "offs", cmdOffs, "<int>", "the offset of the listing to show alongside the disassembly" },
   { "val", cmdPrintValue, "<$hex/dec/\%bin/>", "print the given value in hex, decimal and binary" },
+  { "=", cmdForwardDis, "[<count>]", "move forward in disassembly of pc history from 'z' command" },
+  { "-", cmdBackwardDis, "[<count>]", "move backward in disassembly of pc history from 'z' command" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -1511,6 +1513,27 @@ int* get_backtrace_addresses(void)
   return addresses;
 }
 
+#define PCCNT 400
+
+int zpos = 0;
+int zval[PCCNT];
+int zflag = 0;
+
+void getz(void)
+{
+  serialWrite("z\n");
+  serialRead(inbuf, BUFSIZE);
+
+  zflag = 1;
+
+  char* strLine = strtok(inbuf, "\n");
+  for (int k = 0; k < PCCNT; k++)
+  {
+    sscanf(strLine, "%X", &zval[k]); 
+    strLine = strtok(NULL, "\n");
+  }
+}
+
 void disassemble(bool useAddr28)
 {
   char str[128] = { 0 };
@@ -1597,6 +1620,49 @@ void disassemble(bool useAddr28)
     idx++;
   } // end while
 }
+
+void cmdForwardDis(void)
+{
+  static char s[64];
+  int cnt = 1;
+
+  if (!zflag)
+    getz();
+
+  char* token = strtok(NULL, " ");
+  if (token != NULL)
+    sscanf(token, "%d", &cnt);
+
+  if (zpos-cnt > 0)
+    zpos-=cnt;
+
+  sprintf(s, "dis %04X", zval[zpos]);
+  strtok(s, " ");
+
+  disassemble(false);
+}
+
+void cmdBackwardDis(void)
+{
+  static char s[64];
+  int cnt = 1;
+
+  if (!zflag)
+    getz();
+
+  char* token = strtok(NULL, " ");
+  if (token != NULL)
+    sscanf(token, "%d", &cnt);
+
+  if (zpos+cnt < PCCNT)
+    zpos+=cnt;
+
+  sprintf(s, "dis %04X", zval[zpos]);
+  strtok(s, " ");
+
+  disassemble(false);
+}
+
 
 void cmdDisassemble(void)
 {
