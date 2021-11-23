@@ -1,3 +1,5 @@
+/* vim: set expandtab shiftwidth=2 tabstop=2: */
+
 /*
 
    Upload one or more files to SD card on MEGA65
@@ -48,7 +50,7 @@
 #define DT_UNKNOWN 0xffff
 struct dirent
 {
-  uint32_t __d_version;			/* Used internally */
+  uint32_t __d_version;     /* Used internally */
   ino_t d_ino;
   unsigned char d_type;
   unsigned char __d_unused1[3];
@@ -192,17 +194,17 @@ int poke_value = 0;
 #define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
 // #define do_usleep usleep
-void do_usleep(__int64 usec) 
-{ 
-  HANDLE timer; 
-  LARGE_INTEGER ft; 
+void do_usleep(__int64 usec)
+{
+  HANDLE timer;
+  LARGE_INTEGER ft;
 
   ft.QuadPart = -(10*usec); // Convert to 100 nanosecond interval, negative value indicates relative time
 
-  timer = CreateWaitableTimer(NULL, TRUE, NULL); 
-  SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0); 
-  WaitForSingleObject(timer, INFINITE); 
-  CloseHandle(timer); 
+  timer = CreateWaitableTimer(NULL, TRUE, NULL);
+  SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0);
+  WaitForSingleObject(timer, INFINITE);
+  CloseHandle(timer);
 }
 
 #else
@@ -338,7 +340,7 @@ int process_waiting(int fd)
     for(i=0;i<b;i++) {
       process_char(read_buff[i],1);
     }
-    b=read(fd,read_buff,1024);    
+    b=read(fd,read_buff,1024);
   }
   return 0;
 }
@@ -509,7 +511,7 @@ int do_ftp(char* bitstream)
 #ifndef __CYGWIN__
   // And also another way
   struct serial_struct serial;
-  ioctl(fd, TIOCGSERIAL, &serial); 
+  ioctl(fd, TIOCGSERIAL, &serial);
   serial.flags |= ASYNC_LOW_LATENCY;
   ioctl(fd, TIOCSSERIAL, &serial);
 
@@ -549,7 +551,7 @@ int do_ftp(char* bitstream)
   set_speed(fd,4000000);
 #endif
   //  slow_write_ftp(fd,"\r!\r",3,0); usleep(100000);
-  //  set_speed(fd,2000000);  
+  //  set_speed(fd,2000000);
   //  slow_write_ftp(fd,"\r+9\r",4,5000);
   //  set_speed(fd,4000000);
 
@@ -567,7 +569,7 @@ int do_ftp(char* bitstream)
     int ret = execute_command(cmd);
     if (ret == -1) // user quit ftp?
       break;
-    
+
     add_history(cmd);
     free(cmd);
   }
@@ -590,7 +592,7 @@ int do_ftp(char* bitstream)
 
 void wait_for_sdready(void)
 {
-  do {  
+  do {
     //    long long start=gettime_us();
 
     // Ask for SD card status
@@ -689,14 +691,14 @@ int load_helper(void)
       if ((!saw_c64_mode)) {
         printf("Trying to switch to C64 mode...\n");
         monitor_sync();
-        stuff_keybuffer("GO64\rY\r");    
+        stuff_keybuffer("GO64\rY\r");
         saw_c65_mode=0;
         do_usleep(100000);
         detect_mode();
         while (!saw_c64_mode) {
           fprintf(stderr,"WARNING: Failed to switch to C64 mode.\n");
           monitor_sync();
-          stuff_keybuffer("GO64\rY\r");    
+          stuff_keybuffer("GO64\rY\r");
           do_usleep(100000);
           detect_mode();
         }
@@ -761,7 +763,7 @@ void queue_data_decode(uint8_t v)
   } else {
     //    fprintf(stderr,"Data code $%02x\n",v);
     if (v&0x80) {
-      q_rle_count=v&0x7f;      
+      q_rle_count=v&0x7f;
       //      fprintf(stderr,"RLE of $%02x bytes\n",q_rle_count);
     } else {
       q_raw_count=v&0x7f;
@@ -827,12 +829,12 @@ void job_process_results(void)
         if (!strncmp((char*)&recent[30-10],"FTBATCHDONE",11)) {
           long long endtime =gettime_us();
           if (debug_rx) printf("%lld: Saw end of batch job after %lld usec\n",endtime-start_usec,endtime-now);
-          //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
+          //    dump_bytes(0,"read data",queue_read_data,queue_read_len);
           return;
         }
         if (!strncmp((char*)recent,"FTJOBDONE:",10)) {
-          int jn=atoi((char *)&recent[10]);	  
-          if (debug_rx) printf("Saw job #%d completion.\n",jn);	  
+          int jn=atoi((char *)&recent[10]);
+          if (debug_rx) printf("Saw job #%d completion.\n",jn);
         }
         int j_addr,n;
         uint32_t transfer_size;
@@ -868,7 +870,7 @@ void queue_execute(void)
   slow_write_ftp(fd,cmd,strlen(cmd),0);
   // give serial uart time to get ready
   // (and make sure we end up in a different USB packet to the command)
-  usleep(1000); 
+  usleep(1000);
   serialport_write(fd,queue_cmds,queue_addr-0xc001);
   // changing this from 3 to 6 seemed to help cygwin...
   usleep(USLEEP_LCMD*(queue_addr-0xc001));
@@ -961,7 +963,7 @@ void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
   write_sector_numbers[write_sector_count]=sector_number;
   write_sector_count++;
 
-}  
+}
 
 void queue_read_sector(uint32_t sector_number,uint32_t mega65_address)
 {
@@ -1046,7 +1048,7 @@ int read_sector(const unsigned int sector_number,unsigned char *buffer,int noCac
 
       // Store in cache / update cache
       int i;
-      for(i=0;i<sector_cache_count;i++) 
+      for(i=0;i<sector_cache_count;i++)
         if (sector_cache_sectors[i]==sector_number+n) break;
       if (i<SECTOR_CACHE_SIZE) {
         bcopy(buffer,sector_cache[i],512);
@@ -1084,7 +1086,7 @@ int write_sector(const unsigned int sector_number,unsigned char *buffer)
 
     // Store in cache / update cache
     int i;
-    for(i=0;i<sector_cache_count;i++) 
+    for(i=0;i<sector_cache_count;i++)
       if (sector_cache_sectors[i]==sector_number) break;
     if (i<SECTOR_CACHE_SIZE) {
       bcopy(buffer,sector_cache[i],512);
@@ -1122,7 +1124,7 @@ int open_file_system(void)
         syspart_start=part_ent[8]+(part_ent[9]<<8)+(part_ent[10]<<16)+(part_ent[11]<<24);
         syspart_size=part_ent[12]+(part_ent[13]<<8)+(part_ent[14]<<16)+(part_ent[15]<<24);
         printf("Found MEGA65 system partition in partition slot %d : start sector=$%x, size=%d MB\n",
-            i,syspart_start,syspart_size/2048);	
+            i,syspart_start,syspart_size/2048);
       }
     }
 
@@ -1175,7 +1177,7 @@ int open_file_system(void)
       if (fat_mbr[16]!=2) {
         printf("ERROR: FAT32 file system has more or less than 2 FATs\n");
         retVal=-1; break;
-      }    
+      }
       sectors_per_cluster=fat_mbr[13];
       reserved_sectors=fat_mbr[14]+(fat_mbr[15]<<8);
       data_sectors=(fat_mbr[0x20]<<0)|(fat_mbr[0x21]<<8)|(fat_mbr[0x22]<<16)|(fat_mbr[0x23]<<24);
@@ -1276,8 +1278,8 @@ int advance_to_next_entry(void)
       }
     }
     if (dir_sector!=-1) retVal=read_sector(partition_start+dir_sector,dir_sector_buffer,0);
-    if (retVal) dir_sector=-1;      
-  }    
+    if (retVal) dir_sector=-1;
+  }
 
   return retVal;
 }
@@ -1395,7 +1397,7 @@ int fat_readdir(struct dirent *d)
       d->d_name[0] = 0;
       return 0;
     }
-    
+
     // if the DOS 8.3 entry is a deleted-entry, then ignore
     if (dir_sector_buffer[dir_sector_offset] == 0xE5)
     {
@@ -1416,7 +1418,7 @@ int fat_readdir(struct dirent *d)
       d->d_name[0] = 0;
       return 0;
     }
-    
+
 
     // Put cluster number in d_ino
     d->d_ino=
@@ -1793,7 +1795,7 @@ void show_secinfo(void)
 
   if (!file_system_found) open_file_system();
   printf("\n");
-  printf("  SECTOR : CONTENT\n");    
+  printf("  SECTOR : CONTENT\n");
   printf("  ------   -------\n");
   printf("% 8d : MBR (Master Boot Record)\n", 0);
   printf("% 8d : VBR of 1st Partition\n", partition_start);
@@ -1891,7 +1893,7 @@ void show_mbrinfo(void)
     printf("- Last sector chs: cylinder = %d, head = %d, sector = %d\n", c, h, s);
     printf("- First sector LBA: %d\n", *(unsigned int*)&sector[pt_ofs+0x08]);
     printf("- Number of sectors: %d\n", *(unsigned int*)&sector[pt_ofs+0x0C]);
-    
+
     part_cnt++;
     printf("\n");
 
@@ -1982,7 +1984,7 @@ int upload_file(char *name,char *dest_name)
       //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
       if (!strcasecmp(de.d_name,dest_name)) {
         // Found file, so will replace it
-        //	printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de.d_ino);
+        //  printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de.d_ino);
         break;
       }
     }
@@ -2027,7 +2029,7 @@ int upload_file(char *name,char *dest_name)
           dir[0x11]=((tm->tm_mon+1)&0x1)>>3;
           dir[0x11]|=(tm->tm_year-80)<<1;
 
-          //	  dump_bytes(0,"New directory entry",dir,32);
+          //    dump_bytes(0,"New directory entry",dir,32);
 
           // (Cluster and size we set after writing to the file)
 
@@ -2066,7 +2068,7 @@ int upload_file(char *name,char *dest_name)
       }
       if (allocate_cluster(a_cluster)) {
         printf("ERROR: Could not allocate cluster $%x\n",a_cluster);
-        retVal=-1; break;	
+        retVal=-1; break;
       }
 
       // Write cluster number into directory entry
@@ -2238,13 +2240,13 @@ int download_file(char *dest_name,char *local_name,int showClusters)
       //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
       if (!strcasecmp(de.d_name,dest_name)) {
         // Found file, so will replace it
-        //	printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de.d_ino);
+        //  printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de.d_ino);
         break;
       }
     }
     if (dir_sector==-1) {
       printf("?  FILE NOT FOUND ERROR FOR \"%s\"\n",dest_name);
-      retVal=-1; break; 
+      retVal=-1; break;
     }
 
     // Read out the first cluster. If zero, then we need to allocate a first cluster.
@@ -2275,7 +2277,7 @@ int download_file(char *dest_name,char *local_name,int showClusters)
         // Advance to next cluster
         // If we are currently the last cluster, then allocate a new one, and chain it in
 
-        int next_cluster=chained_cluster(file_cluster);	
+        int next_cluster=chained_cluster(file_cluster);
         if (next_cluster==0||next_cluster>=0xffffff8) {
           printf("\n?  PREMATURE END OF FILE ERROR\n");
           if (f) fclose(f);

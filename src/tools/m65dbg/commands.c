@@ -1,10 +1,12 @@
+/* vim: set expandtab shiftwidth=2 tabstop=2: */
+
 #define _BSD_SOURCE _BSD_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <fcntl.h> 
+#include <fcntl.h>
 #include <unistd.h>
 #include <stdarg.h>
 #include "commands.h"
@@ -58,7 +60,7 @@ int dis_scope = 10;
 
 int softbrkaddr = 0;
 char softbrkmem[3] = { 0 };
- 
+
 type_command_details command_details[] =
 {
   { "?", cmdRawHelp, NULL, "Shows help information for raw/native monitor commands" },
@@ -600,12 +602,12 @@ void parse_ca65_symbols(FILE* f, char* line)
 
       p = get_string_token(p,sval);
       val = strtol(sval, NULL, 16);
-      
+
       p = get_string_token(p,str); // ignore this 3rd one...
 
       type_symmap_entry sme;
       sme.addr = val;
-      sme.sval = sval; 
+      sme.sval = sval;
       sme.symbol = name;
       add_to_symmap(sme);
     }
@@ -619,7 +621,7 @@ void load_ca65_map(FILE* f)
   while (!feof(f))
   {
     fgets(line, 1024, f);
-    
+
     if (starts_with(line, "Modules list:"))
     {
       fgets(line, 1024, f); // ignore following "----" line
@@ -659,7 +661,7 @@ void load_lbl(const char* fname)
 
     type_symmap_entry sme;
     sme.addr = addr;
-    sme.sval = sval; 
+    sme.sval = sval;
     sme.symbol = sym;
     add_to_symmap(sme);
   }
@@ -708,7 +710,7 @@ void load_map(const char* fname)
       //printf("%s : %04X\n", sym, addr);
       type_symmap_entry sme;
       sme.addr = addr;
-      sme.sval = sval; 
+      sme.sval = sval;
       sme.symbol = sym;
       add_to_symmap(sme);
     }
@@ -960,7 +962,7 @@ void load_acme_map(const char* fname)
       //printf("%s : %04X\n", sym, addr);
       type_symmap_entry sme;
       sme.addr = addr;
-      sme.sval = sval; 
+      sme.sval = sval;
       sme.symbol = sym;
       add_to_symmap(sme);
     }
@@ -1139,7 +1141,7 @@ mem_data get_mem(int addr, bool useAddr28)
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
   sscanf(inbuf, ":%X:%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
-  &mem.addr, &mem.b[0], &mem.b[1], &mem.b[2], &mem.b[3], &mem.b[4], &mem.b[5], &mem.b[6], &mem.b[7], &mem.b[8], &mem.b[9], &mem.b[10], &mem.b[11], &mem.b[12], &mem.b[13], &mem.b[14], &mem.b[15]); 
+  &mem.addr, &mem.b[0], &mem.b[1], &mem.b[2], &mem.b[3], &mem.b[4], &mem.b[5], &mem.b[6], &mem.b[7], &mem.b[8], &mem.b[9], &mem.b[10], &mem.b[11], &mem.b[12], &mem.b[13], &mem.b[14], &mem.b[15]);
 
   return mem;
 }
@@ -1164,7 +1166,7 @@ mem_data* get_mem28array(int addr)
   {
     mem = &multimem[k];
     sscanf(strLine, ":%X:%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
-    &mem->addr, &mem->b[0], &mem->b[1], &mem->b[2], &mem->b[3], &mem->b[4], &mem->b[5], &mem->b[6], &mem->b[7], &mem->b[8], &mem->b[9], &mem->b[10], &mem->b[11], &mem->b[12], &mem->b[13], &mem->b[14], &mem->b[15]); 
+    &mem->addr, &mem->b[0], &mem->b[1], &mem->b[2], &mem->b[3], &mem->b[4], &mem->b[5], &mem->b[6], &mem->b[7], &mem->b[8], &mem->b[9], &mem->b[10], &mem->b[11], &mem->b[12], &mem->b[13], &mem->b[14], &mem->b[15]);
     strLine = strtok(NULL, "\n");
   }
 
@@ -1178,7 +1180,7 @@ void put_mem28array(int addr, unsigned char* data, int size)
   sprintf(outbuf, "s%08X", addr);
 
   int i = 0;
-  while(i < size) 
+  while(i < size)
   {
     sprintf(str, " %02X", data[i]);
     strcat(outbuf, str);
@@ -1275,7 +1277,7 @@ void dump(int addr, int total)
 
       printf("%02X ", mem.b[k]);
     }
-    
+
     printf(" | ");
 
     for (int k = 0; k < 16; k++)
@@ -1330,7 +1332,7 @@ void mdump(int addr, int total)
 
       printf("%02X ", mem.b[k]);
     }
-    
+
     printf(" | ");
 
     for (int k = 0; k < 16; k++)
@@ -1412,7 +1414,8 @@ int disassemble_addr_into_string(char* str, int addr, bool useAddr28)
   }
 
   // Instruction name
-  strcat(str, instruction_lut[mem.b[0]]);
+  sprintf(s, "%-4s", instruction_lut[mem.b[0]]);
+  strcat(str, s);
 
   switch(mode_lut[mem.b[0]])
   {
@@ -1555,7 +1558,7 @@ void disassemble(bool useAddr28)
 
   // get address from parameter?
   char* token = strtok(NULL, " ");
-  
+
   if (token != NULL)
   {
     if (strcmp(token, "-") == 0) // '-' equates to current pc
@@ -1688,7 +1691,7 @@ void write_bytes(int* addr, int size, ...)
   sprintf(outbuf, "s%X", *addr);
 
   int i = 0;
-  while(i < size) 
+  while(i < size)
   {
     sprintf(str, " %02X", va_arg(valist, int));
     strcat(outbuf, str);
@@ -1799,7 +1802,7 @@ int oneShotAssembly(int* paddr, char* str)
 
   char* instr = strtok(str, " ");
   char* mode = strtok(NULL, "\0");
-  
+
   // todo: check if instruction is valid.
   // if not, show syntax error.
 
@@ -1955,7 +1958,7 @@ int oneShotAssembly(int* paddr, char* str)
       // e.g. STA $2000
       write_bytes(paddr, 3, opcode, val1 & 0xff, val1 >> 8);
     }
-    
+
     else if ((opcode = getopcode(M_rr, instr)) != -1 && diff < 0x100)
     {
       int rr = 0;
@@ -2215,7 +2218,7 @@ void cmdNext(void)
     // check if this is a JSR command
     reg_data reg = get_regs();
     mem_data mem = get_mem(reg.pc, false);
-      
+
     // if not, then just do a normal step
     if (strcmp(instruction_lut[mem.b[0]], "JSR") != 0)
     {
@@ -2339,7 +2342,7 @@ void print_byte(char *token)
 void cmdPrintByte(void)
 {
   char* token = strtok(NULL, " ");
-  
+
   if (token != NULL)
   {
     print_byte(token);
@@ -2358,7 +2361,7 @@ void print_word(char* token)
 void cmdPrintWord(void)
 {
   char* token = strtok(NULL, " ");
-  
+
   if (token != NULL)
   {
     print_word(token);
@@ -2377,7 +2380,7 @@ void print_dword(char* token)
 void cmdPrintDWord(void)
 {
   char* token = strtok(NULL, " ");
-  
+
   if (token != NULL)
   {
     print_dword(token);
@@ -2450,7 +2453,7 @@ void print_mdump(type_watch_entry* watch)
 void cmdPrintString(void)
 {
   char* token = strtok(NULL, " ");
-  
+
   if (token != NULL)
   {
     print_string(token);
@@ -2473,7 +2476,7 @@ void cmdAutoClearScreen(void)
     autocls = true;
   else if (strcmp(token, "0") == 0)
     autocls = false;
-  
+
   printf(" - autocls is turned %s.\n", autocls ? "on" : "off");
 }
 
@@ -2481,7 +2484,7 @@ void cmdSetBreakpoint(void)
 {
   char* token = strtok(NULL, " ");
   char str[100];
-  
+
   if (token != NULL)
   {
     int addr = get_sym_value(token);
@@ -2516,7 +2519,7 @@ void cmdSetSoftwareBreakpoint(void)
 {
   char* token = strtok(NULL, " ");
   char str[100];
-  
+
   if (token != NULL)
   {
     int addr = get_sym_value(token);
@@ -2563,7 +2566,7 @@ void cmdSetSoftwareBreakpoint(void)
 void cmd_watch(type_watch type)
 {
   char* token = strtok(NULL, " ");
-  
+
   if (token != NULL)
   {
     if (find_in_watchlist(type, token))
@@ -2628,7 +2631,7 @@ void cmdWatches(void)
   int cnt = 0;
 
   printf("---------------------------------------\n");
-  
+
   while (iter != NULL)
   {
     cnt++;
@@ -2656,7 +2659,7 @@ void cmdWatches(void)
 void cmdDeleteWatch(void)
 {
   char* token = strtok(NULL, " ");
-  
+
   if (token != NULL)
   {
     // user wants to delete all watches?
@@ -2694,7 +2697,7 @@ void cmdAutoWatch(void)
     autowatch = true;
   else if (strcmp(token, "0") == 0)
     autowatch = false;
-  
+
   printf(" - autowatch is turned %s.\n", autowatch ? "on" : "off");
 }
 
@@ -2709,7 +2712,7 @@ void cmdPetscii(void)
     petscii = true;
   else if (strcmp(token, "0") == 0)
     petscii = false;
-  
+
   printf(" - petscii is turned %s.\n", petscii ? "on" : "off");
 }
 
@@ -2727,7 +2730,7 @@ void cmdFastMode(void)
     fastmode = true;
   else if (strcmp(token, "0") == 0)
     fastmode = false;
-  
+
   serialBaud(fastmode);
 
   printf(" - fastmode is turned %s.\n", fastmode ? "on" : "off");
@@ -2879,7 +2882,7 @@ int doOneShotAssembly(char* strCommand)
   int tmppc = 0xf0;
 
   usleep(10000);
-  
+
   // get memory at 0xf0 (usually always 'writable' memory in zero-page)
   // serialFlush();
   mem_data mem = get_mem(tmppc, false);
@@ -2931,7 +2934,7 @@ int doOneShotAssembly(char* strCommand)
 void cmdSymbolValue(void)
 {
   char* token = strtok(NULL, " ");
-  
+
   if (token != NULL)
   {
     type_symmap_entry* sme = find_in_symmap(token);
@@ -3026,13 +3029,13 @@ void cmdLoad(void)
   if(fload)
   {
     fseek(fload, 0, SEEK_END);
-    int fsize = ftell(fload);  
-    rewind(fload);          
+    int fsize = ftell(fload);
+    rewind(fload);
     char* buffer = (char *)malloc(fsize*sizeof(char));
-    if(buffer) 
+    if(buffer)
     {
       fread(buffer, fsize, 1, fload);
-    
+
       int i = 0;
       while(i < fsize)
       {
@@ -3043,13 +3046,13 @@ void cmdLoad(void)
 
         put_mem28array(addr + i, (unsigned char*) (buffer + i), outSize);
         i += outSize;
-      }  
+      }
 
       free(buffer);
     }
       fclose(fload);
   }
-  else 
+  else
   {
     printf("Error opening the file '%s'!\n", strBinFile);
   }

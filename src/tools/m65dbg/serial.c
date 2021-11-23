@@ -1,3 +1,5 @@
+/* vim: set expandtab shiftwidth=2 tabstop=2: */
+
 // serial code routine borrowed from:
 // http://stackoverflow.com/questions/6947413/how-to-open-read-and-write-from-serial-port-in-c
 
@@ -5,13 +7,13 @@
 // Note1: enable unix domain socket support is untested on Windows/Cygwin so
 // it's better to leave commented out by default ...
 // -------------------------------------------------
-// Note2 (GI): I'm leaving this always enabled now, as I've gotten 
+// Note2 (GI): I'm leaving this always enabled now, as I've gotten
 // unix-sockets to work in winxp+cygwin
 #define SUPPORT_UNIX_DOMAIN_SOCKET
 
 #define _BSD_SOURCE _BSD_SOURCE
 #include <errno.h>
-#include <fcntl.h> 
+#include <fcntl.h>
 #include <string.h>
 #include <strings.h>
 #include <termios.h>
@@ -43,89 +45,89 @@ bool unix_socket_flag = false;
 
 int set_interface_attribs (int fd, int speed, int parity)
 {
-        struct termios tty;
-        memset (&tty, 0, sizeof tty);
-        if (tcgetattr (fd, &tty) != 0)
-        {
-                error_message ("error %d from tcgetattr\n", errno);
-                return -1;
-        }
+  struct termios tty;
+  memset (&tty, 0, sizeof tty);
+  if (tcgetattr (fd, &tty) != 0)
+  {
+    error_message ("error %d from tcgetattr\n", errno);
+    return -1;
+  }
 
-        cfsetospeed (&tty, speed);
-        cfsetispeed (&tty, speed);
+  cfsetospeed (&tty, speed);
+  cfsetispeed (&tty, speed);
 
-        tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
-        // disable IGNBRK for mismatched speed tests; otherwise receive break
-        // as \000 chars
-        tty.c_iflag &= ~IGNBRK;         // disable break processing
-        tty.c_lflag = 0;                // no signaling chars, no echo,
-                                        // no canonical processing
-        tty.c_oflag = 0;                // no remapping, no delays
-        tty.c_cc[VMIN]  = 0;            // read doesn't block
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+  tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
+  // disable IGNBRK for mismatched speed tests; otherwise receive break
+  // as \000 chars
+  tty.c_iflag &= ~IGNBRK;         // disable break processing
+  tty.c_lflag = 0;                // no signaling chars, no echo,
+                                  // no canonical processing
+  tty.c_oflag = 0;                // no remapping, no delays
+  tty.c_cc[VMIN]  = 0;            // read doesn't block
+  tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
-        tty.c_iflag &= ~(IXON | IXOFF | IXANY | ICRNL); // shut off xon/xoff ctrl
+  tty.c_iflag &= ~(IXON | IXOFF | IXANY | ICRNL); // shut off xon/xoff ctrl
 
-        tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
-                                        // enable reading
-        tty.c_cflag &= ~(PARENB | PARODD);      // shut off parity
-        tty.c_cflag |= parity;
-        tty.c_cflag &= ~CSTOPB;
-        tty.c_cflag &= ~CRTSCTS;
+  tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
+                                  // enable reading
+  tty.c_cflag &= ~(PARENB | PARODD);      // shut off parity
+  tty.c_cflag |= parity;
+  tty.c_cflag &= ~CSTOPB;
+  tty.c_cflag &= ~CRTSCTS;
 
-        if (tcsetattr (fd, TCSANOW, &tty) != 0)
-        {
-                error_message ("error %d from tcsetattr\n", errno);
-                return -1;
-        }
-        return 0;
+  if (tcsetattr (fd, TCSANOW, &tty) != 0)
+  {
+    error_message ("error %d from tcsetattr\n", errno);
+    return -1;
+  }
+  return 0;
 }
 
 void set_blocking_serial (int fd, int should_block)
 {
-        struct termios tty;
-        memset (&tty, 0, sizeof tty);
-        if (tcgetattr (fd, &tty) != 0)
-        {
-                error_message ("error %d from tggetattr\n", errno);
-                return;
-        }
+  struct termios tty;
+  memset (&tty, 0, sizeof tty);
+  if (tcgetattr (fd, &tty) != 0)
+  {
+    error_message ("error %d from tggetattr\n", errno);
+    return;
+  }
 
-        tty.c_cc[VMIN]  = should_block ? 2 : 0;
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+  tty.c_cc[VMIN]  = should_block ? 2 : 0;
+  tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
-        if (tcsetattr (fd, TCSANOW, &tty) != 0)
-                error_message ("error %d setting term attributes\n", errno);
+  if (tcsetattr (fd, TCSANOW, &tty) != 0)
+    error_message ("error %d setting term attributes\n", errno);
 }
 
 /*
-	borrowed from: https://www.binarytides.com/hostname-to-ip-address-c-sockets-linux/
-	Get ip from domain name
+  borrowed from: https://www.binarytides.com/hostname-to-ip-address-c-sockets-linux/
+  Get ip from domain name
  */
 
 int hostname_to_ip(char * hostname , char* ip)
 {
-	struct hostent *he;
-	struct in_addr **addr_list;
-	int i;
-		
-	if ( (he = gethostbyname( hostname ) ) == NULL) 
-	{
-		// get the host info
-		herror("gethostbyname");
-		return 1;
-	}
+  struct hostent *he;
+  struct in_addr **addr_list;
+  int i;
 
-	addr_list = (struct in_addr **) he->h_addr_list;
-	
-	for(i = 0; addr_list[i] != NULL; i++) 
-	{
-		//Return the first one;
-		strcpy(ip , inet_ntoa(*addr_list[i]) );
-		return 0;
-	}
-	
-	return 1;
+  if ( (he = gethostbyname( hostname ) ) == NULL)
+  {
+    // get the host info
+    herror("gethostbyname");
+    return 1;
+  }
+
+  addr_list = (struct in_addr **) he->h_addr_list;
+
+  for(i = 0; addr_list[i] != NULL; i++)
+  {
+    //Return the first one;
+    strcpy(ip , inet_ntoa(*addr_list[i]) );
+    return 0;
+  }
+
+  return 1;
 }
 
 /**
@@ -156,10 +158,10 @@ bool serialOpen(char* portname)
       return false;
     }
 
-		char ip[100];
-		
-		hostname_to_ip(hostname , ip);
-		printf("%s resolved to %s\n" , hostname , ip);
+    char ip[100];
+
+    hostname_to_ip(hostname , ip);
+    printf("%s resolved to %s\n" , hostname , ip);
 
     sock_st.sin_addr.s_addr = inet_addr(ip);
     sock_st.sin_family = AF_INET;
@@ -208,12 +210,12 @@ bool serialOpen(char* portname)
 #else
     set_interface_attribs (fd, B2000000, 0);  // set speed to 2,000,000 bps, 8n1 (no parity)
 #endif
-    set_blocking_serial (fd, 0);	// set no blocking
+    set_blocking_serial (fd, 0);  // set no blocking
     // borrowed this line from m65.c - set_serial_speed(), as it seems to set the
     // non-blocking behaviour properly
     //fcntl(fd,F_SETFL,fcntl(fd, F_GETFL, NULL)|O_NONBLOCK);
   }
-  
+
   xemu_flag = peek(0xffd360f) & 0x20 ? 0 : 1;
   if (xemu_flag)
     printf("Xemu detected!\n");
@@ -271,7 +273,7 @@ void serialFlush(void)
  * writes a string to the serial port
  */
 void serialWrite(char* string)
-{ 
+{
   serialFlush();
 
   int i = strlen(string);

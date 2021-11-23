@@ -1,3 +1,5 @@
+/* vim: set expandtab shiftwidth=2 tabstop=2: */
+
 #include <stdbool.h>
 
 void listSearch(void);
@@ -96,7 +98,7 @@ extern char* type_names[];
 
 typedef struct we
 {
-  type_watch type; 
+  type_watch type;
   char* name;
   char* param1;
   struct we* next;
