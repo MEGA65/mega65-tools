@@ -7,6 +7,10 @@
 #include <dirent.h>
 #include <fileio.h>
 
+// Trigger a raw track read after each format adjustment
+// in histogram display
+#define READ_AFTER_FORMAT
+
 void readtrackgaps(void);
 
 unsigned short i;
@@ -399,6 +403,7 @@ void read_all_sectors(unsigned char HD)
 	  POKE(0xD084, t);
 	  POKE(0xD085, s);
 	  POKE(0xD086, 1-h); // Side flag is inverted
+	  // POKE(0xD086, h); // Side flag is inverted
 	  
 	  // Select correct side of the disk
 	  if (h)
@@ -430,7 +435,7 @@ void read_all_sectors(unsigned char HD)
 	  
 	  // Wait until busy flag clears
 	  while (PEEK(0xD082) & 0x80) {
-	    snprintf(peak_msg, 40, "Under head T:$%02X S:%02X H:%02x R:%02x C:%02x",
+	    snprintf(peak_msg, 40, "Under head T:$%02X S:%02X H:%02x R:%02x N:%02x",
 		     PEEK(0xD6A3) , PEEK(0xD6A4) , PEEK(0xD6A5) , PEEK(0xD6A7),
 		     PEEK(0xD6A9));
 	    print_text(0, 24, 7, peak_msg);
@@ -589,8 +594,13 @@ void gap_histogram(void)
 
     print_text(0, 4, 7, peak_msg);
 
-    snprintf(peak_msg, 41, "WPC: %02x/%02x/%02x, DataRate: $%02x/TIB:%02x",
-	     precomp_a,precomp_b,precomp_15,PEEK(0xD6A2),PEEK(0xD6A7));
+    snprintf(peak_msg, 41, "WPC: %02x/%02x/%02x, DataRate: $%02x/TIB:",
+	     precomp_a,precomp_b,precomp_15,PEEK(0xD6A2));
+    // Show if we have valid TIB or not
+    if (PEEK(0xD6A6)!=0xFF)
+      snprintf(&peak_msg[strlen(peak_msg)],41-strlen(peak_msg),"%02xt%02X",PEEK(0xD6A7),PEEK(0xD6A6));
+    else
+      snprintf(&peak_msg[strlen(peak_msg)],41-strlen(peak_msg),"none ");
     print_text(0, 8, 7, peak_msg);
 
     snprintf(peak_msg, 40, "Target track %-5d is T:$%02X, prev $%02X", random_seek_count, random_target, last_random_target);
@@ -659,14 +669,10 @@ void gap_histogram(void)
 	break;
       case 0x50: case 0x70: // P = increase data rate
 	POKE(0xD6A2,PEEK(0xD6A2)+1);
-	POKE(0xD6A6,0x04);
-	POKE(0xD6A7,0x08);
 	reformat_trackP=1;
 	break;
       case 0x4f: case 0x6f: // O = decreate data rate
 	POKE(0xD6A2,PEEK(0xD6A2)-1);
-	POKE(0xD6A6,0x04);
-	POKE(0xD6A7,0x08);
 	reformat_trackP=1;
 	break;
       case 0x55: case 0x75: // U
@@ -772,11 +778,19 @@ void gap_histogram(void)
 	POKE(0xD086,0);
 	POKE(0xD080, 0x60); // motor on, side 1
 	POKE(0xD081,0x00);
-	while (PEEK(0xD082) & 0x80) continue;
+	while (PEEK(0xD082) & 0x80) {
+	  continue;
+	}
 	//	POKE(0xD020,PEEK(0xD020)+1);
 	POKE(0xD081,0xa4+no_gaps); // $A4= with precomp, $A0= without precomp
 #if 1
-	while (PEEK(0xD082) & 0x80) continue;
+	while (PEEK(0xD082) & 0x80) {
+	  // Show SD card state machine state
+	  POKE(0xC000,PEEK(0xD685));
+	  continue;
+	}
+	POKE(0xC000,0x4d);
+	
 	POKE(0xD080, 0x68); // motor on, side 0
 	POKE(0xD081,0x00);
 	while (PEEK(0xD082) & 0x80) continue;
@@ -1622,8 +1636,9 @@ void format_disk(unsigned char HD, unsigned char RLL)
   goto_track0();
 
   lfill(0xFF80000L,0x01,4000);
-  
-  for(track_num=0;track_num<85;track_num++) {
+
+  // Only Tracks 0 -- 82 seem to be safely reliable = 83 tracks in total.
+  for(track_num=0;track_num<83;track_num++) {
     // Seek to the requested track
     snprintf(peak_msg, 40, "Formatting track %d", track_num);
     print_text(0, 3, 15, peak_msg);
