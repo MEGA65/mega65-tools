@@ -1321,7 +1321,7 @@ extern const char* version_string;
 char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", "C#$06", "C#$07", "C#$08", "C#$09", "C#$0A",
   "C#$0B", "C#$0C", "  LOG", " NAME", " DONE" };
 
-char msgbuf[160];
+char msgbuf[160], *endp;
 char testname[160];
 unsigned char inbuf[8192];
 unsigned int failcount;
@@ -1694,7 +1694,11 @@ int main(int argc, char** argv)
       break;
     case 'u':
       unit_test_mode = 1;
-      unit_test_timeout = atoi(optarg);
+      unit_test_timeout = strtol(optarg, &endp, 10);
+      if (*endp != '\0') {
+        fprintf(stderr, "-u option requires a numeric argument\n");
+        exit(-1);
+      }
       if (unit_test_timeout < UT_TIMEOUT) unit_test_timeout = UT_TIMEOUT;
       break;
     default: /* '?' */
