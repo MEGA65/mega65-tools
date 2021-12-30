@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-int show_gaps=1;
-int show_quantised_gaps=1;
+int show_gaps=0;
+int show_bits=0;
+int show_quantised_gaps=0;
 int show_post_correction=0;
 
 // MEGA65 floppies contain a track info block that is always written at DD data rate.
@@ -230,7 +231,7 @@ void describe_data(void)
 
 void emit_bit(int b)
 {
-  printf("  bit %d\n",b);
+  if (show_bits) printf("  bit %d\n",b);
   last_bit = b;
   byte = (byte << 1) | b;
   bits++;
@@ -541,88 +542,8 @@ int main(int argc, char** argv)
     crc16_init();
 
     int i;
-
-    // Check if data looks like it is a $D6AC capture
-    int a = buffer[0] >> 2;
-    int b = buffer[1] >> 2;
-    int c = buffer[2] >> 2;
-    int d = buffer[3] >> 2;
-    if (a == 63) {
-      b += 64;
-      c += 64;
-      d += 64;
-    }
-    if (b == 63) {
-      c += 64;
-      d += 64;
-    }
-    if (c == 63) {
-      d += 64;
-    }
-#if 0
-    if ((argc < 3) && b >= a && c >= b && d >= c && buffer[0] != buffer[3] && buffer[0] != buffer[2]) {
-#else
-    if (0) {
-#endif
-      fprintf(stderr, "NOTE: File appears to be $D6AC capture\n");
-
-      int last_counter = (a - 1) & 0x1f;
-
-      for (i = 0; i < count; i++) {
-        int counter_val = (buffer[i] >> 2) & 0x1f;
-        if (counter_val != (last_counter + 1)) {
-          fprintf(stderr, "WARNING: Byte %d : counter=%d, expected %d\n", i, counter_val, last_counter + 1);
-        }
-        last_counter = counter_val;
-        if (last_counter == 31)
-          last_counter = -1;
-
-        switch (buffer[i] & 3) {
-        case 0:
-          mfm_decode(1.0);
-          break;
-        case 1:
-          mfm_decode(1.5);
-          break;
-        case 2:
-          mfm_decode(2.0);
-          break;
-        case 3:
-          mfm_decode(1.0);
-          break; // invalidly short or long gap, just lie and call it a short gap
-        }
-      }
-      exit(-1);
-    }
-
-    if (((((buffer[1] >> 4) + 1) & 0xf) == (buffer[3] >> 4)) && ((((buffer[3] >> 4) + 1) & 0xf) == (buffer[5] >> 4))
-        && ((((buffer[5] >> 4) + 1) & 0xf) == (buffer[7] >> 4)) && ((((buffer[7] >> 4) + 1) & 0xf) == (buffer[9] >> 4))) {
-      fprintf(stderr, "NOTE: Auto-detect $D699/$D69A log.\n");
-
-      int last_count = buffer[1] >> 4;
-
-      for (i = 0; i < count; i += 2) {
-        int this_count = buffer[i + 1] >> 4;
-        if (this_count != last_count) {
-          fprintf(stderr, "ERROR: Saw count %d instead of %d at offset %d\n", this_count, last_count, i);
-          last_count = this_count + 1;
-        }
-        else
-          last_count++;
-        if (last_count > 0xf)
-          last_count = 0;
-
-        int gap_len = buffer[i] + ((buffer[i + 1] & 0xf) << 8);
-        float qgap = gap_len * 1.0 / 162.0;
-        // printf("  gap=%.1f (%d)\n",qgap,gap_len);
-        mfm_decode(qgap);
-      }
-
-      exit(-1);
-    }
-    
-    
-    fprintf(stderr,"NOTE: Assuming raw $D6A0 capture.\n");
+      
+    fprintf(stderr,"NOTE: Assuming DMA floppy gap capture.\n");
     fprintf(stderr,"      %d samples.\n",count);
     
     // Obtain data rate from filename if present
@@ -632,7 +553,7 @@ int main(int argc, char** argv)
     last_pulse=0;
     found_sync3=0;
 
-    float divisor;
+    float divisor=rate;
     int pulse_adjust=0;
     int last_pulse_uncorrected=9;
     int early=0;
@@ -643,151 +564,140 @@ int main(int argc, char** argv)
     float recent[8]={0,0,0,0,0,0,0,0};
     int recent_q[8]={0,0,0,0,0,0,0,0};
     float esum=0;
+
+    int current_pulse=0;
     
     for (i = 1; i < count; i++) {
       pulse_adjust=0;
-#if 0
-      if (!rll_encoding) divisor=2*rate/3; else divisor=rate/3;
+      float gap=buffer[i];
 
-      if ((!(buffer[i - 1] & 0x10)) && (buffer[i] & 0x10)) {
-	if (last_pulse) // ignore pseudo-pulse caused by start of file
-	  {
-	    float gap=i-last_pulse;
-#else
-      if (!rll_encoding) divisor=2*rate; else divisor=rate;
-
-      {
-	{
-	      float gap=buffer[i]*2;
-#endif	  
-
-	      // printf(" $%03x(%3d) ",(int)(gap*3.0/2),(int)(gap*3.0/2));
-	    gap/=divisor;
+      current_pulse+=buffer[i];
+      
+      if (show_gaps) printf(" $%03x(%3d) ",(int)(gap*3.0/2),(int)(gap*3.0/2));
+      gap/=divisor;
 	    
-	    n++;
+      n++;
 
-	    float v[8]={
-		    i/divisor - recent[0]  - recent_q[1] - recent_q[2] - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
-		    i/divisor - recent[1]  - recent_q[2] - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
-		    i/divisor - recent[2]  - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
-			
-		    i/divisor - recent[3]  - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
-		    i/divisor - recent[4]  - recent_q[5] - recent_q[6] - recent_q[7],
-		    i/divisor - recent[5]  - recent_q[6] - recent_q[7],
-		    i/divisor - recent[6]  - recent_q[7],
-		    i/divisor - recent[7]
-	    };
+      float v[8]={
+		  current_pulse/divisor - recent[0]  - recent_q[1] - recent_q[2] - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
+		  current_pulse/divisor - recent[1]  - recent_q[2] - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
+		  current_pulse/divisor - recent[2]  - recent_q[3] - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
+		  
+		  current_pulse/divisor - recent[3]  - recent_q[4] - recent_q[5] - recent_q[6] - recent_q[7],
+		  current_pulse/divisor - recent[4]  - recent_q[5] - recent_q[6] - recent_q[7],
+		  current_pulse/divisor - recent[5]  - recent_q[6] - recent_q[7],
+		  current_pulse/divisor - recent[6]  - recent_q[7],
+		  current_pulse/divisor - recent[7]
+      };
 
-	    // Rule 1: Fall-back is to average the registration against the past five pulses	   
-	    float avg=0;	    
-	    for(int i=0;i<8;i++) avg+=v[i];
-	    avg/=8;
-	    float e1,e2;
-	    e1=gap - quantise_gap(gap) - 1;
-
-	    // Rule 2: If the gap is an integer number of gaps vs any of the past five pulses,
-	    // then use the one that had the most hits
-	    int best_count=0;
-	    int best_int=0;
-	    int counts[9]={0,0,0,0,0,0,0,0,0,0};
-	    for(int i=0;i<8;i++) {
-	      if (absf(v[i])-((int)absf(v[i]))<0.02) {
-		int bin=(int)absf(v[i]);
-		if (bin>=0&&bin<10) counts[bin]++;
-	      }
-	    }
-	    for(int i=3;i<=8;i++) {
-	      if (counts[i]>best_count) { best_count=counts[i]; best_int=i; }
-	    }
-	    if (best_count>0) avg=best_int;
-
-
-	    e2=avg - quantise_gap(gap) - 1;
-	    if (n>=186) esum+=absf(e2*100)*absf(e2*100);
-	    
-	    fprintf(raw,"%-4d,% -9.2f"
-		    ",% -5.2f"		    
-		    ",% -5.2f"
-		    ",%5d"
-		    ",% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f"
-		    ",% -7.2f,% -7.2f,% -7.2f"
-		    "\n",
-		    n,i/divisor,
-		    (i-last_pulse)/divisor,
-		    avg,
-		    i-last_pulse,
-		    v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],
-		    e1,e2,esum
-		    );
-	    for(int r=0;r<(8-1);r++) recent[r]=recent[r+1];
-	    for(int r=0;r<(8-1);r++) recent_q[r]=recent_q[r+1];
-	    recent[7]=i/divisor;	    
-	    recent_q[7]=quantise_gap(gap) + 1;
-	    
-	    
-	    if (show_gaps) printf("%.2f (%d-%d=%d)\n",gap,i,last_pulse,i-last_pulse);
-
-	    if (found_sync3==1) {
-	      printf("Harmonising at Sync3 after %d samples\n",
-		     sample_counts[arg]);
-	      sample_counts[arg]=0;
-	      found_sync3++;
-	    }
-	    
-	    // Log the trace
-	    if (sample_counts[arg]) {
-	      // Calculate cumulative time
-	      traces[arg][sample_counts[arg]++]=gap+traces[arg][sample_counts[arg]-1];
-	    } else {
-	      traces[arg][sample_counts[arg]++]=gap;
-	    }
-	    if (traces[arg][sample_counts[arg]-1]>max_time)
-	      max_time=traces[arg][sample_counts[arg]-1];	      
-	    
-	    float quantised=mfm_decode(gap);
-	    {
-	      float uncorrected_gap=i-last_pulse_uncorrected;
-	      uncorrected_gap/=divisor;
-	      float uc_delta=quantise_gap(uncorrected_gap) - uncorrected_gap + 1;
-	      if (show_quantised_gaps) printf("     uncorrected gap=%.2f, delta=%.2f\n",uncorrected_gap,uc_delta);
-	      uncorrected_deltas[ucdelta_count++]=uc_delta;
-
-	    }
-	    if (rll_encoding) {
-	      float delta=(gap-1)-quantised;
-	      if (reset_delta) {
-		delta=0; reset_delta=0;
-	      }
-	      if (delta>0&&delta<=0.5) {
-		// Pulse is a bit late, so adjust last_pulse backwards a bit
-		pulse_adjust=(int)(delta*divisor);
-		//		printf("rewind last_pulse by %d\n",pulse_adjust);
-	      }
-	      if (delta<0&&delta>=-0.5) {
-		// Pulse is a bit late, so adjust last_pulse backwards a bit
-		pulse_adjust=(int)(delta*divisor);
-		//		printf("advance last_pulse by %d\n",-pulse_adjust);
-	      }
-	      if (delta<0) early++;
-	      if (delta>0) late++;
-	      if (late>5) {
-		if (show_post_correction) printf("     LATE\n");
-		late=0;
-		pulse_adjust--;
-	      }
-	      if (early>5) {
-		if (show_post_correction) printf("     EARLY\n");
-		early=0;
-		pulse_adjust++;
-	      }
-	      
-	      if (show_post_correction) printf("     post-correction delta=%.2f\n",delta);
-	      corrected_deltas[ucdelta_count]=delta;
-	    }
-	  }
-	last_pulse = i - pulse_adjust;
-	last_pulse_uncorrected = i;
+      // Rule 1: Fall-back is to average the registration against the past five pulses	   
+      float avg=0;	    
+      for(int i=0;i<8;i++) avg+=v[i];
+      avg/=8;
+      float e1,e2;
+      e1=gap - quantise_gap(gap) - 1;
+      
+      // Rule 2: If the gap is an integer number of gaps vs any of the past five pulses,
+      // then use the one that had the most hits
+      int best_count=0;
+      int best_int=0;
+      int counts[9]={0,0,0,0,0,0,0,0,0,0};
+      for(int i=0;i<8;i++) {
+	if (absf(v[i])-((int)absf(v[i]))<0.02) {
+	  int bin=(int)absf(v[i]);
+	  if (bin>=0&&bin<10) counts[bin]++;
+	}
       }
+      for(int i=3;i<=8;i++) {
+	if (counts[i]>best_count) { best_count=counts[i]; best_int=i; }
+      }
+      if (best_count>0) avg=best_int;
+      
+      
+      e2=avg - quantise_gap(gap) - 1;
+      if (n>=186) esum+=absf(e2*100)*absf(e2*100);
+      
+      fprintf(raw,"%-4d,% -9.2f"
+	      ",% -5.2f"		    
+	      ",% -5.2f"
+	      ",%5d"
+	      ",% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f,% -7.2f"
+	      ",% -7.2f,% -7.2f,% -7.2f"
+	      "\n",
+	      n,current_pulse/divisor,
+	      (current_pulse-last_pulse)/divisor,
+	      avg,
+	      current_pulse-last_pulse,
+	      v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],
+	      e1,e2,esum
+	      );
+      for(int r=0;r<(8-1);r++) recent[r]=recent[r+1];
+      for(int r=0;r<(8-1);r++) recent_q[r]=recent_q[r+1];
+      recent[7]=current_pulse/divisor;	    
+      recent_q[7]=quantise_gap(gap) + 1;
+      
+      
+      if (show_gaps) printf("%.2f (%d-%d=%d)\n",gap,current_pulse,last_pulse,current_pulse-last_pulse);
+      
+      if (found_sync3==1) {
+	printf("Harmonising at Sync3 after %d samples\n",
+	       sample_counts[arg]);
+	sample_counts[arg]=0;
+	found_sync3++;
+      }
+      
+      // Log the trace
+      if (sample_counts[arg]) {
+	// Calculate cumulative time
+	traces[arg][sample_counts[arg]++]=gap+traces[arg][sample_counts[arg]-1];
+      } else {
+	traces[arg][sample_counts[arg]++]=gap;
+      }
+      if (traces[arg][sample_counts[arg]-1]>max_time)
+	max_time=traces[arg][sample_counts[arg]-1];	      
+      
+      float quantised=mfm_decode(gap);
+      {
+	float uncorrected_gap=current_pulse-last_pulse_uncorrected;
+	uncorrected_gap/=divisor;
+	float uc_delta=quantise_gap(uncorrected_gap) - uncorrected_gap + 1;
+	if (show_quantised_gaps) printf("     uncorrected gap=%.2f, delta=%.2f\n",uncorrected_gap,uc_delta);
+	uncorrected_deltas[ucdelta_count++]=uc_delta;
+	
+      }
+      if (rll_encoding) {
+	float delta=(gap-1)-quantised;
+	if (reset_delta) {
+	  delta=0; reset_delta=0;
+	}
+	if (delta>0&&delta<=0.5) {
+	  // Pulse is a bit late, so adjust last_pulse backwards a bit
+	  pulse_adjust=(int)(delta*divisor);
+	  //		printf("rewind last_pulse by %d\n",pulse_adjust);
+	}
+	if (delta<0&&delta>=-0.5) {
+	  // Pulse is a bit late, so adjust last_pulse backwards a bit
+	  pulse_adjust=(int)(delta*divisor);
+	  //		printf("advance last_pulse by %d\n",-pulse_adjust);
+	}
+	if (delta<0) early++;
+	if (delta>0) late++;
+	if (late>5) {
+	  if (show_post_correction) printf("     LATE\n");
+	  late=0;
+	  pulse_adjust--;
+	}
+	if (early>5) {
+	  if (show_post_correction) printf("     EARLY\n");
+	  early=0;
+	  pulse_adjust++;
+	}
+	
+	if (show_post_correction) printf("     post-correction delta=%.2f\n",delta);
+	corrected_deltas[ucdelta_count]=delta;
+      }
+      last_pulse = current_pulse - pulse_adjust;
+      last_pulse_uncorrected = current_pulse;
     }
 
     fclose(raw);
