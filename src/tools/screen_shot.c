@@ -410,9 +410,9 @@ void get_video_state(void)
 {
 
   fetch_ram_invalidate();
-  printf("Calling fetch_ram\n");
+  //  printf("Calling fetch_ram\n");
   fetch_ram(0xffd3000, 0x0400, vic_regs);
-  printf("Got video regs\n");
+  // printf("Got video regs\n");
 
   screen_address = vic_regs[0x60] + (vic_regs[0x61] << 8) + (vic_regs[0x62] << 16);
   charset_address = vic_regs[0x68] + (vic_regs[0x69] << 8) + (vic_regs[0x6A] << 16);
@@ -438,7 +438,7 @@ void get_video_state(void)
   multicolour_mode = vic_regs[0x16] & 0x10;
   bitmap_mode = vic_regs[0x11] & 0x20;
 
-  printf("bitmap_mode=%d, multicolour_mode=%d, extended_background_mode=%d\n", bitmap_mode, multicolour_mode,
+  if (0) printf("bitmap_mode=%d, multicolour_mode=%d, extended_background_mode=%d\n", bitmap_mode, multicolour_mode,
       extended_background_mode);
 
   border_colour = vic_regs[0x20];
@@ -477,7 +477,7 @@ void get_video_state(void)
   x_step = x_scale_120 / 120.0;
   if (!h640)
     x_step /= 2;
-  printf("x_scale_120=$%02x\n", x_scale_120);
+  //  printf("x_scale_120=$%02x\n", x_scale_120);
 
   // Check if we are in 16-bit text mode, without full-colour chars for char IDs > 255
   if (sixteenbit_mode && (!(vic_regs[0x54] & 4))) {
@@ -490,22 +490,24 @@ void get_video_state(void)
     exit(-1);
   }
 
-  fprintf(stderr, "Screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes, uppercase=%d, line_step= %d\n",
-      screen_address, screen_width, screen_rows, screen_size, upper_case, screen_line_step);
-  fprintf(stderr, "charset_address=$%x\n", charset_address);
+  if (0) {
+    fprintf(stderr, "Screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes, uppercase=%d, line_step= %d\n",
+	    screen_address, screen_width, screen_rows, screen_size, upper_case, screen_line_step);
+    fprintf(stderr, "charset_address=$%x\n", charset_address);
+  }
 
-  fprintf(stderr, "Fetching screen data,");
+  //  fprintf(stderr, "Fetching screen data,");
   fflush(stderr);
   fetch_ram(screen_address, screen_size, screen_data);
-  fprintf(stderr, "colour data,");
+  //  fprintf(stderr, "colour data,");
   fflush(stderr);
   fetch_ram(0xff80000 + colour_address, screen_size, colour_data);
 
-  fprintf(stderr, "charset");
+  //  fprintf(stderr, "charset");
   fflush(stderr);
   fetch_ram(charset_address, charset_size, char_data);
 
-  fprintf(stderr, "\nDone\n");
+  //  fprintf(stderr, "\nDone\n");
 
   return;
 }
@@ -801,17 +803,17 @@ void paint_screen_shot(void)
 
 int do_screen_shot(void)
 {
-  printf("Syncing to monitor.\n");
+  //  printf("Syncing to monitor.\n");
   monitor_sync();
-  printf("Synced to monitor\n");
+  // printf("Synced to monitor\n");
 
   get_video_state();
 
-  printf("Got video state.\n");
+  //  printf("Got video state.\n");
 
   do_screen_shot_ascii();
 
-  printf("Got ASCII screenshot.\n");
+  //  printf("Got ASCII screenshot.\n");
 
   FILE* f = NULL;
   char filename[1024];
@@ -823,10 +825,10 @@ int do_screen_shot(void)
   }
   f = fopen(filename, "wb");
   if (!f) {
-    fprintf(stderr, "ERROR: Could not open mega65-screen.png for writing.\n");
+    fprintf(stderr, "ERROR: Could not open '%s' for writing.\n",filename);
     return -1;
   }
-  printf("Rendering pixel-exact version to %s...\n", filename);
+  // printf("Rendering pixel-exact version to %s...\n", filename);
 
   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
   if (!png_ptr) {
@@ -849,7 +851,7 @@ int do_screen_shot(void)
   png_write_info(png_ptr, info_ptr);
 
   // Allocate frame buffer for image, and set all pixels to the border colour by default
-  printf("Allocating PNG frame buffer...\n");
+  // printf("Allocating PNG frame buffer...\n");
   for (int y = 0; y < (is_pal_mode ? 576 : 480); y++) {
     png_rows[y] = (png_bytep)malloc(3 * 720 * sizeof(png_byte));
     if (!png_rows[y]) {
@@ -881,13 +883,13 @@ int do_screen_shot(void)
    */
   //  raster_interrupt_count=0;
 
-  printf("Finding raster splits...\n");
-  printf("next_raster_interrupt=%d\n", next_raster_interrupt);
+  // printf("Finding raster splits...\n");
+  // printf("next_raster_interrupt=%d\n", next_raster_interrupt);
   raster_interrupt_enabled = 0;
   if (raster_interrupt_enabled) {
     progress_to_RTI();
     get_video_state();
-    printf("Current raster line is $%x, next raster interrupt at $%x\n", current_physical_raster, next_raster_interrupt);
+    // printf("Current raster line is $%x, next raster interrupt at $%x\n", current_physical_raster, next_raster_interrupt);
 
     // At this point, the screen is (presumably) set up for raster #next_raster_interrupt
     // But we don't yet know which raster we can render from, because CPU was stopped before
@@ -902,8 +904,8 @@ int do_screen_shot(void)
     // #start_raster to #next_raster_interrupt
 
     while (next_raster_interrupt != start_raster) {
-      printf("Current raster line is $%x, next raster interrupt at $%x\n", current_physical_raster, next_raster_interrupt);
-      printf("Rendering from raster %d -- %d\n", last_raster, next_raster_interrupt);
+      // printf("Current raster line is $%x, next raster interrupt at $%x\n", current_physical_raster, next_raster_interrupt);
+      // printf("Rendering from raster %d -- %d\n", last_raster, next_raster_interrupt);
       if (last_raster < next_raster_interrupt) {
         min_y = last_raster;
         max_y = next_raster_interrupt;
@@ -924,13 +926,13 @@ int do_screen_shot(void)
     }
   }
   else {
-    printf("Video mode does not use raster splits. Drawing normally.\n");
+    //     printf("Video mode does not use raster splits. Drawing normally.\n");
     min_y = 0;
     max_y = is_pal_mode ? 576 : 480;
     paint_screen_shot();
   }
 
-  printf("Writing out PNG frame buffer...\n");
+  //  printf("Writing out PNG frame buffer...\n");
   // Write out each row of the PNG
   for (int y = 0; y < (is_pal_mode ? 576 : 480); y++)
     png_write_row(png_ptr, png_rows[y]);

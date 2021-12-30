@@ -410,8 +410,8 @@ int fake_stop_cpu(void)
     return 1;
   }
   // Stop CPU
-  timestamp_msg("");
-  fprintf(stderr, "Stopping CPU\n");
+  // timestamp_msg("");
+  //  fprintf(stderr, "Stopping CPU\n");
   if (no_rxbuff)
     do_usleep(50000);
   slow_write_safe(fd, "t1\r", 3);
@@ -429,8 +429,8 @@ int real_stop_cpu(void)
     return 1;
   }
   // Stop CPU
-  timestamp_msg("");
-  fprintf(stderr, "Stopping CPU\n");
+  //  timestamp_msg("");
+  // fprintf(stderr, "Stopping CPU\n");
   if (no_rxbuff)
     do_usleep(50000);
   cpu_stopped = 1;
@@ -443,8 +443,8 @@ int start_cpu(void)
 {
   // Stop CPU
   if (cpu_stopped) {
-    timestamp_msg("");
-    fprintf(stderr, "Starting CPU\n");
+    //    timestamp_msg("");
+    //    fprintf(stderr, "Starting CPU\n");
   }
   if (no_rxbuff)
     do_usleep(50000);
