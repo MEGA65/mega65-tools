@@ -86,6 +86,8 @@ void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idc
 int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity);
 void set_vcd_file(char* name);
 void do_exit(int retval);
+int do_screen_shot_ascii(void);
+void get_video_state(void);
 
 void usage(void)
 {
@@ -794,10 +796,12 @@ void do_type_text(char* type_text)
 {
   fprintf(stderr, "Typing text via virtual keyboard...\n");
 
+  time_t last_time_check=0;
+  
 #ifndef WINDOWS
   int use_line_mode = 0;
 #endif
-
+    
   if (!strcmp(type_text, "-")) {
 #ifndef WINDOWS
     if (use_line_mode) {
@@ -824,6 +828,14 @@ void do_type_text(char* type_text)
         // Allow time for a keyboard scan interrupt
         usleep(20000);
 
+	// Display screen updates while typing if requested
+	if (screen_shot) {
+	  real_stop_cpu();
+	  get_video_state();
+	  do_screen_shot_ascii();
+	  start_cpu();
+	}
+	
         line[0] = 0;
         fgets(line, 1024, stdin);
       }
@@ -837,7 +849,7 @@ void do_type_text(char* type_text)
       // But probably easier to just add this functionality in to tayger's MEGA65 Connect programme instead.
 
       struct termios old_tio, new_tio;
-      unsigned char c;
+      int c;
 
       /* get the terminal settings for stdin */
       tcgetattr(STDIN_FILENO, &old_tio);
@@ -851,12 +863,26 @@ void do_type_text(char* type_text)
       /* set the new settings immediately */
       tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
 
+      // Display screen updates while typing if requested
+      if (screen_shot) {
+	real_stop_cpu();
+	get_video_state();
+	do_screen_shot_ascii();
+	start_cpu();
+	// Clear screen
+	printf("%c[2J",0x1b);
+      }
+      
       fprintf(stderr, "Reading input from terminal in character mode.\n"
                       "Type CONTROL-Y to end.\n");
 
+      // make stdin non-blocking
+      fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+      
       c = getc(stdin);
+      if (c==-1) c=0;
       while (c != 25) {
-        printf("$%02x -> ", c);
+	//        printf("$%02x -> ", c);
         switch (c) {
         case 0x7f:
           c = 0x14;
@@ -864,11 +890,17 @@ void do_type_text(char* type_text)
         case 0x0a:
           c = 0x0d;
           break; // RETURN
+	case 0x09: // TAB = RUN/STOP
+	  printf("TAB\n");
+	  c = 0x03;
+	  break;
         case 0x1b:
           // Escape code
-          c = getc(stdin);
-          if (c == '[') {
-            c = getc(stdin);
+	  printf("ESC code: ");
+	  c=0; while(!c||(c==-1)) c = getc(stdin);
+	  printf("ESC code: $%02x",c);
+	  if (c == '[') {
+            c=0; while(!c||(c==-1)) c = getc(stdin);
             switch (c) {
             case 0x41:
               c = 0x91;
@@ -892,12 +924,33 @@ void do_type_text(char* type_text)
           else
             c = 0;
         }
-        printf("$%02x\n", c);
-        if (c) {
+	//        printf("$%02x\n", c);
+        if (c&&(c!=-1)) {
+	  // Display screen updates while typing if requested
+	  if (screen_shot) {
+	    // Cursor to home position
+	    printf("%c[1;1H",0x1b);
+	    real_stop_cpu();
+	    get_video_state();
+	    do_screen_shot_ascii();
+	    start_cpu();
+	  }
           do_type_key(c);
+	  if (c!=-1) printf("Key $%02x    \n",c);
         }
-        else
+        else {
           usleep(1000);
+	  //	  printf("."); fflush(stdout);
+	  if (time(0)!=last_time_check) {
+	    // Cursor to home position
+	    printf("%c[1;1H",0x1b);
+	    real_stop_cpu();
+	    get_video_state();
+	    do_screen_shot_ascii();
+	    start_cpu();	    
+	    last_time_check = time(0);
+	  }
+	}
         c = getc(stdin);
       }
       /* enable canonical mode (buffered i/o) and local echo */
