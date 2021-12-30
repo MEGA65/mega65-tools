@@ -30,5 +30,11 @@ int main(int argc,char **argv)
   open_the_serial_port(serial_port);
   printf("Setting speed to 1,000,000bps\n");
   set_serial_speed(fd, 1000000);
+
+  int len=2;
+  uint8_t str[2]={0x01,0x02};
   
+  while(1) {
+      do_serial_port_write(fd, (uint8_t*)str, len, NULL, NULL, 0);
+  }
 }
