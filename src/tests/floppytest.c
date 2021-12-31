@@ -2004,6 +2004,9 @@ void main(void)
     POKE(0xD062, 0);
     POKE(0xD011, 0x1b);
 
+    // Motor off
+    POKE(0xD080, 0x00);
+    
     printf("%cMEGA65 Floppy Test Utility.\n\n", 0x93);
 
     printf("1. MFM Histogram and seeking tests.\n");
