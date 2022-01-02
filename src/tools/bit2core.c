@@ -83,6 +83,9 @@ typedef union {
     char core_version[32];
     char m65_target[32];
     unsigned char model_id;
+    unsigned char banner_present;
+    unsigned char embed_file_count;
+    unsigned long embed_file_offset;
   };
 } header_info;
 #pragma pack(pop)
@@ -375,6 +378,8 @@ void build_core_file(const int bit_size,
   // Write core file name and version
   header_info header_block;
 
+  memset(core_file,0,8192*1024);
+  
   memset(header_block.data, 0, CORE_HEADER_SIZE);
 
   for (int i = 0; i < 16; i++)
@@ -391,6 +396,115 @@ void build_core_file(const int bit_size,
     exit(-1);
   }
   bcopy(bitstream_data,&core_file[*core_len],bit_size); *core_len+=bit_size;
+}
+
+unsigned long htoc64l(unsigned long v)
+{
+  unsigned char c[4];
+
+  c[0]=(v>>0)&0xff;
+  c[1]=(v>>8)&0xff;
+  c[2]=(v>>16)&0xff;
+  c[3]=(v>>24)&0xff;
+  return *(unsigned long *)c;
+}  
+
+unsigned long c64tohl(unsigned long v)
+{
+  unsigned char *c=(unsigned char *)&v;
+  unsigned long o=0;
+  o=(c[0]<<0)+(c[1]<<8)+(c[2]<<16)+(c[3]<<24);
+  return o;
+}
+
+unsigned char file_data[1024*1024];
+unsigned int last_file_offset=0;
+int banner_present=0;
+void embed_file(int *core_len,unsigned char *core_file,char *filename)
+{
+  header_info *header_block=(header_info *)core_file;
+  if (!header_block->embed_file_offset) {
+    fprintf(stderr,"INFO: Embedding first file. Setting embed_file_offset to current COR file length.\n");
+    header_block->embed_file_offset=htoc64l(*core_len);
+    last_file_offset=*core_len;
+  }
+
+  char basename[32]="";
+  int bnlen=0;
+  for(int i=0;filename[i];i++) {
+    if (filename[i]=='/') bnlen=0;
+    else {
+      if (bnlen<31) {
+	basename[bnlen++]=filename[i];
+      } else {
+	fprintf(stderr,"ERROR: Base name of '%s' too long. Must be <32 chars.\n",filename);
+      }
+    }
+  }
+  basename[bnlen]=0;
+  if (!bnlen) {
+    fprintf(stderr,"ERROR: Cannot embed directories.\n");
+    exit(-1);
+  }
+
+  /* Each embedded file is represented by:
+      4 bytes = address of next embedded file record (or 0 if last)
+      4 bytes = length of this embedded file
+     32 bytes = filename
+  */
+
+  FILE *f=fopen(filename,"rb");
+  if (!f) {
+    fprintf(stderr,"ERROR: Could not read file '%s'\n",filename);
+    exit(-1);
+  }
+  int file_len=fread(file_data, 1, 1024*1024, f);
+  fclose(f);
+
+  fprintf(stderr,"INFO: Writing file '%s' at offset $%06x, len=%d\n",basename,last_file_offset,file_len);
+  
+  // XXX - And banner file if present gets put in the last 32KB of the slot so that a future update to HYPPO can
+  // read it there instantly on boot.
+  if (!strcmp(basename,"BANNER.M65")) {
+    if (file_len>32*1024) {
+      fprintf(stderr,"ERROR: BANNER.M65 file must be <= 32KB\n");
+      exit(-1);
+    }
+    fprintf(stderr,"INFO: Embedding banner file in last 32KB of slot.\n");
+    header_block->banner_present=1;
+    banner_present=1;
+    bcopy(file_data,&core_file[(8192-32)*1024],file_len);
+  }
+
+  // Write embedded file
+  unsigned int this_offset=last_file_offset;
+  unsigned int next_offset=this_offset+4+4+32+file_len;  
+
+  if (next_offset>=8192*1024-4) {
+    fprintf(stderr,"ERROR: COR files must be less than 8MB\n");
+    exit(-1);
+  }
+  
+  core_file[this_offset+0]=next_offset>>0;
+  core_file[this_offset+1]=next_offset>>8;
+  core_file[this_offset+2]=next_offset>>16;
+  core_file[this_offset+3]=next_offset>>24;
+
+  core_file[this_offset+4]=file_len>>0;
+  core_file[this_offset+5]=file_len>>8;
+  core_file[this_offset+6]=file_len>>16;
+  core_file[this_offset+7]=file_len>>24;
+
+  bcopy(basename,&core_file[this_offset+4+4],32);
+
+  bcopy(file_data,&core_file[this_offset+4+4+32],file_len);
+  
+  header_block->embed_file_count++;
+
+  last_file_offset=next_offset;
+  *core_len=last_file_offset;
+  
+  return;
 }
 
 char* find_fpga_part_from_m65targetname(const char* m65targetname)
@@ -421,8 +535,20 @@ int DIRTYMOCK(main)(int argc, char** argv)
 
   build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH);
   for(int i=6;i<argc;i++) {
-    fprintf(stderr,"Embedding file '%s'\n",argv[i]);
+    //    fprintf(stderr,"Embedding file '%s'\n",argv[i]);
+    embed_file(&core_len,core_file,argv[i]);
   }
+
+  if (banner_present) {
+    if (core_len>=(8192-32)*1024-4) {
+      fprintf(stderr,"ERROR: Insufficient room to place BANNER.M65 at end of slot.\n");
+      exit(-1);
+    }
+    core_len=8192*1024;
+  } else
+    // Leave 4 extra zero bytes at end for end of embedded file chain
+    core_len+=4;
+  
   write_core_file(core_len,core_file,ARG_COREPATH);
   
   return 0;
