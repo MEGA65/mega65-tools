@@ -115,7 +115,7 @@ void show_help(void)
       "MEGA65 bitstream to core file converter\n"
       "---------------------------------------\n"
       "Version: %s\n\n"
-      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor>\n"
+      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor> [<file to embed> ...]\n"
       "\n"
       "Note: 1st argument specifies your Mega65 target name, which can be either:\n\n",
       version_string);
@@ -348,14 +348,29 @@ int check_bitstream_file(m65target_info* m65target, int bit_size)
   return 0;
 }
 
-void write_core_file(const int bit_size, const char* core_name, const char* core_version, const char* m65target_name,
-    const char* core_filename)
+void write_core_file(int core_len, unsigned char *core_file,char *core_filename)
 {
   FILE* of = fopen(core_filename, "wb");
   if (!of) {
     fprintf(stderr, "ERROR: Could not create core file '%s'\n", core_filename);
     exit(-3);
   }
+  if (fwrite(core_file, core_len, 1, of)!=1) {
+    fprintf(stderr,"ERROR: Could not write all data to '%s'\n",core_filename);
+    exit(-1);
+  }
+  
+  fclose(of);
+
+  fprintf(stderr, "Core file written: \"%s\"\n", core_filename);
+  return;
+}
+
+void build_core_file(const int bit_size,
+		     int *core_len, unsigned char *core_file,
+		     const char* core_name, const char* core_version, const char* m65target_name,
+    const char* core_filename)
+{
 
   // Write core file name and version
   header_info header_block;
@@ -370,11 +385,12 @@ void write_core_file(const int bit_size, const char* core_name, const char* core
   strcpy(header_block.m65_target, m65target_name);
   header_block.model_id = get_model_id(m65target_name);
 
-  fwrite(header_block.data, CORE_HEADER_SIZE, 1, of);
-  fwrite(bitstream_data, bit_size, 1, of);
-  fclose(of);
-
-  fprintf(stderr, "Core file written: \"%s\"\n", core_filename);
+  bcopy(header_block.data,core_file,CORE_HEADER_SIZE); *core_len=CORE_HEADER_SIZE;
+  if (bit_size+(*core_len)>=8192*1024) {
+    fprintf(stderr,"ERROR: Bitstream + header > 8MB\n");
+    exit(-1);
+  }
+  bcopy(bitstream_data,&core_file[*core_len],bit_size); *core_len+=bit_size;
 }
 
 char* find_fpga_part_from_m65targetname(const char* m65targetname)
@@ -383,11 +399,14 @@ char* find_fpga_part_from_m65targetname(const char* m65targetname)
   return m65target->fpga_part;
 }
 
+unsigned char core_file[8192*1024];
+int core_len=0;
+
 int DIRTYMOCK(main)(int argc, char** argv)
 {
   int err;
-
-  if (argc != 6) {
+  
+  if (argc < 6) {
     show_help();
     exit(-1);
   }
@@ -400,7 +419,11 @@ int DIRTYMOCK(main)(int argc, char** argv)
   if (err != 0)
     return err;
 
-  write_core_file(bit_size, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_COREPATH);
-
+  build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH);
+  for(int i=6;i<argc;i++) {
+    fprintf(stderr,"Embedding file '%s'\n",argv[i]);
+  }
+  write_core_file(core_len,core_file,ARG_COREPATH);
+  
   return 0;
 }
