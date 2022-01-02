@@ -1275,11 +1275,12 @@ int check_file_access(char* file, char* purpose)
   return 0;
 }
 
-void check_for_vf011_requests()
+// returns 1 if there is a vf011 reqest, 0 if not
+unsigned char check_for_vf011_requests()
 {
 
   if (!virtual_f011) {
-    return;
+    return 0;
   }
 
   if (recent_bytes[3] == '!') {
@@ -1290,6 +1291,7 @@ void check_for_vf011_requests()
     pending_vf011_track = recent_bytes[0] & 0x7f;
     pending_vf011_sector = recent_bytes[1] & 0x7f;
     pending_vf011_side = recent_bytes[2] & 0x0f;
+    return 1;
   }
   if (recent_bytes[3] == 0x5c) {
     // Handle request
@@ -1299,7 +1301,9 @@ void check_for_vf011_requests()
     pending_vf011_track = recent_bytes[0] & 0x7f;
     pending_vf011_sector = recent_bytes[1] & 0x7f;
     pending_vf011_side = recent_bytes[2] & 0x0f;
+    return 1;
   }
+  return 0;
 }
 
 void handle_vf011_requests()
@@ -1390,7 +1394,7 @@ void unit_test_log(unsigned char bytes[4])
 void enterTestMode()
 {
 
-  unsigned char receiveString;
+  unsigned char receiveString, recent_bytes_fill = 0;
   int currentMessagePos;
   time_t currentTime;
   char* ts;
@@ -1433,6 +1437,8 @@ void enterTestMode()
         if (msgbuf[currentMessagePos] == 92) {
           msgbuf[currentMessagePos] = 0;
           receiveString = 0;
+          // don't check recent_bytes_fill here! msg bytes are not
+          // but into the buffer!
           if (recent_bytes[3] == 0xfd) { // log message to console
             fprintf(stderr, "%s\n", msgbuf);
             if (logPtr) {
@@ -1443,6 +1449,7 @@ void enterTestMode()
             strncpy(testname, msgbuf, 160);
           }
           bzero(recent_bytes, 4);
+          recent_bytes_fill = 0;
         }
 
         currentMessagePos++;
@@ -1452,25 +1459,31 @@ void enterTestMode()
         recent_bytes[1] = recent_bytes[2];
         recent_bytes[2] = recent_bytes[3];
         recent_bytes[3] = inbuf[i];
-        check_for_vf011_requests();
+        // count if we have 4 bytes in recent_bytes
+        if (recent_bytes_fill < 4)
+          recent_bytes_fill++;
+        // only check for vf011 request if buffer is full!
+        if (recent_bytes_fill > 3)
+          if (check_for_vf011_requests())
+            recent_bytes_fill = 0;
       }
       handle_vf011_requests();
 
-      // check if we should receive a string
-      if (!receiveString) {
+      // fprintf(stderr, "recent_bytes_fill: %d\n", recent_bytes_fill);
+      // dump_bytes(0, "bytes", recent_bytes, 4);
+
+      // not receiving a string? handle unit test token if needed
+      if (!receiveString && recent_bytes_fill > 3) {
+        // check if we should receive a string
         if (recent_bytes[3] == 0xfe || recent_bytes[3] == 0xfd) {
           // receive message
           receiveString = 1;
           currentMessagePos = 0;
-        }
-      }
-
-      // not receiving a string? handle unit test token if needed
-      if (!receiveString) {
-        if (recent_bytes[3] >= 0xf0) {
+        } else if (recent_bytes[3] >= 0xf0) {
           // handle unit test token and update time
           currentTime = time(NULL);
           unit_test_log(recent_bytes);
+          recent_bytes_fill = 0;
         }
       }
     }
