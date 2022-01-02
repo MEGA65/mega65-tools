@@ -33,6 +33,8 @@ typedef struct {
   unsigned char mode;
   // some name
   unsigned char name[16]; // 15 max!
+  // bank for 32bit pointer ops
+  unsigned char bank;
 } opcode_mode;
 
 typedef struct {
@@ -73,12 +75,13 @@ typedef struct {
 
 opcode_suite test_ldq =
   {
-    "ldq", 63, 16, 0x64,
+    "ldq", 27, 51, 0x64,
     {
-      {0, 0xa5, 0x01, "ldq $nn"},
-      {0, 0xad, 0x02, "ldq $nnnn"},
-      {0, 0xb2, 0x04, "ldq ($nn),z"},
-      {0, 0xb2, 0x08, "ldq [$nn],z"},
+      {0, 0xa5, 0x01, "ldq $nn",      0},
+      {0, 0xad, 0x02, "ldq $nnnn",    0},
+      {0, 0xb2, 0x04, "ldq ($nn),z",  0},
+      {0, 0xb2, 0x08, "ldq [$nn],z",  0},
+      {0, 0xb2, 0x08, "ldq f[$nn],z", 4},
       {0, 0}
     },
     {
@@ -104,12 +107,13 @@ opcode_suite test_ldq =
 
 opcode_suite test_stq =
   {
-    "stq", 63, 16, 0x64,
+    "stq", 27, 51, 0x64,
     {
-      {2, 0x85, 0x01, "stq $nn"},
-      {1, 0x8d, 0x02, "stq $nnnn"},
-      {1, 0x92, 0x04, "stq ($nn)"},
-      {1, 0x92, 0x08, "stq [$nn]"},
+      {2, 0x85, 0x01, "stq $nn",    0},
+      {1, 0x8d, 0x02, "stq $nnnn",  0},
+      {1, 0x92, 0x04, "stq ($nn)",  0},
+      {1, 0x92, 0x08, "stq [$nn]",  0},
+      {1, 0x92, 0x08, "stq f[$nn]", 4},
       {0, 0}
     },
     {
@@ -127,12 +131,13 @@ opcode_suite test_stq =
 
 opcode_suite test_adcq =
   {
-    "adcq", 63, 16, 0x64,
+    "adcq", 27, 51, 0x64,
     {
-      {0, 0x65, 0x01, "adcq $nn"},
-      {0, 0x6d, 0x02, "adcq $nnnn"},
-      {0, 0x72, 0x04, "adcq ($nn)"},
-      {0, 0x72, 0x08, "adcq [$nn]"},
+      {0, 0x65, 0x01, "adcq $nn",    0},
+      {0, 0x6d, 0x02, "adcq $nnnn",  0},
+      {0, 0x72, 0x04, "adcq ($nn)",  0},
+      {0, 0x72, 0x08, "adcq [$nn]",  0},
+      {0, 0x72, 0x08, "adcq f[$nn]", 4},
       {0, 0},
     },
     {
@@ -164,12 +169,13 @@ opcode_suite test_adcq =
 
 opcode_suite test_sbcq =
   {
-    "sbcq", 63, 16, 0x64,
+    "sbcq", 27, 51, 0x64,
     {
-      {0, 0xe5, 0x81, "sbcq $nn"},
-      {0, 0xed, 0x82, "sbcq $nnnn"},
-      {0, 0xf2, 0x84, "sbcq ($nn)"},
-      {0, 0xf2, 0x88, "sbcq [$nn]"},
+      {0, 0xe5, 0x81, "sbcq $nn",    0},
+      {0, 0xed, 0x82, "sbcq $nnnn",  0},
+      {0, 0xf2, 0x84, "sbcq ($nn)",  0},
+      {0, 0xf2, 0x88, "sbcq [$nn]",  0},
+      {0, 0xf2, 0x88, "sbcq f[$nn]", 4},
       {0, 0},
     },
     {
@@ -198,12 +204,13 @@ opcode_suite test_sbcq =
 
 opcode_suite test_cmpq =
   {
-    "cmpq", 63, 16, 0x64,
+    "cmpq", 27, 51, 0x64,
     {
-      {0, 0xc5, 0x01, "cmpq $nn"},
-      {0, 0xcd, 0x02, "cmpq $nnnn"},
-      {0, 0xd2, 0x04, "cmpq ($nn)"},
-      {0, 0xd2, 0x08, "cmpq [$nn]"},
+      {0, 0xc5, 0x01, "cmpq $nn",    0},
+      {0, 0xcd, 0x02, "cmpq $nnnn",  0},
+      {0, 0xd2, 0x04, "cmpq ($nn)",  0},
+      {0, 0xd2, 0x08, "cmpq [$nn]",  0},
+      {0, 0xd2, 0x08, "cmpq f[$nn]", 4},
       {0, 0},
     },
     {
@@ -234,10 +241,10 @@ opcode_suite test_cmpq =
 
 opcode_suite test_bitq =
   {
-    "bitq", 63, 16, 0x64,
+    "bitq", 27, 51, 0x64,
     {
-      {0, 0x24, 0x01, "bitq $nn"},
-      {0, 0x2c, 0x02, "bitq $nnnn"},
+      {0, 0x24, 0x01, "bitq $nn", 0},
+      {0, 0x2c, 0x02, "bitq $nnnn", 0},
       {0, 0},
     },
     {
@@ -263,13 +270,13 @@ opcode_suite test_bitq =
 
 opcode_suite test_deq =
   {
-    "deq", 63, 16, 0x64,
+    "deq", 27, 51, 0x64,
     {
-      {0, 0x3a, 0x40, "deq q"},
-      {2, 0xc6, 0x01, "deq $nn"},
-      {1, 0xce, 0x02, "deq $nnnn"},
-      {2, 0xd6, 0x10, "deq $nn,x"},
-      {1, 0xde, 0x20, "deq $nnnn,x"},
+      {0, 0x3a, 0x40, "deq q", 0},
+      {2, 0xc6, 0x01, "deq $nn", 0},
+      {1, 0xce, 0x02, "deq $nnnn", 0},
+      {2, 0xd6, 0x10, "deq $nn,x", 0},
+      {1, 0xde, 0x20, "deq $nnnn,x", 0},
       {0, 0},
     },
     {
@@ -300,13 +307,13 @@ opcode_suite test_deq =
 
 opcode_suite test_inq =
   {
-    "inq", 63, 16, 0x64,
+    "inq", 27, 51, 0x64,
     {
-      {0, 0x1a, 0x40, "inq q"},
-      {2, 0xe6, 0x01, "inq $nn"},
-      {1, 0xee, 0x02, "inq $nnnn"},
-      {2, 0xf6, 0x10, "inq $nn,x"},
-      {1, 0xfe, 0x20, "inq $nnnn,x"},
+      {0, 0x1a, 0x40, "inq q", 0},
+      {2, 0xe6, 0x01, "inq $nn", 0},
+      {1, 0xee, 0x02, "inq $nnnn", 0},
+      {2, 0xf6, 0x10, "inq $nn,x", 0},
+      {1, 0xfe, 0x20, "inq $nnnn,x", 0},
       {0, 0},
     },
     {
@@ -335,12 +342,13 @@ opcode_suite test_inq =
 
 opcode_suite test_andq =
   {
-    "andq", 63, 16, 0x64,
+    "andq", 27, 51, 0x64,
     {
-      {0, 0x25, 0x01, "andq $nn"},
-      {0, 0x2d, 0x02, "andq $nnnn"},
-      {0, 0x32, 0x04, "andq ($nn)"},
-      {0, 0x32, 0x08, "andq [$nn]"},
+      {0, 0x25, 0x01, "andq $nn",    0},
+      {0, 0x2d, 0x02, "andq $nnnn",  0},
+      {0, 0x32, 0x04, "andq ($nn)",  0},
+      {0, 0x32, 0x08, "andq [$nn]",  0},
+      {0, 0x32, 0x08, "andq f[$nn]", 4},
       {0, 0},
     },
     {
@@ -360,12 +368,13 @@ opcode_suite test_andq =
 
 opcode_suite test_orq =
   {
-    "orq", 63, 16, 0x64,
+    "orq", 27, 51, 0x64,
     {
-      {0, 0x05, 0x01, "orq $nn"},
-      {0, 0x0d, 0x02, "orq $nnnn"},
-      {0, 0x12, 0x04, "orq ($nn)"},
-      {0, 0x12, 0x08, "orq [$nn]"},
+      {0, 0x05, 0x01, "orq $nn",    0},
+      {0, 0x0d, 0x02, "orq $nnnn",  0},
+      {0, 0x12, 0x04, "orq ($nn)",  0},
+      {0, 0x12, 0x08, "orq [$nn]",  0},
+      {0, 0x12, 0x08, "orq f[$nn]", 4},
       {0, 0},
     },
     {
@@ -385,12 +394,13 @@ opcode_suite test_orq =
 
 opcode_suite test_eorq =
   {
-    "eorq", 63, 16, 0x64,
+    "eorq", 27, 51, 0x64,
     {
-      {0, 0x45, 0x01, "eorq $nn"},
-      {0, 0x4d, 0x02, "eorq $nnnn"},
-      {0, 0x52, 0x04, "eorq ($nn)"},
-      {0, 0x52, 0x08, "eorq [$nn]"},
+      {0, 0x45, 0x01, "eorq $nn",    0},
+      {0, 0x4d, 0x02, "eorq $nnnn",  0},
+      {0, 0x52, 0x04, "eorq ($nn)",  0},
+      {0, 0x52, 0x08, "eorq [$nn]",  0},
+      {0, 0x52, 0x08, "eorq f[$nn]", 4},
       {0, 0},
     },
     {
@@ -411,13 +421,13 @@ opcode_suite test_eorq =
 
 opcode_suite test_lsrq =
   {
-    "lsrq", 63, 16, 0x64,
+    "lsrq", 27, 51, 0x64,
     {
-      {0, 0x4A, 0x40, "lsrq q"},
-      {2, 0x46, 0x01, "lsrq $nn"},
-      {1, 0x4e, 0x02, "lsrq $nnnn"},
-      {2, 0x56, 0x10, "lsrq $nn,x"},
-      {1, 0x5e, 0x20, "lsrq $nnnn,x"},
+      {0, 0x4A, 0x40, "lsrq q", 0},
+      {2, 0x46, 0x01, "lsrq $nn", 0},
+      {1, 0x4e, 0x02, "lsrq $nnnn", 0},
+      {2, 0x56, 0x10, "lsrq $nn,x", 0},
+      {1, 0x5e, 0x20, "lsrq $nnnn,x", 0},
       {0, 0},
     },
     {
@@ -446,11 +456,11 @@ opcode_suite test_lsrq =
 
 opcode_suite test_asrq =
   {
-    "asrq", 63, 16, 0x64,
+    "asrq", 27, 51, 0x64,
     {
-      {0, 0x43, 0x40, "asrq q"},
-      {2, 0x44, 0x01, "asrq $nn"},
-      {2, 0x54, 0x10, "asrq $nn,x"},
+      {0, 0x43, 0x40, "asrq q", 0},
+      {2, 0x44, 0x01, "asrq $nn", 0},
+      {2, 0x54, 0x10, "asrq $nn,x", 0},
       {0, 0},
     },
     {
@@ -486,14 +496,14 @@ opcode_suite test_asrq =
 
 opcode_suite test_aslq =
   {
-    "aslq", 63, 16, 0x64,
+    "aslq", 27, 51, 0x64,
     {
       // set carry with all the tests, to check it is not shifted in
-      {0, 0x0A, 0xc0, "aslq q"},
-      {2, 0x06, 0x81, "aslq $nn"},
-      {1, 0x0e, 0x82, "aslq $nnnn"},
-      {2, 0x16, 0x90, "aslq $nn,x"},
-      {1, 0x1e, 0xa0, "aslq $nnnn,x"},
+      {0, 0x0A, 0xc0, "aslq q", 0},
+      {2, 0x06, 0x81, "aslq $nn", 0},
+      {1, 0x0e, 0x82, "aslq $nnnn", 0},
+      {2, 0x16, 0x90, "aslq $nn,x", 0},
+      {1, 0x1e, 0xa0, "aslq $nnnn,x", 0},
       {0, 0},
     },
     {
@@ -529,14 +539,14 @@ opcode_suite test_aslq =
 
 opcode_suite test_rorq0 =
   {
-    "rorq c=0", 63, 16, 0x64,
+    "rorq c=0", 27, 51, 0x64,
     {
       // test with carry clear -> no negative result possible
-      {0, 0x6a, 0x40, "rorq0 q"},
-      {2, 0x66, 0x01, "rorq0 $nn"},
-      {1, 0x6e, 0x02, "rorq0 $nnnn"},
-      {2, 0x76, 0x10, "rorq0 $nn,x"},
-      {1, 0x7e, 0x20, "rorq0 $nnnn,x"},
+      {0, 0x6a, 0x40, "rorq0 q", 0},
+      {2, 0x66, 0x01, "rorq0 $nn", 0},
+      {1, 0x6e, 0x02, "rorq0 $nnnn", 0},
+      {2, 0x76, 0x10, "rorq0 $nn,x", 0},
+      {1, 0x7e, 0x20, "rorq0 $nnnn,x", 0},
       {0, 0},
     },
     {
@@ -558,14 +568,14 @@ opcode_suite test_rorq0 =
 
 opcode_suite test_rorq1 =
   {
-    "rorq c=1", 63, 16, 0x64,
+    "rorq c=1", 27, 51, 0x64,
     {
       // test with carry set -> no positive result possible
-      {0, 0x6a, 0xc0, "rorq1 q"},
-      {2, 0x66, 0x81, "rorq1 $nn"},
-      {1, 0x6e, 0x82, "rorq1 $nnnn"},
-      {2, 0x76, 0x90, "rorq1 $nn,x"},
-      {1, 0x7e, 0xa0, "rorq1 $nnnn,x"},
+      {0, 0x6a, 0xc0, "rorq1 q", 0},
+      {2, 0x66, 0x81, "rorq1 $nn", 0},
+      {1, 0x6e, 0x82, "rorq1 $nnnn", 0},
+      {2, 0x76, 0x90, "rorq1 $nn,x", 0},
+      {1, 0x7e, 0xa0, "rorq1 $nnnn,x", 0},
       {0, 0},
     },
     {
@@ -592,14 +602,14 @@ opcode_suite test_rorq1 =
 
 opcode_suite test_rolq0 =
   {
-    "rolq c=0", 63, 16, 0x64,
+    "rolq c=0", 27, 51, 0x64,
     {
       // test with carry clear
-      {0, 0x2A, 0x40, "rolq0 q"},
-      {2, 0x26, 0x01, "rolq0 $nn"},
-      {1, 0x2e, 0x02, "rolq0 $nnnn"},
-      {2, 0x36, 0x10, "rolq0 $nn,x"},
-      {1, 0x3e, 0x20, "rolq0 $nnnn,x"},
+      {0, 0x2A, 0x40, "rolq0 q", 0},
+      {2, 0x26, 0x01, "rolq0 $nn", 0},
+      {1, 0x2e, 0x02, "rolq0 $nnnn", 0},
+      {2, 0x36, 0x10, "rolq0 $nn,x", 0},
+      {1, 0x3e, 0x20, "rolq0 $nnnn,x", 0},
       {0, 0},
     },
     {
@@ -627,14 +637,14 @@ opcode_suite test_rolq0 =
 
 opcode_suite test_rolq1 =
   {
-    "rolq c=1", 63, 16, 0x64,
+    "rolq c=1", 27, 51, 0x64,
     {
       // test with carry set
-      {0, 0x2A, 0xc0, "rolq1 q"},
-      {2, 0x26, 0x81, "rolq1 $nn"},
-      {1, 0x2e, 0x82, "rolq1 $nnnn"},
-      {2, 0x36, 0x90, "rolq1 $nn,x"},
-      {1, 0x3e, 0xa0, "rolq1 $nnnn,x"},
+      {0, 0x2A, 0xc0, "rolq1 q", 0},
+      {2, 0x26, 0x81, "rolq1 $nn", 0},
+      {1, 0x2e, 0x82, "rolq1 $nnnn", 0},
+      {2, 0x36, 0x90, "rolq1 $nn,x", 0},
+      {1, 0x3e, 0xa0, "rolq1 $nnnn,x", 0},
       {0, 0},
     },
     {
@@ -681,8 +691,14 @@ opcode_suite *suites[] = {
 };
 
 /* code snippet
-   SEI
-   CLD
+   LDZ #$0C
+   LDX #$0C
+loop:
+   LDA $0380,X
+   STA [$60],Z
+   DEZ
+   DEX
+   BPL loop 
    ; preload registers with garbage
    LDA #$fa
    LDX #$5f
@@ -710,17 +726,34 @@ opcode_suite *suites[] = {
    ; and the flags
    PLA
    STA $0390
+   LDZ #$0C
+   LDX #$0C
+loop:
+   LDA [$60],Z
+   STA $0380,X
+   DEZ
+   DEX
+   BPL loop 
    RTS
  */
-unsigned char code_snippet[64] = {
-  0x78, 0xd8, 0xa9, 0xfa, 0xa2, 0x5f, 0xa0, 0xaf, 0xa3, 0xf5,
+unsigned char code_snippet[66] = {
+  // far ptr copy loop
+  0xa3, 0x0b, 0xa2, 0x0b, 0xbd, 0x80, 0x03, 0xea, 0x92, 0x60,
+  0x3b, 0xca, 0x10, 0xf6,
+  // real start +13
+  0xa9, 0xfa, 0xa2, 0x5f, 0xa0, 0xaf, 0xa3, 0xf5,
   // LDQ Val1 from 0380
   0x42, 0x42, 0xad, 0x80, 0x03,
   // Test Opcode at 0384 (with padding) -- this is the part that gets changed every test
   0x18, 0x18, 0x42, 0x42, 0x8d, 0x84, 0x03,
   // store Q to 038C and Flags to 0390
   0x08, 0x8d, 0x8c, 0x03, 0x8e, 0x8d, 0x03, 0x8c, 0x8e, 0x03,
-  0x9c, 0x8f, 0x03, 0x68, 0x8d, 0x90, 0x03, 0x60, 0x00
+  0x9c, 0x8f, 0x03, 0x68, 0x8d, 0x90, 0x03,
+  // copy far ptr back
+  0xa3, 0x0b, 0xa2, 0x0b, 0xea, 0xb2, 0x60, 0x9d, 0x80, 0x03,
+  0x3b, 0xca, 0x10, 0xf6,
+  // rts
+  0x60
 };
 
 unsigned short line=0, total=0, total_failed=0;
@@ -847,14 +880,14 @@ unsigned char keybuffer(unsigned char wait) {
 
 void run_suite(unsigned char issue_num, opcode_suite *suite) {
   unsigned short reslo, reshi;
-  unsigned long result_q;
+  unsigned long result_q, farptr;
   unsigned char result_f, status;
   unsigned char m, t, count=0, sub=1, failed=0, fi, flagmask;
   unsigned char concmsg[81]="", failstr[3]="", testname[21]="", status_flags[]="nvebdizc", flagstr[11]="[........]";
-  unsigned char *code_buf = (unsigned char*)0x340; // Tape Buffer
+  unsigned char *code_buf = (unsigned char*)0x5000;
 
   // Pre-install code snippet
-  lcopy((long)code_snippet, (long)code_buf, 64);
+  lcopy((long)code_snippet, (long)code_buf, 66);
 
   // Run each test
   for (m=0; suite->modes[m].opcode; m++) {
@@ -865,13 +898,28 @@ void run_suite(unsigned char issue_num, opcode_suite *suite) {
         // count for test and total
         count++; total++;
 
+        farptr = 0x00000384 | ((unsigned long)suite->modes[m].bank)<<16;
+        //snprintf(concmsg, 80, "%02x %08lx", suite->modes[m].bank, farptr);
+        //print_text80(68, line, 1, concmsg);
+
         // Setup input values, always set val1 to 0x380
         *(unsigned long*)0x380 = suite->tests[t].val1;
+        *(unsigned long*)0x384 = 0xdeadbeef;
+        *(unsigned long*)0x388 = 0xc4ffee11;
+        code_buf[suite->offset2] = 0x60;
         if (suite->modes[m].mode & 0x11) { // $nn / $nn,x
           // for base page opcodes
           *(unsigned long*)0x60 = suite->tests[t].val1;
           *(unsigned long*)0x64 = suite->tests[t].val2;
           *(unsigned long*)0x68 = suite->tests[t].val3;
+        } else if ((suite->modes[m].mode & 0x08) && suite->modes[m].bank != 0) { // $nn / $nn,x
+          // for absolute opcodes
+          *(unsigned long*)0x384 = suite->tests[t].val2;
+          *(unsigned long*)0x388 = suite->tests[t].val3;
+          // setup zero page pointers - we use part of the Basic FAC range of addresses here
+          *(unsigned long*)0x60 = farptr - 4;
+          *(unsigned long*)0x64 = farptr + 0;
+          code_buf[suite->offset2] = 0xa3;
         } else {
           // for absolute opcodes
           *(unsigned long*)0x384 = suite->tests[t].val2;
@@ -884,23 +932,29 @@ void run_suite(unsigned char issue_num, opcode_suite *suite) {
         *(unsigned long*)0x38c = 0xb1eb1bbe;
 
         // change code for test
-        code_buf[suite->offset2-1] = (suite->modes[m].mode & 0x80)?0x38:0x18;
-        code_buf[suite->offset2]   = (suite->modes[m].mode & 0x08)?0x42:((suite->modes[m].mode & 0x80)?0x38:0x18);
-        //code_buf[suite->offset2+1] = 0x42;
-        code_buf[suite->offset2+2] = (suite->modes[m].mode & 0x08)?0xea:0x42;
-        code_buf[suite->offset2+3] = suite->modes[m].opcode;
+        code_buf[suite->offset1] = (suite->modes[m].mode & 0x80)?0x38:0x18;
+        code_buf[suite->offset1+1]   = (suite->modes[m].mode & 0x08)?0x42:((suite->modes[m].mode & 0x80)?0x38:0x18);
+        //code_buf[suite->offset1+2] = 0x42;
+        code_buf[suite->offset1+3] = (suite->modes[m].mode & 0x08)?0xea:0x42;
+        code_buf[suite->offset1+4] = suite->modes[m].opcode;
 
         if (suite->modes[m].mode & 0x1d) { // $nn / $nn,x / ($nn) / [$nn]
-          code_buf[suite->offset2+4] = suite->basepage;
-          code_buf[suite->offset2+5] = 0xea;
+          code_buf[suite->offset1+5] = suite->basepage;
+          code_buf[suite->offset1+6] = 0xea;
         } else if (suite->modes[m].mode & 0x22) { // $nnnn / $nnnn,x
-          code_buf[suite->offset2+4] = 0x84;
-          code_buf[suite->offset2+5] = 0x03;
+          code_buf[suite->offset1+5] = 0x84;
+          code_buf[suite->offset1+6] = 0x03;
         } else if (suite->modes[m].mode & 0x40) { // accumulator
-          code_buf[suite->offset2+4] = 0xea;
-          code_buf[suite->offset2+5] = 0xea;
+          code_buf[suite->offset1+5] = 0xea;
+          code_buf[suite->offset1+6] = 0xea;
         }
-        __asm__("jsr $0340");
+        if ((suite->modes[m].mode & 0x08) && suite->modes[m].bank != 0) {
+          __asm__("cld");
+          __asm__("jsr $5000");
+        } else {
+          __asm__("cld");
+          __asm__("jsr $500e");
+        }
 
         // read results
         if (suite->modes[m].rmw == 1)
