@@ -1231,6 +1231,113 @@ unsigned char checkUSBPermissions()
   return 1;
 }
 
+unsigned char read_a_sector(unsigned char track_number, unsigned char side, unsigned char sector)
+{
+  // Disable auto-seek, or we can't force seeking to track 0    
+  mega65_poke(0xffD3696,0x00);
+
+  // Floppy motor on, and select side
+  mega65_poke(0xffD3080, 0x68);
+  if (side) mega65_poke(0xffD3080,0x60);
+  
+  // Map FDC sector buffer, not SD sector buffer
+  mega65_poke(0xffD3689, mega65_peek(0xffD3689) & 0x7f);
+  
+  // Disable matching on any sector, use real drive
+  mega65_poke(0xffd36A1, 0x01);
+
+  // Wait until busy flag clears
+  while (mega65_peek(0xffD3082) & 0x80) {
+    continue;
+  }
+
+#if 0
+  // Seek to track 0
+  goto_track0();
+  
+  // Seek to the requested track
+  while(PEEK(0xD082)&0x80) continue;
+  for(i=0;i<track_number;i++) {
+    while(PEEK(0xD082)&0x80) continue;
+    POKE(0xD081,0x18);
+    while(PEEK(0xD082)&0x80) continue;
+    }
+#endif
+
+  // Now select the side, and try to read the sector
+  mega65_poke(0xffD3084, track_number);
+  mega65_poke(0xffD3085, sector);
+  mega65_poke(0xffD3086, side ? 1 : 0);
+
+  // Issue read command
+  mega65_poke(0xffD3081, 0x01); // but first reset buffers
+  mega65_poke(0xffD3081, 0x40);
+
+  // Wait for busy flag to clear
+  while (mega65_peek(0xffD3082) & 0x80) {
+   
+  }
+
+  if (mega65_peek(0xffD3082) & 0x18) {
+    // Read failed
+    fprintf(stderr,"ERROR: Failed to read T:%02x, S:%02x, H:%02x\n",
+	    track_number,sector,side);
+    return 1;
+  }
+  else {
+    // Read succeeded
+    return 0;
+  }
+}
+
+void goto_track0(void)
+{
+  // Do some slow seeks first, in case head is stuck at end of disk
+  mega65_poke(0xffd3081, 0x10);
+  usleep(20000);
+  mega65_poke(0xffd3081, 0x10);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  usleep(30000);
+  mega65_poke(0xffd3081, 0x10);
+  usleep(40000);
+
+  while (!(mega65_peek(0xffd3082) & 0x01)) {
+    while (mega65_peek(0xffd3082) & 0x80)
+      continue;
+    //    mega65_poke(0xffd3020,1);
+    mega65_poke(0xffd3081, 0x10);
+    while (mega65_peek(0xffd3082) & 0x80)
+      continue;
+    mega65_poke(0xffd3020, mega65_peek(0xffd3020) + 1);
+  }
+}
+
+
 int main(int argc, char** argv)
 {
   start_time = time(0);
@@ -1329,6 +1436,40 @@ int main(int argc, char** argv)
   monitor_sync();
 
   real_stop_cpu();
+
+  // Seek to track 0, then to track 37
+  goto_track0();
+  for(int i=0;i<35;i++) {
+    mega65_poke(0xffD3081, 0x18);
+    while (mega65_peek(0xffd3082) & 0x80)
+      continue;
+  }
+  
+  for(int track=38;track<41;track++) {
+
+    // Step one track
+    mega65_poke(0xffD3081, 0x18);
+    while (mega65_peek(0xffd3082) & 0x80)
+      continue;    
+
+    usleep(50000);
+    printf("Current track is T:%02x, H:%02x\n",mega65_peek(0xffd36a3),mega65_peek(0xffd36a5));
+    
+    for(int side=0;side<2;side++) {
+      // Allow a little bit of time for a sector to pass under the head,
+      // so that we can check the track and head, and step if we need      
+      
+      for(int sector=1;sector<=10;sector++) {
+	fprintf(stdout,"Reading T:%02x, S:%02x, H:%02x\n",
+		track,sector,side);
+	int r=read_a_sector(track,side,sector);
+      }
+    }
+  }
+  // Floppy motor off
+  mega65_poke(0xffD3080, 0x00);
+
+  
   start_cpu();
   do_exit(0);
 }
