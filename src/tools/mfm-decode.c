@@ -2,14 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-int show_gaps=0;
-int show_bits=0;
-int show_quantised_gaps=0;
+int show_gaps=1;
+int show_bits=1;
+int show_quantised_gaps=1;
 int show_post_correction=0;
 
 // MEGA65 floppies contain a track info block that is always written at DD data rate.
 // When the TIB is read, the FDC switches to the indicated rate and encoding
-float rate=81+1;
+float rate=81+1; // DD 720KB
+//float rate=40+1; // HD 1.44MB 
 
 int rll_encoding=0;
 
@@ -222,6 +223,8 @@ void describe_data(void)
     }
     else
       printf("CRC ok\n");
+    // Clear sector between operations
+    bzero(data_field,512);
     break;
   default:
     fprintf(stdout, "WARNING: Unknown data field type $%02x\n", data_field[0]);
@@ -384,7 +387,10 @@ float mfm_decode(float gap)
     printf("Accumulating short gap %.2f\n",gap);
     return 0;
   }
-  
+
+  if (previous_partial_gap) {
+    printf("Accumulated gap = %.2f + %.2f = %.2f\n",gap,previous_partial_gap,gap_in);
+  }
   gap = quantise_gap(gap_in);
   previous_partial_gap=0;  
   
