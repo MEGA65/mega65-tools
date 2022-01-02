@@ -1679,6 +1679,10 @@ void format_disk(unsigned char HD, unsigned char RLL)
       else
         POKE(0xD080, 0x68);
 
+      // Make sure we put the right track and side in the headers
+      POKE(0xD084, track_num);
+      POKE(0xD086, side?0:1);
+      
       format_single_track_side( sector_count,
 				1 /* = with inter-sector gaps */,
 				RLL);
@@ -1906,6 +1910,9 @@ void read_write_test(void)
           print_text80x40(0, 3, 13, peak_msg);
 
           if (!read_a_sector(request_track, request_side, request_sector)) {
+
+	    while (PEEK(0xD082) & 0x80) continue;
+	    
             // Display sector buffer contents
             // XXX This is really slow, but it works
             for (i = 0; i < 512; i += 16) {
