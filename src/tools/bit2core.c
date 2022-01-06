@@ -124,6 +124,14 @@ void show_help(void)
       version_string);
 
   show_mega65_target_name_list();
+
+  fprintf(stderr, "\n"
+      "The tool can optionally embed files after the core for quick excess or\n"
+      "SD-Card population. You can list multiple files or you can give a\n"
+      "filename prefixed with a @ to specify a special list file. In it you\n"
+      "can list the filenames of files to embed that reside in the *same* path\n"
+      "as the list file. WARNING: there is no duplicate protection!\n"
+      "\n");
 }
 
 int is_match_on_m65targetname_string(const char* m65target, const char* m65targetstring)
@@ -504,6 +512,51 @@ void embed_file(int *core_len,unsigned char *core_file,char *filename)
   return;
 }
 
+void embed_file_list(int *core_len,unsigned char *core_file,char *filename) {
+  char *filepath = NULL, *seek=NULL, *next=NULL;
+  FILE *listfile = NULL;
+  char file_data[2048], embedfile[1024];
+  int file_len;
+
+  filepath = strdup(filename);
+  seek = strrchr(filepath, '/');
+  if (seek == NULL) {
+    // no path, set to empty string
+    seek = filepath;
+    *filepath = 0;
+  } else
+    // set last path sep +1 to 0
+    *(seek+1) = 0;
+
+  listfile = fopen(filename, "rb");
+  if (!listfile) {
+    fprintf(stderr,"ERROR: Could not open list file '%s'\n", filename);
+    exit(-1);
+  }
+  file_len = fread(file_data, 1, 2048, listfile);
+  fclose(listfile);
+
+  seek = file_data;
+  do {
+    next = strchr(seek, '\n');
+    if (next != NULL) {
+      if (*(next-1) == '\r') // check if there is a \r to strip (deft has windows)
+        *(next-1) = 0;
+      else
+        *next = 0;
+    }
+    if (strlen(seek) > 0) {
+      strncpy(embedfile, filepath, 768);
+      strncat(embedfile, seek, 256);
+      // fprintf(stderr, "DEBUG FILE-LIST: %s\n", embedfile);
+      embed_file(core_len, core_file, embedfile);
+    }
+    seek = next + 1;
+  } while (next != NULL && seek < file_data + file_len);
+
+  free(filepath);
+}
+
 char* find_fpga_part_from_m65targetname(const char* m65targetname)
 {
   m65target_info* m65target = find_m65targetinfo_from_m65targetname(m65targetname);
@@ -533,7 +586,10 @@ int DIRTYMOCK(main)(int argc, char** argv)
   build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH);
   for(int i=6;i<argc;i++) {
     //    fprintf(stderr,"Embedding file '%s'\n",argv[i]);
-    embed_file(&core_len,core_file,argv[i]);
+    if (argv[i][0] == '@')
+      embed_file_list(&core_len,core_file,argv[i]+1);
+    else
+      embed_file(&core_len,core_file,argv[i]);
   }
 
   if (banner_present) {
