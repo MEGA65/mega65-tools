@@ -429,21 +429,18 @@ void embed_file(int *core_len,unsigned char *core_file,char *filename)
     last_file_offset=*core_len;
   }
 
-  char basename[32]="";
-  int bnlen=0;
-  for(int i=0;filename[i];i++) {
-    if (filename[i]=='/') bnlen=0;
-    else {
-      if (bnlen<31) {
-	basename[bnlen++]=filename[i];
-      } else {
-	fprintf(stderr,"ERROR: Base name of '%s' too long. Must be <32 chars.\n",filename);
-      }
-    }
-  }
-  basename[bnlen]=0;
-  if (!bnlen) {
-    fprintf(stderr,"ERROR: Cannot embed directories.\n");
+  char *basename=strrchr(filename, '/');
+  if (basename == NULL) {
+    // no slash in filename
+    basename = filename;
+  } else
+    // skip slash
+    basename += 1;
+  if (strlen(basename) > 31) {
+	  fprintf(stderr,"ERROR: Base name of '%s' too long. Must be <32 chars.\n",filename);
+    exit(-1);
+  } else if (strlen(basename) == 0) {
+    fprintf(stderr,"ERROR: Cannot embed directory '%s'.\n", filename);
     exit(-1);
   }
 
