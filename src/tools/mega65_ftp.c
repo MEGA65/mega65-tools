@@ -115,6 +115,7 @@ void request_quit(void);
 void mount_file(char* filename);
 #define CACHE_NO 0
 #define CACHE_YES 1
+int read_flash(const unsigned int sector_number, unsigned char* buffer);
 int read_sector(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead);
 int write_sector(const unsigned int sector_number, unsigned char* buffer);
 int load_helper(void);
@@ -419,6 +420,9 @@ int execute_command(char* cmd)
 
   if (parse_command(cmd, "getslot %d %s", &slot, dst) == 2) {
     download_slot(slot, dst);
+  }
+  else if (parse_command(cmd, "getflash %d %s", &slot, dst) == 2) {
+    download_flashslot(slot, dst);
   }
   else if (parse_command(cmd, "get %s %s", src, dst) == 2) {
     download_file(src, dst, 0);
@@ -1231,6 +1235,21 @@ void queue_read_sectors(uint32_t sector_number, uint16_t sector_count)
   queue_add_job(job, 7);
 }
 
+void queue_read_flash(uint32_t flash_address, uint16_t sector_count)
+{
+  uint8_t job[7];
+  job[0] = 0x0f; 
+  job[1] = sector_count >> 0;
+  job[2] = sector_count >> 8;
+  job[3] = flash_address >> 0;
+  job[4] = flash_address >> 8;
+  job[5] = flash_address >> 16;
+  job[6] = flash_address >> 24;
+  //  printf("queue reading %d sectors, beginning with sector $%08x\n",sector_count,sector_number);
+  queue_add_job(job, 7);
+}
+
+
 void queue_read_mem(uint32_t mega65_address, uint32_t len)
 {
   uint8_t job[9];
@@ -1246,6 +1265,27 @@ void queue_read_mem(uint32_t mega65_address, uint32_t len)
   //  printf("queue reading mem @ $%08x (len = %d)\n",mega65_address,len);
   queue_add_job(job, 9);
 }
+
+// XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
+int DIRTYMOCK(read_flash)(const unsigned int flash_address, unsigned char* buffer)
+{
+  int retVal = 0;
+  do {
+    // Read 32KB at a time
+    int batch_read_size = 64;
+
+    queue_read_flash(flash_address, batch_read_size);
+    queue_execute();
+
+    bcopy(queue_read_data, buffer, 64*512);
+    
+
+  } while (0);
+  if (retVal)
+    printf("FAIL reading flash at $%08x\n", flash_address);
+  return retVal;
+}
+
 
 // XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
 int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead)
@@ -3743,6 +3783,46 @@ int download_slot(int slot_number, char* dest_name)
 
   return retVal;
 }
+
+int download_flashslot(int slot_number, char* dest_name)
+{
+  int retVal = 0;
+  do {
+
+    if (slot_number < 0 || slot_number >= 8) {
+      printf("ERROR: Invalid flash slot number (valid range is 0 -- 7)\n");
+      retVal = -1;
+      break;
+    }
+
+    FILE* f = fopen(dest_name, "wb");
+    if (!f) {
+      printf("ERROR: Could not open file '%s' for writing\n", dest_name);
+      retVal = -1;
+      break;
+    }
+    printf("Saving flash slot %d into '%s'\n", slot_number, dest_name);
+
+    for (int i = 0; i < 8192*1024; i+=512*64) {
+      unsigned char sector[512*64];
+      if (read_flash(slot_number*8192*1024+i, sector)) {
+        printf("ERROR: Could not read sector %d/%d of freeze slot %d (absolute sector %d)\n", i, syspart_slot_size,
+            slot_number, slot_number*8192*1024+i);
+        retVal = -1;
+        break;
+      }
+      fwrite(sector, 512*64, 1, f);
+      printf(".");
+      fflush(stdout);
+    }
+    fclose(f);
+    printf("\n");
+
+  } while (0);
+
+  return retVal;
+}
+
 
 BOOL safe_open_dir(void)
 {

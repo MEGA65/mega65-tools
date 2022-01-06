@@ -535,6 +535,112 @@ void main(void)
 
           break;
 
+        case 0x0f: // 0x0F == Read a slab of QSPI flash
+          job_addr++;
+          sector_count = *(uint16_t*)job_addr;
+          job_addr += 2;
+          sector_number = *(uint32_t*)job_addr;
+          job_addr += 4;
+
+#if DEBUG > 1
+          printf("sector_count = %d\n", sector_count);
+          printf("sector_number = $%08lx (%ld)\n", sector_number, sector_number);
+          press_key();
+#endif
+
+          // Begin with no bytes to send
+          buffer_ready = 0;
+          // and no sector in progress being read
+          read_pending = 0;
+
+          // Reset RLE state
+          rle_init();
+
+          if (job_type == 3)
+            snprintf(msg, 80, "ftjobdata:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
+          else
+            snprintf(msg, 80, "ftjobdatr:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
+#if DEBUG > 1
+          printf("%s\n", msg);
+          press_key();
+#endif
+          serial_write_string(msg, strlen(msg));
+
+          while (sector_count || buffer_ready || read_pending) {
+            if (sector_count && (!read_pending)) {
+              // if sd-card is not busy, then do this stuff
+              if (!(PEEK(0xD680) & 0x03)) {
+                // Schedule reading of next sector
+
+                POKE(0xD020, PEEK(0xD020) + 1);
+
+                // Do read
+                *(uint32_t*)0xD681 = sector_number;
+
+                read_pending = 1;
+                sector_count--;
+
+                POKE(0xD680, 0x53);
+
+		// Wait just a short time for the fast flash transaction to complete
+		for(z=0;z<180;z++) continue;
+
+                sector_number++;
+              }
+            }
+            if (read_pending && (!buffer_ready)) {
+
+              // Read is complete, now queue it for sending back
+              if (!(PEEK(0xD680) & 0x03)) {
+                // Sector has been read. Copy it to a local buffer for sending,
+                // so that we can send it while reading the next sector
+                lcopy(0xffd6e00, (long)&temp_sector_buffer[0], 0x200);
+                // if (sector_number-1 == 2623)
+                //{
+                //  //pause_flag = 1;
+                //  for (z = 0; z < 16*8; z++)
+                //  {
+                //    if ( (z % 8) == 0)
+                //      printf(" ");
+                //    if ( (z % 16) == 0 )
+                //      printf("\n");
+                //    printf("%02X", temp_sector_buffer[z]);
+                //  }
+                //}
+
+                read_pending = 0;
+                buffer_ready = 1;
+              }
+            }
+            if (buffer_ready) {
+              // XXX - Just send it all in one go, since we don't buffer multiple
+              // sectors
+              if (job_type == 3)
+                rle_write_string((uint32_t)temp_sector_buffer, 0x200);
+              else
+                serial_write_string(temp_sector_buffer, 0x200);
+              buffer_ready = 0;
+              pause_flag = 0;
+            }
+          } // end while we have sectors to send
+
+
+#if DEBUG
+          sector_number = *(uint32_t*)(job_addr - 4);
+          sector_count = *(uint16_t*)(job_addr - 6);
+          printf("$%04x : Completed read flash $%08lx (count=%d)\n", *(uint16_t*)0xDC08, sector_number, sector_count);
+#endif
+
+          snprintf(msg, 80, "ftjobdone:%04x:\n\r", job_type_addr);
+          serial_write_string(msg, strlen(msg));
+
+#if DEBUG
+          printf("$%04x : Read flash done\n", *(uint16_t*)0xDC08);
+#endif
+
+          break;
+
+	  
         // - - - - - - - - - - - - - - - - - - - - -
         // Send block of memory
         // - - - - - - - - - - - - - - - - - - - - -
