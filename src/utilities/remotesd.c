@@ -585,7 +585,7 @@ void main(void)
 		// Wait just a short time for the fast flash transaction to complete
 		for(z=0;z<180;z++) continue;
 
-                sector_number++;
+                sector_number+=512;
               }
             }
             if (read_pending && (!buffer_ready)) {
