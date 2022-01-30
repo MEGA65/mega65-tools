@@ -89,6 +89,7 @@ char current_dir[1024] = "/";
 int open_file_system(void);
 int download_slot(int sllot, char* dest_name);
 int download_file(char* dest_name, char* local_name, int showClusters);
+int download_flashslot(int slot_number, char* dest_name);
 void show_clustermap(void);
 void show_cluster(void);
 void dump_sectors(void);
@@ -2722,8 +2723,8 @@ void write_tcl_script(models_type* mdl)
 {
   char fpga[128];
   char qspi[128];
-  char hwcfg[128];
-  char hwcfgtype[128];
+  char hwcfg[180];
+  char hwcfgtype[180];
   sprintf(fpga, "[lindex [get_hw_devices %s] 0]", mdl->fpga_part);
   sprintf(qspi, "[lindex [get_cfgmem_parts {%s}] 0]", mdl->qspi_part);
   sprintf(hwcfg, "[ get_property PROGRAM.HW_CFGMEM %s]", fpga);
@@ -2820,7 +2821,7 @@ void flash_core_to_slot(char* fname, int slotnum)
 
   printf("Running 'write-flash.tcl' via Vivado... (use VIVADO_PATH env-var to specify path)\n");
   // NOTE: Consider permitting users to set a VIVADO_PATH to alter the default path that mega65_ftp will try use.
-  char vivado_cmd[512];
+  char vivado_cmd[576];
   sprintf(vivado_cmd, "%s -mode batch -nojournal -nolog -notrace -source write-flash.tcl", vivado_path);
   system(vivado_cmd);
 
@@ -3260,7 +3261,7 @@ int upload_single_file(char* name, char* dest_name)
     normalise_long_name(dest_name, short_name, current_dir);
 
     // Calculate checksum of 8.3 name
-    unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
+    // unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
     // #endif
 
     time_t upload_start = time(0);
