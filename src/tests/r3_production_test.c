@@ -482,6 +482,9 @@ void main(void)
     print_text(0, 6, 7, "TEST Left speaker (P=PASS,F=FAIL)");
     play_sine(0, 2000);
     play_sine(3, 1);
+
+    while(PEEK(0xD610)) POKE(0xD610,0);
+    
     while(!PEEK(0xD610)) POKE(0xD020,PEEK(0xD020+1));
     switch (PEEK(0xD610)) {
     case 0x50: case 0x70:
