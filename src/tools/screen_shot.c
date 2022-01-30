@@ -73,16 +73,16 @@ unsigned int right_border;
 unsigned int x_scale_120;
 float x_step;
 
-unsigned char vic_regs[0x400];
+unsigned char vic_regs[0x700]; // we fetch two palettes
 #define MAX_SCREEN_SIZE (128 * 1024)
 unsigned char screen_data[MAX_SCREEN_SIZE];
 unsigned char colour_data[MAX_SCREEN_SIZE];
 unsigned char char_data[8192 * 8];
 
-unsigned char mega65_rgb(int colour, int rgb)
+unsigned char mega65_rgb(int colour, int rgb, unsigned char alt)
 {
-  return ((vic_regs[0x0100 + (0x100 * rgb) + colour] & 0xf) << 4)
-       + ((vic_regs[0x0100 + (0x100 * rgb) + colour] & 0xf0) >> 4);
+  return ((vic_regs[(alt?0x400:0x100) + (0x100 * rgb) + colour] & 0xf) << 4)
+       + ((vic_regs[(alt?0x400:0x100) + (0x100 * rgb) + colour] & 0xf0) >> 4);
 }
 
 png_structp png_ptr = NULL;
@@ -293,9 +293,9 @@ int do_screen_shot_ascii(void)
 #ifndef WINDOWS
   // Display a thin border
   printf("%c[48;2;%d;%d;%dm", 27,
-      ((vic_regs[0x0100 + border_colour] & 0xf) << 4) + ((vic_regs[0x0100 + border_colour] & 0xf0) >> 4),
-      ((vic_regs[0x0200 + border_colour] & 0xf) << 4) + ((vic_regs[0x0200 + border_colour] & 0xf0) >> 4),
-      ((vic_regs[0x0300 + border_colour] & 0xf) << 4) + ((vic_regs[0x0300 + border_colour] & 0xf0) >> 4));
+         mega65_rgb(border_colour, 0, 0),
+         mega65_rgb(border_colour, 1, 0),
+         mega65_rgb(border_colour, 2, 0));
   for (int x = 0; x < (1 + screen_width + 1); x++)
     printf(" ");
   printf("%c[0m\n", 27);
@@ -304,9 +304,9 @@ int do_screen_shot_ascii(void)
     //    dump_bytes(0,"row data",&screen_data[y*screen_line_step],screen_width*(1+sixteenbit_mode));
 
     printf("%c[48;2;%d;%d;%dm ", 27,
-        ((vic_regs[0x0100 + border_colour] & 0xf) << 4) + ((vic_regs[0x0100 + border_colour] & 0xf0) >> 4),
-        ((vic_regs[0x0200 + border_colour] & 0xf) << 4) + ((vic_regs[0x0200 + border_colour] & 0xf0) >> 4),
-        ((vic_regs[0x0300 + border_colour] & 0xf) << 4) + ((vic_regs[0x0300 + border_colour] & 0xf0) >> 4));
+           mega65_rgb(border_colour, 0, 0),
+           mega65_rgb(border_colour, 1, 0),
+           mega65_rgb(border_colour, 2, 0));
 
     for (int x = 0; x < screen_width; x++) {
 
@@ -339,12 +339,13 @@ int do_screen_shot_ascii(void)
       //      int glyph_underline=0;
       int glyph_bold = 0;
       int glyph_reverse = 0;
+      unsigned char glyph_altpalette = glyph_bold && glyph_reverse;
       if (viciii_attribs && (!multicolour_mode)) {
         //	glyph_blink=colour_value&0x0010;
         glyph_reverse = colour_value & 0x0020;
         glyph_bold = colour_value & 0x0040;
         //	glyph_underline=colour_value&0x0080;
-        if (glyph_bold)
+        if (glyph_bold && !glyph_reverse)
           foreground_colour |= 0x10;
       }
       if (vic_regs[0x54] & 2)
@@ -361,17 +362,18 @@ int do_screen_shot_ascii(void)
 
       int fg = foreground_colour;
       int bg = char_background_colour;
-      if (glyph_reverse) {
+      if (glyph_reverse && !glyph_bold) {
         bg = foreground_colour;
         fg = char_background_colour;
       }
       printf("%c[48;2;%d;%d;%dm%c[38;2;%d;%d;%dm", 27,
-          ((vic_regs[0x0100 + bg] & 0xf) << 4) + ((vic_regs[0x0100 + bg] & 0xf0) >> 4),
-          ((vic_regs[0x0200 + bg] & 0xf) << 4) + ((vic_regs[0x0200 + bg] & 0xf0) >> 4),
-          ((vic_regs[0x0300 + bg] & 0xf) << 4) + ((vic_regs[0x0300 + bg] & 0xf0) >> 4), 27,
-          ((vic_regs[0x0100 + fg] & 0xf) << 4) + ((vic_regs[0x0100 + fg] & 0xf0) >> 4),
-          ((vic_regs[0x0200 + fg] & 0xf) << 4) + ((vic_regs[0x0200 + fg] & 0xf0) >> 4),
-          ((vic_regs[0x0300 + fg] & 0xf) << 4) + ((vic_regs[0x0300 + fg] & 0xf0) >> 4));
+             mega65_rgb(bg, 0, glyph_altpalette),
+             mega65_rgb(bg, 1, glyph_altpalette),
+             mega65_rgb(bg, 2, glyph_altpalette),
+             27,
+             mega65_rgb(fg, 0, glyph_altpalette),
+             mega65_rgb(fg, 1, glyph_altpalette),
+             mega65_rgb(fg, 2, glyph_altpalette));
 
       // Xterm can't display arbitrary graphics, so just mark full-colour chars
       if (glyph_full_colour) {
@@ -384,17 +386,17 @@ int do_screen_shot_ascii(void)
     }
 
     printf("%c[48;2;%d;%d;%dm ", 27,
-        ((vic_regs[0x0100 + border_colour] & 0xf) << 4) + ((vic_regs[0x0100 + border_colour] & 0xf0) >> 4),
-        ((vic_regs[0x0200 + border_colour] & 0xf) << 4) + ((vic_regs[0x0200 + border_colour] & 0xf0) >> 4),
-        ((vic_regs[0x0300 + border_colour] & 0xf) << 4) + ((vic_regs[0x0300 + border_colour] & 0xf0) >> 4));
+           mega65_rgb(border_colour, 0, 0),
+           mega65_rgb(border_colour, 1, 0),
+           mega65_rgb(border_colour, 2, 0));
 
     // Set foreground and background colours back to normal at end of each line, before newline
     printf("%c[0m\n", 27);
   }
   printf("%c[48;2;%d;%d;%dm", 27,
-      ((vic_regs[0x0100 + border_colour] & 0xf) << 4) + ((vic_regs[0x0100 + border_colour] & 0xf0) >> 4),
-      ((vic_regs[0x0200 + border_colour] & 0xf) << 4) + ((vic_regs[0x0200 + border_colour] & 0xf0) >> 4),
-      ((vic_regs[0x0300 + border_colour] & 0xf) << 4) + ((vic_regs[0x0300 + border_colour] & 0xf0) >> 4));
+         mega65_rgb(border_colour, 0, 0),
+         mega65_rgb(border_colour, 1, 0),
+         mega65_rgb(border_colour, 2, 0));
   for (int x = 0; x < (1 + screen_width + 1); x++)
     printf(" ");
   printf("%c[0m", 27);
@@ -410,9 +412,30 @@ void get_video_state(void)
 {
 
   fetch_ram_invalidate();
-  //  printf("Calling fetch_ram\n");
-  fetch_ram(0xffd3000, 0x0400, vic_regs);
-  // printf("Got video regs\n");
+  // printf("Calling fetch_ram\n");
+  fetch_ram(0xffd3000, 0x0100, vic_regs);
+  // printf("Got video regs, pal = $%02X\n", vic_regs[0x70]);
+  unsigned char palreg = vic_regs[0x70];
+  unsigned char altpalsel = vic_regs[0x70]&0x3;
+  unsigned char btpalsel  = (vic_regs[0x70]&0x30)>>4;
+  unsigned char mapedpal  = vic_regs[0x70]>>6;
+  unsigned char mapbtpal  = (palreg & 0x3f) | (btpalsel<<6);
+  unsigned char mapaltpal = (palreg & 0x3f) | (altpalsel<<6);
+  // printf("palreg = $%02X, btpalsel = %d(%02X), altpalsel = %d(%02X)\n", palreg, btpalsel, mapbtpal, altpalsel, mapaltpal);
+  if (mapedpal != btpalsel)
+    push_ram(0xffd3070, 1, &mapbtpal);
+  fetch_ram(0xffd3100, 0x0300, vic_regs+0x100);
+  if (btpalsel != altpalsel) {
+    // also fetch ALTernate palette
+    push_ram(0xffd3070, 1, &mapaltpal);
+    fetch_ram_invalidate();
+    fetch_ram(0xffd3100, 0x0300, vic_regs+0x400);
+  } else
+    // BTPAL == ALTPAL
+    memcpy(vic_regs+0x400, vic_regs+0x100, 0x300);
+  // restore MAPEDPAL if we switched it
+  if (mapedpal != btpalsel || mapedpal != altpalsel)
+    push_ram(0xffd3070, 1, &palreg);
 
   screen_address = vic_regs[0x60] + (vic_regs[0x61] << 8) + (vic_regs[0x62] << 16);
   charset_address = vic_regs[0x68] + (vic_regs[0x69] << 8) + (vic_regs[0x6A] << 16);
@@ -563,12 +586,15 @@ void paint_screen_shot(void)
       int glyph_underline = 0;
       int glyph_bold = 0;
       int glyph_reverse = 0;
+      unsigned char glyph_altpalette = 0;
       if (viciii_attribs && (!multicolour_mode)) {
         // glyph_blink=colour_value&0x0010;
         glyph_reverse = colour_value & 0x0020;
         glyph_bold = colour_value & 0x0040;
         glyph_underline = colour_value & 0x0080;
-        if (glyph_bold)
+        glyph_altpalette = glyph_bold && glyph_reverse;
+        // if (glyph_altpalette) printf("alt %d %d\n", cx, cy);
+        if (glyph_bold && !glyph_reverse)
           foreground_colour |= 0x10;
       }
       if (multicolour_mode)
@@ -648,7 +674,7 @@ void paint_screen_shot(void)
             glyph_data[i] = b[7 - i];
         }
 
-        if (glyph_reverse) {
+        if (glyph_reverse && !glyph_bold) {
           for (int i = 0; i < 8; i++)
             glyph_data[i] = 0xff - glyph_data[i];
         }
@@ -667,9 +693,9 @@ void paint_screen_shot(void)
         }
         else
           for (float xx = 0; xx < glyph_width; xx += x_step) {
-            int r = mega65_rgb(background_colour, 0);
-            int g = mega65_rgb(background_colour, 1);
-            int b = mega65_rgb(background_colour, 2);
+            int r = mega65_rgb(background_colour, 0, glyph_altpalette);
+            int g = mega65_rgb(background_colour, 1, glyph_altpalette);
+            int b = mega65_rgb(background_colour, 2, glyph_altpalette);
 
             is_foreground = 0;
 
@@ -685,14 +711,14 @@ void paint_screen_shot(void)
                 // Here we blend the foreground and background colours we already know
                 // according to the alpha value
                 int a = c;
-                r = (mega65_rgb(foreground_colour, 0) * a + mega65_rgb(background_colour, 0) * (15 - a)) >> 8;
-                g = (mega65_rgb(foreground_colour, 1) * a + mega65_rgb(background_colour, 1) * (15 - a)) >> 8;
-                b = (mega65_rgb(foreground_colour, 2) * a + mega65_rgb(background_colour, 2) * (15 - a)) >> 8;
+                r = (mega65_rgb(foreground_colour, 0, glyph_altpalette) * a + r * (15 - a)) >> 8;
+                g = (mega65_rgb(foreground_colour, 1, glyph_altpalette) * a + g * (15 - a)) >> 8;
+                b = (mega65_rgb(foreground_colour, 2, glyph_altpalette) * a + b * (15 - a)) >> 8;
               }
               else {
-                r = mega65_rgb(c, 0);
-                g = mega65_rgb(c, 1);
-                b = mega65_rgb(c, 2);
+                r = mega65_rgb(c, 0, glyph_altpalette);
+                g = mega65_rgb(c, 1, glyph_altpalette);
+                b = mega65_rgb(c, 2, glyph_altpalette);
               }
               if (c)
                 is_foreground = 1;
@@ -704,16 +730,16 @@ void paint_screen_shot(void)
                 // Here we blend the foreground and background colours we already know
                 // according to the alpha value
                 int a = glyph_data[(int)xx];
-                r = (mega65_rgb(foreground_colour, 0) * a + mega65_rgb(background_colour, 0) * (255 - a)) >> 8;
-                g = (mega65_rgb(foreground_colour, 1) * a + mega65_rgb(background_colour, 1) * (255 - a)) >> 8;
-                b = (mega65_rgb(foreground_colour, 2) * a + mega65_rgb(background_colour, 2) * (255 - a)) >> 8;
+                r = (mega65_rgb(foreground_colour, 0, glyph_altpalette) * a + r * (255 - a)) >> 8;
+                g = (mega65_rgb(foreground_colour, 1, glyph_altpalette) * a + g * (255 - a)) >> 8;
+                b = (mega65_rgb(foreground_colour, 2, glyph_altpalette) * a + b * (255 - a)) >> 8;
                 if (foreground_colour)
                   is_foreground = 1;
               }
               else {
-                r = mega65_rgb(glyph_data[(int)xx], 0);
-                g = mega65_rgb(glyph_data[(int)xx], 1);
-                b = mega65_rgb(glyph_data[(int)xx], 2);
+                r = mega65_rgb(glyph_data[(int)xx], 0, glyph_altpalette);
+                g = mega65_rgb(glyph_data[(int)xx], 1, glyph_altpalette);
+                b = mega65_rgb(glyph_data[(int)xx], 2, glyph_altpalette);
               }
             }
             else if (multicolour_mode && ((foreground_colour & 8) || bitmap_mode)) {
@@ -762,16 +788,16 @@ void paint_screen_shot(void)
                   break;
                 }
               }
-              r = mega65_rgb(colour, 0);
-              g = mega65_rgb(colour, 1);
-              b = mega65_rgb(colour, 2);
+              r = mega65_rgb(colour, 0, glyph_altpalette);
+              g = mega65_rgb(colour, 1, glyph_altpalette);
+              b = mega65_rgb(colour, 2, glyph_altpalette);
             }
             else {
               // Mono normal char
               if (glyph_data[7 - (int)xx]) {
-                r = mega65_rgb(foreground_colour, 0);
-                g = mega65_rgb(foreground_colour, 1);
-                b = mega65_rgb(foreground_colour, 2);
+                r = mega65_rgb(foreground_colour, 0, glyph_altpalette);
+                g = mega65_rgb(foreground_colour, 1, glyph_altpalette);
+                b = mega65_rgb(foreground_colour, 2, glyph_altpalette);
                 //	      printf("Foreground pixel. colour = $%02x = #%02x%02x%02x\n",
                 //		     foreground_colour,b,g,r);
                 is_foreground = 1;
@@ -860,9 +886,9 @@ int do_screen_shot(void)
     }
     // Set all pixels to border colour
     for (int x = 0; x < 720; x++) {
-      ((unsigned char*)png_rows[y])[x * 3 + 0] = mega65_rgb(border_colour, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 1] = mega65_rgb(border_colour, 1);
-      ((unsigned char*)png_rows[y])[x * 3 + 2] = mega65_rgb(border_colour, 2);
+      ((unsigned char*)png_rows[y])[x * 3 + 0] = mega65_rgb(border_colour, 0, 0);
+      ((unsigned char*)png_rows[y])[x * 3 + 1] = mega65_rgb(border_colour, 1, 0);
+      ((unsigned char*)png_rows[y])[x * 3 + 2] = mega65_rgb(border_colour, 2, 0);
     }
   }
 
@@ -871,9 +897,9 @@ int do_screen_shot(void)
   // Start by drawing the non-border area
   for (int y = top_border_y; y < bottom_border_y && (y < (is_pal_mode ? 576 : 480)); y++) {
     for (int x = left_border; x < right_border; x++) {
-      ((unsigned char*)png_rows[y])[x * 3 + 0] = mega65_rgb(background_colour, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 1] = mega65_rgb(background_colour, 1);
-      ((unsigned char*)png_rows[y])[x * 3 + 2] = mega65_rgb(background_colour, 2);
+      ((unsigned char*)png_rows[y])[x * 3 + 0] = mega65_rgb(background_colour, 0, 0);
+      ((unsigned char*)png_rows[y])[x * 3 + 1] = mega65_rgb(background_colour, 1, 0);
+      ((unsigned char*)png_rows[y])[x * 3 + 2] = mega65_rgb(background_colour, 2, 0);
     }
   }
 
