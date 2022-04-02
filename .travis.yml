@@ -16,10 +16,13 @@ matrix:
       - sudo apt-get install -y mingw-w64-common
       - sudo apt-get install -y libz-mingw-w64-dev
       - sudo apt-get install -y libgtest-dev libgmock-dev
-      - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE
-      - sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
-      - sudo apt-get --allow-unauthenticated update
-      - sudo apt --allow-unauthenticated install -y libpng-mingw-w64 libusb-1.0-0-mingw-w64
+        #- sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE
+        #- sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
+      - sudo apt-get update
+        #- sudo apt install -y libpng-mingw-w64 libusb-1.0-0-mingw-w64
+      - wget gurce.net/ubuntu/pool/main/libp/libpng-mingw-w64/libpng-mingw-w64_1.6.37-1_amd64.deb ; dpkg -i libpng-mingw-w64_1.6.37-1_amd64.deb
+      - wget gurce.net/ubuntu/pool/main/libp/libpng-mingw-w64/libusb-1.0-0-mingw-w64_1.0.21-3_amd64.deb ; dpkg -i libusb-1.0-0-mingw-w64_1.0.21-3_amd64.deb
+      - wget gurce.net/ubuntu/pool/main/libp/libpng-mingw-w64/libusb-1.0-0-mingw-w64-dev_1.0.21-3_amd64.deb ; dpkg -i libusb-1.0-0-mingw-w64-dev_1.0.21-3_amd64.deb
       - sudo apt-get install -y cc65
       - make USE_LOCAL_CC65=1
       - make USE_LOCAL_CC65=1 test
