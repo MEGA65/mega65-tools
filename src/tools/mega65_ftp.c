@@ -1268,7 +1268,7 @@ void queue_read_mem(uint32_t mega65_address, uint32_t len)
 }
 
 // XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
-int DIRTYMOCK(read_flash)(const unsigned int flash_address, unsigned char* buffer)
+int read_flash(const unsigned int flash_address, unsigned char* buffer)
 {
   int retVal = 0;
   do {
