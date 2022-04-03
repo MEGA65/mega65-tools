@@ -108,6 +108,7 @@ type_command_details command_details[] =
   { "val", cmdPrintValue, "<$hex/dec/\%bin/>", "print the given value in hex, decimal and binary" },
   { "=", cmdForwardDis, "[<count>]", "move forward in disassembly of pc history from 'z' command" },
   { "-", cmdBackwardDis, "[<count>]", "move backward in disassembly of pc history from 'z' command" },
+  { "mcopy", cmdMCopy, "<src_addr> <dest_addr> <count>", "copy data from source location to destination (28-bit addresses)" },
   { NULL, NULL, NULL, NULL }
 };
 
@@ -1666,6 +1667,64 @@ void cmdBackwardDis(void)
   disassemble(false);
 }
 
+void cmdMCopy(void)
+{
+  // get address from parameter?
+  char* token = strtok(NULL, " ");
+
+  if (token == NULL)
+  {
+    printf("Invalid args\n");
+    return;
+  }
+
+  int src_addr = get_sym_value(token);
+
+  token = strtok(NULL, " ");
+
+  if (token == NULL)
+  {
+    printf("Invalid args\n");
+    return;
+  }
+
+  int dest_addr = get_sym_value(token);
+
+  token = strtok(NULL, " ");
+
+  if (token == NULL)
+  {
+    printf("Invalid args\n");
+    return;
+  }
+
+  int count = get_sym_value(token);
+
+  char strCmd[256];
+  int cnt = 0;
+  while (cnt < count)
+  {
+    mem_data mem = get_mem(src_addr + cnt, true);
+    sprintf(strCmd, "s%X ", dest_addr + cnt);
+    for (int k = 0; k < 16; k++)
+    {
+      char strVal[10];
+      sprintf(strVal, "%02X ", mem.b[k]);
+      strcat(strCmd, strVal);
+      cnt++;
+      if (cnt >= count)
+        break;
+    }
+    printf("%d%%...\r", 100*cnt/count);
+    strcat(strCmd,"\n");
+    serialWrite(strCmd);
+    serialRead(inbuf, BUFSIZE);
+
+    if (ctrlcflag)
+      break;
+  }
+  printf("\n");
+}
 
 void cmdDisassemble(void)
 {

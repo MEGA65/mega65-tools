@@ -52,6 +52,7 @@ void cmdOffs(void);
 void cmdPrintValue(void);
 void cmdForwardDis(void);
 void cmdBackwardDis(void);
+void cmdMCopy(void);
 int doOneShotAssembly(char* strCommand);
 int  cmdGetCmdCount(void);
 char* cmdGetCmdName(int idx);
