@@ -528,7 +528,7 @@ $(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(G
 # Gives two targets of:
 # - gtest/bin/bit2core.test
 # - gtest/bin/bit2core.test.exe
-$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/bit2core.test, $(GTESTDIR)/bit2core_test.cpp $(TOOLDIR)/bit2core.c,))
+$(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/bit2core.test, $(GTESTDIR)/bit2core_test.cpp $(TOOLDIR)/bit2core.c Makefile, -fpermissive))
 
 test: $(GTESTBINDIR)/mega65_ftp.test $(GTESTBINDIR)/bit2core.test
 	@echo ""

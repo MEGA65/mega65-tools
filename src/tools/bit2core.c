@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <stdint.h>
+#include "m65common.h"
 #include "dirtymock.h"
 
 extern const char* version_string;

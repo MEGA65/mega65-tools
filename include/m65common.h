@@ -1,6 +1,8 @@
 #ifndef M65COMMON_H
 #define M65COMMON_H
 
+#include <stdint.h>
+
 #ifdef WINDOWS
 #include <windows.h>
 #define SSIZE_T SIZE_T

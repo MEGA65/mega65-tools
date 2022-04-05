@@ -627,9 +627,13 @@ int execute_command(char* cmd)
     printf("mbrinfo - lists the partitions specified in the MBR (sector 0)\n");
     printf("vbrinfo - lists the VBR details of the main Mega65 partition\n");
     printf("poke <sector> <offset> <val> - poke a value into a sector, at the desired offset.\n");
-    printf("fh - retrieve a list of files available on the filehost at files.mega65.org\n");
-    printf("fhget <num> [destname] - download a file from the filehost and upload it onto your sd-card\n");
+    printf("fh - retrieve a list of files available on the filehost at files.mega65.org\n"
+           "     - can use wildcard searches. E.g. 'fh *.cor'\n"
+           "     - can use -t to sort by published datetime\n");
+    printf("fhget <num> [destname] - download a file from the filehost and upload it onto your sd-card\n"
+           "                         (to only download to local drive, set destname to -\n");
     printf("fhflash <num> <slotnum> - download a cor file from the filehost and flash it to specified slot via vivado\n");
+    printf("flash <fname> <slotnum> - flash a cor file on your local drive to specified slot via vivado\n");
     printf("roms - list all MEGA65x.ROM files on your sd-card along with their version information\n");
     printf("exit - leave this programme.\n");
     printf("quit - leave this programme.\n");
@@ -2614,6 +2618,9 @@ void perform_filehost_get(int num, char* destname)
     char* d81name = create_d81_for_prg(fname);
     strcpy(fname, d81name);
   }
+
+  if (destname != NULL && strcmp(destname, "-") == 0)
+    return;
 
   if (fname) {
     if (destname)
