@@ -106,6 +106,7 @@ void list_all_roms(void);
 int show_directory(char* path);
 void show_local_directory(char* searchpattern);
 void change_local_dir(char* path);
+void change_dir(char* path);
 void show_local_pwd(void);
 int delete_file(char* name);
 int rename_file(char* name, char* dest_name);
@@ -123,7 +124,7 @@ int load_helper(void);
 int stuff_keybuffer(char* s);
 int create_dir(char*);
 int fat_opendir(char*, int show_errmsg);
-int fat_readdir(struct m65dirent*);
+int fat_readdir(struct m65dirent*, int extend_dir_flag);
 BOOL safe_open_dir(void);
 BOOL find_file_in_curdir(char* filename, struct m65dirent* de);
 BOOL create_directory_entry_for_file(char* filename);
@@ -131,6 +132,7 @@ unsigned int calc_first_cluster_of_file(void);
 BOOL is_d81_file(char* filename);
 void wrap_upload(char* fname);
 char* get_file_extension(char* filename);
+int extend_dir_cluster_chain(void);
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -481,65 +483,7 @@ int execute_command(char* cmd)
     show_local_pwd();
   }
   else if ((parse_command(cmd, "chdir %s", src) == 1) || (parse_command(cmd, "cd %s", src) == 1)) {
-    if (src[0] == '/') {
-      // absolute path
-      if (fat_opendir(src, TRUE)) {
-        fprintf(stderr, "ERROR: Could not open directory '%s'\n", src);
-      }
-      strcpy(current_dir, src);
-    }
-    else {
-      // relative path
-      char temp_path[1024], src_copy[1024];
-      {
-        // Apply each path segment, handling . and .. appropriately
-        snprintf(temp_path, 1024, "%s", current_dir);
-        strcpy(src_copy, src);
-        while (src_copy[0]) {
-
-          while (src_copy[0] == '/')
-            strcpy(src_copy, &src_copy[1]);
-
-          int seg_len = 0;
-          char seg[1024];
-          for (seg_len = 0; src_copy[seg_len]; seg_len++) {
-            if (src_copy[seg_len] == '/')
-              break;
-            else
-              seg[seg_len] = src_copy[seg_len];
-          }
-          seg[seg_len] = 0;
-          if (!strcmp(seg, ".")) {
-            // Ignore "." elements
-          }
-          else if (!strcmp(seg, "..")) {
-            // Remove an element for each ".."
-            int len = 0;
-            for (int i = 0; temp_path[i]; i++)
-              if (temp_path[i] == '/')
-                len = i;
-            if (len < 1)
-              len = 1;
-            temp_path[len] = 0;
-          }
-          else {
-            // Append element otherwise
-            if (strcmp(temp_path, "/"))
-              snprintf(&temp_path[strlen(temp_path)], 1024 - strlen(temp_path), "/%s", seg);
-            else
-              snprintf(&temp_path[strlen(temp_path)], 1024 - strlen(temp_path), "%s", seg);
-          }
-          strcpy(src_copy, &src_copy[seg_len]);
-        }
-        // Stay in current directory
-      }
-
-      if (fat_opendir(temp_path, TRUE)) {
-        fprintf(stderr, "ERROR: Could not open directory '%s'\n", temp_path);
-      }
-      else
-        strcpy(current_dir, temp_path);
-    }
+    change_dir(src);
   }
   else if (parse_command(cmd, "get %s", src) == 1) {
     download_file(src, src, 0);
@@ -1578,7 +1522,7 @@ int fat_opendir(char* path, int show_errmsg)
         // We can use fat_readdir for this
         struct m65dirent d;
         int found = 0;
-        while (!fat_readdir(&d)) {
+        while (!fat_readdir(&d, FALSE)) {
           if (!strcmp(d.d_name, path_seg)) {
             if (d.d_attr & 0x10) {
               // Its a dir, so change directory to here, and repeat
@@ -1706,7 +1650,7 @@ void copy_vfat_chars_into_dname(char* dname, int seqnumber)
   copy_to_dnamechunk_from_offset(dname, 0x1C, 2);
 }
 
-int fat_readdir(struct m65dirent* d)
+int fat_readdir(struct m65dirent* d, int extend_dir_flag)
 {
   int retVal = 0;
   int vfatEntry = 0;
@@ -1715,6 +1659,13 @@ int fat_readdir(struct m65dirent* d)
 
   do {
     retVal = advance_to_next_entry();
+
+    if (extend_dir_flag && dir_sector == -1) { // did we exhaust the currently allocated clusters for these dir-entries?
+      if (!extend_dir_cluster_chain())
+        return -1;
+
+      retVal = advance_to_next_entry();
+    }
 
     if (retVal == -2) // exiting due to end-of-directory?
     {
@@ -2199,7 +2150,7 @@ int read_direntries(llist* lst, char* path)
     return 0;
   }
   // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-  while (!fat_readdir(&de)) {
+  while (!fat_readdir(&de, FALSE)) {
     struct m65dirent* denew = (struct m65dirent*)malloc(sizeof(struct m65dirent));
     memcpy(denew, &de, sizeof(struct m65dirent));
     llist_add(lst, denew, compare_dirents);
@@ -2324,6 +2275,69 @@ void change_local_dir(char* path)
 {
   if (chdir(path))
     printf("ERROR: Failed to change directory (%s)!\n", path);
+}
+
+void change_dir(char* path)
+{
+  if (path[0] == '/') {
+    // absolute path
+    if (fat_opendir(path, TRUE)) {
+      fprintf(stderr, "ERROR: Could not open directory '%s'\n", path);
+    }
+    strcpy(current_dir, path);
+  }
+  else {
+    // relative path
+    char temp_path[1024], src_copy[1024];
+    {
+      // Apply each path segment, handling . and .. appropriately
+      snprintf(temp_path, 1024, "%s", current_dir);
+      strcpy(src_copy, path);
+      while (src_copy[0]) {
+
+        while (src_copy[0] == '/')
+          strcpy(src_copy, &src_copy[1]);
+
+        int seg_len = 0;
+        char seg[1024];
+        for (seg_len = 0; src_copy[seg_len]; seg_len++) {
+          if (src_copy[seg_len] == '/')
+            break;
+          else
+            seg[seg_len] = src_copy[seg_len];
+        }
+        seg[seg_len] = 0;
+        if (!strcmp(seg, ".")) {
+          // Ignore "." elements
+        }
+        else if (!strcmp(seg, "..")) {
+          // Remove an element for each ".."
+          int len = 0;
+          for (int i = 0; temp_path[i]; i++)
+            if (temp_path[i] == '/')
+              len = i;
+          if (len < 1)
+            len = 1;
+          temp_path[len] = 0;
+        }
+        else {
+          // Append element otherwise
+          if (strcmp(temp_path, "/"))
+            snprintf(&temp_path[strlen(temp_path)], 1024 - strlen(temp_path), "/%s", seg);
+          else
+            snprintf(&temp_path[strlen(temp_path)], 1024 - strlen(temp_path), "%s", seg);
+        }
+        strcpy(src_copy, &src_copy[seg_len]);
+      }
+      // Stay in current directory
+    }
+
+    if (fat_opendir(temp_path, TRUE)) {
+      fprintf(stderr, "ERROR: Could not open directory '%s'\n", temp_path);
+    }
+    else
+      strcpy(current_dir, temp_path);
+  }
 }
 
 int read_remote_dirents(llist* lst_dirents, char* path, char** psearchterm)
@@ -3086,7 +3100,7 @@ int contains_file(char* name)
     return -1;
 
   // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-  while (!fat_readdir(&de)) {
+  while (!fat_readdir(&de, FALSE)) {
     // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_filelen);
     // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
     if (!strcasecmp(de.d_name, name)) {
@@ -3161,7 +3175,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
   int dot_count = 0;
   int needs_long_name = 0;
 
-  short_name[8 + 3] = 0;
+  strcpy(short_name, "           ");
 
   // Handle . and .. special cases
   if (!strcmp(long_name, ".")) {
@@ -3185,6 +3199,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
       if (dot_count == 0) {
         if (base_len < 8) {
           short_name[base_len] = toupper(long_name[i]);
+          base_len++;
         }
         else {
           needs_long_name = 1;
@@ -3193,6 +3208,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
       else if (dot_count == 1) {
         if (ext_len < 3) {
           short_name[8 + ext_len] = toupper(long_name[i]);
+          ext_len++;
         }
         else {
           needs_long_name = 1;
@@ -3226,7 +3242,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
       }
       else {
         // iterate through the directory looking for
-        while (!fat_readdir(&de)) {
+        while (!fat_readdir(&de, FALSE)) {
           // Compare short name with each directory entry.
           // XXX We have the non-dotted version to compare against,
           // so maybe we should just do direct sector reading and examination,
@@ -3254,6 +3270,28 @@ unsigned char lfn_checksum(const unsigned char* pFCBName)
   return sum;
 }
 // #endif
+
+int extend_dir_cluster_chain(void)
+{
+  int next_cluster = find_free_cluster(dir_cluster);
+  if (allocate_cluster(next_cluster)) {
+    printf("ERROR: Could not allocate cluster $%x (for directory)\n", next_cluster);
+    return FALSE;
+  }
+  if (chain_cluster(dir_cluster, next_cluster)) {
+    printf("ERROR: Could not chain cluster $%x to $%x (for directory)\n", dir_cluster, next_cluster);
+    return FALSE;
+  }
+  // update vars
+  dir_cluster = next_cluster;
+  dir_sector = first_cluster_sector + (dir_cluster - first_cluster) * sectors_per_cluster;
+  dir_sector_offset = -32;
+  dir_sector_in_cluster = 0;
+
+  read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
+
+  return TRUE;
+}
 
 int upload_single_file(char* name, char* dest_name)
 {
@@ -3293,7 +3331,7 @@ int upload_single_file(char* name, char* dest_name)
         break;
       }
       struct m65dirent de;
-      while (!fat_readdir(&de)) {
+      while (!fat_readdir(&de, TRUE)) {
         if (!de.d_name[0] && de.d_type == M65DT_FREESLOT) {
           if (0)
             printf("Found empty slot at dir_sector=%d, dir_sector_offset=%d\n", dir_sector, dir_sector_offset);
@@ -3308,7 +3346,7 @@ int upload_single_file(char* name, char* dest_name)
     }
 
     if (dir_sector == -1) {
-      printf("ERROR: Directory is full.  Request support for extending directory into multiple clusters.\n");
+      printf("ERROR: Drive is full.\n");
       retVal = -1;
       break;
     }
@@ -3323,7 +3361,11 @@ int upload_single_file(char* name, char* dest_name)
     if (!first_cluster_of_file) {
       //      printf("File currently has no first cluster allocated.\n");
 
-      int a_cluster = find_contiguous_clusters(st.st_size / (512 * sectors_per_cluster));
+      int a_cluster = find_contiguous_clusters((st.st_size - 1) / (512 * sectors_per_cluster) + 1);
+      // E.g. If size = 4096 bytes, it fits in 1 cluster.
+      //      If size = 4097 bytes, it fits in 2 clusters
+      //      If size = 8192 bytes, it fits in 2 clusters
+      //      If size = 8193 bytes, it fits in 3 clusters
 
       if (!a_cluster) {
         printf("ERROR: Failed to find a free cluster.\n");
@@ -3496,7 +3538,7 @@ int create_dir(char* dest_name)
     }
     parent_cluster = dir_cluster;
     //    printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
-    while (!fat_readdir(&de)) {
+    while (!fat_readdir(&de, FALSE)) {
       // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_filelen);
       //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
       if (!strcasecmp(de.d_name, dest_name)) {
@@ -3515,8 +3557,8 @@ int create_dir(char* dest_name)
         break;
       }
       struct m65dirent de;
-      while (!fat_readdir(&de)) {
-        if (!de.d_name[0]) {
+      while (!fat_readdir(&de, TRUE)) {
+        if (!de.d_name[0] && de.d_type == M65DT_FREESLOT) {
           if (0)
             printf("Found empty slot at dir_sector=%d, dir_sector_offset=%d\n", dir_sector, dir_sector_offset);
 
@@ -3852,7 +3894,7 @@ BOOL safe_open_dir(void)
 
 BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
 {
-  while (!fat_readdir(de)) {
+  while (!fat_readdir(de, FALSE)) {
     // if (de->d_name[0]) printf("%13s   %d\n",de->d_name,(int)de->d_filelen);
     //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
     if (!strcasecmp(de->d_name, filename)) {

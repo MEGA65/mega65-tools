@@ -13,15 +13,14 @@ int contains_file(char* name);
 int is_fragmented(char* filename);
 int create_dir(char*);
 int show_directory(char* path);
-int fat_opendir(char* path, int show_errmsg);
-
-extern char current_dir[1024];
+void change_dir(char* path);
 
 #define SECTOR_SIZE 512
 #define MBR_SIZE SECTOR_SIZE
 #define SECTORS_PER_CLUSTER 8
+#define SECTORS_PER_FAT 2
 #define CLUSTER_SIZE (SECTOR_SIZE * SECTORS_PER_CLUSTER)
-#define PARTITION1_CLUSTER_COUNT 16
+#define PARTITION1_CLUSTER_COUNT 200
 #define PARTITION1_START (1 * SECTOR_SIZE)
 #define PARTITION1_SIZE (PARTITION1_CLUSTER_COUNT * CLUSTER_SIZE)
 #define SDSIZE (MBR_SIZE + PARTITION1_SIZE)
@@ -51,7 +50,7 @@ void init_sdcard_data(void)
   sdcard[PARTITION1_START + 0x10] = 0x02; // number of FATs (2)
   sdcard[PARTITION1_START + 0x0d] = 0x08; // sectors per cluster (8)
   *((unsigned int*)&sdcard[PARTITION1_START + 0x20]) = PARTITION1_SIZE / SECTOR_SIZE; // total logical sectors
-  *((unsigned int*)&sdcard[PARTITION1_START + 0x24]) = 1;                             // sectors per fat
+  *((unsigned int*)&sdcard[PARTITION1_START + 0x24]) = SECTORS_PER_FAT;               // sectors per fat
   *((unsigned int*)&sdcard[PARTITION1_START + 0x2c]) = 2;                             // Cluster no# of root-directory start
 
   // NOTE: For now, I'll ignore the fsinfo_sector, pretend it doesn't exist, and see if I get away with it
@@ -70,14 +69,19 @@ void init_sdcard_data(void)
     sdcard[offset + 0x06] = 0xff;
     sdcard[offset + 0x07] = 0xff;
 
+    sdcard[offset + 0x08] = 0xf8; // this is for cluster#2 (root dir - dir entries)
+    sdcard[offset + 0x09] = 0xff;
+    sdcard[offset + 0x0a] = 0xff;
+    sdcard[offset + 0x0b] = 0x0f;
+
     // jump to next sector / fat table and repeat this data
-    offset += SECTOR_SIZE;
+    offset += SECTOR_SIZE*SECTORS_PER_FAT;
   }
 
   // DIRECTORY ENTRIES
   // =================
   // volume label
-  offset = PARTITION1_START + 3 * SECTOR_SIZE;
+  offset = PARTITION1_START + (1 + SECTORS_PER_FAT*2) * SECTOR_SIZE;
   sdcard[offset + 0x00] = 'M';
   sdcard[offset + 0x01] = 'E';
   sdcard[offset + 0x02] = 'G';
@@ -90,6 +94,15 @@ void init_sdcard_data(void)
   sdcard[offset + 0x09] = ' ';
   sdcard[offset + 0x0a] = ' ';
   sdcard[offset + 0x0b] = 0x08; // file attribute (0x08 = volume label)
+}
+
+void dump_sdcard_to_file(void)
+{
+  FILE* f = fopen("sdcard.bin", "wb");
+  for (int i = 0; i < SDSIZE; i++) {
+    fputc(sdcard[i], f);
+  }
+  fclose(f);
 }
 
 // my read/write sector mock functions
@@ -179,6 +192,18 @@ TEST(Mega65FtpTest, GetCommandExpectTwoParamGivenOne)
 void generate_dummy_file(const char* name, int size)
 {
   FILE* f = fopen(name, "wb");
+  for (int i = 0; i < size; i++) {
+    fputc(i % 256, f);
+  }
+  fclose(f);
+}
+
+void generate_dummy_file_embed_name(const char* name, int size)
+{
+  FILE* f = fopen(name, "wb");
+  for (int i = 0; i < strlen(name); i++) {
+    fputc(name[i], f);
+  }
   for (int i = 0; i < size; i++) {
     fputc(i % 256, f);
   }
@@ -296,15 +321,14 @@ TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
 {
   init_sdcard_data();
   create_dir("test");
-  fat_opendir("/test", 1);
-  strcpy(current_dir, "/test");
+  change_dir("/test");
   upload_file(file4kb, file4kb);
-  fat_opendir("/", 1);
-  strcpy(current_dir, "/");
+  change_dir("/");
   ReleaseStdOut();
 
   CaptureStdOut();
   show_directory("/test");
+
   fflush(stdout);
   std::string output = testing::internal::GetCapturedStdout();
   testing::internal::GetCapturedStderr();
@@ -313,6 +337,97 @@ TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
   EXPECT_THAT(output, testing::ContainsRegex("4kbtest.tmp"));
 }
 
+void upload_dummy_file_with_embedded_name(char* newname, int size)
+{
+  generate_dummy_file_embed_name(newname, size);
+  upload_file(newname, newname);
+  delete_local_file(newname);
+}
+
+void upload_127_dummy_files_with_embedded_name(void)
+{
+  char newname[128];
+  for (int k = 1; k <= 127; k++) {
+    sprintf(newname,"%d.TXT", k);
+    upload_dummy_file_with_embedded_name(newname, 256);
+  }
+}
+
+TEST_F(Mega65FtpTestFixture, RootDirCanHoldMoreThan128Files)
+{
+  // NOTE: mega65_ftp was limited to only 128 direntries in a single sector.
+  // If you tried to write a 129th file, it would fail. We'd like to update the code to allow for this now.
+
+  init_sdcard_data();
+
+  // Let's generate 127 dummy files. These (in addition to the drive name entry) will fill up all the 128 direntries
+  upload_127_dummy_files_with_embedded_name();
+
+  ReleaseStdOut();
+
+  // Let's make a 129th dir-entry, which needs to be allocated on a new/free cluster
+  CaptureStdOut();
+  upload_dummy_file_with_embedded_name("128.TXT", 256);
+
+  fflush(stdout);
+  std::string output = testing::internal::GetCapturedStdout();
+  testing::internal::GetCapturedStderr();
+  suppressflag = 0;
+
+  // dump_sdcard_to_file();
+
+  EXPECT_THAT(output, testing::ContainsRegex("Uploaded"));
+}
+
+TEST_F(Mega65FtpTestFixture, RootDir128thItemIsADirectory)
+{
+  init_sdcard_data();
+
+  // Let's generate 127 dummy files. These (in addition to the drive name entry) will fill up all the 128 direntries
+  upload_127_dummy_files_with_embedded_name();
+
+  ReleaseStdOut();
+
+  // Let's make a 129th dir-entry, which needs to be allocated on a new/free cluster
+  CaptureStdOut();
+  create_dir("DIR128");
+
+  fflush(stdout);
+  std::string output = testing::internal::GetCapturedStdout();
+  testing::internal::GetCapturedStderr();
+  suppressflag = 0;
+
+  // dump_sdcard_to_file();
+
+  EXPECT_THAT(output, testing::ContainsRegex("Uploaded"));
+}
+
+TEST_F(Mega65FtpTestFixture, SubDirCanHoldMoreThan128Files)
+{
+  init_sdcard_data();
+
+  // Let's generate 127 dummy files. These (in addition to the drive name entry) will fill up all the 128 direntries
+  create_dir("MYDIR");
+  change_dir("/MYDIR");
+  // NOTE: For a sub-directory, the first two direntries are '.' and '..'
+  // So we really ought to be writing 126 dummy files in this test to be precise, but 127 files does the job too...
+  upload_127_dummy_files_with_embedded_name();
+
+  ReleaseStdOut();
+
+  // Let's make a 129th dir-entry, which needs to be allocated on a new/free cluster
+  CaptureStdOut();
+  upload_dummy_file_with_embedded_name("128.TXT", 256);
+
+  fflush(stdout);
+  std::string output = testing::internal::GetCapturedStdout();
+  testing::internal::GetCapturedStderr();
+  suppressflag = 0;
+
+  // dump_sdcard_to_file();
+
+  EXPECT_THAT(output, testing::ContainsRegex("Uploaded"));
+}
 /*
 TEST(Mega65FtpTest, UploadNewLFNShouldOfferShortName)
 {
