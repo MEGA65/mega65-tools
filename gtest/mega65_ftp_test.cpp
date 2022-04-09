@@ -248,6 +248,16 @@ class Mega65FtpTestFixture : public ::testing::Test {
     }
   }
 
+  std::string RetrieveStdOut(void)
+  {
+    fflush(stdout);
+    std::string output = testing::internal::GetCapturedStdout();
+    testing::internal::GetCapturedStderr();
+    suppressflag = 0;
+    return output;
+  }
+
+
   void TearDown() override
   {
     ReleaseStdOut();
@@ -329,10 +339,7 @@ TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
   CaptureStdOut();
   show_directory("/test");
 
-  fflush(stdout);
-  std::string output = testing::internal::GetCapturedStdout();
-  testing::internal::GetCapturedStderr();
-  suppressflag = 0;
+  std::string output = RetrieveStdOut();
 
   EXPECT_THAT(output, testing::ContainsRegex("4kbtest.tmp"));
 }
@@ -369,10 +376,7 @@ TEST_F(Mega65FtpTestFixture, RootDirCanHoldMoreThan128Files)
   CaptureStdOut();
   upload_dummy_file_with_embedded_name("128.TXT", 256);
 
-  fflush(stdout);
-  std::string output = testing::internal::GetCapturedStdout();
-  testing::internal::GetCapturedStderr();
-  suppressflag = 0;
+  std::string output = RetrieveStdOut();
 
   // dump_sdcard_to_file();
 
@@ -392,10 +396,7 @@ TEST_F(Mega65FtpTestFixture, RootDir128thItemIsADirectory)
   CaptureStdOut();
   create_dir("DIR128");
 
-  fflush(stdout);
-  std::string output = testing::internal::GetCapturedStdout();
-  testing::internal::GetCapturedStderr();
-  suppressflag = 0;
+  std::string output = RetrieveStdOut();
 
   // dump_sdcard_to_file();
 
@@ -419,22 +420,39 @@ TEST_F(Mega65FtpTestFixture, SubDirCanHoldMoreThan128Files)
   CaptureStdOut();
   upload_dummy_file_with_embedded_name("128.TXT", 256);
 
-  fflush(stdout);
-  std::string output = testing::internal::GetCapturedStdout();
-  testing::internal::GetCapturedStderr();
-  suppressflag = 0;
+  std::string output = RetrieveStdOut();
 
   // dump_sdcard_to_file();
 
   EXPECT_THAT(output, testing::ContainsRegex("Uploaded"));
 }
-/*
-TEST(Mega65FtpTest, UploadNewLFNShouldOfferShortName)
+
+TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
 {
+  init_sdcard_data();
+  generate_dummy_file("LongFileName.d81", 4096);
   upload_file("LongFileName.d81", "LongFileName.d81");
   // assess_shortname = "LONGFI~1.D81"
+
+  // Let's assess the dir output to see if it was written
+
+  dump_sdcard_to_file();
+
+  CaptureStdOut();
+  show_directory("LONGFI~1.D81");
+  std::string output = RetrieveStdOut();
+
+  // dump_sdcard_to_file();
+
+  EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 }
 
+// TODO: Assess what happens if file of certain size is written:
+//       - and then it is written again, but it is a larger (or smaller) file.
+//       - keep an eye on how clusters are allocated / de-allocated
+//       - also assure that the newly uploaded file is in contiguous clusters too.
+
+/*
 TEST(Mega65FtpTest, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
 {
   upload_file("LongFileName.d81", "LongFileName.d81");
@@ -471,6 +489,10 @@ TEST(Mega65FtpTest, UploadDifferentLFNWithExistingShortNameShouldUseDifferentNam
   upload_file("LongFish.d81");   // This should be 'LONGFI~2.D81'
   download("LONGFI~2.D81");
   // assure its contents matches 'LongFish.d81'
+}
+
+TEST(Mega65FtpTest, CanChangeDirectoryIntoLFNDirectory)
+{
 }
 */
 

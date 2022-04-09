@@ -41,6 +41,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "m65common.h"
 #include "filehost.h"
@@ -3246,13 +3247,60 @@ int rename_file(char* name, char* dest_name)
 }
 
 // #ifdef USE_LFN
+
+int is_long_name_needed(char* long_name, char* short_name)
+{
+  int needs_long_name = FALSE;
+  int dot_count = 0;
+  int base_len = 0;
+  int ext_len = 0;
+
+  for (int i = 0; long_name[i]; i++) {
+    if (long_name[i] == '.') {
+      dot_count++;
+      if (dot_count > 1)
+        needs_long_name = TRUE;
+    }
+    else {
+      if (toupper(long_name[i]) != long_name[i])
+        needs_long_name = TRUE;
+      if (dot_count == 0) {
+        if (base_len < 8) {
+          short_name[base_len] = toupper(long_name[i]);
+          base_len++;
+        }
+        else {
+          needs_long_name = TRUE;
+        }
+      }
+      else if (dot_count == 1) {
+        if (ext_len < 3) {
+          short_name[8 + ext_len] = toupper(long_name[i]);
+          ext_len++;
+        }
+        else {
+          needs_long_name = TRUE;
+        }
+      }
+    }
+  }
+  return needs_long_name;
+}
+
+void put_tilde_number_in_shortname(char* short_name, int i)
+{
+  int length_of_number = log10(i) + 1;
+  int ofs = 7 - length_of_number;
+  char temp[9];
+  snprintf(temp, 8 - ofs + 1, "~%d", i);
+  bcopy(temp, &short_name[ofs], 8 - ofs);
+  printf("  considering short-name '%s'...\n", short_name);
+}
+
 // returns: 0 = doesn't need long name, 1 = needs long name
 int normalise_long_name(char* long_name, char* short_name, char* dir_name)
 {
   struct m65dirent de;
-  int base_len = 0;
-  int ext_len = 0;
-  int dot_count = 0;
   int needs_long_name = 0;
 
   strcpy(short_name, "           ");
@@ -3267,73 +3315,20 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
     return 0;
   }
 
-  for (int i = 0; long_name[i]; i++) {
-    if (long_name[i] == '.') {
-      dot_count++;
-      if (dot_count > 1)
-        needs_long_name = 1;
-    }
-    else {
-      if (toupper(long_name[i]) != long_name[i])
-        needs_long_name = 1;
-      if (dot_count == 0) {
-        if (base_len < 8) {
-          short_name[base_len] = toupper(long_name[i]);
-          base_len++;
-        }
-        else {
-          needs_long_name = 1;
-        }
-      }
-      else if (dot_count == 1) {
-        if (ext_len < 3) {
-          short_name[8 + ext_len] = toupper(long_name[i]);
-          ext_len++;
-        }
-        else {
-          needs_long_name = 1;
-        }
-      }
-    }
-  }
+  needs_long_name = is_long_name_needed(long_name, short_name);
 
   if (needs_long_name) {
     // Put ~X suffix on base name.
     // XXX Needs to be unique in the sub-directory
-    for (int i = 1; i <= 99999; i++) {
-      int length_of_number = 5;
-      if (i < 10000)
-        length_of_number = 4;
-      if (i < 1000)
-        length_of_number = 3;
-      if (i < 100)
-        length_of_number = 2;
-      if (i < 10)
-        length_of_number = 1;
-      int ofs = 7 - length_of_number;
-      char temp[9];
-      snprintf(temp, 8 - ofs + 1, "~%d", i);
-      bcopy(temp, &short_name[ofs], 8 - ofs);
-      printf("  considering short-name '%s'...\n", short_name);
-      if (fat_opendir(dir_name, TRUE)) {
-        fprintf(stderr, "ERROR: Could not open directory '%s' to check for LFN uniqueness.\n", dir_name);
-        // So just assume its unique
+    for (int i = 1; ; i++) {  // endless loop till we find an available short-name
+      put_tilde_number_in_shortname(short_name, i);
+
+      // iterate through the directory looking for
+      if (!find_file_in_curdir(short_name, &de)) {
+        // This name permutation is unused presently, so let's use it
         break;
       }
-      else {
-        // iterate through the directory looking for
-        while (!fat_readdir(&de, FALSE)) {
-          // Compare short name with each directory entry.
-          // XXX We have the non-dotted version to compare against,
-          // so maybe we should just do direct sector reading and examination,
-          // rather than calling fat_readdir(). Else we can make fat_readdir()
-          // store the unmodified short-name (and eventually long-name)?
-          fprintf(stderr, "ERROR: Not implemented.\n");
-          return -1;
-          // exit(-1);
-        }
-      }
-    }
+    } // end while
   }
 
   return needs_long_name;
@@ -3401,7 +3396,7 @@ int upload_single_file(char* name, char* dest_name)
     char short_name[8 + 3 + 1];
 
     // Normalise dest_name into 8.3 format.
-    normalise_long_name(dest_name, short_name, current_dir);
+    int needs_long_name = normalise_long_name(dest_name, short_name, current_dir);
 
     // Calculate checksum of 8.3 name
     // unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
