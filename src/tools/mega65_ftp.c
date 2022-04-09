@@ -59,13 +59,19 @@ unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
 unsigned int sector_cache_sectors[SECTOR_CACHE_SIZE];
 
 struct m65dirent {
-  long d_ino;                /* start cluster */
-  long d_filelen;            /* length of file */
-  unsigned short d_reclen;   /* Always sizeof struct dirent. */
-  unsigned short d_namlen;   /* Length of name in d_name. */
-  unsigned char d_attr;      /* FAT file attributes */
-  unsigned d_type;           /* Object type (digested attributes) */
-  char d_name[FILENAME_MAX]; /* File name. */
+  long d_ino;                    /* start cluster */
+  long d_filelen;                /* length of file */
+  unsigned short d_reclen;       /* Always sizeof struct dirent. */
+  unsigned short d_namlen;       /* Length of name in d_name. */
+  unsigned char d_attr;          /* FAT file attributes */
+  unsigned d_type;               /* Object type (digested attributes) */
+  char d_name[FILENAME_MAX];     /* File name. */
+  char d_longname[FILENAME_MAX]; /* Long file name. */
+  // extra debug fields for info on dir entries
+  long de_cluster;
+  long de_sector;
+  int de_sector_offset;
+  unsigned char de_raw[32];       /* preserve dirent_raw info for debugging purposes */
 };
 
 #define RET_FAIL -1
@@ -98,6 +104,7 @@ void show_secinfo(void);
 void show_mbrinfo(void);
 void show_vbrinfo(void);
 void poke_sector(void);
+void parse_pokes(char* cmd);
 void perform_filehost_read(char* searchterm);
 void perform_filehost_get(int num, char* destname);
 void perform_filehost_flash(int fhnum, int slotnum);
@@ -165,7 +172,7 @@ unsigned char* sd_read_buffer = NULL;
 int sd_read_offset = 0;
 
 int file_system_found = 0;
-unsigned int partition_start = 0;
+unsigned int partition_start = 0; // The absolute sector location of the start of the partition (in units of sectors)
 unsigned int partition_size = 0;
 unsigned char sectors_per_cluster = 0;
 unsigned int sectors_per_fat = 0;
@@ -173,7 +180,10 @@ unsigned int data_sectors = 0;
 unsigned int first_cluster = 0;
 unsigned int fsinfo_sector = 0;
 unsigned int reserved_sectors = 0;
-unsigned int fat1_sector = 0, fat2_sector = 0, first_cluster_sector;
+unsigned int fat1_sector = 0, fat2_sector = 0;
+unsigned int first_cluster_sector;  // Slightly confusing name, as the first cluster is actually cluster #2
+                                    // Even more confusing is that this value is relative to the start of the partition (partition_start)
+                                    // I.e. to calculate the absolute sector of cluster#2 = partition_start + first_cluster_sector
 
 unsigned int syspart_start = 0;
 unsigned int syspart_size = 0;
@@ -519,8 +529,8 @@ int execute_command(char* cmd)
   else if (!strcmp(cmd, "vbrinfo")) {
     show_vbrinfo();
   }
-  else if (sscanf(cmd, "poke %d %d %d", &poke_secnum, &poke_offset, &poke_value) == 3) {
-    poke_sector();
+  else if (strncmp(cmd, "poke ", 5) == 0) {
+    parse_pokes(cmd+5);
   }
   else if (sscanf(cmd, "fhget %d %s", &fhnum, src) == 2) {
     perform_filehost_get(fhnum, src);
@@ -562,7 +572,7 @@ int execute_command(char* cmd)
     printf("mount <d81file> - Mount the specified .d81 file (which resides on the SD card).\n");
     printf("sector <number|$hex number> - display the contents of the specified sector.\n");
     printf("getslot <slot> <destination name> - download a freeze slot.\n");
-    printf("dirent_raw 0|1 - flag to hide/show 32-byte dump of directory entries.\n");
+    printf("dirent_raw 0|1|2 - flag to hide/show 32-byte dump of directory entries. (2=more verbose)\n");
     printf("clustermap <startidx> [<count>] - show cluster-map entries for specified range.\n");
     printf("cluster <num> - dump the entire contents of this cluster.\n");
     printf("secdump <filename> <startsec> <count> - dump the specified sector range to a file.\n");
@@ -1664,6 +1674,7 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
       if (!extend_dir_cluster_chain())
         return -1;
 
+      extend_dir_flag = FALSE;
       retVal = advance_to_next_entry();
     }
 
@@ -1681,6 +1692,12 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
       retVal = -1;
       break;
     }
+
+    // gather debug info
+    bcopy(&dir_sector_buffer[dir_sector_offset], d->de_raw, 32);
+    d->de_cluster = dir_cluster;
+    d->de_sector = partition_start + dir_sector;
+    d->de_sector_offset = dir_sector_offset;
 
     // printf("Found dirent %d %d %d\n",dir_sector,dir_sector_offset,dir_sector_in_cluster);
 
@@ -1731,12 +1748,18 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
       return 0;
     }
 
-    // if the DOS 8.3 entry is a deleted-entry, then ignore
+    // if the DOS 8.3 entry is a deleted-entry (0xE5) then ignore
     if (dir_sector_buffer[dir_sector_offset] == 0xE5) {
       d->d_name[0] = 0;
       return 0;
     }
 
+    // if the DOS 8.3 entry is a free-slot starts with (0x00) then mark it as such
+    if (dir_sector_buffer[dir_sector_offset] == 0x00) {
+      d->d_type = M65DT_FREESLOT;
+      d->d_name[0] = 0;
+      return 0;
+    }
     int attrib = dir_sector_buffer[dir_sector_offset + 0x0B];
 
     // if this is the volume-name of the partition, then ignore
@@ -1792,7 +1815,7 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
       d->d_name[namelen] = 0;
     }
 
-    if (dirent_raw && d->d_name[0])
+    if (dirent_raw == 2 && d->d_name[0])
       dump_bytes(0, "dirent raw", &dir_sector_buffer[dir_sector_offset], 32);
 
     d->d_filelen = (dir_sector_buffer[dir_sector_offset + 0x1C] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1D] << 8)
@@ -2151,6 +2174,8 @@ int read_direntries(llist* lst, char* path)
   }
   // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
   while (!fat_readdir(&de, FALSE)) {
+    if (!de.d_name[0])
+      continue;
     struct m65dirent* denew = (struct m65dirent*)malloc(sizeof(struct m65dirent));
     memcpy(denew, &de, sizeof(struct m65dirent));
     llist_add(lst, denew, compare_dirents);
@@ -2408,6 +2433,12 @@ int show_directory(char* path)
         file_count++;
         printf("%12d %s\n", (int)itm->d_filelen, itm->d_name);
       }
+      if (dirent_raw == 1) {
+        dump_bytes(0, "dirent raw", itm->de_raw, 32);
+        printf("type: $%02X, cluster=%ld, sector=%ld, sec_offset=$%04X\n"
+               "  data_cluster=%ld\n", itm->d_type, itm->de_cluster, itm->de_sector, itm->de_sector_offset, itm->d_ino);
+        // show dirent_raw and parse info here
+      }
       cur = cur->next;
     }
   } while (0);
@@ -2463,7 +2494,9 @@ void show_clustermap(void)
 
     int clustermap_val = read_int32_from_offset_in_buffer(clustermap_offset);
     clustermap_val &= 0x0fffffff; // map out flags in top 4 bits
-    printf("%d:  %d  ($%08X)\n", clustermap_idx, clustermap_val, clustermap_val);
+
+    int next_clustermap_sector = partition_start + first_cluster_sector + (clustermap_val - first_cluster) * sectors_per_cluster;
+    printf("%d:  %d  ($%08X)  (sector=%d)\n", clustermap_idx, clustermap_val, clustermap_val, next_clustermap_sector);
   }
 }
 
@@ -2504,17 +2537,64 @@ void restore_sectors(void)
     printf("\rLoading... (%d%%)", (sector - secrestore_start) * 100 / secrestore_count);
   }
   fclose(fload);
+  execute_write_queue();
   printf("\rLoaded file \"%s\" at starting-sector %d.\n", secrestore_file, secrestore_start);
+}
+
+int parse_value(char* strval)
+{
+  int retval = 0;
+
+  // hexadecimal value?
+  if (strval[0] == '$') {
+    sscanf(&strval[1], "%x", &retval);
+  }
+  else {
+    sscanf(strval, "%d", &retval);
+  }
+
+  return retval;
 }
 
 void poke_sector(void)
 {
-  read_sector(poke_secnum, dir_sector_buffer, CACHE_NO, 0);
+  read_sector(poke_secnum, dir_sector_buffer, CACHE_YES, 0);
   dir_sector_buffer[poke_offset] = poke_value;
   write_sector(poke_secnum, dir_sector_buffer);
+}
+
+void parse_pokes(char* cmd)
+{
+  char* tok = strtok(cmd, " ");
+
+  if (tok == NULL) {
+    printf("ERROR: invalid arguments: Sector number not found\n");
+    return;
+  }
+  poke_secnum = parse_value(tok);
+
+  if ((tok = strtok(NULL, " ")) == NULL) {
+    printf("ERROR: invalid arguments: Sector offset not found\n");
+    return;
+  }
+
+  poke_offset = parse_value(tok);
+
+  while ((tok = strtok(NULL, " ")) != NULL) {
+    poke_value = parse_value(tok);
+    poke_sector();
+
+    poke_offset++;
+    if (poke_offset >= 512) {
+      poke_offset = 0;
+      poke_secnum++;
+    }
+  }
+
   // Flush any pending sector writes out
   execute_write_queue();
 }
+
 
 int endswith(char* fname, char* ext)
 {
@@ -3232,7 +3312,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
         length_of_number = 1;
       int ofs = 7 - length_of_number;
       char temp[9];
-      snprintf(temp, 8 - ofs, "~%d", i);
+      snprintf(temp, 8 - ofs + 1, "~%d", i);
       bcopy(temp, &short_name[ofs], 8 - ofs);
       printf("  considering short-name '%s'...\n", short_name);
       if (fat_opendir(dir_name, TRUE)) {
@@ -3271,6 +3351,18 @@ unsigned char lfn_checksum(const unsigned char* pFCBName)
 }
 // #endif
 
+void wipe_cluster(int cluster)
+{
+  unsigned char buffer[512];
+  int sector = partition_start + first_cluster_sector + (cluster - first_cluster) * sectors_per_cluster;
+
+  memset(buffer, 0, 512);
+
+  for (int k = 0; k < sectors_per_cluster; k++) {
+    write_sector(sector + k, buffer);
+  }
+}
+
 int extend_dir_cluster_chain(void)
 {
   int next_cluster = find_free_cluster(dir_cluster);
@@ -3282,11 +3374,17 @@ int extend_dir_cluster_chain(void)
     printf("ERROR: Could not chain cluster $%x to $%x (for directory)\n", dir_cluster, next_cluster);
     return FALSE;
   }
+
+  // empty the new cluster (to assure no other data resides in there that could be mistake for dir-entries)
+  wipe_cluster(next_cluster);
+  execute_write_queue();
+
   // update vars
   dir_cluster = next_cluster;
   dir_sector = first_cluster_sector + (dir_cluster - first_cluster) * sectors_per_cluster;
   dir_sector_offset = -32;
   dir_sector_in_cluster = 0;
+
 
   read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
 
