@@ -1675,11 +1675,50 @@ void copy_vfat_chars_into_dname(char* dname, int seqnumber)
   copy_to_dnamechunk_from_offset(dname, 0x1C, 2);
 }
 
+void extract_out_dos8_3name(char* d_name)
+{
+  int namelen = 0;
+  int nt_flags = dir_sector_buffer[dir_sector_offset + 0x0C];
+  int basename_lowercase = nt_flags & 0x08;
+  int extension_lowercase = nt_flags & 0x10;
+
+  // get the 8-byte filename
+  if (dir_sector_buffer[dir_sector_offset]) {
+    for (int i = 0; i < 8; i++) {
+      if (dir_sector_buffer[dir_sector_offset + i]) {
+        int c = dir_sector_buffer[dir_sector_offset + i];
+        if (basename_lowercase)
+          c = tolower(c);
+        d_name[namelen++] = c;
+      }
+    }
+    while (namelen && d_name[namelen - 1] == ' ')
+      namelen--;
+
+    // get the 3-byte extension
+    if (dir_sector_buffer[dir_sector_offset + 8] && dir_sector_buffer[dir_sector_offset + 8] != ' ') {
+      d_name[namelen++] = '.';
+      for (int i = 0; i < 3; i++) {
+        if (dir_sector_buffer[dir_sector_offset + 8 + i]) {
+          int c = dir_sector_buffer[dir_sector_offset + 8 + i];
+          if (extension_lowercase)
+            c = tolower(c);
+          d_name[namelen++] = c;
+        }
+      }
+      while (namelen && d_name[namelen - 1] == ' ')
+        namelen--;
+    }
+    d_name[namelen] = 0;
+  }
+}
+
 int fat_readdir(struct m65dirent* d, int extend_dir_flag)
 {
   int retVal = 0;
   int deletedEntry = 0;
-  d->d_type = 0;
+
+  memset(d, 0, sizeof(struct m65dirent));
 
   vfatEntry = FALSE;
   vfat_entry_count = 0;
@@ -1750,7 +1789,7 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
         }
 
         // vfat seqnumbers will be parsed from high to low, each containing up to 13 UCS-2 characters
-        copy_vfat_chars_into_dname(d->d_name, seqnumber);
+        copy_vfat_chars_into_dname(d->d_longname, seqnumber);
         advance_to_next_entry();
 
         // if next dirent is not a vfat entry, break out
@@ -1760,7 +1799,7 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
     }
 
     // ignore any vfat files starting with '.' (such as mac osx '._*' metadata files)
-    if (vfatEntry && d->d_name[0] == '.') {
+    if (vfatEntry && d->d_longname[0] == '.') {
       // printf("._ vfat hide\n");
       d->d_name[0] = 0;
       return 0;
@@ -1802,42 +1841,7 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
     d->d_ino = (dir_sector_buffer[dir_sector_offset + 0x1A] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1B] << 8)
              | (dir_sector_buffer[dir_sector_offset + 0x14] << 16) | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
 
-    // if not vfat-longname, then extract out old 8.3 name
-    if (!vfatEntry) {
-      int namelen = 0;
-      int nt_flags = dir_sector_buffer[dir_sector_offset + 0x0C];
-      int basename_lowercase = nt_flags & 0x08;
-      int extension_lowercase = nt_flags & 0x10;
-
-      // get the 8-byte filename
-      if (dir_sector_buffer[dir_sector_offset]) {
-        for (int i = 0; i < 8; i++) {
-          if (dir_sector_buffer[dir_sector_offset + i]) {
-            int c = dir_sector_buffer[dir_sector_offset + i];
-            if (basename_lowercase)
-              c = tolower(c);
-            d->d_name[namelen++] = c;
-          }
-        }
-        while (namelen && d->d_name[namelen - 1] == ' ')
-          namelen--;
-      }
-      // get the 3-byte extension
-      if (dir_sector_buffer[dir_sector_offset + 8] && dir_sector_buffer[dir_sector_offset + 8] != ' ') {
-        d->d_name[namelen++] = '.';
-        for (int i = 0; i < 3; i++) {
-          if (dir_sector_buffer[dir_sector_offset + 8 + i]) {
-            int c = dir_sector_buffer[dir_sector_offset + 8 + i];
-            if (extension_lowercase)
-              c = tolower(c);
-            d->d_name[namelen++] = c;
-          }
-        }
-        while (namelen && d->d_name[namelen - 1] == ' ')
-          namelen--;
-      }
-      d->d_name[namelen] = 0;
-    }
+    extract_out_dos8_3name(d->d_name);
 
     if (dirent_raw == 2 && d->d_name[0])
       dump_bytes(0, "dirent raw", &dir_sector_buffer[dir_sector_offset], 32);
@@ -2444,18 +2448,18 @@ int show_directory(char* path)
     while (cur != NULL) {
       struct m65dirent* itm = (struct m65dirent*)cur->item;
 
-      if (searchterm && !is_match(itm->d_name, searchterm, 1)) {
+      if (searchterm && !is_match(itm->d_name, searchterm, TRUE) && !is_match(itm->d_longname, searchterm, TRUE)) {
         cur = cur->next;
         continue;
       }
 
       if (itm->d_attr & 0x10) {
         dir_count++;
-        printf("       <DIR> %s\n", itm->d_name);
+        printf("       <DIR> %-12s | %s\n", itm->d_name, itm->d_longname);
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
         file_count++;
-        printf("%12d %s\n", (int)itm->d_filelen, itm->d_name);
+        printf("%12d %-12s | %s\n", (int)itm->d_filelen, itm->d_name, itm->d_longname);
       }
       if (dirent_raw == 1) {
         dump_bytes(0, "dirent raw", itm->de_raw, 32);
@@ -3259,10 +3263,6 @@ int rename_file(char* name, char* dest_name)
     // need to call this again to set various global variable details for the found file properly
     contains_file(name);
 
-    int direntries_needed = 1;
-    if (needs_long_name)
-      direntries_needed = 1 + calculate_needed_direntries_for_vfat(dest_name);
-
     // Calculate checksum of 8.3 name
     unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
 
@@ -3275,7 +3275,7 @@ int rename_file(char* name, char* dest_name)
       int direntries_needed = 1 + calculate_needed_direntries_for_vfat(dest_name);
 
       if (!find_contiguous_free_direntries(direntries_needed)) {
-        printf("ERROR: Unable to locate %d contiguous free dir entries\n");
+        printf("ERROR: Unable to locate %d contiguous free dir entries\n", direntries_needed);
         return -1;
       }
     }
@@ -3508,7 +3508,7 @@ int upload_single_file(char* name, char* dest_name)
         direntries_needed = 1 + calculate_needed_direntries_for_vfat(dest_name);
 
       if (!find_contiguous_free_direntries(direntries_needed)) {
-        printf("ERROR: Unable to locate %d contiguous free dir entries\n");
+        printf("ERROR: Unable to locate %d contiguous free dir entries\n", direntries_needed);
         return -1;
       }
 
@@ -4064,7 +4064,7 @@ BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
   while (!fat_readdir(de, FALSE)) {
     // if (de->d_name[0]) printf("%13s   %d\n",de->d_name,(int)de->d_filelen);
     //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
-    if (!strcasecmp(de->d_name, filename)) {
+    if (!strcasecmp(de->d_name, filename) || !strcasecmp(de->d_longname, filename)) {
       // Found file, so will replace it
       //	printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de->d_ino);
       return TRUE;
@@ -4123,7 +4123,7 @@ BOOL create_directory_entry_for_shortname(char* short_name)
   return TRUE;
 }
 
-BOOL read_next_direntry_and_assure_is_free(m65dirent *de)
+BOOL read_next_direntry_and_assure_is_free(struct m65dirent *de)
 {
   if (fat_readdir(de, TRUE) != 0) {
     printf("ERROR: Unable to read next direntry\n");
@@ -4131,9 +4131,11 @@ BOOL read_next_direntry_and_assure_is_free(m65dirent *de)
   }
 
   if (de->d_name[0] || de->d_type != M65DT_FREESLOT) {
-    printf("ERROR: Was expecting to find a free dir entries here (dir_sector=%, dir_sector_offset=%d)\n", dir_sector, dir_sector_offset);
+    printf("ERROR: Was expecting to find a free dir entries here (dir_sector=%d, dir_sector_offset=%d)\n", dir_sector, dir_sector_offset);
     return FALSE;
   }
+
+  return TRUE;
 }
 
 BOOL find_contiguous_free_direntries(int direntries_needed)
@@ -4150,7 +4152,7 @@ BOOL find_contiguous_free_direntries(int direntries_needed)
   }
 
   while (count < direntries_needed) {
-    m65dirent de;
+    struct m65dirent de;
     if (read_next_direntry_and_assure_is_free(&de)) {
       count++;
       if (!found_start_free) {
@@ -4246,6 +4248,8 @@ BOOL create_directory_entry_for_file(char* dest_name, char* short_name, unsigned
     return FALSE;
 
   create_directory_entry_for_shortname(short_name);
+
+  return TRUE;
 }
 
 char* get_file_extension(char* filename)
@@ -4511,7 +4515,7 @@ int download_file(char* name, char* local_name, int showClusters)
   while (cur != NULL) {
     struct m65dirent* itm = (struct m65dirent*)cur->item;
 
-    if (!is_match(itm->d_name, name, 1)) {
+    if (!is_match(itm->d_name, name, 1) && !is_match(itm->d_longname, name, 1)) {
       cur = cur->next;
       continue;
     }
@@ -4519,8 +4523,11 @@ int download_file(char* name, char* local_name, int showClusters)
     if (itm->d_attr & 0x10)
       ; // this is a DIR
     else if (itm->d_name[0] && itm->d_filelen >= 0) {
-      printf("Downloading \"%s\"...\n", itm->d_name);
-      download_single_file(itm->d_name, itm->d_name, showClusters);
+      char *name = itm->d_name;
+      if (itm->d_longname[0])
+        name = itm->d_longname;
+      printf("Downloading \"%s\"...\n", name);
+      download_single_file(name, name, showClusters);
     }
 
     cur = cur->next;
