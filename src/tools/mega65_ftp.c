@@ -1666,12 +1666,19 @@ void copy_to_dnamechunk_from_offset(char* dnamechunk, int offset, int numuc2char
 
 void copy_vfat_chars_into_dname(char* dname, int seqnumber)
 {
+  int len = strlen(dname);
   // increment char-pointer to the seqnumber string chunk we'll copy across
   dname = dname + 13 * (seqnumber - 1);
   copy_to_dnamechunk_from_offset(dname, 0x01, 5);
   dname += 5;
+  len -= 5;
+  if (len <= 0)
+    return;
   copy_to_dnamechunk_from_offset(dname, 0x0E, 6);
   dname += 6;
+  len -= 6;
+  if (len <= 0)
+    return;
   copy_to_dnamechunk_from_offset(dname, 0x1C, 2);
 }
 
@@ -3190,6 +3197,9 @@ int delete_file(char* name)
     cur = cur->next;
   }
 
+  // Flush any pending sector writes out
+  execute_write_queue();
+
   return TRUE;
 }
 
@@ -3312,13 +3322,11 @@ BOOL is_long_name_needed(char* long_name, char* short_name)
         needs_long_name = TRUE;
     }
     else {
-      if (toupper(long_name[i]) != long_name[i])
-        needs_long_name = TRUE;
       if (long_name[i] == ' ')
         continue;
       if (dot_count == 0) {
         if (base_len < 8) {
-          short_name[base_len] = toupper(long_name[i]);
+          short_name[base_len] = long_name[i];
           base_len++;
         }
         else {
@@ -3327,7 +3335,7 @@ BOOL is_long_name_needed(char* long_name, char* short_name)
       }
       else if (dot_count == 1) {
         if (ext_len < 3) {
-          short_name[8 + ext_len] = toupper(long_name[i]);
+          short_name[8 + ext_len] = long_name[i];
           ext_len++;
         }
         else {
@@ -3336,6 +3344,12 @@ BOOL is_long_name_needed(char* long_name, char* short_name)
       }
     }
   }
+
+  if (needs_long_name) {
+    for (int i = 0; i < strlen(short_name); i++)
+      short_name[i] = toupper(short_name[i]);
+  }
+
   return needs_long_name;
 }
 
@@ -3781,7 +3795,7 @@ int create_dir(char* dest_name)
       }
     }
     if (dir_sector == -1) {
-      printf("ERROR: Directory is full.  Request support for extending directory into multiple clusters.\n");
+      printf("ERROR: Drive is full.\n");
       retVal = -1;
       break;
     }
@@ -4131,7 +4145,6 @@ BOOL read_next_direntry_and_assure_is_free(struct m65dirent *de)
   }
 
   if (de->d_name[0] || de->d_type != M65DT_FREESLOT) {
-    printf("ERROR: Was expecting to find a free dir entries here (dir_sector=%d, dir_sector_offset=%d)\n", dir_sector, dir_sector_offset);
     return FALSE;
   }
 

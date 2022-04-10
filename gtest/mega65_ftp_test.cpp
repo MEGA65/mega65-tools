@@ -436,7 +436,7 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
 {
   init_sdcard_data();
 
-  dump_sdcard_to_file("sdcard_before.bin");
+  // dump_sdcard_to_file("sdcard_before.bin");
 
   generate_dummy_file("Long File Name.d81", 4096);
   upload_file("Long File Name.d81", "Long File Name.d81");
@@ -448,7 +448,7 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
   show_directory("LONGFI~1.D81");
   std::string output = RetrieveStdOut();
 
-  dump_sdcard_to_file("sdcard_after.bin");
+  // dump_sdcard_to_file("sdcard_after.bin");
 
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 }
