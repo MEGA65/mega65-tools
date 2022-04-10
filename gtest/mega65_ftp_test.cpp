@@ -96,9 +96,9 @@ void init_sdcard_data(void)
   sdcard[offset + 0x0b] = 0x08; // file attribute (0x08 = volume label)
 }
 
-void dump_sdcard_to_file(void)
+void dump_sdcard_to_file(char* fname)
 {
-  FILE* f = fopen("sdcard.bin", "wb");
+  FILE* f = fopen(fname, "wb");
   for (int i = 0; i < SDSIZE; i++) {
     fputc(sdcard[i], f);
   }
@@ -218,13 +218,15 @@ void delete_local_file(const char* name)
 class Mega65FtpTestFixture : public ::testing::Test {
   protected:
   char* file4kb = "4kbtest.tmp";
-  char* file8kb = "8kbtest.d81";
+  char* file8kb = "8kbtest.tmp";
   bool suppressflag = 0;
 
   void SetUp() override
   {
     // suppress the chatty output
     CaptureStdOut();
+
+    change_dir("/"); // always start in root folder
 
     generate_dummy_file(file4kb, 4096);
     generate_dummy_file(file8kb, 8192);
@@ -308,9 +310,12 @@ TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
 TEST_F(Mega65FtpTestFixture, RenameToNonExistingFilenameShouldBePermitted)
 {
   init_sdcard_data();
+
   upload_file(file4kb, file4kb);
+  // dump_sdcard_to_file("sdcard_before.bin");
   rename_file(file4kb, file8kb);
 
+  // dump_sdcard_to_file("sdcard_after.bin");
   ReleaseStdOut();
   ASSERT_EQ(1, contains_file(file8kb));
 }
@@ -378,7 +383,7 @@ TEST_F(Mega65FtpTestFixture, RootDirCanHoldMoreThan128Files)
 
   std::string output = RetrieveStdOut();
 
-  // dump_sdcard_to_file();
+  // dump_sdcard_to_file("sdcard.bin");
 
   EXPECT_THAT(output, testing::ContainsRegex("Uploaded"));
 }
@@ -398,7 +403,7 @@ TEST_F(Mega65FtpTestFixture, RootDir128thItemIsADirectory)
 
   std::string output = RetrieveStdOut();
 
-  // dump_sdcard_to_file();
+  // dump_sdcard_to_file("sdcard.bin");
 
   EXPECT_THAT(output, testing::ContainsRegex("Uploaded"));
 }
@@ -422,7 +427,7 @@ TEST_F(Mega65FtpTestFixture, SubDirCanHoldMoreThan128Files)
 
   std::string output = RetrieveStdOut();
 
-  // dump_sdcard_to_file();
+  // dump_sdcard_to_file("sdcard.bin");
 
   EXPECT_THAT(output, testing::ContainsRegex("Uploaded"));
 }
@@ -430,19 +435,20 @@ TEST_F(Mega65FtpTestFixture, SubDirCanHoldMoreThan128Files)
 TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
 {
   init_sdcard_data();
-  generate_dummy_file("LongFileName.d81", 4096);
-  upload_file("LongFileName.d81", "LongFileName.d81");
+
+  dump_sdcard_to_file("sdcard_before.bin");
+
+  generate_dummy_file("Long File Name.d81", 4096);
+  upload_file("Long File Name.d81", "Long File Name.d81");
   // assess_shortname = "LONGFI~1.D81"
 
   // Let's assess the dir output to see if it was written
-
-  dump_sdcard_to_file();
 
   CaptureStdOut();
   show_directory("LONGFI~1.D81");
   std::string output = RetrieveStdOut();
 
-  // dump_sdcard_to_file();
+  dump_sdcard_to_file("sdcard_after.bin");
 
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 }
@@ -451,6 +457,15 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
 //       - and then it is written again, but it is a larger (or smaller) file.
 //       - keep an eye on how clusters are allocated / de-allocated
 //       - also assure that the newly uploaded file is in contiguous clusters too.
+
+// Assure there are enough contiguous direntries to support all LFN-sections plus the 8.3 shortname entry
+
+// Assure that if we upload the same long filename (with different content) that it will replace the existing file
+// (and not notice the prior ~1 file there, and decide to make a ~2 instead)
+
+// Assure that a short-name that is renamed to a long-name handles dir-entries gracefully
+// (E.g., if a shortname entry is squeezed amongst other file entries, then it might need to get deleted and
+// then we look for another contiguous+free block of direntries to store vfat-chunks + dos8.3 entry)
 
 /*
 TEST(Mega65FtpTest, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)

@@ -544,11 +544,11 @@ test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTBINDIR)/bit2core.test.exe
 	@echo ""
 	@echo "TESTING: MEGA65_FTP..."
 	@echo "======================"
-	$(GTESTBINDIR)/mega65_ftp.test.exe
+	cd $(GTESTBINDIR) ; ./mega65_ftp.test.exe
 	@echo ""
 	@echo "TESTING: BIT2CORE..."
 	@echo "===================="
-	$(GTESTBINDIR)/bit2core.test.exe
+	cd $(GTESTBINDIR) ; ./bit2core.test.exe
 
 $(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) Makefile
 	$(MAKE_VERSION)
