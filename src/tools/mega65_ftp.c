@@ -41,7 +41,6 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <stdio.h>
-#include <math.h>
 
 #include "m65common.h"
 #include "filehost.h"
@@ -3353,9 +3352,20 @@ BOOL is_long_name_needed(char* long_name, char* short_name)
   return needs_long_name;
 }
 
+int num_digits(int i)
+{
+  int count = 0;
+  do {
+    i /= 10;
+    count++;
+  } while (i != 0);
+
+  return count;
+}
+
 void put_tilde_number_in_shortname(char* short_name, int i)
 {
-  int length_of_number = log10(i) + 1;
+  int length_of_number = num_digits(i);
   int ofs = 7 - length_of_number;
   char temp[9];
   snprintf(temp, 8 - ofs + 1, "~%d", i);
