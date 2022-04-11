@@ -3227,18 +3227,26 @@ int contains_file(char* name)
 
 void wipe_direntries_of_current_file(void)
 {
-  dir_cluster = vfat_dir_cluster;
-  dir_sector = vfat_dir_sector;
-  dir_sector_in_cluster = vfat_dir_sector_in_cluster;
-  dir_sector_offset = vfat_dir_sector_offset - 32; // the -32 is needed due to advance_to_next_entry() call doing a +32 initially
+  if (vfatEntry) {
+    dir_cluster = vfat_dir_cluster;
+    dir_sector = vfat_dir_sector;
+    dir_sector_in_cluster = vfat_dir_sector_in_cluster;
+    dir_sector_offset = vfat_dir_sector_offset - 32; // the -32 is needed due to advance_to_next_entry() call doing a +32 initially
 
-  for (int i = 0; i < (vfat_entry_count + 1); i++) {
+    for (int i = 0; i < vfat_entry_count; i++) {
+      advance_to_next_entry();
+
+      unsigned char *dir = &dir_sector_buffer[dir_sector_offset];
+      bzero(dir, 32);
+      write_sector(partition_start + dir_sector, dir_sector_buffer);
+    }
     advance_to_next_entry();
-
-    unsigned char *dir = &dir_sector_buffer[dir_sector_offset];
-    bzero(dir, 32);
-    write_sector(partition_start + dir_sector, dir_sector_buffer);
   }
+  // delete the 8.3 entry
+  unsigned char *dir = &dir_sector_buffer[dir_sector_offset];
+  bzero(dir, 32);
+  write_sector(partition_start + dir_sector, dir_sector_buffer);
+
   execute_write_queue();
 }
 
@@ -3271,7 +3279,7 @@ int rename_file(char* name, char* dest_name)
     unsigned int first_cluster_of_file = calc_first_cluster_of_file();
     unsigned int size = calc_size_of_file();
 
-    if (vfatEntry) { // was the prior entry a fvat-lfn entry?
+    if (vfatEntry || needs_long_name) { // was the prior entry a vfat-lfn entry or will it become a vfat-lfn after the rename?
       wipe_direntries_of_current_file();
 
       int direntries_needed = 1 + calculate_needed_direntries_for_vfat(dest_name);

@@ -453,7 +453,7 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 }
 
-TEST_F(Mega65FtpTestFixture, ReUploadOfLFNFileButLargerStillHasContiguousClusters)
+TEST_F(Mega65FtpTestFixture, ReUploadOfVfatFileButLargerStillHasContiguousClusters)
 {
   init_sdcard_data();
 
@@ -481,14 +481,26 @@ TEST_F(Mega65FtpTestFixture, ReUploadOfLFNFileButLargerStillHasContiguousCluster
   ASSERT_EQ(0, is_fragmented("Long File Name.d81"));
 }
 
-// Assure there are enough contiguous direntries to support all LFN-sections plus the 8.3 shortname entry
-
-// Assure that if we upload the same long filename (with different content) that it will replace the existing file
-// (and not notice the prior ~1 file there, and decide to make a ~2 instead)
-
 // Assure that a short-name that is renamed to a long-name handles dir-entries gracefully
 // (E.g., if a shortname entry is squeezed amongst other file entries, then it might need to get deleted and
 // then we look for another contiguous+free block of direntries to store vfat-chunks + dos8.3 entry)
+TEST_F(Mega65FtpTestFixture, AssureEnoughDirEntriesToSupportLengthenedVfatName)
+{
+  init_sdcard_data();
+
+  generate_dummy_file_embed_name("short.d81", 4096);
+  generate_dummy_file_embed_name("dummy.txt", 8192);
+
+  upload_file("dummy.txt", "dummy.txt");
+  upload_file("short.d81", "short.d81");
+  upload_file("dummy.txt", "dummy2.txt");
+
+  dump_sdcard_to_file("sdcard_before.bin");
+
+  rename_file("short.d81", "Long File Name.d81");
+
+  dump_sdcard_to_file("sdcard_after.bin");
+}
 
 /*
 TEST(Mega65FtpTest, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
