@@ -2213,6 +2213,11 @@ int read_direntries(llist* lst, char* path)
   return 1;
 }
 
+BOOL name_match(struct m65dirent* de, char* name)
+{
+  return !strcasecmp(de->d_name, name) || !strcasecmp(de->d_longname, name);
+}
+
 int contains_dir(llist* lst, char* path)
 {
   while (lst != NULL && lst->item != NULL) {
@@ -3211,7 +3216,7 @@ int contains_file(char* name)
   while (!fat_readdir(&de, FALSE)) {
     // if (de.d_name[0]) printf("'%s'   %d\n",de.d_name,(int)de.d_filelen);
     // else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
-    if (!strcasecmp(de.d_name, name)) {
+    if (name_match(&de, name)) {
       // Found file, so will replace it
       // printf("Found \"%s\" on the file system, beginning at cluster %d\n", name, (int)de.d_ino);
       return 1;
@@ -3409,7 +3414,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
         // This name permutation is unused presently, so let's use it
         break;
       }
-      if (strcmp(long_name, de.d_longname) == 0) {
+      if (!strcasecmp(long_name, de.d_longname)) {
         // TODO: assess if longfile matches too. If so, then break out too
         // (since an upload of same file should override it)
         break;
@@ -3755,7 +3760,7 @@ int create_dir(char* dest_name)
     while (!fat_readdir(&de, FALSE)) {
       // if (de.d_name[0]) printf("%13s   %d\n",de.d_name,(int)de.d_filelen);
       //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
-      if (!strcasecmp(de.d_name, dest_name)) {
+      if (name_match(&de, dest_name)) {
         // Name exists
         fprintf(stderr, "ERROR: File or directory '%s' already exists.\n", dest_name);
         retVal = -1;
@@ -4114,7 +4119,7 @@ BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
   while (!fat_readdir(de, FALSE)) {
     // if (de->d_name[0]) printf("%13s   %d\n",de->d_name,(int)de->d_filelen);
     //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
-    if (!strcasecmp(de->d_name, filename) || !strcasecmp(de->d_longname, filename)) {
+    if (name_match(de, filename)) {
       // Found file, so will replace it
       //	printf("%s already exists on the file system, beginning at cluster %d\n",name,(int)de->d_ino);
       return TRUE;
@@ -4243,10 +4248,17 @@ void copy_vfat_chars_into_direntry(char* dname, unsigned char* dir, int seqnumbe
 {
   // increment char-pointer to the seqnumber string chunk we'll copy across
   dname = dname + 13 * (seqnumber - 1);
+  int len = strlen(dname);
   copy_from_dnamechunk_to_offset(dname, dir, 0x01, 5);
   dname += 5;
+  len -= 5;
+  if (len <= 0)
+    return;
   copy_from_dnamechunk_to_offset(dname, dir, 0x0E, 6);
   dname += 6;
+  len -= 6;
+  if (len <= 0)
+    return;
   copy_from_dnamechunk_to_offset(dname, dir, 0x1C, 2);
 }
 

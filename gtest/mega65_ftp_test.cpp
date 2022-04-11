@@ -457,7 +457,7 @@ TEST_F(Mega65FtpTestFixture, ReUploadOfVfatFileButLargerStillHasContiguousCluste
 {
   init_sdcard_data();
 
-  dump_sdcard_to_file("sdcard_before.bin");
+  // dump_sdcard_to_file("sdcard_before.bin");
 
   generate_dummy_file_embed_name("Long File Name.d81", 4096);
   generate_dummy_file_embed_name("dummy.txt", 8192);
@@ -495,11 +495,11 @@ TEST_F(Mega65FtpTestFixture, AssureEnoughDirEntriesToSupportLengthenedVfatName)
   upload_file("short.d81", "short.d81");
   upload_file("dummy.txt", "dummy2.txt");
 
-  dump_sdcard_to_file("sdcard_before.bin");
+  // dump_sdcard_to_file("sdcard_before.bin");
 
   rename_file("short.d81", "Long File Name.d81");
 
-  dump_sdcard_to_file("sdcard_after.bin");
+  // dump_sdcard_to_file("sdcard_after.bin");
 }
 
 TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
@@ -555,15 +555,48 @@ TEST_F(Mega65FtpTestFixture, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
   EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
 }
 
-/*
-TEST(Mega65FtpTest, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDirEntries)
+TEST_F(Mega65FtpTestFixture, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDirEntries)
 {
+  init_sdcard_data();
+  generate_dummy_file_embed_name("LongFileName.d81", 4096);
+
+  // dump_sdcard_to_file("sdcard_before.bin");
+
   upload_file("LongFileName.d81", "LongFileName.d81");
+
+  // dump_sdcard_to_file("sdcard_after1.bin");
+
   // as with test above, assure the dir-entries exist
   rename_file("LongFileName.d81", "AnotherLongFileName.d81");
+
   // now assess that dir-entries for LFN and 8.3 shortname have been updated
+  // dump_sdcard_to_file("sdcard_after2.bin");
+
+  CaptureStdOut();
+  show_directory("LONGFI*.D81");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("LongFileName.d81");
+  output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("ANOTHE~1.D81");
+  output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("AnotherLongFileName.d81");
+  output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 }
 
+/*
 TEST(Mega65FtpTest, UploadSameLFNWithExistingShortNameShouldOverwrite)
 {
   upload_file("LongFileName.d81", "LongFileName.d81");
@@ -584,5 +617,10 @@ TEST(Mega65FtpTest, CanChangeDirectoryIntoLFNDirectory)
 {
 }
 */
+
+// Disallow creating a directory with the same name, but different casing
+
+// Disallow creating of a new file if same file is uploaded again but with different casing
+// (it should just replace the existing file)
 
 } // namespace mega65_ftp
