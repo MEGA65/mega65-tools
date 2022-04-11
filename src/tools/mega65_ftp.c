@@ -148,6 +148,8 @@ void write_file_size_into_direntry(unsigned int size);
 void write_cluster_number_into_direntry(int a_cluster);
 int calculate_needed_direntries_for_vfat(char* filename);
 unsigned char lfn_checksum(const unsigned char* pFCBName);
+int get_cluster_count(char *filename);
+void wipe_direntries_of_current_file(void);
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -1666,19 +1668,12 @@ void copy_to_dnamechunk_from_offset(char* dnamechunk, int offset, int numuc2char
 
 void copy_vfat_chars_into_dname(char* dname, int seqnumber)
 {
-  int len = strlen(dname);
   // increment char-pointer to the seqnumber string chunk we'll copy across
   dname = dname + 13 * (seqnumber - 1);
   copy_to_dnamechunk_from_offset(dname, 0x01, 5);
   dname += 5;
-  len -= 5;
-  if (len <= 0)
-    return;
   copy_to_dnamechunk_from_offset(dname, 0x0E, 6);
   dname += 6;
-  len -= 6;
-  if (len <= 0)
-    return;
   copy_to_dnamechunk_from_offset(dname, 0x1C, 2);
 }
 
@@ -1773,7 +1768,6 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
         vfat_dir_sector_offset = dir_sector_offset;
       }
       vfatEntry = TRUE;
-      vfat_entry_count++;
       int firstTime = 1;
       int seqnumber;
       do {
@@ -1797,6 +1791,7 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
 
         // vfat seqnumbers will be parsed from high to low, each containing up to 13 UCS-2 characters
         copy_vfat_chars_into_dname(d->d_longname, seqnumber);
+        vfat_entry_count++;
         advance_to_next_entry();
 
         // if next dirent is not a vfat entry, break out
@@ -3127,12 +3122,8 @@ int delete_single_file(char* name)
 
   unsigned int first_cluster_of_file = get_first_cluster_of_file();
 
-  // remove entry from cluster#2
-  bzero(&dir_sector_buffer[dir_sector_offset], 32);
-  if (write_sector(partition_start + dir_sector, dir_sector_buffer)) {
-    printf("Failed to write updated directory sector.\n");
-    return -1;
-  }
+  // remove dir-entry from FAT table (including any preceding vfat-lfn entries)
+  wipe_direntries_of_current_file();
 
   // remove cluster-chain from cluster-map in FAT tables #1 and #2
   unsigned int current_cluster = first_cluster_of_file;
@@ -3234,7 +3225,8 @@ int contains_file(char* name)
   return 0;
 }
 
-void wipe_direntries_of_current_file(void) {
+void wipe_direntries_of_current_file(void)
+{
   dir_cluster = vfat_dir_cluster;
   dir_sector = vfat_dir_sector;
   dir_sector_in_cluster = vfat_dir_sector_in_cluster;
@@ -3389,9 +3381,19 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
     for (int i = 1; ; i++) {  // endless loop till we find an available short-name
       put_tilde_number_in_shortname(short_name, i);
 
+      char short_name_with_dot[13] = { 0 };
+      memcpy(short_name_with_dot, short_name,8);
+      short_name_with_dot[8] = '.';
+      memcpy(&short_name_with_dot[9], &short_name[8], 3);
+
       // iterate through the directory looking for
-      if (!find_file_in_curdir(short_name, &de)) {
+      if (!find_file_in_curdir(short_name_with_dot, &de)) {
         // This name permutation is unused presently, so let's use it
+        break;
+      }
+      if (strcmp(long_name, de.d_longname) == 0) {
+        // TODO: assess if longfile matches too. If so, then break out too
+        // (since an upload of same file should override it)
         break;
       }
     } // end while
@@ -3508,7 +3510,20 @@ int upload_single_file(char* name, char* dest_name)
     if (!safe_open_dir())
       return -1;
 
-    if (!find_file_in_curdir(dest_name, &de)) {
+    BOOL file_exists = find_file_in_curdir(dest_name, &de);
+
+    if (file_exists) {
+      // assess how many contiguous clusters it consumes right now.
+      int num_clusters = get_cluster_count(dest_name);
+      int clusters_needed = (st.st_size - 1) / (512 * sectors_per_cluster) + 1;
+
+      if (num_clusters != clusters_needed) {
+        delete_file(dest_name);
+        file_exists = FALSE;
+      }
+    }
+
+    if (!file_exists) {
       // File does not (yet) exist, get ready to create it
       printf("%s does not yet exist on the file system -- searching for empty directory slot to create it in.\n", dest_name);
 
@@ -4075,6 +4090,9 @@ BOOL safe_open_dir(void)
 
 BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
 {
+  if (!safe_open_dir())
+    return FALSE;
+
   while (!fat_readdir(de, FALSE)) {
     // if (de->d_name[0]) printf("%13s   %d\n",de->d_name,(int)de->d_filelen);
     //      else dump_bytes(0,"empty dirent",&dir_sector_buffer[dir_sector_offset],32);
@@ -4383,6 +4401,27 @@ void mount_file(char* filename)
     return;
 
   queue_execute();
+}
+
+int get_cluster_count(char *filename)
+{
+  struct m65dirent de;
+
+  if (!safe_open_dir())
+    return 0;
+
+  if (!find_file_in_curdir(filename, &de)) {
+    return 0;
+  }
+  int file_cluster = de.d_ino;
+  int count = 0;
+  do
+  {
+    count++;
+    file_cluster = chained_cluster(file_cluster);
+  } while(file_cluster != 0 && file_cluster != 0xffffff8);
+
+  return count;
 }
 
 int download_single_file(char* dest_name, char* local_name, int showClusters)

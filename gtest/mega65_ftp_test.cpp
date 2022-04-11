@@ -453,10 +453,33 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 }
 
-// TODO: Assess what happens if file of certain size is written:
-//       - and then it is written again, but it is a larger (or smaller) file.
-//       - keep an eye on how clusters are allocated / de-allocated
-//       - also assure that the newly uploaded file is in contiguous clusters too.
+TEST_F(Mega65FtpTestFixture, ReUploadOfLFNFileButLargerStillHasContiguousClusters)
+{
+  init_sdcard_data();
+
+  dump_sdcard_to_file("sdcard_before.bin");
+
+  generate_dummy_file_embed_name("Long File Name.d81", 4096);
+  generate_dummy_file_embed_name("dummy.txt", 8192);
+
+  upload_file("Long File Name.d81", "Long File Name.d81");
+  upload_file("dummy.txt", "dummy.txt");
+
+  // dump_sdcard_to_file("sdcard_after1.bin");
+
+  generate_dummy_file_embed_name("Long File Name.d81", 16384);
+
+  upload_file("Long File Name.d81", "Long File Name.d81");
+
+  // dump_sdcard_to_file("sdcard_after2.bin");
+
+  CaptureStdOut();
+  show_directory("LONGFI*.D81");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
+
+  ASSERT_EQ(0, is_fragmented("Long File Name.d81"));
+}
 
 // Assure there are enough contiguous direntries to support all LFN-sections plus the 8.3 shortname entry
 
