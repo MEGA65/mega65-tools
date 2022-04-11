@@ -2216,7 +2216,7 @@ int read_direntries(llist* lst, char* path)
 
 int contains_dir(llist* lst, char* path)
 {
-  while (lst != NULL) {
+  while (lst != NULL && lst->item != NULL) {
     struct m65dirent* itm = (struct m65dirent*)lst->item;
     if (itm->d_attr & 0x10 && strcmp(itm->d_name, path) == 0)
       return 1;
@@ -2447,7 +2447,7 @@ int show_directory(char* path)
     }
 
     llist* cur = lst_dirents;
-    while (cur != NULL) {
+    while (cur != NULL && cur->item != NULL) {
       struct m65dirent* itm = (struct m65dirent*)cur->item;
 
       if (searchterm && !is_match(itm->d_name, searchterm, TRUE) && !is_match(itm->d_longname, searchterm, TRUE)) {

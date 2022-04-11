@@ -502,21 +502,60 @@ TEST_F(Mega65FtpTestFixture, AssureEnoughDirEntriesToSupportLengthenedVfatName)
   dump_sdcard_to_file("sdcard_after.bin");
 }
 
-/*
-TEST(Mega65FtpTest, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
+TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
 {
+  init_sdcard_data();
+  generate_dummy_file_embed_name("LongFileName.d81", 4096);
+
+  // dump_sdcard_to_file("sdcard_before.bin");
+
   upload_file("LongFileName.d81", "LongFileName.d81");
+
   // examine dir-entries for file and assess validity of LFN and 8.3 ShortName
+  CaptureStdOut();
+  show_directory("LONGFI*.D81");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("LongFileName.d81");
+  output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
+
+  // dump_sdcard_to_file("sdcard_after.bin");
 }
 
-TEST(Mega65FtpTest, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
+TEST_F(Mega65FtpTestFixture, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
 {
+  init_sdcard_data();
+  generate_dummy_file_embed_name("LongFileName.d81", 4096);
+
+  // dump_sdcard_to_file("sdcard_before.bin");
+
   upload_file("LongFileName.d81", "LongFileName.d81");
   // as with test above, assure the dir-entries exist
+
+  // dump_sdcard_to_file("sdcard_after1.bin");
+
   delete_file("LongFileName.d81");
   // now assess that dir-entries have been removed
+
+  // dump_sdcard_to_file("sdcard_after2.bin");
+
+  CaptureStdOut();
+  show_directory("LONGFI*.D81");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("LongFileName.d81");
+  output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
 }
 
+/*
 TEST(Mega65FtpTest, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDirEntries)
 {
   upload_file("LongFileName.d81", "LongFileName.d81");
