@@ -119,7 +119,7 @@ void change_local_dir(char* path);
 void change_dir(char* path);
 void show_local_pwd(void);
 int delete_file(char* name);
-int rename_file(char* name, char* dest_name);
+int rename_file_or_dir(char* name, char* dest_name);
 int upload_file(char* name, char* dest_name);
 int sdhc_check(void);
 void request_remotesd_version(void);
@@ -151,7 +151,7 @@ void write_cluster_number_into_direntry(int a_cluster);
 int calculate_needed_direntries_for_vfat(char* filename);
 unsigned char lfn_checksum(const unsigned char* pFCBName);
 int get_cluster_count(char *filename);
-void wipe_direntries_of_current_file(void);
+void wipe_direntries_of_current_file_or_dir(void);
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -462,7 +462,7 @@ int execute_command(char* cmd)
     delete_file(src);
   }
   else if (parse_command(cmd, "rename %s %s", src, dst) == 2) {
-    rename_file(src, dst);
+    rename_file_or_dir(src, dst);
   }
   else if (parse_command(cmd, "sector %d", &sector_num) == 1) {
     // Clear cache to force re-reading
@@ -3133,7 +3133,7 @@ int delete_single_file(char* name)
   unsigned int first_cluster_of_file = get_first_cluster_of_file();
 
   // remove dir-entry from FAT table (including any preceding vfat-lfn entries)
-  wipe_direntries_of_current_file();
+  wipe_direntries_of_current_file_or_dir();
 
   // remove cluster-chain from cluster-map in FAT tables #1 and #2
   unsigned int current_cluster = first_cluster_of_file;
@@ -3235,7 +3235,7 @@ int contains_file_or_dir(char* name)
   return 0;
 }
 
-void wipe_direntries_of_current_file(void)
+void wipe_direntries_of_current_file_or_dir(void)
 {
   if (vfatEntry) {
     dir_cluster = vfat_dir_cluster;
@@ -3260,7 +3260,7 @@ void wipe_direntries_of_current_file(void)
   execute_write_queue();
 }
 
-int rename_file(char* name, char* dest_name)
+int rename_file_or_dir(char* name, char* dest_name)
 {
   int retVal = 0;
   do {
@@ -3283,6 +3283,9 @@ int rename_file(char* name, char* dest_name)
     // need to call this again to set various global variable details for the found file properly
     contains_file_or_dir(name);
 
+    // check if it is a DE_ATTRIB_FILE or DE_ATTRIB_DIR
+    int attrib = dir_sector_buffer[dir_sector_offset + 0x0b];
+
     // Calculate checksum of 8.3 name
     unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
 
@@ -3290,7 +3293,7 @@ int rename_file(char* name, char* dest_name)
     unsigned int size = calc_size_of_file();
 
     if (vfatEntry || needs_long_name) { // was the prior entry a vfat-lfn entry or will it become a vfat-lfn after the rename?
-      wipe_direntries_of_current_file();
+      wipe_direntries_of_current_file_or_dir();
 
       int direntries_needed = 1 + calculate_needed_direntries_for_vfat(dest_name);
 
@@ -3300,7 +3303,7 @@ int rename_file(char* name, char* dest_name)
       }
     }
 
-    if (!create_directory_entry_for_item(dest_name, short_name, lfn_csum, needs_long_name, DE_ATTRIB_FILE)) {
+    if (!create_directory_entry_for_item(dest_name, short_name, lfn_csum, needs_long_name, attrib)) {
       printf("ERROR: Failed to create dir entry for file\n");
       return -1;
     }
