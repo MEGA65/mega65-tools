@@ -9,7 +9,7 @@ int rename_file(char* name, char* dest_name);
 int delete_file(char* name);
 int download_file(char* dest_name, char* local_name, int showClusters);
 int open_file_system(void);
-int contains_file(char* name);
+int contains_file_or_dir(char* name);
 int is_fragmented(char* filename);
 int create_dir(char*);
 int show_directory(char* path);
@@ -103,6 +103,13 @@ void dump_sdcard_to_file(char* fname)
     fputc(sdcard[i], f);
   }
   fclose(f);
+}
+
+int get_file_size(char* fname)
+{
+  struct stat file_stats;
+  stat(fname, &file_stats);
+  return (int)file_stats.st_size;
 }
 
 // my read/write sector mock functions
@@ -317,7 +324,7 @@ TEST_F(Mega65FtpTestFixture, RenameToNonExistingFilenameShouldBePermitted)
 
   // dump_sdcard_to_file("sdcard_after.bin");
   ReleaseStdOut();
-  ASSERT_EQ(1, contains_file(file8kb));
+  ASSERT_EQ(1, contains_file_or_dir(file8kb));
 }
 
 TEST_F(Mega65FtpTestFixture, RenameToExistingFilenameShouldNotBePermitted)
@@ -336,8 +343,10 @@ TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
 {
   init_sdcard_data();
   create_dir("test");
+  // dump_sdcard_to_file("sdcard_before.bin");
   change_dir("/test");
   upload_file(file4kb, file4kb);
+  // dump_sdcard_to_file("sdcard_after.bin");
   change_dir("/");
   ReleaseStdOut();
 
@@ -444,6 +453,7 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
 
   // Let's assess the dir output to see if it was written
 
+  ReleaseStdOut();
   CaptureStdOut();
   show_directory("LONGFI~1.D81");
   std::string output = RetrieveStdOut();
@@ -473,6 +483,7 @@ TEST_F(Mega65FtpTestFixture, ReUploadOfVfatFileButLargerStillHasContiguousCluste
 
   // dump_sdcard_to_file("sdcard_after2.bin");
 
+  ReleaseStdOut();
   CaptureStdOut();
   show_directory("LONGFI*.D81");
   std::string output = RetrieveStdOut();
@@ -512,6 +523,7 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
   upload_file("LongFileName.d81", "LongFileName.d81");
 
   // examine dir-entries for file and assess validity of LFN and 8.3 ShortName
+  ReleaseStdOut();
   CaptureStdOut();
   show_directory("LONGFI*.D81");
   std::string output = RetrieveStdOut();
@@ -543,6 +555,7 @@ TEST_F(Mega65FtpTestFixture, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
 
   // dump_sdcard_to_file("sdcard_after2.bin");
 
+  ReleaseStdOut();
   CaptureStdOut();
   show_directory("LONGFI*.D81");
   std::string output = RetrieveStdOut();
@@ -572,6 +585,7 @@ TEST_F(Mega65FtpTestFixture, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDir
   // now assess that dir-entries for LFN and 8.3 shortname have been updated
   // dump_sdcard_to_file("sdcard_after2.bin");
 
+  ReleaseStdOut();
   CaptureStdOut();
   show_directory("LONGFI*.D81");
   std::string output = RetrieveStdOut();
@@ -596,31 +610,66 @@ TEST_F(Mega65FtpTestFixture, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDir
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 }
 
-/*
-TEST(Mega65FtpTest, UploadSameLFNWithExistingShortNameShouldOverwrite)
+TEST_F(Mega65FtpTestFixture, UploadSameLFNWithExistingShortNameShouldOverwrite)
 {
+  init_sdcard_data();
+  generate_dummy_file_embed_name("LongFileName.d81", 4096);
+  generate_dummy_file_embed_name("LongFileName2.d81", 8192);
+
   upload_file("LongFileName.d81", "LongFileName.d81");
+
+  // dump_sdcard_to_file("sdcard_before.bin");
+
   upload_file("LongFileName2.d81", "LongFileName.d81");
-  download_file("LongFileName.d81");
+
+  // dump_sdcard_to_file("sdcard_after.bin");
+
+  download_file("LongFileName.d81", "LongFileName.d81", 0);
+
   // it should match the contents of LongFileName2.d81
+  EXPECT_EQ(get_file_size("LongFileName.d81"), get_file_size("LongFileName2.d81"));
 }
 
-TEST(Mega65FtpTest, UploadDifferentLFNWithExistingShortNameShouldUseDifferentName)
+TEST_F(Mega65FtpTestFixture, UploadDifferentLFNWithExistingShortNameShouldUseDifferentName)
 {
-  upload_file("LongFileName.d81"); // This will be 'LONGFI~1.D81'
-  upload_file("LongFish.d81");   // This should be 'LONGFI~2.D81'
-  download("LONGFI~2.D81");
-  // assure its contents matches 'LongFish.d81'
+  init_sdcard_data();
+  generate_dummy_file_embed_name("LongFileName.d81", 4096);
+  generate_dummy_file_embed_name("LongFishyFishy.d81", 8192);
+
+  upload_file("LongFileName.d81", "LongFileName.d81"); // This will be 'LONGFI~1.D81'
+  // dump_sdcard_to_file("sdcard_before.bin");
+  upload_file("LongFishyFishy.d81", "LongFishyFishy.d81");   // This should be 'LONGFI~2.D81'
+  // dump_sdcard_to_file("sdcard_after.bin");
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("LONGFI~2.D81");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
+  EXPECT_THAT(output, testing::ContainsRegex("LongFishyFishy.d81"));
 }
 
-TEST(Mega65FtpTest, CanChangeDirectoryIntoLFNDirectory)
+TEST_F(Mega65FtpTestFixture, CanChangeDirectoryIntoLFNDirectory)
 {
+  init_sdcard_data();
+  generate_dummy_file_embed_name("LongFileName.d81", 4096);
+  create_dir("LongDirectory");
+  change_dir("LongDirectory");
+  upload_file("LongFileName.d81", "LongFileName.d81");
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, Not(testing::ContainsRegex("LongDirectory")));
+  EXPECT_THAT(output, testing::ContainsRegex("LongFileName.d81"));
 }
-*/
 
 // Disallow creating a directory with the same name, but different casing
 
 // Disallow creating of a new file if same file is uploaded again but with different casing
 // (it should just replace the existing file)
+
+// Assess if renaming an LFN directory works
 
 } // namespace mega65_ftp
