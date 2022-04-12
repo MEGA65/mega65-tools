@@ -3196,7 +3196,7 @@ int delete_file_or_dir(char* name)
   while (cur != NULL) {
     struct m65dirent* itm = (struct m65dirent*)cur->item;
 
-    if (!is_match(itm->d_name, name, 1)) {
+    if (!is_match(itm->d_name, name, 0) && !is_match(itm->d_longname, name, 0)) {
       cur = cur->next;
       continue;
     }
@@ -3205,7 +3205,10 @@ int delete_file_or_dir(char* name)
       ; // this is a DIR
     }
     else if (itm->d_name[0] && itm->d_filelen >= 0) {
-      delete_single_file(itm->d_name);
+      if (itm->d_longname[0])
+        delete_single_file(itm->d_longname);
+      else
+        delete_single_file(itm->d_name);
     }
 
     cur = cur->next;
@@ -3401,7 +3404,7 @@ void put_tilde_number_in_shortname(char* short_name, int i)
   char temp[9];
   snprintf(temp, 8 - ofs + 1, "~%d", i);
   bcopy(temp, &short_name[ofs], 8 - ofs);
-  printf("  considering short-name '%s'...\n", short_name);
+  // printf("  considering short-name '%s'...\n", short_name);
 }
 
 // returns: 0 = doesn't need long name, 1 = needs long name
@@ -3409,6 +3412,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
 {
   struct m65dirent de;
   int needs_long_name = 0;
+  char short_name_with_dot[13] = { 0 };
 
   strcpy(short_name, "           ");
 
@@ -3430,7 +3434,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
     for (int i = 1; ; i++) {  // endless loop till we find an available short-name
       put_tilde_number_in_shortname(short_name, i);
 
-      char short_name_with_dot[13] = { 0 };
+      memset(short_name_with_dot, 0, 13);
       memcpy(short_name_with_dot, short_name,8);
       short_name_with_dot[8] = '.';
       memcpy(&short_name_with_dot[9], &short_name[8], 3);
@@ -3447,6 +3451,9 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
       }
     } // end while
   }
+
+  if (needs_long_name)
+    printf("- Using DOS8.3 name of '%s'\n", short_name_with_dot);
 
   return needs_long_name;
 }
@@ -3774,7 +3781,6 @@ int upload_file(char* name, char* dest_name)
 int create_dir(char* dest_name)
 {
   int parent_cluster = 2;
-  struct m65dirent de;
   int retVal = 0;
   do {
     time_t upload_start = time(0);
