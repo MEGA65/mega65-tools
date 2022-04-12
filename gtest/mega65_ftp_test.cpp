@@ -6,7 +6,7 @@
 int parse_command(const char* str, const char* format, ...);
 int upload_file(char* name, char* dest_name);
 int rename_file_or_dir(char* name, char* dest_name);
-int delete_file(char* name);
+int delete_file_or_dir(char* name);
 int download_file(char* dest_name, char* local_name, int showClusters);
 int open_file_system(void);
 int contains_file_or_dir(char* name);
@@ -280,6 +280,27 @@ class Mega65FtpTestFixture : public ::testing::Test {
     delete_local_file(file4kb);
     delete_local_file(file8kb);
   }
+
+  void assess_100_files_exist(int skip)
+  {
+    // assure all other files still exist, except this one
+    for (int i = 1; i <= 100; i++) {
+      char filename[256];
+      sprintf(filename, "LongFileName%d.d81", i);
+
+      ReleaseStdOut();
+      CaptureStdOut();
+      show_directory(filename);
+      std::string output = RetrieveStdOut();
+      if (i == skip) {
+        ASSERT_THAT(output, Not(testing::ContainsRegex(filename)));
+      }
+      else
+        ASSERT_THAT(output, testing::ContainsRegex(filename));
+      ReleaseStdOut();
+      CaptureStdOut();
+    }
+  }
 };
 
 TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
@@ -304,7 +325,7 @@ TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
   //         +----------+----------+----------+----------+----------+-----
   //         | 4KB1.TMP |    ---   | 4BK3.TMP |    ---   |    ---   | ...
   //         +----------+----------+----------+----------+----------+-----
-  delete_file("4kb2.tmp");
+  delete_file_or_dir("4kb2.tmp");
 
   // write a two cluster file
   // CLUSTER       2          3          4          5          6      ...
@@ -555,7 +576,7 @@ TEST_F(Mega65FtpTestFixture, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
 
   // dump_sdcard_to_file("sdcard_after1.bin");
 
-  delete_file("LongFileName.d81");
+  delete_file_or_dir("LongFileName.d81");
   // now assess that dir-entries have been removed
 
   // dump_sdcard_to_file("sdcard_after2.bin");
@@ -723,9 +744,9 @@ TEST_F(Mega65FtpTestFixture, AssessIfRenamingVfatDirectoryWorks)
 {
   init_sdcard_data();
   create_dir("LongDirectory");
-  dump_sdcard_to_file("sdcard_before.bin");
+  // dump_sdcard_to_file("sdcard_before.bin");
   rename_file_or_dir("LongDirectory", "EvenLongerDirectory");
-  dump_sdcard_to_file("sdcard_after.bin");
+  // dump_sdcard_to_file("sdcard_after.bin");
 
   ReleaseStdOut();
   CaptureStdOut();
@@ -767,28 +788,15 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
 
   // dump_sdcard_to_file("sdcard_after1.bin");
 
-  // assure all other files still exist, except this one
-  for (int i = 1; i <= 100; i++) {
-    char filename[256];
-    sprintf(filename, "LongFileName%d.d81", i);
+  assess_100_files_exist(43);
 
-    ReleaseStdOut();
-    CaptureStdOut();
-    show_directory(filename);
-    std::string output = RetrieveStdOut();
-    if (i == 43) {
-      ASSERT_THAT(output, Not(testing::ContainsRegex(filename)));
-      ReleaseStdOut();
-      CaptureStdOut();
-      show_directory("EvenSuperDuperLongerFileName43.d81");
-      output = RetrieveStdOut();
-      ASSERT_THAT(output, testing::ContainsRegex("EvenSuperDuperLongerFileName43.d81"));
-    }
-    else
-      ASSERT_THAT(output, testing::ContainsRegex(filename));
-    ReleaseStdOut();
-    CaptureStdOut();
-  }
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("EvenSuperDuperLongerFileName43.d81");
+  std::string output = RetrieveStdOut();
+  ASSERT_THAT(output, testing::ContainsRegex("EvenSuperDuperLongerFileName43.d81"));
+  ReleaseStdOut();
+  CaptureStdOut();
 
   // Rename it back to the original name, so it crossed the cluster boundary again (for next test case)
   rename_file_or_dir("EvenSuperDuperLongerFileName43.d81", "LongFileName43.d81");
@@ -796,29 +804,47 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
   // dump_sdcard_to_file("sdcard_after2.bin");
 
   // "LongFileName43.d81" direntry crosses a cluster boundary, so let's try delete it
-  delete_file("LongFileName43.d81");
+  delete_file_or_dir("LongFileName43.d81");
 
-  // assure all other files still exist, except this one
-  for (int i = 1; i <= 100; i++) {
-    char filename[256];
-    sprintf(filename, "LongFileName%d.d81", i);
+  assess_100_files_exist(43);
 
-    ReleaseStdOut();
-    CaptureStdOut();
-    show_directory(filename);
-    std::string output = RetrieveStdOut();
-    if (i == 43)
-      ASSERT_THAT(output, Not(testing::ContainsRegex(filename)));
-    else
-      ASSERT_THAT(output, testing::ContainsRegex(filename));
-    ReleaseStdOut();
-    CaptureStdOut();
-  }
   // dump_sdcard_to_file("sdcard_after3.bin");
+
+  create_dir("LongDirectory");
+
+  // dump_sdcard_to_file("sdcard_after4.bin");
+
+  assess_100_files_exist(43);
+
+  // dump_sdcard_to_file("sdcard_after5.bin");
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("");
+  output = RetrieveStdOut();
+  ASSERT_THAT(output, testing::ContainsRegex("LongDirectory"));
+  ASSERT_THAT(output, testing::ContainsRegex("\n1 Dir"));
+  ReleaseStdOut();
+  CaptureStdOut();
+
+  // TODO: Unable to delete directories as yet. When that's possible, re-enable this test
+  /*
+  delete_file_or_dir("LongDirectory");
+
+  // dump_sdcard_to_file("sdcard_after6.bin");
+
+  assess_100_files_exist(43);
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("");
+  output = RetrieveStdOut();
+  ASSERT_THAT(output, Not(testing::ContainsRegex("LongDirectory")));
+  ASSERT_THAT(output, testing::ContainsRegex("\n0 Dir"));
+  */
 }
 
+// Further test ideas:
 // re-upload the same file with a smaller size and assure orphaned clusters get freed.
-
-// Assess an LFN file of exactly 13 chars long (will it behave properly)
 
 } // namespace mega65_ftp

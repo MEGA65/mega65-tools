@@ -118,7 +118,7 @@ void show_local_directory(char* searchpattern);
 void change_local_dir(char* path);
 void change_dir(char* path);
 void show_local_pwd(void);
-int delete_file(char* name);
+int delete_file_or_dir(char* name);
 int rename_file_or_dir(char* name, char* dest_name);
 int upload_file(char* name, char* dest_name);
 int sdhc_check(void);
@@ -460,7 +460,7 @@ int execute_command(char* cmd)
     wrap_upload(src);
   }
   else if (parse_command(cmd, "del %s", src) == 1) {
-    delete_file(src);
+    delete_file_or_dir(src);
   }
   else if (parse_command(cmd, "rename %s %s", src, dst) == 2) {
     rename_file_or_dir(src, dst);
@@ -3133,6 +3133,17 @@ int delete_single_file(char* name)
 
   unsigned int first_cluster_of_file = get_first_cluster_of_file();
 
+  // check if it is a DE_ATTRIB_FILE or DE_ATTRIB_DIR
+  int attrib = dir_sector_buffer[dir_sector_offset + 0x0b];
+
+  if (attrib == DE_ATTRIB_DIR) {
+    printf("TODO: Unable to delete directories as yet. Raise a ticket\n");
+    // NOTE: Will need to assess if directory is empty.
+    //      If not empty, then tell use the dir has xxx dirs and xxx files, are they sure they want to delete?
+    //      If yes, then will need a recursive strategy to delete files within dirs first before deleting dir
+    return -1;
+  }
+
   // remove dir-entry from FAT table (including any preceding vfat-lfn entries)
   wipe_direntries_of_current_file_or_dir();
 
@@ -3156,7 +3167,7 @@ int delete_single_file(char* name)
   return 0;
 }
 
-int delete_file(char* name)
+int delete_file_or_dir(char* name)
 {
   llist* lst_dirents = llist_new();
   char* searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
@@ -3190,8 +3201,9 @@ int delete_file(char* name)
       continue;
     }
 
-    if (itm->d_attr & 0x10)
+    if (itm->d_attr & 0x10) {
       ; // this is a DIR
+    }
     else if (itm->d_name[0] && itm->d_filelen >= 0) {
       delete_single_file(itm->d_name);
     }
@@ -3578,7 +3590,7 @@ int upload_single_file(char* name, char* dest_name)
       int clusters_needed = (st.st_size - 1) / (512 * sectors_per_cluster) + 1;
 
       if (num_clusters != clusters_needed) {
-        delete_file(dest_name);
+        delete_file_or_dir(dest_name);
         file_exists = FALSE;
       }
     }
