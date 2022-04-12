@@ -237,6 +237,7 @@ int slotnum = 0;
 
 int sd_status_fresh = 0;
 unsigned char sd_status[16];
+int quietFlag = 0;
 
 extern const char* version_string;
 
@@ -3698,6 +3699,8 @@ int upload_single_file(char* name, char* dest_name)
       remaining_length -= 512;
     }
 
+    fclose(f);
+
     // XXX check for orphan clusters at the end, and if present, free them.
 
     // Write file size into directory entry
@@ -4177,6 +4180,9 @@ BOOL find_contiguous_free_direntries(int direntries_needed)
     dir_sector = start_dir_sector;
     dir_sector_in_cluster = start_dir_sector_in_cluster;
     dir_sector_offset = start_dir_sector_offset - 32; // the -32 is needed due to advance_to_next_entry() call doing a +32 initially
+
+    read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
+
     return TRUE;
   }
 
@@ -4250,6 +4256,8 @@ BOOL create_directory_entry_for_item(char* dest_name, char* short_name, unsigned
 
       if (!write_vfat_direntry_chunk(vfat_seq_id, dest_name, lfn_csum))
         return FALSE;
+
+      execute_write_queue();
     }
   }
 
@@ -4258,6 +4266,8 @@ BOOL create_directory_entry_for_item(char* dest_name, char* short_name, unsigned
     return FALSE;
 
   create_directory_entry_for_shortname(short_name, attrib);
+
+  execute_write_queue();
 
   return TRUE;
 }
@@ -4487,7 +4497,7 @@ int download_single_file(char* dest_name, char* local_name, int showClusters)
       if (0)
         printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
             (int)de.d_filelen, sector_number, sector_number, file_cluster);
-      if (!showClusters)
+      if (!showClusters && !quietFlag)
         printf("\rDownloaded %lld bytes.", (long long)de.d_filelen - remaining_bytes);
       fflush(stdout);
 
@@ -4503,20 +4513,24 @@ int download_single_file(char* dest_name, char* local_name, int showClusters)
       fclose(f);
 
     int next_cluster = chained_cluster(file_cluster);
-    printf("Next cluster = $%x\n",next_cluster);
+    if (!quietFlag)
+      printf("Next cluster = $%x\n",next_cluster);
     while(next_cluster<0xffffff0) {
       next_cluster = chained_cluster(next_cluster);
-      printf("Next cluster = $%x\n",next_cluster);      
+      if (!quietFlag)
+        printf("Next cluster = $%x\n",next_cluster);
     }
 
     if (time(0) == upload_start)
       upload_start = time(0) - 1;
-    if (!showClusters) {
+    if (!showClusters && !quietFlag) {
       printf("\rDownloaded %lld bytes in %lld seconds (%.1fKB/sec)\n", (long long)de.d_filelen,
           (long long)time(0) - upload_start, de.d_filelen * 1.0 / 1024 / (time(0) - upload_start));
     }
-    else
+    else {
+    if (!quietFlag)
       printf("\n");
+    }
 
   } while (0);
 

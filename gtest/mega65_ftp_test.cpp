@@ -14,6 +14,9 @@ int is_fragmented(char* filename);
 int create_dir(char*);
 int show_directory(char* path);
 void change_dir(char* path);
+void put_tilde_number_in_shortname(char* short_name, int i);
+
+extern int quietFlag;
 
 #define SECTOR_SIZE 512
 #define MBR_SIZE SECTOR_SIZE
@@ -237,6 +240,8 @@ class Mega65FtpTestFixture : public ::testing::Test {
 
     generate_dummy_file(file4kb, 4096);
     generate_dummy_file(file8kb, 8192);
+
+    quietFlag = 1;
   }
 
   void CaptureStdOut(void)
@@ -731,12 +736,37 @@ TEST_F(Mega65FtpTestFixture, AssessIfRenamingVfatDirectoryWorks)
   EXPECT_THAT(output, testing::ContainsRegex("\n1 Dir"));
 }
 
-// Assess an LFN file of exactly 13 chars long (will it behave properly)
-
 // Assess ~1, ~2, ~3 short-names work into two digit form too (~10, ~11, etc...)
+TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
+{
+  init_sdcard_data();
+  // dump_sdcard_to_file("sdcard_before.bin");
+
+  for (int i = 1; i <= 100; i++) {
+    char filename[256];
+    sprintf(filename, "LongFileName%d.d81", i);
+    generate_dummy_file_embed_name(filename, 100);
+    upload_file(filename, filename);
+
+    // dump_sdcard_to_file("sdcard_after.bin");
+
+    char short_name[256] = "LONGFILE.D81";
+    put_tilde_number_in_shortname(short_name, i);
+
+    ReleaseStdOut();
+    CaptureStdOut();
+    show_directory(filename);
+    std::string output = RetrieveStdOut();
+    ASSERT_THAT(output, testing::ContainsRegex(short_name));
+    ReleaseStdOut();
+    CaptureStdOut();
+  }
+}
 
 // Assure vfat direntries are created/deleted/renamed successfully when they cross cluster boundaries...
 
 // re-upload the same file with a smaller size and assure orphaned clusters get freed.
+
+// Assess an LFN file of exactly 13 chars long (will it behave properly)
 
 } // namespace mega65_ftp
