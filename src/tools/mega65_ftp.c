@@ -3244,6 +3244,8 @@ void wipe_direntries_of_current_file_or_dir(void)
     dir_sector_in_cluster = vfat_dir_sector_in_cluster;
     dir_sector_offset = vfat_dir_sector_offset - 32; // the -32 is needed due to advance_to_next_entry() call doing a +32 initially
 
+    read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
+
     for (int i = 0; i < vfat_entry_count; i++) {
       advance_to_next_entry();
 
@@ -3311,6 +3313,8 @@ int rename_file_or_dir(char* name, char* dest_name)
 
     write_cluster_number_into_direntry(first_cluster_of_file);
     write_file_size_into_direntry(size);
+
+    write_sector(partition_start + dir_sector, dir_sector_buffer);
 
     // Flush any pending sector writes out
     execute_write_queue();

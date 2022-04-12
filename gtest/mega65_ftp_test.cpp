@@ -748,8 +748,6 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
     generate_dummy_file_embed_name(filename, 100);
     upload_file(filename, filename);
 
-    // dump_sdcard_to_file("sdcard_after.bin");
-
     char short_name[256] = "LONGFILE.D81";
     put_tilde_number_in_shortname(short_name, i);
 
@@ -761,9 +759,63 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
     ReleaseStdOut();
     CaptureStdOut();
   }
-}
 
-// Assure vfat direntries are created/deleted/renamed successfully when they cross cluster boundaries...
+  // dump_sdcard_to_file("sdcard_after.bin");
+
+  // "LongFileName43.d81" direntry crosses a cluster boundary, so let's try rename it
+  rename_file_or_dir("LongFileName43.d81", "EvenSuperDuperLongerFileName43.d81");
+
+  // dump_sdcard_to_file("sdcard_after1.bin");
+
+  // assure all other files still exist, except this one
+  for (int i = 1; i <= 100; i++) {
+    char filename[256];
+    sprintf(filename, "LongFileName%d.d81", i);
+
+    ReleaseStdOut();
+    CaptureStdOut();
+    show_directory(filename);
+    std::string output = RetrieveStdOut();
+    if (i == 43) {
+      ASSERT_THAT(output, Not(testing::ContainsRegex(filename)));
+      ReleaseStdOut();
+      CaptureStdOut();
+      show_directory("EvenSuperDuperLongerFileName43.d81");
+      output = RetrieveStdOut();
+      ASSERT_THAT(output, testing::ContainsRegex("EvenSuperDuperLongerFileName43.d81"));
+    }
+    else
+      ASSERT_THAT(output, testing::ContainsRegex(filename));
+    ReleaseStdOut();
+    CaptureStdOut();
+  }
+
+  // Rename it back to the original name, so it crossed the cluster boundary again (for next test case)
+  rename_file_or_dir("EvenSuperDuperLongerFileName43.d81", "LongFileName43.d81");
+
+  // dump_sdcard_to_file("sdcard_after2.bin");
+
+  // "LongFileName43.d81" direntry crosses a cluster boundary, so let's try delete it
+  delete_file("LongFileName43.d81");
+
+  // assure all other files still exist, except this one
+  for (int i = 1; i <= 100; i++) {
+    char filename[256];
+    sprintf(filename, "LongFileName%d.d81", i);
+
+    ReleaseStdOut();
+    CaptureStdOut();
+    show_directory(filename);
+    std::string output = RetrieveStdOut();
+    if (i == 43)
+      ASSERT_THAT(output, Not(testing::ContainsRegex(filename)));
+    else
+      ASSERT_THAT(output, testing::ContainsRegex(filename));
+    ReleaseStdOut();
+    CaptureStdOut();
+  }
+  // dump_sdcard_to_file("sdcard_after3.bin");
+}
 
 // re-upload the same file with a smaller size and assure orphaned clusters get freed.
 
