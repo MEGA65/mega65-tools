@@ -68,6 +68,7 @@ struct m65dirent {
   unsigned short d_namlen;       /* Length of name in d_name. */
   unsigned char d_attr;          /* FAT file attributes */
   unsigned d_type;               /* Object type (digested attributes) */
+  struct tm d_time;               /* Creation time? */
   char d_name[FILENAME_MAX];     /* File name. */
   char d_longname[FILENAME_MAX]; /* Long file name. */
   // extra debug fields for info on dir entries
@@ -76,6 +77,24 @@ struct m65dirent {
   int de_sector_offset;
   unsigned char de_raw[32];       /* preserve dirent_raw info for debugging purposes */
 };
+
+void assemble_time_from_raw(unsigned char* buffer, struct m65dirent* de)
+{
+  memset(&de->d_time, 0, sizeof(struct tm));
+
+  de->d_time.tm_sec = (buffer[0xe] & 0x1f) << 1;
+  de->d_time.tm_min = (buffer[0xe] >> 5) & 0x07;
+
+  de->d_time.tm_min |= ((buffer[0xf] & 0x7)  << 3);
+  de->d_time.tm_hour = buffer[0xf] >> 3;
+
+  de->d_time.tm_mday = buffer[0x10] & 0x1f;
+  de->d_time.tm_mon = ((buffer[0x10] >> 5) & 0x7);
+
+  de->d_time.tm_mon |= ( (buffer[0x11] & 0x1) << 3);
+  de->d_time.tm_mon -= 1;
+  de->d_time.tm_year = (buffer[0x11] >> 1) + 80;
+}
 
 #define RET_FAIL -1
 #define RET_NOT_FOUND 0
@@ -1759,12 +1778,6 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
       break;
     }
 
-    // gather debug info
-    bcopy(&dir_sector_buffer[dir_sector_offset], d->de_raw, 32);
-    d->de_cluster = dir_cluster;
-    d->de_sector = partition_start + dir_sector;
-    d->de_sector_offset = dir_sector_offset;
-
     // printf("Found dirent %d %d %d\n",dir_sector,dir_sector_offset,dir_sector_in_cluster);
 
     // Read in all FAT32-VFAT entries to extract out long filenames
@@ -1807,6 +1820,14 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
           break;
       } while (seqnumber != 1);
     }
+
+    // gather debug info
+    bcopy(&dir_sector_buffer[dir_sector_offset], d->de_raw, 32);
+    d->de_cluster = dir_cluster;
+    d->de_sector = partition_start + dir_sector;
+    d->de_sector_offset = dir_sector_offset;
+
+    assemble_time_from_raw(d->de_raw, d);
 
     // ignore any vfat files starting with '.' (such as mac osx '._*' metadata files)
     if (vfatEntry && d->d_longname[0] == '.') {
@@ -2438,6 +2459,14 @@ int read_remote_dirents(llist* lst_dirents, char* path, char** psearchterm)
   return TRUE;
 }
 
+char* get_datetime_str(struct tm* tm)
+{
+  static char s[20]; /* strlen("2009-08-10 18:17:54") + 1 */
+  strftime(s, 20, "%Y-%m-%d %H:%M:%S", tm);
+
+  return s;
+}
+
 int show_directory(char* path)
 {
   int dir_count = 0;
@@ -2468,11 +2497,11 @@ int show_directory(char* path)
 
       if (itm->d_attr & 0x10) {
         dir_count++;
-        printf("       <DIR> %-12s | %s\n", itm->d_name, itm->d_longname);
+        printf("       <DIR> | %-20s | %-12s | %s\n", get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
         file_count++;
-        printf("%12d %-12s | %s\n", (int)itm->d_filelen, itm->d_name, itm->d_longname);
+        printf("%12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
       }
       if (dirent_raw == 1) {
         dump_bytes(0, "dirent raw", itm->de_raw, 32);
@@ -3775,6 +3804,21 @@ int upload_file(char* name, char* dest_name)
   return 0;
 }
 
+void assemble_time_into_raw(unsigned char* buffer, struct tm* tm)
+{
+  buffer[0x00 + 0xe] = (tm->tm_sec >> 1) & 0x1F; // 2 second resolution
+  buffer[0x00 + 0xe] |= (tm->tm_min & 0x7) << 5;
+
+  buffer[0x00 + 0xf] = (tm->tm_min >> 3) & 0x7;
+  buffer[0x00 + 0xf] |= (tm->tm_hour) << 3;
+
+  buffer[0x00 + 0x10] = tm->tm_mday & 0x1f;
+  buffer[0x00 + 0x10] |= ((tm->tm_mon + 1) & 0x7) << 5;
+
+  buffer[0x00 + 0x11] = ((tm->tm_mon + 1) >> 3) & 0x1;
+  buffer[0x00 + 0x11] |= (tm->tm_year - 80) << 1;
+}
+
 // Must be a single path segment.  Creating sub-directories requires multiple chdir/cd + mkdir calls
 int create_dir(char* dest_name)
 {
@@ -3898,14 +3942,9 @@ int create_dir(char* dest_name)
           buffer[0x00 + i] = ' ';
         buffer[0x00 + 0] = '.';
         buffer[0x00 + 0xb] = 0x10;                     // directory
-        buffer[0x00 + 0xe] = (tm->tm_sec >> 1) & 0x1F; // 2 second resolution
-        buffer[0x00 + 0xe] |= (tm->tm_min & 0x7) << 5;
-        buffer[0x00 + 0xf] = (tm->tm_min & 0x3) >> 3;
-        buffer[0x00 + 0xf] |= (tm->tm_hour) << 2;
-        buffer[0x00 + 0x10] = tm->tm_mday & 0x1f;
-        buffer[0x00 + 0x10] |= ((tm->tm_mon + 1) & 0x7) << 5;
-        buffer[0x00 + 0x11] = ((tm->tm_mon + 1) & 0x1) >> 3;
-        buffer[0x00 + 0x11] |= (tm->tm_year - 80) << 1;
+
+        assemble_time_into_raw(&buffer[0x00], tm);
+
         buffer[0x00 + 0x1A] = (first_cluster_of_file >> 0) & 0xff;
         buffer[0x00 + 0x1B] = (first_cluster_of_file >> 8) & 0xff;
         buffer[0x00 + 0x14] = (first_cluster_of_file >> 16) & 0xff;
@@ -3916,14 +3955,9 @@ int create_dir(char* dest_name)
         buffer[0x20 + 0] = '.';
         buffer[0x20 + 1] = '.';
         buffer[0x20 + 0xb] = 0x10;                     // directory
-        buffer[0x20 + 0xe] = (tm->tm_sec >> 1) & 0x1F; // 2 second resolution
-        buffer[0x20 + 0xe] |= (tm->tm_min & 0x7) << 5;
-        buffer[0x20 + 0xf] = (tm->tm_min & 0x3) >> 3;
-        buffer[0x20 + 0xf] |= (tm->tm_hour) << 2;
-        buffer[0x20 + 0x10] = tm->tm_mday & 0x1f;
-        buffer[0x20 + 0x10] |= ((tm->tm_mon + 1) & 0x7) << 5;
-        buffer[0x20 + 0x11] = ((tm->tm_mon + 1) & 0x1) >> 3;
-        buffer[0x20 + 0x11] |= (tm->tm_year - 80) << 1;
+
+        assemble_time_into_raw(&buffer[0x20], tm);
+
         buffer[0x20 + 0x1A] = (parent_cluster >> 0) & 0xff;
         buffer[0x20 + 0x1B] = (parent_cluster >> 8) & 0xff;
         buffer[0x20 + 0x14] = (parent_cluster >> 16) & 0xff;
@@ -4128,14 +4162,7 @@ BOOL create_directory_entry_for_shortname(char* short_name, int attrib)
   // Store create time and date
   time_t t = time(0);
   struct tm* tm = localtime(&t);
-  dir[0xe] = (tm->tm_sec >> 1) & 0x1F; // 2 second resolution
-  dir[0xe] |= (tm->tm_min & 0x7) << 5;
-  dir[0xf] = (tm->tm_min & 0x3) >> 3;
-  dir[0xf] |= (tm->tm_hour) << 2;
-  dir[0x10] = tm->tm_mday & 0x1f;
-  dir[0x10] |= ((tm->tm_mon + 1) & 0x7) << 5;
-  dir[0x11] = ((tm->tm_mon + 1) & 0x1) >> 3;
-  dir[0x11] |= (tm->tm_year - 80) << 1;
+  assemble_time_into_raw(dir, tm);
 
   //	  dump_bytes(0,"New directory entry",dir,32);
 
