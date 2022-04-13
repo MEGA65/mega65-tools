@@ -302,6 +302,7 @@ void main(void)
   POKE(0, 65);
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
+  POKE(0xD689, PEEK(0xD689) | 128);
 
   // Cursor off
   POKE(204, 0x80);
