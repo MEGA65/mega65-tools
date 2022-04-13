@@ -365,6 +365,23 @@ TEST_F(Mega65FtpTestFixture, RenameToExistingFilenameShouldNotBePermitted)
   ASSERT_EQ(ret, -2);
 }
 
+TEST_F(Mega65FtpTestFixture, AssessRenameFileRemovesOldName)
+{
+  init_sdcard_data();
+  upload_file(file4kb, file4kb);
+
+  // dump_sdcard_to_file("sdcard_before.bin");
+  int ret = rename_file_or_dir(file4kb, file8kb);
+  // dump_sdcard_to_file("sdcard_after.bin");
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("");
+  std::string output = RetrieveStdOut();
+  ASSERT_THAT(output, testing::ContainsRegex(file8kb));
+  ASSERT_THAT(output, Not(testing::ContainsRegex(file4kb)));
+}
+
 TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
 {
   init_sdcard_data();

@@ -3310,15 +3310,13 @@ int rename_file_or_dir(char* name, char* dest_name)
     unsigned int first_cluster_of_file = calc_first_cluster_of_file();
     unsigned int size = calc_size_of_file();
 
-    if (vfatEntry || needs_long_name) { // was the prior entry a vfat-lfn entry or will it become a vfat-lfn after the rename?
-      wipe_direntries_of_current_file_or_dir();
+    wipe_direntries_of_current_file_or_dir();
 
-      int direntries_needed = 1 + calculate_needed_direntries_for_vfat(dest_name);
+    int direntries_needed = 1 + calculate_needed_direntries_for_vfat(dest_name);
 
-      if (!find_contiguous_free_direntries(direntries_needed)) {
-        printf("ERROR: Unable to locate %d contiguous free dir entries\n", direntries_needed);
-        return -1;
-      }
+    if (!find_contiguous_free_direntries(direntries_needed)) {
+      printf("ERROR: Unable to locate %d contiguous free dir entries\n", direntries_needed);
+      return -1;
     }
 
     if (!create_directory_entry_for_item(dest_name, short_name, lfn_csum, needs_long_name, attrib)) {
