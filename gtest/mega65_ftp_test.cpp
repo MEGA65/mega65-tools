@@ -15,6 +15,7 @@ int create_dir(char*);
 int show_directory(char* path);
 void change_dir(char* path);
 void put_tilde_number_in_shortname(char* short_name, int i);
+char* get_current_short_name(void);
 
 extern int quietFlag;
 
@@ -772,6 +773,56 @@ TEST_F(Mega65FtpTestFixture, AssessIfRenamingVfatDirectoryWorks)
   EXPECT_THAT(output, Not(testing::ContainsRegex("LongDirectory")));
   EXPECT_THAT(output, testing::ContainsRegex("EvenLongerDirectory"));
   EXPECT_THAT(output, testing::ContainsRegex("\n1 Dir"));
+}
+
+TEST_F(Mega65FtpTestFixture, AssessVariousVfatEdgeCases)
+{
+  char *params[][2] =
+  {
+      // lfn                      shortname
+      { "ViZ",                    "VIZ" },
+      { "viz.exe",                "VIZ.EXE" }, // TODO: lowercase 'viz.exe' shouldn't need an lfn, it should fiddle with upper/lowercase direntry bits
+      { "viZzyO.d81",             "VIZZYO.D81" },
+      { "viZzyO.d81234",          "VIZZYO~1.D81" },
+      { "viZ.executable",         "VIZ~1.EXE" },
+      { ".executable",            "EXECUT~1" },
+      { ".viz",                   "VIZ~1" },
+      { "vIzIbIlItY.exe",         "VIZIBI~1.EXE" },
+      { "vIzIbIlItY.executable",  "VIZIBI~2.EXE" },
+      { ".vIz.viz",               "VIZ~1.VIZ" },
+      { ".vIz.dIz.vIz",           "VIZDIZ~1.VIZ" },
+      { ".vizib.",                "VIZIB~1" },
+      { NULL, NULL }
+  };
+  init_sdcard_data();
+
+  int i = 0;
+  while (params[i][0] != NULL) {
+    char* lfn = params[i][0];
+    char* shortname = params[i][1];
+    upload_dummy_file_with_embedded_name(lfn, 100);
+
+    contains_file_or_dir(lfn);
+
+    ReleaseStdOut();
+    EXPECT_STREQ(shortname, get_current_short_name());
+    CaptureStdOut();
+    i++;
+  }
+}
+
+TEST_F(Mega65FtpTestFixture, AssessMultipleVfatDirectoriesWithSimilarNames)
+{
+  init_sdcard_data();
+  create_dir("LongDirectory");
+  create_dir("LongDirectory2");
+
+  contains_file_or_dir("LongDirectory");
+  ReleaseStdOut();
+  EXPECT_STREQ("LONGDI~1", get_current_short_name());
+
+  contains_file_or_dir("LongDirectory2");
+  EXPECT_STREQ("LONGDI~2", get_current_short_name());
 }
 
 // Assess ~1, ~2, ~3 short-names work into two digit form too (~10, ~11, etc...)

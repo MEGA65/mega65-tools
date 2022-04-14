@@ -81,7 +81,7 @@ void cleanup(char *str)
   }
 }
 
-#define DEBUG
+// #define DEBUG
 
 void assess_key_val(tfile_info* finfo, char* key, char* val)
 {

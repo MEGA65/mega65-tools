@@ -2505,8 +2505,8 @@ int show_directory(char* path)
       }
       if (dirent_raw == 1) {
         dump_bytes(0, "dirent raw", itm->de_raw, 32);
-        printf("type: $%02X, cluster=%ld, sector=%ld, sec_offset=$%04X\n"
-               "  data_cluster=%ld\n", itm->d_type, itm->de_cluster, itm->de_sector, itm->de_sector_offset, itm->d_ino);
+        printf("type: $%02X, cluster=%ld ($%08lX), sector=%ld, sec_offset=$%04X\n"
+               "  data_cluster=%ld ($%08lX)\n", itm->d_type, itm->de_cluster, itm->de_cluster, itm->de_sector, itm->de_sector_offset, itm->d_ino, itm->d_ino);
         // show dirent_raw and parse info here
       }
       cur = cur->next;
@@ -3295,6 +3295,7 @@ void wipe_direntries_of_current_file_or_dir(void)
 
       unsigned char *dir = &dir_sector_buffer[dir_sector_offset];
       bzero(dir, 32);
+      dir[0] = 0xE5;
       write_sector(partition_start + dir_sector, dir_sector_buffer);
     }
     advance_to_next_entry();
@@ -3302,6 +3303,7 @@ void wipe_direntries_of_current_file_or_dir(void)
   // delete the 8.3 entry
   unsigned char *dir = &dir_sector_buffer[dir_sector_offset];
   bzero(dir, 32);
+  dir[0] = 0xE5;
   write_sector(partition_start + dir_sector, dir_sector_buffer);
 
   execute_write_queue();
@@ -3375,18 +3377,29 @@ BOOL is_long_name_needed(char* long_name, char* short_name)
   int base_len = 0;
   int ext_len = 0;
 
+  char* lastdot = strrchr(long_name, '.');
+
   for (int i = 0; long_name[i]; i++) {
     if (long_name[i] == '.') {
-      dot_count++;
-      if (dot_count > 1)
+      if (i == 0) { // ignore dot as start of name
+        needs_long_name = TRUE;
+        continue;
+      }
+      if (lastdot == &long_name[i]) {
+        dot_count++;
+        ext_len = 0;
+      }
+      else
         needs_long_name = TRUE;
     }
     else {
       if (long_name[i] == ' ')
         continue;
+      if (toupper(long_name[i]) != long_name[i])
+        needs_long_name = TRUE;
       if (dot_count == 0) {
         if (base_len < 8) {
-          short_name[base_len] = long_name[i];
+          short_name[base_len] = toupper(long_name[i]);
           base_len++;
         }
         else {
@@ -3395,7 +3408,7 @@ BOOL is_long_name_needed(char* long_name, char* short_name)
       }
       else if (dot_count == 1) {
         if (ext_len < 3) {
-          short_name[8 + ext_len] = long_name[i];
+          short_name[8 + ext_len] = toupper(long_name[i]);
           ext_len++;
         }
         else {
@@ -3403,11 +3416,6 @@ BOOL is_long_name_needed(char* long_name, char* short_name)
         }
       }
     }
-  }
-
-  if (needs_long_name) {
-    for (int i = 0; i < strlen(short_name); i++)
-      short_name[i] = toupper(short_name[i]);
   }
 
   return needs_long_name;
@@ -3427,11 +3435,76 @@ int num_digits(int i)
 void put_tilde_number_in_shortname(char* short_name, int i)
 {
   int length_of_number = num_digits(i);
-  int ofs = 7 - length_of_number;
+  int ofs = 7;
   char temp[9];
-  snprintf(temp, 8 - ofs + 1, "~%d", i);
-  bcopy(temp, &short_name[ofs], 8 - ofs);
+
+  // 0123456789A
+  // VIZ     D81
+
+  // locate first space in first 8 chars (the ~1 will be placed in there)
+  while (short_name[ofs] == ' ')
+    ofs--;
+  ofs++;
+  if (ofs > 7 - length_of_number)
+    ofs = 7 - length_of_number;
+
+  sprintf(temp, "~%d", i);
+  bcopy(temp, &short_name[ofs], strlen(temp));
   // printf("  considering short-name '%s'...\n", short_name);
+}
+
+BOOL is_tilde_needed(char* longname)
+{
+  int basename_len = strlen(longname);
+  int suffix_len = 0;
+
+  // if there's a dot at the start of the longname, then we must have a tilde
+  if (longname[0] == '.')
+    return TRUE;
+
+  char* pdot = strrchr(longname, '.');
+
+
+  if (pdot) {
+    basename_len = (int)(pdot - longname);
+    suffix_len = strlen(pdot) - 1;
+  }
+
+  if (basename_len <= 8 && suffix_len <=3)
+    return FALSE;
+
+  return TRUE;
+}
+
+void get_dotted_shortname(char* short_name_with_dot, char* short_name)
+{
+  int i = 0;
+  for (i = 0; i < 8; i++) {
+    if (short_name[i] != ' ') {
+      short_name_with_dot[i] = short_name[i];
+    }
+    else
+      break;
+  }
+
+  short_name_with_dot[i] = '.';
+  i++;
+
+  for (int k = 8; k < 11; k++) {
+    if (short_name[k] != ' ') {
+      short_name_with_dot[i] = short_name[k];
+      i++;
+    }
+    else {
+      if (k == 8) { // if we don't have any extension, remove the dot
+        i--;
+      }
+
+      break;
+    }
+  }
+
+  short_name_with_dot[i] = '\0';
 }
 
 // returns: 0 = doesn't need long name, 1 = needs long name
@@ -3455,16 +3528,13 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
 
   needs_long_name = is_long_name_needed(long_name, short_name);
 
-  if (needs_long_name) {
+  if (needs_long_name && is_tilde_needed(long_name)) {
     // Put ~X suffix on base name.
     // XXX Needs to be unique in the sub-directory
     for (int i = 1; ; i++) {  // endless loop till we find an available short-name
       put_tilde_number_in_shortname(short_name, i);
 
-      memset(short_name_with_dot, 0, 13);
-      memcpy(short_name_with_dot, short_name,8);
-      short_name_with_dot[8] = '.';
-      memcpy(&short_name_with_dot[9], &short_name[8], 3);
+      get_dotted_shortname(short_name_with_dot, short_name);
 
       // iterate through the directory looking for
       if (!find_file_in_curdir(short_name_with_dot, &de)) {
@@ -3804,19 +3874,28 @@ int upload_file(char* name, char* dest_name)
   return 0;
 }
 
+void assemble_time_into_raw_at_offset(unsigned char* buffer, int offs, struct tm* tm)
+{
+  buffer[0x00 + offs] = (tm->tm_sec >> 1) & 0x1F; // 2 second resolution
+  buffer[0x00 + offs] |= (tm->tm_min & 0x7) << 5;
+
+  buffer[0x00 + offs+1] = (tm->tm_min >> 3) & 0x7;
+  buffer[0x00 + offs+1] |= (tm->tm_hour) << 3;
+
+  buffer[0x00 + offs+2] = tm->tm_mday & 0x1f;
+  buffer[0x00 + offs+2] |= ((tm->tm_mon + 1) & 0x7) << 5;
+
+  buffer[0x00 + offs+3] = ((tm->tm_mon + 1) >> 3) & 0x1;
+  buffer[0x00 + offs+3] |= (tm->tm_year - 80) << 1;
+}
+
 void assemble_time_into_raw(unsigned char* buffer, struct tm* tm)
 {
-  buffer[0x00 + 0xe] = (tm->tm_sec >> 1) & 0x1F; // 2 second resolution
-  buffer[0x00 + 0xe] |= (tm->tm_min & 0x7) << 5;
+  // create time+date
+  assemble_time_into_raw_at_offset(buffer, 0x0e, tm);
 
-  buffer[0x00 + 0xf] = (tm->tm_min >> 3) & 0x7;
-  buffer[0x00 + 0xf] |= (tm->tm_hour) << 3;
-
-  buffer[0x00 + 0x10] = tm->tm_mday & 0x1f;
-  buffer[0x00 + 0x10] |= ((tm->tm_mon + 1) & 0x7) << 5;
-
-  buffer[0x00 + 0x11] = ((tm->tm_mon + 1) >> 3) & 0x1;
-  buffer[0x00 + 0x11] |= (tm->tm_year - 80) << 1;
+  // last-modifiied time+date
+  assemble_time_into_raw_at_offset(buffer, 0x16, tm);
 }
 
 // Must be a single path segment.  Creating sub-directories requires multiple chdir/cd + mkdir calls
@@ -3833,6 +3912,11 @@ int create_dir(char* dest_name)
       fprintf(stderr, "ERROR: Could not open file system.\n");
       retVal = -1;
       break;
+    }
+
+    // assure dir_cluster points to the first cluster of the current directory's direntries)
+    if (fat_opendir(current_dir, TRUE)) {
+      return FALSE;
     }
 
     parent_cluster = dir_cluster;
@@ -4134,6 +4218,14 @@ BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
   return FALSE;
 }
 
+char* get_current_short_name(void)
+{
+  static struct m65dirent de;
+  dir_sector_offset -= 32;
+  fat_readdir(&de, FALSE);
+  return de.d_name;
+}
+
 unsigned int calc_first_cluster_of_file(void)
 {
   return (dir_sector_buffer[dir_sector_offset + 0x1A] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1B] << 8)
@@ -4184,7 +4276,7 @@ BOOL read_next_direntry_and_assure_is_free(struct m65dirent *de)
     return FALSE;
   }
 
-  if (de->d_name[0] || de->d_type != M65DT_FREESLOT) {
+  if (de->d_name[0] || de->d_type != M65DT_FREESLOT || de->de_raw[0] == 0xE5) {
     return FALSE;
   }
 
