@@ -16,6 +16,8 @@ int show_directory(char* path);
 void change_dir(char* path);
 void put_tilde_number_in_shortname(char* short_name, int i);
 char* get_current_short_name(void);
+void show_cluster(int cluster_num);
+char* find_long_name_in_curdir(char* filename);
 
 extern int quietFlag;
 
@@ -304,6 +306,36 @@ class Mega65FtpTestFixture : public ::testing::Test {
   }
 };
 
+void upload_dummy_file_with_embedded_name(char* newname, int size)
+{
+  generate_dummy_file_embed_name(newname, size);
+  upload_file(newname, newname);
+  delete_local_file(newname);
+}
+
+void upload_127_dummy_files_with_embedded_name(void)
+{
+  char newname[128];
+  for (int k = 1; k <= 127; k++) {
+    sprintf(newname,"%d.TXT", k);
+    upload_dummy_file_with_embedded_name(newname, 256);
+  }
+}
+
+/*
+TEST_F(Mega65FtpTestFixture, AssessSector)
+{
+  init_sdcard_data();
+
+  upload_dummy_file_with_embedded_name("LongFileName.d81", 100);
+  upload_dummy_file_with_embedded_name("Long File Name.d81", 100);
+
+  ReleaseStdOut();
+
+  show_cluster(2);
+}
+*/
+
 TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
 {
   init_sdcard_data();
@@ -400,22 +432,6 @@ TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
   std::string output = RetrieveStdOut();
 
   EXPECT_THAT(output, testing::ContainsRegex("4kbtest.tmp"));
-}
-
-void upload_dummy_file_with_embedded_name(char* newname, int size)
-{
-  generate_dummy_file_embed_name(newname, size);
-  upload_file(newname, newname);
-  delete_local_file(newname);
-}
-
-void upload_127_dummy_files_with_embedded_name(void)
-{
-  char newname[128];
-  for (int k = 1; k <= 127; k++) {
-    sprintf(newname,"%d.TXT", k);
-    upload_dummy_file_with_embedded_name(newname, 256);
-  }
 }
 
 TEST_F(Mega65FtpTestFixture, RootDirCanHoldMoreThan128Files)
@@ -806,6 +822,7 @@ TEST_F(Mega65FtpTestFixture, AssessVariousVfatEdgeCases)
 
     ReleaseStdOut();
     EXPECT_STREQ(shortname, get_current_short_name());
+    EXPECT_STREQ(lfn, find_long_name_in_curdir(lfn));
     CaptureStdOut();
     i++;
   }

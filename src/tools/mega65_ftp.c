@@ -119,7 +119,7 @@ int download_slot(int sllot, char* dest_name);
 int download_file(char* dest_name, char* local_name, int showClusters);
 int download_flashslot(int slot_number, char* dest_name);
 void show_clustermap(void);
-void show_cluster(void);
+void show_cluster(int cluster_num);
 void dump_sectors(void);
 void restore_sectors(void);
 void show_secinfo(void);
@@ -237,7 +237,6 @@ unsigned char syspart_configsector[512];
 int dirent_raw = 0;
 int clustermap_start = 0;
 int clustermap_count = 0;
-int cluster_num = 0;
 char secdump_file[256] = { 0 };
 int secdump_start = 0;
 int secdump_count = 0;
@@ -445,6 +444,7 @@ int parse_command(const char* str, const char* format, ...)
 
 int execute_command(char* cmd)
 {
+  int cluster_num = 0;
   unsigned int sector_num;
 
   if (strlen(cmd) > 1000) {
@@ -544,7 +544,7 @@ int execute_command(char* cmd)
     show_clustermap();
   }
   else if (sscanf(cmd, "cluster %d", &cluster_num) == 1) {
-    show_cluster();
+    show_cluster(cluster_num);
   }
   else if (sscanf(cmd, "secdump %s %d %d", secdump_file, &secdump_start, &secdump_count) == 3) {
     dump_sectors();
@@ -1781,7 +1781,9 @@ int fat_readdir(struct m65dirent* d, int extend_dir_flag)
     // printf("Found dirent %d %d %d\n",dir_sector,dir_sector_offset,dir_sector_in_cluster);
 
     // Read in all FAT32-VFAT entries to extract out long filenames
-    if (dir_sector_buffer[dir_sector_offset + 0x0B] == 0x0F) {
+    if (dir_sector_buffer[dir_sector_offset + 0x0B] == 0x0F
+        && dir_sector_buffer[dir_sector_offset] != 0x00 // assure this isn't an old vfat that has been wiped
+        && dir_sector_buffer[dir_sector_offset] != 0xE5) {
       if (vfatEntry == FALSE) {
         vfat_dir_cluster = dir_cluster;
         vfat_dir_sector = dir_sector;
@@ -1902,7 +1904,7 @@ int chain_cluster(unsigned int cluster, unsigned int next_cluster)
     int fat_sector_num = cluster / (512 / 4);
     int fat_sector_offset = (cluster * 4) & 0x1FF;
     if (fat_sector_num >= sectors_per_fat) {
-      printf("ERROR: cluster number too large.\n");
+      printf("ERROR: cluster number too large. (cluster=%d, next_cluster=%d)\n", cluster, next_cluster);
       retVal = -1;
       break;
     }
@@ -2570,7 +2572,7 @@ void show_clustermap(void)
   }
 }
 
-void show_cluster(void)
+void show_cluster(int cluster_num)
 {
   char str[50];
   int abs_cluster2_sector = partition_start + first_cluster_sector + (cluster_num - 2) * sectors_per_cluster;
@@ -3864,7 +3866,7 @@ int upload_file(char* name, char* dest_name)
       struct stat file_stats;
       if (!stat(dir->d_name, &file_stats)) {
         if (!S_ISDIR(file_stats.st_mode)) {
-          printf("Uploading \"%s\"...\n", dir->d_name);
+          printf("\nUploading \"%s\"...\n", dir->d_name);
           upload_single_file(dir->d_name, dir->d_name);
         }
       }
@@ -4218,6 +4220,20 @@ BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
   return FALSE;
 }
 
+char* find_long_name_in_curdir(char* filename)
+{
+  static struct m65dirent de;
+  if (!safe_open_dir())
+    return FALSE;
+
+  while (!fat_readdir(&de, FALSE)) {
+    if (name_match(&de, filename)) {
+      return de.d_longname;
+    }
+  }
+  return NULL;
+}
+
 char* get_current_short_name(void)
 {
   static struct m65dirent de;
@@ -4276,7 +4292,7 @@ BOOL read_next_direntry_and_assure_is_free(struct m65dirent *de)
     return FALSE;
   }
 
-  if (de->d_name[0] || de->d_type != M65DT_FREESLOT || de->de_raw[0] == 0xE5) {
+  if (vfatEntry || de->d_name[0] || de->d_type != M65DT_FREESLOT || de->de_raw[0] == 0xE5) {
     return FALSE;
   }
 
@@ -4307,6 +4323,10 @@ BOOL find_contiguous_free_direntries(int direntries_needed)
         start_dir_sector_in_cluster = dir_sector_in_cluster;
         start_dir_sector_offset = dir_sector_offset;
       }
+      if (de.de_raw[0] == 0x00) { // if first byte of direntry is 00, it implies that no genuine direntries exist beyond this
+        count = direntries_needed;
+        break;
+      }
     }
     else { // this dir-entry is not free?
       found_start_free = FALSE;
@@ -4332,9 +4352,20 @@ BOOL find_contiguous_free_direntries(int direntries_needed)
 void copy_from_dnamechunk_to_offset(char* dnamechunk, unsigned char* dir, int offset, int numuc2chars)
 {
   for (int k = 0; k < numuc2chars; k++) {
-    if (dnamechunk[k] == 0)
-      return;
-    dir[offset + k * 2] = (unsigned char)dnamechunk[k];
+    if (dnamechunk == NULL) {
+      dir[offset + k * 2] = 0xff;
+      dir[offset + k * 2 + 1] = 0xff;
+    }
+    else if (dnamechunk[k] == 0) { // last char in string?
+      dir[offset + k * 2] = (unsigned char)dnamechunk[k];
+      dir[offset + k * 2 + 1] = 0;
+      dnamechunk = NULL;
+    }
+    else
+    {
+      dir[offset + k * 2] = (unsigned char)dnamechunk[k];
+      dir[offset + k * 2 + 1] = 0;
+    }
   }
 }
 
@@ -4346,13 +4377,15 @@ void copy_vfat_chars_into_direntry(char* dname, unsigned char* dir, int seqnumbe
   copy_from_dnamechunk_to_offset(dname, dir, 0x01, 5);
   dname += 5;
   len -= 5;
-  if (len <= 0)
-    return;
+  if (len < 0)
+    dname = NULL;
   copy_from_dnamechunk_to_offset(dname, dir, 0x0E, 6);
-  dname += 6;
+
+  if (dname != NULL)
+    dname += 6;
   len -= 6;
-  if (len <= 0)
-    return;
+  if (len < 0)
+    dname = NULL;
   copy_from_dnamechunk_to_offset(dname, dir, 0x1C, 2);
 }
 
@@ -4390,8 +4423,10 @@ BOOL create_directory_entry_for_item(char* dest_name, char* short_name, unsigned
     int vfat_seq_id = calculate_needed_direntries_for_vfat(dest_name);
 
     for ( ; vfat_seq_id > 0 ; vfat_seq_id--) {
-      if (!read_next_direntry_and_assure_is_free(&de))
+      if (!read_next_direntry_and_assure_is_free(&de)) {
+        printf("ERROR: direntry at sector=%ld, offset=$%04X is not free (but we thought it should have been)\n", de.de_sector, de.de_sector_offset);
         return FALSE;
+      }
 
       if (!write_vfat_direntry_chunk(vfat_seq_id, dest_name, lfn_csum))
         return FALSE;
