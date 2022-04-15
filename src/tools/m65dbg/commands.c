@@ -653,18 +653,18 @@ void load_lbl(const char* fname)
   while (!feof(f))
   {
     char line[1024];
-    char sval[256];
     fgets(line, 1024, f);
 
-    int addr;
+    char saddr[128];
     char sym[1024];
-    sscanf(line, "al %06X %s", &addr, sym);
+    sscanf(line, "al %s %s", saddr, sym);
 
     type_symmap_entry sme;
-    sme.addr = addr;
-    sme.sval = sval;
+    sme.addr = get_sym_value(saddr);
+    sme.sval = saddr;
     sme.symbol = sym;
     add_to_symmap(sme);
+    // printf("%s : %s\n", sme.sval, sym);
   }
   fclose(f);
 }
@@ -2642,7 +2642,18 @@ void cmd_watch(type_watch type)
     token = strtok(NULL, " ");
     if (token != NULL)
     {
-      we.param1 = token;
+      if (type == TYPE_DUMP || type == TYPE_MDUMP) {
+        we.param1 = token;
+      }
+      else {
+        // grab a new symbol name?
+        type_symmap_entry sme;
+        sme.addr = get_sym_value(we.name);
+        sme.sval = we.name;
+        sme.symbol = token;
+        add_to_symmap(sme);
+        we.name = token;
+      }
     }
 
     add_to_watchlist(we);
