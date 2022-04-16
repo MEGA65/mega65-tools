@@ -2627,6 +2627,10 @@ void setSoftBreakpoint(int addr)
   if (in_hv)
     addr |= 0xfff0000;
 
+  // user manually enforcing a hypervisor breakpoint? (or any other >64kb for that matter)
+  if (addr > 0xffff)
+    in_hv = true;
+
   mem_data mem = get_mem(addr, in_hv);
   softbrkmem[0] = mem.b[0];
   softbrkmem[1] = mem.b[1];
