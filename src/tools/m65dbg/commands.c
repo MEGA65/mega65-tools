@@ -788,7 +788,7 @@ void load_ca65_list(const char* fname, FILE* f)
 
     // new .segment specified in code?
     char *p = get_nth_token(line, 2);
-    if (p != NULL && strcmp(p, ".segment") == 0)
+    if (p != NULL && strcasecmp(p, ".segment") == 0)
     {
       char* p = get_nth_token(line, 3);
       strncpy(current_segment, p+1, strlen(p+1)-1);
