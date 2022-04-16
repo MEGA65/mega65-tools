@@ -2161,13 +2161,13 @@ void cmdContinue(void)
     reg_data reg = get_regs();
 
     if (reg.pc == cur_pc ||
-        (softbrkaddr && (reg.pc >= softbrkaddr && reg.pc <= softbrkaddr+3)))
+        (softbrkaddr && (reg.pc >= (softbrkaddr & 0xffff) && reg.pc <= ((softbrkaddr+3) & 0xffff))))
     {
       same_cnt++;
-      // printf("good addr=$%04X : same_cnt=%d\n", cur_pc, same_cnt);
+      // printf("good addr=$%04X : same_cnt=%d (soft=$%04X)\n", reg.pc, same_cnt, softbrkaddr);
       if (same_cnt == 5)
       {
-        if (reg.pc >= softbrkaddr && reg.pc <= softbrkaddr + 3) {
+        if (reg.pc >= (softbrkaddr & 0xffff) && reg.pc <= ((softbrkaddr + 3) & 0xffff)) {
           clearSoftBreak();
           // doOneShotAssembly("cli");
         }
@@ -2176,7 +2176,7 @@ void cmdContinue(void)
     }
     else
     {
-      // printf("lost addr=$%04X\n", cur_pc);
+      // printf("lost addr=$%04X (soft=$%04X)\n", reg.pc, softbrkaddr);
       same_cnt = 0;
       cur_pc = reg.pc;
     }
@@ -2599,7 +2599,7 @@ void clearSoftBreak(void)
 
   bool in_hv = inHypervisorMode();
   if (in_hv)
-    softbrkaddr += 0xfff0000;
+    softbrkaddr |= 0xfff0000;
 
   // inject JMP command to loop over itself
   sprintf(str, "s%04X %02X %02X %02X\n", softbrkaddr, softbrkmem[0], softbrkmem[1], softbrkmem[2]);
@@ -2625,7 +2625,7 @@ void setSoftBreakpoint(int addr)
 
   bool in_hv = inHypervisorMode();
   if (in_hv)
-    addr += 0xfff0000;
+    addr |= 0xfff0000;
 
   mem_data mem = get_mem(addr, in_hv);
   softbrkmem[0] = mem.b[0];
