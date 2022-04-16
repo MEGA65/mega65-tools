@@ -1121,7 +1121,7 @@ reg_data get_regs(void)
   serialRead(inbuf, BUFSIZE);
   line = strstr(inbuf+2, "\n") + 1;
   sscanf(line,"%04X %02X %02X %02X %02X %02X %04X %04X %04X %02X %02X %02X %s",
-    &reg.pc, &reg.a, &reg.x, &reg.y, &reg.z, &reg.b, &reg.sp, &reg.mapl, &reg.maph, &reg.lastop, &reg.odd1, &reg.odd2, reg.flags);
+    &reg.pc, &reg.a, &reg.x, &reg.y, &reg.z, &reg.b, &reg.sp, &reg.maph, &reg.mapl, &reg.lastop, &reg.odd1, &reg.odd2, reg.flags);
 
   return reg;
 }
@@ -1129,7 +1129,7 @@ reg_data get_regs(void)
 void show_regs(reg_data* reg)
 {
   printf("PC   A  X  Y  Z  B  SP   MAPH MAPL LAST-OP     P  P-FLAGS   RGP uS IO\n");
-  printf("%04X %02X %02X %02X %02X %02X %04X %04X %04X %02X       %02X %02X %s\n", reg->pc, reg->a, reg->x, reg->y, reg->z, reg->b, reg->sp, reg->mapl, reg->maph, reg->lastop, reg->odd1, reg->odd2, reg->flags);
+  printf("%04X %02X %02X %02X %02X %02X %04X %04X %04X %02X       %02X %02X %s\n", reg->pc, reg->a, reg->x, reg->y, reg->z, reg->b, reg->sp, reg->maph, reg->mapl, reg->lastop, reg->odd1, reg->odd2, reg->flags);
 }
 
 mem_data get_mem(int addr, bool useAddr28)
@@ -2577,6 +2577,17 @@ void cmdSetBreakpoint(void)
   }
 }
 
+bool inHypervisorMode(void)
+{
+  // get current register values
+  reg_data reg = get_regs();
+
+  if (reg.maph == 0x3F00)
+    return true;
+
+  return false;
+}
+
 void clearSoftBreak(void)
 {
   char str[100];
@@ -2585,6 +2596,10 @@ void clearSoftBreak(void)
   serialWrite("t1\n");
   usleep(10000);
   serialRead(inbuf, BUFSIZE);
+
+  bool in_hv = inHypervisorMode();
+  if (in_hv)
+    softbrkaddr += 0xfff0000;
 
   // inject JMP command to loop over itself
   sprintf(str, "s%04X %02X %02X %02X\n", softbrkaddr, softbrkmem[0], softbrkmem[1], softbrkmem[2]);
@@ -2608,7 +2623,11 @@ void setSoftBreakpoint(int addr)
     serialRead(inbuf, BUFSIZE);
   }
 
-  mem_data mem = get_mem(addr, false);
+  bool in_hv = inHypervisorMode();
+  if (in_hv)
+    addr += 0xfff0000;
+
+  mem_data mem = get_mem(addr, in_hv);
   softbrkmem[0] = mem.b[0];
   softbrkmem[1] = mem.b[1];
   softbrkmem[2] = mem.b[2];
