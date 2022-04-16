@@ -139,6 +139,8 @@ type_watch_entry* lstWatches = NULL;
 
 void clearSoftBreak(void);
 int isCpuStopped(void);
+void setSoftBreakpoint(int addr);
+void step(void);
 
 void add_to_offsets_list(type_offsets mo)
 {
@@ -1844,13 +1846,15 @@ int modematcher(char* curmode, char* modeform, int* var1, int* var2)
 }
 
 // return -1=invalid-command, 0=no-command, 1=bytes written
-int oneShotAssembly(int* paddr, char* str)
+int oneShotAssembly(int* paddr, char* strCommand)
 {
+  char str[128];
   int val1;
   int val2;
   int opcode = 0;
   int startaddr = *paddr;
   int invalid = 0;
+  strcpy(str, strCommand);
   if (str[strlen(str)-1] == '\n')
     str[strlen(str)-1] = '\0';
 
@@ -2123,11 +2127,16 @@ void cmdContinue(void)
   {
     int addr = get_sym_value(token);
 
-    // set a breakpoint
-    char str[100];
-    sprintf(str, "b%04X\n", addr);
-    serialWrite(str);
-    serialRead(inbuf, BUFSIZE);
+    // set a hard breakpoint
+    // char str[100];
+    // sprintf(str, "b%04X\n", addr);
+    // serialWrite(str);
+    // serialRead(inbuf, BUFSIZE);
+
+    // set a soft breakpoint (more reliable for now...)
+    // doOneShotAssembly("sei");
+    step(); // step just once, just in-case user wants to repeat the last continue command (e.g., 'c 3aa9')
+    setSoftBreakpoint(addr);
   }
 
   // just send an enter command
@@ -2144,21 +2153,30 @@ void cmdContinue(void)
   {
     usleep(10000);
 
+    if (ctrlcflag) {
+      break;
+    }
+
     // get current register values
     reg_data reg = get_regs();
 
-    if (reg.pc == cur_pc)
+    if (reg.pc == cur_pc ||
+        (softbrkaddr && (reg.pc >= softbrkaddr && reg.pc <= softbrkaddr+3)))
     {
       same_cnt++;
+      // printf("good addr=$%04X : same_cnt=%d\n", cur_pc, same_cnt);
       if (same_cnt == 5)
       {
-        if (reg.pc == softbrkaddr || reg.pc == softbrkaddr + 3)
+        if (reg.pc >= softbrkaddr && reg.pc <= softbrkaddr + 3) {
           clearSoftBreak();
+          // doOneShotAssembly("cli");
+        }
         break;
       }
     }
     else
     {
+      // printf("lost addr=$%04X\n", cur_pc);
       same_cnt = 0;
       cur_pc = reg.pc;
     }
@@ -2572,12 +2590,49 @@ void clearSoftBreak(void)
   sprintf(str, "s%04X %02X %02X %02X\n", softbrkaddr, softbrkmem[0], softbrkmem[1], softbrkmem[2]);
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
+  softbrkaddr = 0;
+}
+
+void setSoftBreakpoint(int addr)
+{
+  char str[100];
+
+  softbrkaddr = addr;
+
+  int cpu_stopped = isCpuStopped();
+
+  if (!cpu_stopped)
+  {
+    serialWrite("t1\n");
+    usleep(10000);
+    serialRead(inbuf, BUFSIZE);
+  }
+
+  mem_data mem = get_mem(addr, false);
+  softbrkmem[0] = mem.b[0];
+  softbrkmem[1] = mem.b[1];
+  softbrkmem[2] = mem.b[2];
+
+  // inject JMP command to loop over itself
+  sprintf(str, "s%04X %02X %02X %02X\n", addr, 0x4C, addr & 0xff, addr >> 8);
+  serialWrite(str);
+  serialRead(inbuf, BUFSIZE);
+
+  if (!cpu_stopped)
+  {
+    serialWrite("t0\n");
+    usleep(100000);
+    serialRead(inbuf, BUFSIZE);
+  }
+
+  // sprintf(str, "b%04X\n", addr);
+  // serialWrite(str);
+  // serialRead(inbuf, BUFSIZE);
 }
 
 void cmdSetSoftwareBreakpoint(void)
 {
   char* token = strtok(NULL, " ");
-  char str[100];
 
   if (token != NULL)
   {
@@ -2588,37 +2643,7 @@ void cmdSetSoftwareBreakpoint(void)
 
     printf("- Setting software breakpoint to $%04X\n", addr);
 
-    softbrkaddr = addr;
-
-    int cpu_stopped = isCpuStopped();
-
-    if (!cpu_stopped)
-    {
-      serialWrite("t1\n");
-      usleep(10000);
-      serialRead(inbuf, BUFSIZE);
-    }
-
-    mem_data mem = get_mem(addr, false);
-    softbrkmem[0] = mem.b[0];
-    softbrkmem[1] = mem.b[1];
-    softbrkmem[2] = mem.b[2];
-
-    // inject JMP command to loop over itself
-    sprintf(str, "s%04X %02X %02X %02X\n", addr, 0x4C, addr & 0xff, addr >> 8);
-    serialWrite(str);
-    serialRead(inbuf, BUFSIZE);
-
-    if (!cpu_stopped)
-    {
-      serialWrite("t0\n");
-      usleep(100000);
-      serialRead(inbuf, BUFSIZE);
-    }
-
-    // sprintf(str, "b%04X\n", addr);
-    // serialWrite(str);
-    // serialRead(inbuf, BUFSIZE);
+    setSoftBreakpoint(addr);
   }
 }
 
