@@ -307,6 +307,9 @@ bool serialRead(char* buf, int bufsize)
   char* secondline = NULL;
   bool foundLF = false;
 
+  // wait a millisecond first, to assure all of buffer has arrived
+  usleep(1000);
+
   while (ptr - buf < bufsize)
   {
     int n = read (fd, ptr, bufsize);  // read up to 'bufsize' characters if ready to read

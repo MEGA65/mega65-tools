@@ -318,6 +318,7 @@ type_fileloc* find_in_list(int addr)
 
   while (iter != NULL)
   {
+    //printf("%s : addr=$%04X : line=%d\n", iter->file, iter->addr, iter->lineno);
     if (iter->addr == addr)
       return iter;
 
@@ -579,6 +580,7 @@ void parse_ca65_modules(FILE* f, char* line)
         strcpy(mo.segments[mo.seg_cnt].name, name);
         mo.segments[mo.seg_cnt].offset = val;
         mo.seg_cnt++;
+        //printf("ca65 module: %s : %s - offs = $%04X\n", mo.modulename, name, val);
     }
   }
 }
@@ -763,7 +765,7 @@ void load_ca65_list(const char* fname, FILE* f)
 
   char line[1024];
   char current_module[256] = { 0 };
-  char current_segment[64] = { 0 };
+  char current_segment[256] = { 0 };
   int lineno = 1;
 
   while (!feof(f))
@@ -783,6 +785,7 @@ void load_ca65_list(const char* fname, FILE* f)
       current_module[strlen(current_module)-1] = '\0';
       current_module[strlen(current_module)-1] = 'o';
       current_segment[0] = '\0';
+      // printf("current_module=%s\n", current_module);
     }
 
     if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n')
@@ -794,7 +797,11 @@ void load_ca65_list(const char* fname, FILE* f)
     {
       char* p = get_nth_token(line, 3);
       strncpy(current_segment, p+1, strlen(p+1)-1);
-      current_segment[strlen(p+1)] = '\0';
+      current_segment[strlen(p+1) - 1] = '\0';
+      //if (strcmp(current_module, "fdisk_fat32.o") == 0)
+        //printf("line: %s\ncurrent_segment=%s\n", line, current_segment);
+      //if (strcmp(current_segment, "CODET") == 0)
+        //exit(0);
     }
 
     // did we find a line with a relocatable address at the start of it
@@ -814,7 +821,8 @@ void load_ca65_list(const char* fname, FILE* f)
         addr += get_module_offset(current_module, current_segment);
       }
 
-      //printf("mod=%s:seg=%s : %08X : %s", current_module, current_segment, addr, line);
+      //if (strcmp(current_module, "fdisk_fat32.o") == 0 /*&& strcmp(current_segment, "CODE") == 0 */ && addr <= 0x1000)
+        //printf("mod=%s:seg=%s : %08X : %s", current_module, current_segment, addr, line);
       type_fileloc fl;
       fl.addr = addr;
       fl.file = list_file_name;
@@ -1117,11 +1125,17 @@ reg_data get_regs(void)
 {
   reg_data reg = { 0 };
   char* line;
-  serialWrite("r\n");
-  serialRead(inbuf, BUFSIZE);
-  line = strstr(inbuf+2, "\n") + 1;
-  sscanf(line,"%04X %02X %02X %02X %02X %02X %04X %04X %04X %02X %02X %02X %s",
-    &reg.pc, &reg.a, &reg.x, &reg.y, &reg.z, &reg.b, &reg.sp, &reg.maph, &reg.mapl, &reg.lastop, &reg.odd1, &reg.odd2, reg.flags);
+  while (1) {
+    serialWrite("r\n");
+    serialRead(inbuf, BUFSIZE);
+    line = strstr(inbuf+2, "\n");
+    if (!line) // did we hit a null+1? try again
+      continue;
+    line++;
+    sscanf(line,"%04X %02X %02X %02X %02X %02X %04X %04X %04X %02X %02X %02X %s",
+      &reg.pc, &reg.a, &reg.x, &reg.y, &reg.z, &reg.b, &reg.sp, &reg.maph, &reg.mapl, &reg.lastop, &reg.odd1, &reg.odd2, reg.flags);
+    break;
+  }
 
   return reg;
 }
@@ -2187,9 +2201,9 @@ void cmdContinue(void)
     cmdClearScreen();
 
   // show the registers
-  serialWrite("r\n");
-  serialRead(inbuf, BUFSIZE);
-  printf("%s", inbuf);
+  // serialWrite("r\n");
+  // serialRead(inbuf, BUFSIZE);
+  // printf("%s", inbuf);
 
   cmdDisassemble();
 }
@@ -2331,7 +2345,7 @@ void cmdNext(void)
   {
     if (autocls)
       cmdClearScreen();
-    printf("%s", inbuf);
+    // printf("%s", inbuf);
     cmdDisassemble();
   }
 }
