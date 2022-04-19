@@ -121,6 +121,7 @@ typedef struct tfl
 {
   int addr;
   char* file;
+  char* module;
   int lineno;
   struct tfl *next;
 } type_fileloc;
@@ -183,6 +184,7 @@ void add_to_list(type_fileloc fl)
     lstFileLoc->addr = fl.addr;
     lstFileLoc->file = strdup(fl.file);
     lstFileLoc->lineno = fl.lineno;
+    lstFileLoc->module = fl.module;
     lstFileLoc->next = NULL;
     return;
   }
@@ -203,11 +205,13 @@ void add_to_list(type_fileloc fl)
       flcpy->addr = iter->addr;
       flcpy->file = iter->file;
       flcpy->lineno = iter->lineno;
+      flcpy->module = iter->module;
       flcpy->next = iter->next;
 
       iter->addr = fl.addr;
       iter->file = strdup(fl.file);
       iter->lineno = fl.lineno;
+      iter->module = fl.module;
       iter->next = flcpy;
       return;
     }
@@ -218,6 +222,7 @@ void add_to_list(type_fileloc fl)
       flnew->addr = fl.addr;
       flnew->file = strdup(fl.file);
       flnew->lineno = fl.lineno;
+      flnew->module = fl.module;
       flnew->next = NULL;
 
       iter->next = flnew;
@@ -756,6 +761,21 @@ int get_module_offset(const char* current_module, const char* current_segment)
   return 0;
 }
 
+char* get_module_string(const char* current_module)
+{
+  type_offsets* iter = lstModuleOffsets;
+
+  while (iter != NULL)
+  {
+    if (strcmp(current_module, iter->modulename) == 0)
+    {
+      return iter->modulename;
+    }
+    iter = iter->next;
+  }
+  return 0;
+}
+
 void load_ca65_list(const char* fname, FILE* f)
 {
   static char list_file_name[256];
@@ -767,6 +787,7 @@ void load_ca65_list(const char* fname, FILE* f)
   char current_module[256] = { 0 };
   char current_segment[256] = { 0 };
   int lineno = 1;
+  char *cmod = NULL;
 
   while (!feof(f))
   {
@@ -786,6 +807,7 @@ void load_ca65_list(const char* fname, FILE* f)
       current_module[strlen(current_module)-1] = 'o';
       current_segment[0] = '\0';
       // printf("current_module=%s\n", current_module);
+      cmod = get_module_string(current_module);
     }
 
     if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n')
@@ -823,9 +845,10 @@ void load_ca65_list(const char* fname, FILE* f)
 
       //if (strcmp(current_module, "fdisk_fat32.o") == 0 /*&& strcmp(current_segment, "CODE") == 0 */ && addr <= 0x1000)
         //printf("mod=%s:seg=%s : %08X : %s", current_module, current_segment, addr, line);
-      type_fileloc fl;
+      type_fileloc fl = { 0 };
       fl.addr = addr;
       fl.file = list_file_name;
+      fl.module = cmod;
       fl.lineno = lineno;
       add_to_list(fl);
     }
@@ -874,10 +897,11 @@ void load_list(char* fname)
       sscanf(line, " %X", &addr);
 
       //printf("%04X : %s:%d\n", addr, file, lineno);
-      type_fileloc fl;
+      type_fileloc fl = { 0 };
       fl.addr = addr;
       fl.file = file;
       fl.lineno = lineno;
+      fl.module = NULL;
       add_to_list(fl);
     }
   }
@@ -914,12 +938,13 @@ void load_bsa_list(char* fname)
     {
       if (is_hexc(line[5]) && is_hexc(line[6]))
       {
-        type_fileloc fl;
+        type_fileloc fl = { 0 };
         int addr;
         sscanf(line, "%X", &addr);
         fl.addr = addr;
         fl.file = fname;
         fl.lineno = lineno;
+        fl.module = NULL;
         add_to_list(fl);
       }
       else
@@ -933,11 +958,12 @@ void load_bsa_list(char* fname)
           int addr;
           char sval[256];
           sscanf(line, "%X", &addr);
-          sscanf(sval, "$%04X", &addr);
+          sprintf(sval, "$%04X", addr);
           sme.addr = addr;
           sme.sval = sval;
           sme.symbol = tok;
           add_to_symmap(sme);
+          // printf("%s : %s ($%04X) : %s\n", line, sval, addr, sme.symbol);
         }
       }
     }
@@ -1023,7 +1049,7 @@ void load_acme_list(char* fname)
         if (is_hex(val1) && is_hex(val2))
         {
           sscanf(val1, "%04X", &memaddr);
-          type_fileloc fl;
+          type_fileloc fl = { 0 };
           fl.addr = memaddr;
           fl.file = curfile;
           fl.lineno = lineno;
@@ -1621,7 +1647,10 @@ void disassemble(bool useAddr28)
       cur_file_loc = found;
       if (found)
       {
-        printf("> %s:%d\n", found->file, found->lineno);
+        if (found->module)
+          printf("> \"%s\"  (%s:%d)\n", found->module, found->file, found->lineno);
+        else
+          printf("> %s::%d\n", found->file, found->lineno);
         show_location(found);
         printf("---------------------------------------\n");
       }
