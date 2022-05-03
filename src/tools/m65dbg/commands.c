@@ -2680,7 +2680,7 @@ void setSoftBreakpoint(int addr)
   softbrkmem[2] = mem.b[2];
 
   // inject JMP command to loop over itself
-  sprintf(str, "s%04X %02X %02X %02X\n", addr, 0x4C, addr & 0xff, addr >> 8);
+  sprintf(str, "s%04X %02X %02X %02X\n", addr, 0x4C, addr & 0xff, (addr >> 8) & 0xff);
   serialWrite(str);
   serialRead(inbuf, BUFSIZE);
 
