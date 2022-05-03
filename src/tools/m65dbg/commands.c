@@ -59,7 +59,7 @@ int dis_offs = 0;
 int dis_scope = 10;
 
 int softbrkaddr = 0;
-char softbrkmem[3] = { 0 };
+unsigned char softbrkmem[3] = { 0 };
 
 type_command_details command_details[] =
 {
