@@ -37,6 +37,16 @@ FileName:
                     bcc LoadOK
 error:              jmp FLOPPYIO.Error
 LoadOK:             tba // restore zp base
+// ki-bo: This does not restore the base page to its original value. You may want to consider something like
+//
+// lda RestoreBP:#$00
+// tab
+//
+//
+// and store BP at the beginning with
+//
+// tba
+// sta RestoreBP
 
 }
 
@@ -45,7 +55,11 @@ LoadOK:             tba // restore zp base
 .namespace FLOPPYIO {
 
 .align $100
+// ki-bo: You could use an alignment with a smaller power of two ($10), since this is just to prevent the data
+// from crossing a page boundary. This may help keeping number of unused bytes low.
 ZPBase:
+// ki-bo: Use .zp directive of kickass to mark this section. The assembler will then automatically address them
+// with their low-byte only.
 FileNamePtr:        .word $0000
 BufferPtr:          .word $0000
 NextTrack:          .byte $00
