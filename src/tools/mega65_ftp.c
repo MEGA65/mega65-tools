@@ -172,6 +172,9 @@ unsigned char lfn_checksum(const unsigned char* pFCBName);
 int get_cluster_count(char *filename);
 void wipe_direntries_of_current_file_or_dir(void);
 
+int direct_sdcard_device = 0;
+FILE *fsdcard = NULL;
+
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
 extern unsigned char helperroutine[];
@@ -195,6 +198,7 @@ unsigned char viciv_regs[0x100];
 int mode_report = 0;
 
 char serial_port[1024] = "/dev/ttyUSB1";
+char device_name[1024] = "";
 char* bitstream = NULL;
 char* username = NULL;
 char* password = NULL;
@@ -263,8 +267,9 @@ void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr, "version: %s\n\n", version_string);
-  fprintf(stderr, "usage: mega65_ftp [-l <serial port>] [-s <230400|2000000|4000000>]  [-b bitstream] [[-c command] ...]\n");
+  fprintf(stderr, "usage: mega65_ftp [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  [-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
+  fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Almost always 2000000 is the correct answer).\n");
   fprintf(stderr, "  -b - Name of bitstream file to load.\n");
@@ -455,11 +460,13 @@ int execute_command(char* cmd)
   char src[1024];
   char dst[1024];
   if ((!strcmp(cmd, "exit")) || (!strcmp(cmd, "quit"))) {
-    printf("Reseting MEGA65 and exiting.\n");
+    if (!direct_sdcard_device) {
+      printf("Reseting MEGA65 and exiting.\n");
 
-    request_quit();
-    if (xemu_flag)
-      usleep(30000);
+      request_quit();
+      if (xemu_flag)
+        usleep(30000);
+    }
     exit(0);
   }
 
@@ -682,13 +689,17 @@ int DIRTYMOCK(main)(int argc, char** argv)
   start_usec = gettime_us();
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
       break;
     case 'l':
       strcpy(serial_port, optarg);
+      break;
+    case 'd':
+      strcpy(device_name, optarg);
+      direct_sdcard_device = 1;
       break;
     case 's':
       serial_speed = atoi(optarg);
@@ -728,36 +739,45 @@ int DIRTYMOCK(main)(int argc, char** argv)
   }
   errno = 0;
 
-  open_the_serial_port(serial_port);
-  xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
-
-  rxbuff_detect();
-
-  // Load bitstream if file provided
-  if (bitstream) {
-    char cmd[1024];
-    snprintf(cmd, 1024, "fpgajtag -a %s", bitstream);
-    fprintf(stderr, "%s\n", cmd);
-    system(cmd);
-    fprintf(stderr, "[T+%lldsec] Bitstream loaded\n", (long long)time(0) - start_time);
+  if (direct_sdcard_device) {
+    fsdcard = fopen(device_name, "r+b");
+    if (fsdcard == NULL) {
+      fprintf(stderr, "ERROR: Could not open device '%s'\n", device_name);
+      exit(-3);
+    }
   }
+  else {
+    open_the_serial_port(serial_port);
+    xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
-  // We used to push the interface to 4mbit to speed things up, but that's not needed now.
-  // In fact, with the RX buffering allowing us to fix a bunch of other problems that were
-  // slowing things down, at 4mbit/sec we are now too fast for the serial monitor to keep up
-  // when receiving stuff
+    rxbuff_detect();
 
-  fake_stop_cpu();
+    // Load bitstream if file provided
+    if (bitstream) {
+      char cmd[1024];
+      snprintf(cmd, 1024, "fpgajtag -a %s", bitstream);
+      fprintf(stderr, "%s\n", cmd);
+      system(cmd);
+      fprintf(stderr, "[T+%lldsec] Bitstream loaded\n", (long long)time(0) - start_time);
+    }
 
-  load_helper();
+    // We used to push the interface to 4mbit to speed things up, but that's not needed now.
+    // In fact, with the RX buffering allowing us to fix a bunch of other problems that were
+    // slowing things down, at 4mbit/sec we are now too fast for the serial monitor to keep up
+    // when receiving stuff
 
-  // Give helper time to get all sorted.
-  // Without this delay serial monitor commands to set memory seem to fail :/
-  usleep(500000);
+    fake_stop_cpu();
 
-  //  monitor_sync();
+    load_helper();
 
-  sdhc_check();
+    // Give helper time to get all sorted.
+    // Without this delay serial monitor commands to set memory seem to fail :/
+    usleep(500000);
+
+    //  monitor_sync();
+
+    sdhc_check();
+  }
 
   if (!file_system_found)
     open_file_system();
@@ -1277,11 +1297,22 @@ int read_flash(const unsigned int flash_address, unsigned char* buffer)
   return retVal;
 }
 
+int read_sector_from_device(const unsigned int sector_number, unsigned char* buffer)
+{
+  fseeko(fsdcard, sector_number * 512LL, SEEK_SET);
+  fread(buffer, 512, 1, fsdcard);
+
+  return 0;
+}
+
 
 // XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
 int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead)
 {
   int retVal = 0;
+  if (direct_sdcard_device)
+    return read_sector_from_device(sector_number, buffer);
+
   do {
 
     int cachedRead = 0;
@@ -1346,8 +1377,19 @@ int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buff
 
 unsigned char verify[512];
 
+int write_sector_to_device(const unsigned int sector_number, unsigned char* buffer)
+{
+  fseeko(fsdcard, sector_number * 512LL, SEEK_SET);
+  fwrite(buffer, 512, 1, fsdcard);
+
+  return 0;
+}
+
 int DIRTYMOCK(write_sector)(const unsigned int sector_number, unsigned char* buffer)
 {
+  if (direct_sdcard_device)
+    return write_sector_to_device(sector_number, buffer);
+
   int retVal = 0;
   do {
     // With new method, we write the data, then schedule the write to happen with a job
