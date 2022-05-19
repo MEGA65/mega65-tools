@@ -1500,6 +1500,10 @@ void set_serial_speed(int fd, int serial_speed)
   }
 
 #ifdef __APPLE__
+  /*
+   * This code is needed because recent versions of MacOS do not allow
+   * setting 'strange' baud rates (like 2000000) via tcsetattr().
+   */
   speed_t speed = serial_speed;
   fprintf(stderr, "Setting serial speed to %d bps using OSX method.\n", (int)speed);
   if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
@@ -1508,8 +1512,15 @@ void set_serial_speed(int fd, int serial_speed)
   if (tcgetattr(fd, &t))
     perror("Failed to get terminal parameters");
   cfmakeraw(&t);
-  if (tcsetattr(fd, TCSANOW, &t))
+  //TCSASOFT prevents some fields (most importantly the baud rate)
+  //from being changed.  MacOS does not support 'strange' baud rates
+  //that might be set by the ioctl above.
+  if (tcsetattr(fd, TCSANOW | TCSASOFT, &t))
     perror("Failed to set OSX terminal parameters");
+
+  //Serial port will be unresponsive after returning from FREEZER
+  //without this.
+  tcflush(fd, TCIFLUSH);
 #else
   if (serial_speed == 230400) {
     if (cfsetospeed(&t, B230400))
