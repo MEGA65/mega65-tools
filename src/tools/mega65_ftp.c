@@ -3231,7 +3231,7 @@ int delete_single_file(char* name)
     }
     deallocate_cluster(current_cluster);
     current_cluster = next_cluster;
-  } while (current_cluster > 0 && current_cluster < 0xffffff8);
+  } while (current_cluster > 0 && current_cluster < FAT32_MIN_END_OF_CLUSTER_MARKER);
 
   // Flush any pending sector writes out
   execute_write_queue();
@@ -3817,7 +3817,7 @@ int upload_single_file(char* name, char* dest_name)
         // If we are currently the last cluster, then allocate a new one, and chain it in
 
         int next_cluster = chained_cluster(file_cluster);
-        if (next_cluster == 0 || next_cluster >= 0xffffff8) {
+        if (next_cluster == 0 || next_cluster >= FAT32_MIN_END_OF_CLUSTER_MARKER) {
           next_cluster = find_free_cluster(file_cluster);
           if (allocate_cluster(next_cluster)) {
             printf("ERROR: Could not allocate cluster $%x\n", next_cluster);
@@ -3830,7 +3830,7 @@ int upload_single_file(char* name, char* dest_name)
             break;
           }
         }
-        if (!next_cluster) {
+        if (next_cluster <= 0) {
           printf("ERROR: Could not find a free cluster\n");
           retVal = -1;
           break;
@@ -4033,7 +4033,7 @@ int create_dir(char* dest_name)
         // If we are currently the last cluster, then allocate a new one, and chain it in
 
         int next_cluster = chained_cluster(file_cluster);
-        if (next_cluster == 0 || next_cluster >= 0xffffff8) {
+        if (next_cluster == 0 || next_cluster >= FAT32_MIN_END_OF_CLUSTER_MARKER) {
           next_cluster = find_free_cluster(file_cluster);
           if (allocate_cluster(next_cluster)) {
             printf("ERROR: Could not allocate cluster $%x\n", next_cluster);
@@ -4046,7 +4046,7 @@ int create_dir(char* dest_name)
             break;
           }
         }
-        if (!next_cluster) {
+        if (next_cluster <= 0) {
           printf("ERROR: Could not find a free cluster\n");
           retVal = -1;
           break;
@@ -4528,7 +4528,7 @@ int is_fragmented(char* filename)
 
   unsigned int current_cluster = first_cluster_of_file;
   int next_cluster;
-  while ((next_cluster = chained_cluster(current_cluster)) != 0xffffff8) {
+  while ((next_cluster = chained_cluster(current_cluster)) < FAT32_MIN_END_OF_CLUSTER_MARKER) {
     if (next_cluster != current_cluster + 1)
       fragmented_flag = 1;
     current_cluster = next_cluster;
@@ -4624,7 +4624,12 @@ int get_cluster_count(char *filename)
   {
     count++;
     file_cluster = chained_cluster(file_cluster);
-  } while(file_cluster != 0 && file_cluster != 0xffffff8);
+  } while(file_cluster > 0 && file_cluster < FAT32_MIN_END_OF_CLUSTER_MARKER);
+
+  if(file_cluster < 0)
+  {
+    return -1;
+  }
 
   return count;
 }
@@ -4671,7 +4676,7 @@ int download_single_file(char* dest_name, char* local_name, int showClusters)
         // If we are currently the last cluster, then allocate a new one, and chain it in
 
         int next_cluster = chained_cluster(file_cluster);
-        if (next_cluster == 0 || next_cluster >= 0xffffff8) {
+        if (next_cluster == 0 || next_cluster >= FAT32_MIN_END_OF_CLUSTER_MARKER) {
           printf("\n?  PREMATURE END OF FILE ERROR\n");
           if (f)
             fclose(f);

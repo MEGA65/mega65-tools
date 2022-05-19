@@ -33,6 +33,8 @@ int do_serial_port_write(int fd, uint8_t* buffer, size_t size, const char* func,
 #define slow_write(A, B, C) do_slow_write(A, B, C, __func__, __FILE__, __LINE__)
 #define slow_write_safe(A, B, C) do_slow_write_safe(A, B, C, __func__, __FILE__, __LINE__)
 
+#define FAT32_MIN_END_OF_CLUSTER_MARKER 0xffffff8
+
 int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer);
 int push_ram(unsigned long address, unsigned int count, unsigned char* buffer);
 int mega65_poke(unsigned int addr, unsigned char value);
