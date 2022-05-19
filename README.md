@@ -148,25 +148,36 @@ You can then apply the enforced style by typing:
 make format
 ```
 
-# Unit tests
+# Unit Tests
 
-Some initial effort is underway to start providing unit tests for our tooling, starting with mega65_ftp.
+Some initial effort is underway to start providing unit tests for our tooling, starting with mega65_ftp and bit2core.
 
 It presently makes use of gtest release 1.10.0.
+
+To install gtest on linux run the following:
+```
+sudo apt install cmake
+git clone https://github.com/google/googletest.git -b release-1.10.0
+cd googletest
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
+```
 
 Unit tests are housed in the 'gtest/' folder.
 
 The unit test executables are housed in the 'gtest/bin' folder.
 
-E.g. to generate the executable:
+To generate the tests and run them:
 
+#### Linux:
 ```
-make gtest/bin/mega65_ftp.test
+make test
 ```
 
-To run the unit tests:
-
+#### Windows
 ```
-cd gtest/bin
-./mega65_ftp.test
+make test.exe
 ```
