@@ -172,6 +172,12 @@ The unit test executables are housed in the 'gtest/bin' folder.
 
 To generate the tests and run them:
 
+#### Linux:
 ```
 make test
+```
+
+#### Windows
+```
+make test.exe
 ```
