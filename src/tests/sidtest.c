@@ -19,21 +19,32 @@ unsigned char is_mega65=0;
 unsigned short div;
 unsigned char wf,i,c;
 unsigned char sid_mode=0;
-unsigned char with_gate=1;
-unsigned char oct=1;
+unsigned char oct=3;
 unsigned char note=0;
 unsigned long divl;
 
-unsigned char dma_list[16]=
+unsigned char dma_list[14]=
   {
    0x0a, // F018A DMA format
    0x10, // SID recording mode
-   0x90,0x02, // 2x64KB length
    0x00, // End of options
    0x03, // FILL + end of chain
    0xff, 0xff, // Len=$FFFF
    0x00,0x00,0x00, // SRC (ignored for SID record file)
    0x00,0x00,0x04, // DST = bank 4
+   0x00,0x00 // Modulo (ignored)
+   
+  };
+
+unsigned char dma_list_release[14]=
+  {
+   0x0a, // F018A DMA format
+   0x10, // SID recording mode
+   0x00, // End of options
+   0x03, // FILL + end of chain
+   0xff, 0xff, // Len=$FFFF
+   0x00,0x00,0x00, // SRC (ignored for SID record file)
+   0x00,0x00,0x05, // DST = bank 4
    0x00,0x00 // Modulo (ignored)
    
   };
@@ -44,7 +55,7 @@ unsigned char wav_header[0x50]=
    0x10,0x00,0x00,0x00,0x01,0x00,0x01,0x00,0x25,0xac,0x00,0x00,0x44,0xac,0x00,0x00, // 44069Hz = $AC25 
    0x01,0x00,0x08,0x00,0x66,0x61,0x63,0x74,0x04,0x00,0x00,0x00,0x00,0x4a,0x01,0x00, //    D@ @factD@@@@JA@
    0x50,0x45,0x41,0x4b,0x10,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0xda,0xa1,0xff,0x5c, //    PEAKP@@@A@@@Za~
-   0xce,0x4d,0x00,0x3f,0xfa,0xae,0x00,0x00,0x64,0x61,0x74,0x61,0xb0,0xff,0x00,0x00   
+   0xce,0x4d,0x00,0x3f,0xfa,0xae,0x00,0x00,0x64,0x61,0x74,0x61,0xb0,0xff,0x01,0x00   
   };
 
 unsigned long note_freqs[12]={
@@ -89,7 +100,6 @@ void main(void)
     div=divl;
     if (divl>65535L) { printf("WARNING: Note is too high. Clipping to max.\n"); div=65535L; }
     printf("Divisor is %ld\n",divl);
-    if (with_gate) printf("Gate enabled\n");
     printf("\n");
     printf("M = Toggle SID mode\n");
     printf("W = Next waveform\n");
@@ -135,7 +145,6 @@ void main(void)
       
       // Start note playing  
       POKE(0xD404,wf+1);
-      if (with_gate) POKE(0xD404,wf+0);
       
       if (is_mega65) {
 	// DMA audio recording
@@ -145,13 +154,22 @@ void main(void)
 	POKE(0xD705,(unsigned char)&dma_list);
 	POKE(0xD020,0x0e);
 
+	// Trigger release, then record some more
+	POKE(0xD404,wf+0);
+	
+	POKE(0xD020,0x03);
+	POKE(0xD702,0x00);
+	POKE(0xD701,((unsigned short)&dma_list_release)>>8);
+	POKE(0xD705,(unsigned char)&dma_list_release);
+	POKE(0xD020,0x0e);
+	
 	// Apply WAV file header
 	lcopy((unsigned long)wav_header,0x40000,0x50);
 	
 	// Record info about the test
 	lpoke(0x40050,sid_mode);
 	lpoke(0x40051,wf);
-	lpoke(0x40052,with_gate);
+	lpoke(0x40052,0x00);
 	lpoke(0x40053,oct);
 	lpoke(0x40054,note);
 
@@ -159,9 +177,6 @@ void main(void)
 	POKE(0xD418,0);
       }
       
-      break;
-    case 0x47: case 0x67:
-      with_gate^=1;
       break;
     case 0x4d: case 0x6d:
       sid_mode^=1;

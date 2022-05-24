@@ -466,6 +466,29 @@ void main(void)
   line_dmalist[ofs++] = 0x00; // modulo
   line_dmalist[ofs++] = 0x00;
 
+  // Draw lines at varying slopes to verify doglegging or not
+  draw_line(10,190, 300,190, 1);
+  draw_line(10,180, 300,170, 2);
+  draw_line(10,170, 300,150, 3);
+  draw_line(10,160, 300,130, 4);
+  draw_line(10,150, 300,110, 5);
+  draw_line(10,140, 300, 90, 6);
+  draw_line(10,130, 300, 70, 7);
+  draw_line(10,120, 300, 50, 8);
+  draw_line(10,110, 300, 30, 9);
+  draw_line(10,100, 300, 10, 10);
+  draw_line(10, 90, 250, 10, 11);
+  draw_line(10, 80, 200, 10, 12);
+  draw_line(10, 70, 150, 10, 13);
+  draw_line(10, 60, 100, 10, 14);
+  draw_line(10, 50, 50, 10, 15);
+  draw_line(10, 40, 30, 1, 1);
+  draw_line(10, 30, 20, 1, 2);
+  draw_line(10, 20, 15, 1, 3);
+  draw_line(10, 10, 10, 1, 4);
+  while (!PEEK(0xD610)) continue; POKE(0xD610, 0);
+
+  
   draw_line(160, 100, 319, 100, 1);
   while (!PEEK(0xD610))
     continue;
