@@ -14,6 +14,7 @@ extern const char* version_string;
 #define MAGIC_STR "MEGA65BITSTREAM0"
 #define MAGIC_LEN strlen(MAGIC_STR)
 #define MAX_M65_TARGET_NAME_LEN 128
+#define MAX_M65_PART_NAME_LEN 12
 
 #define ARG_M65TARGETNAME argv[1]
 #define ARG_BITSTREAMPATH argv[2]
@@ -28,7 +29,7 @@ static unsigned char bitstream_data[MAX_MB * BYTES_IN_MEGABYTE];
 typedef struct {
   char name[MAX_M65_TARGET_NAME_LEN];
   int max_core_mb_size;
-  char fpga_part[13];
+  char fpga_part[MAX_M65_PART_NAME_LEN + 1U];
 } m65target_info;
 
 // clang-format off
@@ -169,8 +170,10 @@ m65target_info* find_m65targetinfo_from_m65targetname(const char* m65targetname)
 
 m65target_info* find_m65targetinfo_from_fpga_part(char* fpga_part)
 {
+  if (strncmp(fpga_part, "xc", 2) == 0)
+    fpga_part += 2;
   for (int idx = 0; idx < m65targetgroup_count; idx++) {
-    if (strcmp(fpga_part, m65targetgroups[idx].fpga_part) == 0) {
+    if (strncmp(fpga_part, m65targetgroups[idx].fpga_part, MAX_M65_PART_NAME_LEN) == 0) {
       printf("This bitstream's FPGA part is suitable for the following mega65 targets: \"%s\" (FPGA part: %s)\n",
           m65targetgroups[idx].name, m65targetgroups[idx].fpga_part);
       return &m65targetgroups[idx];
