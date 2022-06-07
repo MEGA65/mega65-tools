@@ -1,3 +1,18 @@
+// Copyright (C) 2022 MEGA65
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -14,6 +29,7 @@ extern const char* version_string;
 #define MAGIC_STR "MEGA65BITSTREAM0"
 #define MAGIC_LEN strlen(MAGIC_STR)
 #define MAX_M65_TARGET_NAME_LEN 128
+#define MAX_M65_PART_NAME_LEN 12
 
 #define ARG_M65TARGETNAME argv[1]
 #define ARG_BITSTREAMPATH argv[2]
@@ -28,7 +44,7 @@ static unsigned char bitstream_data[MAX_MB * BYTES_IN_MEGABYTE];
 typedef struct {
   char name[MAX_M65_TARGET_NAME_LEN];
   int max_core_mb_size;
-  char fpga_part[13];
+  char fpga_part[MAX_M65_PART_NAME_LEN + 1U];
 } m65target_info;
 
 // clang-format off
@@ -169,8 +185,10 @@ m65target_info* find_m65targetinfo_from_m65targetname(const char* m65targetname)
 
 m65target_info* find_m65targetinfo_from_fpga_part(char* fpga_part)
 {
+  if (strncmp(fpga_part, "xc", 2) == 0)
+    fpga_part += 2;
   for (int idx = 0; idx < m65targetgroup_count; idx++) {
-    if (strcmp(fpga_part, m65targetgroups[idx].fpga_part) == 0) {
+    if (strncmp(fpga_part, m65targetgroups[idx].fpga_part, MAX_M65_PART_NAME_LEN) == 0) {
       printf("This bitstream's FPGA part is suitable for the following mega65 targets: \"%s\" (FPGA part: %s)\n",
           m65targetgroups[idx].name, m65targetgroups[idx].fpga_part);
       return &m65targetgroups[idx];
