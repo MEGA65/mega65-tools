@@ -84,6 +84,7 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_378.prg \
 		$(TESTDIR)/test_390.prg \
 		$(TESTDIR)/test_579.prg \
+		$(TESTDIR)/test_585.prg \
 		$(TESTDIR)/test_mandelbrot.prg
 
 TOOLDIR=	$(SRCDIR)/tools
@@ -109,6 +110,8 @@ SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
 
 all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
+
+tests: $(TESTS)
 
 SUBMODULEUPDATE= \
 	@if [ -z "$(DO_SMU)" ] || [ "$(DO_SMU)" -eq "1" ] ; then \
@@ -252,6 +255,9 @@ $(TESTDIR)/test_535.prg:       $(TESTDIR)/test_535.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
 
 $(TESTDIR)/test_579.prg:       $(TESTDIR)/test_579.c $(CC65)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
+$(TESTDIR)/test_585.prg:       $(TESTDIR)/test_585.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65)
