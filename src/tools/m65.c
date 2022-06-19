@@ -395,10 +395,12 @@ void show_hyppo_report(void)
 
   unsigned char syspart_buffer[0x40];
   unsigned char disktable_buffer[0x100];
+  unsigned char pd_buffer[0x0100];
 
   fetch_ram(0xfffbb00, 0x100, disktable_buffer);
   fetch_ram(0xfffbbc0, 0x40, syspart_buffer);
   fetch_ram(0xfffbc00, 0x400, hyppo_buffer);
+  fetch_ram(0xfffbd00, 0x100, pd_buffer);
   printf("HYPPO status:\n");
 
   printf("Disk count = $%02x\n", hyppo_buffer[0x001]);
@@ -466,6 +468,12 @@ void show_hyppo_report(void)
   printf("SYSPART error code = $%02x\n", hyppo_buffer[0xf7]);
   printf("SYSPART present = $%02x\n", hyppo_buffer[0xf8]);
   printf("SYSPART start = $%02x%02x%02x%02x\n", syspart_buffer[3], syspart_buffer[2], syspart_buffer[1], syspart_buffer[0]);
+
+  printf("\nProcess descriptor:\n");
+  printf("    Process ID: $%02x\n",pd_buffer[0x00]);
+  printf("  Process name: ");
+  for(int i=0;i<16;i++) printf("%c",pd_buffer[0x01+i]);
+  printf("\n");
 }
 
 void progress_to_RTI(void)
