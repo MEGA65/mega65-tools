@@ -1764,7 +1764,7 @@ int main(int argc, char** argv)
       fprintf(stderr, "WARNING: May not be able to auto-detect USB port due to insufficient permissions.\n");
       fprintf(stderr,
           "         You may be able to solve this problem via the following:\n"
-          "           sudo usermode -a -G dialout <your username>\n"
+          "           sudo usermod -a -G dialout <your username>\n"
           "         and then:\n"
           "           echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
           "sudo tee /etc/udev/rules.d/40-xilinx.rules\n"
