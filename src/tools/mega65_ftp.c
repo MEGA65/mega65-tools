@@ -3171,7 +3171,7 @@ void show_mbrinfo(void)
     h = sector[pt_ofs + 0x06] & 0x3F;
     s = sector[pt_ofs + 0x05];
     printf("- Last sector chs: cylinder = %d, head = %d, sector = %d\n", c, h, s);
-    printf("- First sector LBA: %d (byte position)\n", *(unsigned int*)&sector[pt_ofs + 0x08]);
+    printf("- First sector LBA: %d (sector position)\n", *(unsigned int*)&sector[pt_ofs + 0x08]);
     printf("- Number of sectors: %d\n", *(unsigned int*)&sector[pt_ofs + 0x0C]);
 
     part_cnt++;
