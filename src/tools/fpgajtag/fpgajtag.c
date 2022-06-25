@@ -1128,11 +1128,6 @@ int fpgajtag_main(char* bitstream, char* serialport)
 exit_label:
   fpgausb_close();
   fpgausb_release();
-  if (rescan) {
-    int rc = execlp("pciescanportal", "arg", (char*)NULL); /* rescan pci bus to discover device */
-    fprintf(stderr, "fpgajtag: ERROR failed to run pciescanportal: %s\n", strerror(errno));
-    return rc;
-  }
   EXIT();
   return 0;
 }
