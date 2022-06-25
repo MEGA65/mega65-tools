@@ -408,11 +408,13 @@ USB_INFO* fpgausb_init(void)
       usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
       int open_result = libusb_open(dev, &usbhandle);
       if (open_result < 0) {
-        fprintf(stderr, "ERROR: Could not open USB device: Error code %d\n", open_result);
+        fprintf(stderr, "ERROR: Could not open USB device[VID: %04X, PID: %04X]: Error code %d\n", desc.idVendor, desc.idProduct, open_result);
         fprintf(stderr, "       libusb says: %s\n", libusb_strerror(open_result));
-        exit(1);
+        continue; // keep looking for other devices E.g. my system has multiple FTDIs some for work (which will fail to open here)
+                  // so keep looking for another that might open (i.e., the proper MEGA65 JTAG one)
       }
       else {
+        fprintf(stderr, "INFO: Successfully opened USB device[VID: %04X, PID: %04X]\n", desc.idVendor, desc.idProduct);
         if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
           printf("WARNING: Error getting USB device attributes (iManuf=%x, iProd=%x, iSerial=%x)\n", UDESC(iManufacturer),
               UDESC(iProduct), UDESC(iSerialNumber));
