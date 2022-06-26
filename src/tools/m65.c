@@ -1751,29 +1751,33 @@ int main(int argc, char** argv)
   if (!serial_port)
 #endif
   {
-    fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
-    unsigned int fpga_id = 0x3631093;
-    FILE* f = fopen(bitstream, "rb");
-    if (f) {
-      unsigned char buff[8192];
-      int len = fread(buff, 1, 8192, f);
-      fprintf(stderr, "NOTE: Read %d bytes to search\n", len);
-      for (int i = 0; i < len; i++) {
-        if ((buff[i + 0] == 0x30) && (buff[i + 1] == 0x01) && (buff[i + 2] == 0x80) && (buff[i + 3] == 0x01)) {
-          i += 4;
-          fpga_id = buff[i + 0] << 24;
-          fpga_id |= buff[i + 1] << 16;
-          fpga_id |= buff[i + 2] << 8;
-          fpga_id |= buff[i + 3] << 0;
+    unsigned int fpga_id = 0x3631093, found =0;
+    if (bitstream) {
+      fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
+      FILE* f = fopen(bitstream, "rb");
+      if (f) {
+        unsigned char buff[8192];
+        int len = fread(buff, 1, 8192, f);
+        fprintf(stderr, "NOTE: Read %d bytes to search\n", len);
+        for (int i = 0; i < len; i++) {
+          if ((buff[i + 0] == 0x30) && (buff[i + 1] == 0x01) && (buff[i + 2] == 0x80) && (buff[i + 3] == 0x01)) {
+            i += 4;
+            fpga_id = buff[i + 0] << 24;
+            fpga_id |= buff[i + 1] << 16;
+            fpga_id |= buff[i + 2] << 8;
+            fpga_id |= buff[i + 3] << 0;
 
-          timestamp_msg("");
-          fprintf(stderr, "Detected FPGA ID %x from bitstream file.\n", fpga_id);
-          break;
+            timestamp_msg("");
+            fprintf(stderr, "INFO: Detected FPGA ID %x from bitstream file.\n", fpga_id);
+            found = 1;
+            break;
+          }
         }
+        fclose(f);
       }
-      fclose(f);
     }
-    fprintf(stderr, "INFO: Using fpga_id %x\n", fpga_id);
+    if (!found)
+      fprintf(stderr, "INFO: Using default fpga_id %x\n", fpga_id);
     if (!checkUSBPermissions()) {
       fprintf(stderr, "WARNING: May not be able to auto-detect USB port due to insufficient permissions.\n");
       fprintf(stderr,
