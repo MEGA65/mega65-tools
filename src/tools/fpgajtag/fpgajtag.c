@@ -945,7 +945,7 @@ int fpgajtag_main(char* bitstream, char* serialport)
 {
   ENTER();
   uint32_t ret;
-  int rflag = 0, mflag = 0, cflag = 0, xflag = 0, rescan = 0;
+  int rflag = 0, mflag = 0, cflag = 0, xflag = 0; // rescan = 0;
   //    const char *serialno = serialport;
 
   match_any_idcode = 1;
@@ -1120,7 +1120,7 @@ int fpgajtag_main(char* bitstream, char* serialport)
   printf("STATUS %08x done %x release_done %x eos %x startup_state %x\n", status, status & 0x4000, status & 0x2000,
       status & 0x10, (status >> 18) & 7);
   access_mdm(0, 0, 1);
-  rescan = 1;
+  // rescan = 1;
 
   /*
    * Cleanup and free USB device
