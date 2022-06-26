@@ -85,6 +85,7 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_390.prg \
 		$(TESTDIR)/test_579.prg \
 		$(TESTDIR)/test_585.prg \
+		$(TESTDIR)/test_340.prg \
 		$(TESTDIR)/test_mandelbrot.prg
 
 TOOLDIR=	$(SRCDIR)/tools
@@ -258,6 +259,9 @@ $(TESTDIR)/test_579.prg:       $(TESTDIR)/test_579.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/test_585.prg:       $(TESTDIR)/test_585.c $(CC65)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
+$(TESTDIR)/test_340.prg:       $(TESTDIR)/test_340.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65)
