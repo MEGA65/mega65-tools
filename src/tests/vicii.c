@@ -26,14 +26,11 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "../mega65-libc/cc65/include/tests.h"
-#include "../mega65-libc/cc65/src/tests.c"
+#include <memory.h>
+#include <tests.h>
 
 // Which issue number are we testing
 #define ISSUE_NUM 132
-
-#define POKE(a, v) *((uint8_t*)a) = (uint8_t)v
-#define PEEK(a) ((uint8_t)(*((uint8_t*)a)))
 
 void sprite_setxy(uint8_t sprite, uint16_t x, uint16_t y)
 {
@@ -234,7 +231,7 @@ void check_sprite_contact(uint16_t expected_first, uint16_t expected_last)
     fatal();
   }
   else
-    unit_test_ok();
+    unit_test_ok("sprite position/dimensions ok");
   return;
 }
 
@@ -365,7 +362,7 @@ void sprite_sprite_collide_tests(void)
   // Check that there is no collision yet
   v = PEEK(0xD01E);
   if (!v)
-    unit_test_ok();
+    unit_test_ok("no collisions detected");
   else {
     unit_test_fail("collisions detected with no sprites active");
     fatal();
@@ -381,7 +378,7 @@ void sprite_sprite_collide_tests(void)
   if (v == 3) {
     // Read result for next test first, as it is timing sensitive
     v = PEEK(0xD01E);
-    unit_test_ok();
+    unit_test_ok("sprite 0 and 1 collision ok");
   }
   else {
     unit_test_fail("$d01e != $03 after sprite 0 and 1 collision");
@@ -390,7 +387,7 @@ void sprite_sprite_collide_tests(void)
   }
   printf("     Reading $D01E clears collisions");
   if (!v)
-    unit_test_ok();
+    unit_test_ok("reading $d01e clears collision");
   else {
     unit_test_fail("reading $d01e does not clear sprite:sprite collisions");
     //    printf("\nFAIL: Reading $D01E does not clear sprite:sprite collisions.\n");
@@ -406,7 +403,7 @@ void sprite_sprite_collide_tests(void)
   v = PEEK(0xD01E);
 
   if (!v)
-    unit_test_ok();
+    unit_test_ok("sprites separated by 256 pixels do not collide");
   else {
     unit_test_fail("sprites separated by 256 pixels collide");
     //    printf("\nFAIL: Collisions detected with sprites separated by 256 pixels ($D01E=$%x)\n", v);
@@ -422,7 +419,7 @@ void sprite_sprite_collide_tests(void)
   v = PEEK(0xD01E);
   wait_for_vsync();
   if (!v)
-    unit_test_ok();
+    unit_test_ok("$d01e == $00");
   else {
     unit_test_fail("$d01e != $00");
     // printf("\nFAIL: *$D01E != $00: Saw $%x\n", v);
@@ -491,7 +488,7 @@ void d018_timing_tests(void)
     fatal();
   }
   else
-    unit_test_ok();
+    unit_test_ok("raster 57 $d018 change ok");
 
   // Set raster interrupt for raster 58, and do the same
   POKE(0xD012U, 58);
@@ -515,7 +512,7 @@ void d018_timing_tests(void)
     fatal();
   }
   else
-    unit_test_ok();
+    unit_test_ok("raster 58 $d018 change ok");
 
   // Set raster interrupt for raster 51, and this should now be too late
   POKE(0xD012U, 59);
@@ -538,7 +535,7 @@ void d018_timing_tests(void)
     fatal();
   }
   else
-    unit_test_ok();
+    unit_test_ok("raster 59 $d018 change ok");
 
   // All done, restore IRQ etc
   __asm__("sei");
@@ -555,7 +552,7 @@ void d018_timing_tests(void)
 
   restore_screen();
   sprites_on(0);
-  unit_test_ok();
+  unit_test_ok("cleanup done");
 }
 
 int main(void)

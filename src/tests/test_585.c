@@ -56,7 +56,7 @@ void main(void)
     ++address;
   }
 
-  unit_test_ok();
+  unit_test_ok("all tests passed!");
 
 done:
   unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);

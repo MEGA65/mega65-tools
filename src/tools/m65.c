@@ -1334,42 +1334,54 @@ char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", 
   "C#$0B", "C#$0C", "  LOG", " NAME", " DONE" };
 
 char msgbuf[160], *endp;
-char testname[160];
+char testname[160], testlog[160];
 unsigned char inbuf[8192];
-unsigned int failcount;
+unsigned int failcount, test_last_issue, test_last_sub;
 FILE* logPtr;
 
-void unit_test_log(unsigned char bytes[4])
+void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char state, char *msg)
 {
-  int test_issue = bytes[0] + (bytes[1] << 8);
-  int test_sub = bytes[2];
   char outstring[255];
   char temp[255];
 
   struct timeval currentTime;
 
-  // dump_bytes(0, "bytes", bytes, 4);
-
   gettimeofday(&currentTime, NULL);
   strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
 
-  sprintf(temp, ".%03dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec/1000, test_states[bytes[3] - 0xf0], test_issue, test_sub);
-  strcat(outstring, temp);
+  snprintf(temp, 255, ".%03dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec/1000, test_states[state], issue, sub);
+  strncat(outstring, temp, 254);
 
-  // append current test name if we have one
-  if (testname[0]) {
-    sprintf(temp, " - %s)", testname);
+  if (msg) {
+    snprintf(temp, 255, " - %s)", msg);
+  } else {
+    snprintf(temp, 255, ")");
   }
-  else {
-    sprintf(temp, ")");
-  }
-  strcat(outstring, temp);
+  strncat(outstring, temp, 254);
 
   fprintf(stderr, "%s\n", outstring);
   if (logPtr) {
     fprintf(logPtr, "%s\n", outstring);
     fflush(logPtr);
   }
+}
+
+void unit_test_log(unsigned char bytes[4])
+{
+  int test_issue = bytes[0] + (bytes[1] << 8);
+  int test_sub = bytes[2];
+  // dump_bytes(0, "bytes", bytes, 4);
+
+  // check for log message, but no PASS/FAIL follows
+  if (testlog[0] && bytes[3] != 0xf2 && bytes[3] != 0xf3) {
+    unit_test_logline(test_last_issue, test_last_sub, 0xd, testlog);
+    testlog[0] = 0;
+  }
+
+  unit_test_logline(test_issue, test_sub, bytes[3] - 0xf0, testlog[0]?testlog:(testname[0]?testname:NULL));
+  testlog[0] = 0;
+  test_last_issue = test_issue;
+  test_last_sub = test_sub;
 
   switch (bytes[3]) {
   case 0xf0: // Starting a test
@@ -1409,6 +1421,7 @@ void enterTestMode()
 
   fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
   testname[0] = 0; // initialize test name with empty string
+  testlog[0] = 0;
   receiveString = 0;
   failcount = 0;
   logPtr = NULL;
@@ -1448,12 +1461,8 @@ void enterTestMode()
           // don't check recent_bytes_fill here! msg bytes are not
           // but into the buffer!
           if (recent_bytes[3] == 0xfd) { // log message to console
-            fprintf(stderr, "%s\n", msgbuf);
-            if (logPtr) {
-              fprintf(logPtr, "%s\n", msgbuf);
-            }
-          }
-          else if (recent_bytes[3] == 0xfe) { // set current test name
+            strncpy(testlog, msgbuf, 160);
+          } else if (recent_bytes[3] == 0xfe) { // set current test name
             strncpy(testname, msgbuf, 160);
           }
           bzero(recent_bytes, 4);
@@ -1484,6 +1493,11 @@ void enterTestMode()
       if (!receiveString && recent_bytes_fill > 3) {
         // check if we should receive a string
         if (recent_bytes[3] == 0xfe || recent_bytes[3] == 0xfd) {
+          // if we are starting to receive a new log line, and already have one, we need to output it
+          if (recent_bytes[3] == 0xfd && testlog[0]) {
+            unit_test_logline(test_last_issue, test_last_sub, 0xd, testlog);
+            testlog[0] = 0;
+          }
           // receive message
           receiveString = 1;
           currentMessagePos = 0;

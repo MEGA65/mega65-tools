@@ -50,6 +50,7 @@ BINDIR=		bin
 B65DIR=		bin65
 EXAMPLEDIR=	$(SRCDIR)/examples
 UTILDIR=	$(SRCDIR)/utilities
+BASICUTILDIR=	$(SRCDIR)/basic-utilities
 TESTDIR=	$(SRCDIR)/tests
 LIBEXECDIR=	libexec
 GTESTDIR=gtest
@@ -74,6 +75,9 @@ UTILITIES=	$(B65DIR)/ethertest.prg \
 		$(B65DIR)/b65support.bin \
 		$(B65DIR)/cartload.prg
 
+BASICUTILS=	$(BASICUTILDIR)/mega65info.prg \
+		$(BASICUTILDIR)/rtctest.prg
+
 TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/vicii.prg \
 		$(TESTDIR)/test_290.prg \
@@ -89,7 +93,8 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_mandelbrot.prg
 
 TOOLDIR=	$(SRCDIR)/tools
-TOOLS=	$(BINDIR)/etherload \
+
+TOOLSUNX=	$(BINDIR)/etherload \
 	$(BINDIR)/m65 \
 	$(BINDIR)/readdisk \
 	$(BINDIR)/mega65_ftp \
@@ -100,17 +105,22 @@ TOOLS=	$(BINDIR)/etherload \
 	$(BINDIR)/m65ftp_test \
 	$(BINDIR)/mfm-decode \
 	$(BINDIR)/bit2core \
-	$(BINDIR)/bit2mcs \
-	$(BINDIR)/m65.exe \
+	$(BINDIR)/bit2mcs
+
+TOOLSWIN= $(BINDIR)/m65.exe \
 	$(BINDIR)/mega65_ftp.exe \
 	$(BINDIR)/bit2core.exe \
 	$(BINDIR)/bit2mcs.exe \
 	$(BINDIR)/romdiff.exe
 
+TOOLS=$(TOOLSUNX) $(TOOLSWIN)
+
 SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
 
 all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
+
+allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(UTILITIES) $(TESTS)
 
 tests: $(TESTS)
 
@@ -158,11 +168,11 @@ $(TOOLDIR)/frame2png:	$(TOOLDIR)/frame2png.c
 
 
 # verbose, for 1581 format, overwrite
-$(SDCARD_DIR)/M65UTILS.D81:	$(UTILITIES) $(CBMCONVERT)
+$(SDCARD_DIR)/M65UTILS.D81:	$(UTILITIES) $(CBMCONVERT) $(BASICUTILS)
 	$(info =============================================================)
 	$(info ~~~~~~~~~~~~~~~~> Making: $(SDCARD_DIR)/MEGA65.D81)
 	mkdir -p $(SDCARD_DIR)
-	$(CBMCONVERT) -v2 -D8o $(SDCARD_DIR)/M65UTILS.D81 $(UTILITIES)
+	$(CBMCONVERT) -v2 -D8o $(SDCARD_DIR)/M65UTILS.D81 $(UTILITIES) $(BASICUTILS)
 
 # verbose, for 1581 format, overwrite
 $(SDCARD_DIR)/M65TESTS.D81:	$(TESTS) $(CBMCONVERT)
@@ -202,7 +212,7 @@ bin65/b65support.bin:	$(UTILDIR)/b65support.a65 $(OPHIS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.bin
 
 $(TESTDIR)/vicii.prg:       $(TESTDIR)/vicii.c $(TESTDIR)/vicii_asm.s $(CC65)
-	$(CL65) -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/vicii_asm.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/vicii_asm.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
 
 $(TESTDIR)/sidtest.prg:       $(TESTDIR)/sidtest.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
@@ -344,7 +354,7 @@ bin/wirekrill:	$(EXAMPLEDIR)/wirekrill.c
 
 $(B65DIR)/cartload.prg:       $(UTILDIR)/cartload.c $(CC65)
 	$(SUBMODULEUPDATE)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/memory.c
 
 $(B65DIR)/rompatch.prg:       $(UTILDIR)/rompatch.c $(CC65)
 	$(SUBMODULEUPDATE)
