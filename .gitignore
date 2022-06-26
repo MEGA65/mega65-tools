@@ -1,6 +1,4 @@
 bin/m65*
-src/tools/version.c
-.gitignore
 bin/etherload
 bin/giftotiles
 bin/m65
@@ -8,6 +6,14 @@ bin/mega65_ftp
 bin/monitor_load
 bin/monitor_save
 bin/pngprepare
+bin/bit2core 
+bin/readdisk
+bin/romdiff
+bin/bit2mcs
+bin/mfm-decode
+src/tools/version.c
+src/tools/bin2c
+src/tools/ftphelper.c
 *~
 #*#
 .#*
@@ -24,4 +30,3 @@ bin/pngprepare
 monitorload_dlls
 test.wxs
 cbmconvert
-
