@@ -646,7 +646,7 @@ int rxbuff_detect(void)
     Newer bitstreams finally have buffering on the serial monitor interface.
     If detected, this means that we can send commands a lot faster.
   */
-  unsigned char read_buff[8192];
+  unsigned char read_buff[8193];
 
   // If running with xemu, assume no rxbuff available (for now)
   if (xemu_flag)
@@ -668,6 +668,7 @@ int rxbuff_detect(void)
     if ((strstr((char*)read_buff, ":00000000:")) && (strstr((char*)read_buff, ":00000001:"))) {
       no_rxbuff = 0;
       timestamp_msg("RX buffer detected.  Latency will be reduced.\n");
+      break;
     }
   }
   return !no_rxbuff;
