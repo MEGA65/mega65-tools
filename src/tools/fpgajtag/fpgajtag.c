@@ -718,15 +718,21 @@ static void read_config_memory(int fd, uint32_t size)
   EXIT();
 }
 
-void trim_path_component(char* s)
+// finds last slash and sets it to 0
+// returns the position where the slash was or NULL if none was found
+char *trim_path_component(char* s, unsigned int num)
 {
   int len = strlen(s);
+  int count = 0;
   for (int i = len - 1; i >= 0; i--) {
     if (s[i] == '/') {
       s[i] = 0;
-      return;
+      count++;
+      if (count == num)
+        return &s[i];
     }
   }
+  return NULL;
 }
 
 void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idcode)
@@ -811,87 +817,65 @@ void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idc
         if (d) {
           struct dirent* de = NULL;
           char serial_path[1024] = "";
+          char path[1024];
+          char link[1024]; // possible problem: PATH_MAX is probably 4096 on UNIX systems
+          char match[1024];
+          char *linkslash;
+          FILE *f;
+          int vendor = 0, product = 0, isDigilent = 0;
+
           while ((de = readdir(d)) != NULL) {
-            char link[1024] = "";
-            char path[1024];
+            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
             snprintf(path, 1024, "/sys/bus/usb-serial/devices/%s", de->d_name);
-            int len = readlink(path, link, sizeof(link));
-            link[len] = 0;
+            if (!realpath(path, link)) continue;
             fprintf(stderr, "  Checking '%s' -> '%s'\n", path, link);
 
-            int vendor = 0, product = 0, isDigilent = 0;
-
             // Now get vendor and product IDs
-            char temp[8192];
-            strcpy(temp, &link[4]);
-            temp[0] = '/';
-            temp[1] = 's';
-            temp[2] = 'y';
-            temp[3] = 's';
-            trim_path_component(temp);
-            trim_path_component(temp);
-            strcat(temp, "/idVendor");
-            {
-              FILE* f = fopen(temp, "r");
-              if (f) {
-                char line[1024];
-                fread(line, 1024, 1, f);
-                sscanf(line, "%x", &vendor);
-                fclose(f);
-              }
-            }
-            trim_path_component(temp);
-            strcat(temp, "/idProduct");
-            {
-              FILE* f = fopen(temp, "r");
-              if (f) {
-                char line[1024];
-                fread(line, 1024, 1, f);
-                sscanf(line, "%x", &product);
-                fclose(f);
-              }
+            linkslash = trim_path_component(link, 2); // keep last slash position
+            if (linkslash == NULL) continue;
+
+            strcpy(linkslash, "/idVendor");
+            f = fopen(link, "r");
+            if (f) {
+              char line[1024];
+              fread(line, 1024, 1, f);
+              sscanf(line, "%x", &vendor);
+              fclose(f);
             }
 
-            trim_path_component(temp);
-            strcat(temp, "/manufacturer");
-            {
-              FILE* f = fopen(temp, "r");
-              if (f) {
-                char line[1024];
-                fread(line, 1024, 1, f);
-                if (strstr(line, "Digilent"))
-                  isDigilent = 1;
-                fclose(f);
-              }
+            strcpy(linkslash, "/idProduct");
+            f = fopen(link, "r");
+            if (f) {
+              char line[1024];
+              fread(line, 1024, 1, f);
+              sscanf(line, "%x", &product);
+              fclose(f);
             }
 
-            char match[1024];
+            strcpy(linkslash, "/manufacturer");
+            f = fopen(link, "r");
+            if (f) {
+              char line[1024];
+              fread(line, 1024, 1, f);
+              if (strstr(line, "Digilent"))
+                isDigilent = 1;
+              fclose(f);
+            }
 
             fprintf(stderr, "USB vendor:product is %04x:%04x (%d)\n", vendor, product, isDigilent);
-            if (vendor == 0x0403 && product == 0x6010 && isDigilent) {
-              snprintf(match, 1024, "/%d-%d/%d-%d:1.1", bus, port, bus, port);
-              //		fprintf(stderr,"    match is '%s'\n",match);
-              snprintf(serial_path, 1024, "/dev/%s", de->d_name);
-              timestamp_msg("");
-              fprintf(stderr, "Auto-detected serial port '%s'\n", serial_path);
-              serial_port = strdup(serial_path);
-            }
-
             snprintf(match, 1024, "/%d-%d/%d-%d:1.1", bus, port, bus, port);
-            //		fprintf(stderr,"    match is '%s'\n",match);
             snprintf(serial_path, 1024, "/dev/%s", de->d_name);
-            if (strstr(link, match)) {
+            if ((vendor == 0x0403 && product == 0x6010 && isDigilent) || strstr(link, match)) {
               timestamp_msg("");
               fprintf(stderr, "Auto-detected serial port '%s'\n", serial_path);
               serial_port = strdup(serial_path);
             }
           }
           closedir(d);
-          if (!serial_port) {
-            if (serial_path[0]) {
-              fprintf(stderr, "Auto-guessing serial port '%s' due to lack of exact match\n", serial_path);
-              serial_port = strdup(serial_path);
-            }
+
+          if (!serial_port && serial_path[0]) {
+            fprintf(stderr, "Auto-guessing serial port '%s' due to lack of exact match\n", serial_path);
+            serial_port = strdup(serial_path);
           }
         }
       }
