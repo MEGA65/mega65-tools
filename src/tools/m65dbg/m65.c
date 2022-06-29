@@ -1429,6 +1429,11 @@ void do_type_text(char *type_text)
         case '3': c1=0xF3; break; // F3
         case '5': c1=0xF5; break; // F5
         case '7': c1=0xF7; break; // F7
+        case 'F':
+            slow_write(fd,"sffd3615 52 7f 7f \n",19);   // hold down restore
+            sleep(1);
+            slow_write(fd,"sffd3615 7f 7f 7f \n",19);   // release down restore
+            return;
       }
       do_type_key(c1);
       i++;
