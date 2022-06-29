@@ -71,6 +71,7 @@ type_command_details command_details[] =
   { "dis", cmdDisassemble, "[<addr16> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "mdis", cmdMDisassemble, "[<addr28> [<count>]]", "Disassembles the instruction at <addr> or at PC. If <count> exists, it will dissembly that many instructions onwards" },
   { "c", cmdContinue, "[<addr>]", "continue (until optional <addr>) (equivalent to t0, but more m65dbg-friendly)"},
+  { "sc", cmdSoftContinue, "[<addr>]", "soft continue (until optional <addr>) (equivalent to t0, but more m65dbg-friendly)"},
   { "step", cmdStep, "[<count>]", "Step into next instruction. If <count> is specified, perform that many steps" }, // equate to pressing 'enter' in raw monitor
   { "n", cmdNext, "[<count>]", "Step over to next instruction (software-based, slow). If <count> is specified, perform that many steps" },
   { "next", cmdHardNext, "[<count>]", "Step over to next instruction (hardware-based, fast, xemu-only, for now). If <count> is specified, perform that many steps" },
@@ -146,6 +147,7 @@ void step(void);
 void add_to_offsets_list(type_offsets mo)
 {
   type_offsets* iter = lstModuleOffsets;
+  mo.enabled = 1;
 
   if (iter == NULL)
   {
@@ -2158,7 +2160,7 @@ void cmdMDisassemble(void)
 }
 
 
-void cmdContinue(void)
+void do_continue(int do_soft_break)
 {
   traceframe = 0;
 
@@ -2170,16 +2172,21 @@ void cmdContinue(void)
   {
     int addr = get_sym_value(token);
 
-    // set a hard breakpoint
-    // char str[100];
-    // sprintf(str, "b%04X\n", addr);
-    // serialWrite(str);
-    // serialRead(inbuf, BUFSIZE);
-
+    if (do_soft_break) {
     // set a soft breakpoint (more reliable for now...)
     // doOneShotAssembly("sei");
     step(); // step just once, just in-case user wants to repeat the last continue command (e.g., 'c 3aa9')
     setSoftBreakpoint(addr);
+    }
+    else
+    {
+      // set a hard breakpoint
+      char str[100];
+      sprintf(str, "b%04X\n", addr);
+      serialWrite(str);
+      serialRead(inbuf, BUFSIZE);
+    }
+
   }
 
   // just send an enter command
@@ -2236,6 +2243,17 @@ void cmdContinue(void)
 
   cmdDisassemble();
 }
+
+void cmdSoftContinue(void)
+{
+  do_continue(1);
+}
+
+void cmdContinue(void)
+{
+  do_continue(0);
+}
+
 
 bool cmdGetContinueMode(void)
 {

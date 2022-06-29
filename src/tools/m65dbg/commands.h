@@ -10,6 +10,7 @@ void cmdMDump(void);
 void cmdAssemble(void);
 void cmdDisassemble(void);
 void cmdMDisassemble(void);
+void cmdSoftContinue(void);
 void cmdContinue(void);
 bool cmdGetContinueMode(void);
 void cmdSetContinueMode(bool val);
@@ -91,6 +92,7 @@ typedef struct t_o
   char modulename[256];
   type_segment segments[32];
   int seg_cnt;
+  int enabled;
   struct t_o* next;
 } type_offsets;
 
