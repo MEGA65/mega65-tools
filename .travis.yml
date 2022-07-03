@@ -23,9 +23,8 @@ matrix:
       - wget gurce.net/ubuntu/pool/main/libp/libpng-mingw-w64/libpng-mingw-w64_1.6.37-1_amd64.deb ; sudo dpkg -i libpng-mingw-w64_1.6.37-1_amd64.deb
       - wget gurce.net/ubuntu/pool/main/libu/libusb-1.0-mingw-w64/libusb-1.0-0-mingw-w64_1.0.21-3_amd64.deb ; sudo dpkg -i libusb-1.0-0-mingw-w64_1.0.21-3_amd64.deb
       - wget gurce.net/ubuntu/pool/main/libu/libusb-1.0-mingw-w64/libusb-1.0-0-mingw-w64-dev_1.0.21-3_amd64.deb ; sudo dpkg -i libusb-1.0-0-mingw-w64-dev_1.0.21-3_amd64.deb
-      - sudo apt-get install -y cc65
-      - make USE_LOCAL_CC65=0
-      - make USE_LOCAL_CC65=0 test
+      - make
+      - make test
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
