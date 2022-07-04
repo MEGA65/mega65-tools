@@ -2034,11 +2034,11 @@ int main(int argc, char** argv)
   if (pal_mode) {
     mega65_poke(0xFFD306fL, 0x00);
     mega65_poke(0xFFD3072L, 0x00);
-    mega65_poke(0xFFD3048L, 0x69);
+    mega65_poke(0xFFD3048L, 0x68);
     mega65_poke(0xFFD3049L, 0x0 + (mega65_peek(0xFFD3049L) & 0xf0));
-    mega65_poke(0xFFD304AL, 0xFA);
+    mega65_poke(0xFFD304AL, 0xF8);
     mega65_poke(0xFFD304BL, 0x1 + (mega65_peek(0xFFD304BL) & 0xf0));
-    mega65_poke(0xFFD304EL, 0x69);
+    mega65_poke(0xFFD304EL, 0x68);
     mega65_poke(0xFFD304FL, 0x0 + (mega65_peek(0xFFD304FL) & 0xf0));
     mega65_poke(0xFFD3072L, 0);
   }
