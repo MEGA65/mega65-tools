@@ -2035,23 +2035,29 @@ int main(int argc, char** argv)
     mega65_poke(0xFFD306fL, 0x00);
     mega65_poke(0xFFD3072L, 0x00);
     mega65_poke(0xFFD3048L, 0x68);
-    mega65_poke(0xFFD3049L, 0x0 + (mega65_peek(0xFFD3049L) & 0xf0));
+    mega65_poke(0xFFD3049L, 0x0 | (mega65_peek(0xFFD3049L) & 0xf0));
     mega65_poke(0xFFD304AL, 0xF8);
-    mega65_poke(0xFFD304BL, 0x1 + (mega65_peek(0xFFD304BL) & 0xf0));
+    mega65_poke(0xFFD304BL, 0x1 | (mega65_peek(0xFFD304BL) & 0xf0));
     mega65_poke(0xFFD304EL, 0x68);
-    mega65_poke(0xFFD304FL, 0x0 + (mega65_peek(0xFFD304FL) & 0xf0));
+    mega65_poke(0xFFD304FL, 0x0 | (mega65_peek(0xFFD304FL) & 0xf0));
     mega65_poke(0xFFD3072L, 0);
+    // switch CIA TOD 50/60
+    mega65_poke(0xffd3c0el, mega65_peek(0xffd3c0el) | 0x80);
+    mega65_poke(0xffd3d0el, mega65_peek(0xffd3d0el) | 0x80);
   }
   if (ntsc_mode) {
     mega65_poke(0xFFD306fL, 0x87);
     mega65_poke(0xFFD3072L, 0x18);
     mega65_poke(0xFFD3048L, 0x2A);
-    mega65_poke(0xFFD3049L, 0x0 + (mega65_peek(0xFFD3049L) & 0xf0));
+    mega65_poke(0xFFD3049L, 0x0 | (mega65_peek(0xFFD3049L) & 0xf0));
     mega65_poke(0xFFD304AL, 0xB9);
-    mega65_poke(0xFFD304BL, 0x1 + (mega65_peek(0xFFD304BL) & 0xf0));
+    mega65_poke(0xFFD304BL, 0x1 | (mega65_peek(0xFFD304BL) & 0xf0));
     mega65_poke(0xFFD304EL, 0x2A);
-    mega65_poke(0xFFD304FL, 0x0 + (mega65_peek(0xFFD304FL) & 0xf0));
+    mega65_poke(0xFFD304FL, 0x0 | (mega65_peek(0xFFD304FL) & 0xf0));
     mega65_poke(0xFFD3072L, 24);
+    // switch CIA TOD 50/60
+    mega65_poke(0xffd3c0el, mega65_peek(0xffd3c0el) & 0x7f);
+    mega65_poke(0xffd3d0el, mega65_peek(0xffd3d0el) & 0x7f);
   }
   if (ethernet_video) {
     mega65_poke(0xffd36e1, 0x29);
