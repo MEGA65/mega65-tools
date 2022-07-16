@@ -220,6 +220,7 @@ unsigned int first_cluster_sector;  // Slightly confusing name, as the first clu
                                     // Even more confusing is that this value is relative to the start of the partition (partition_start)
                                     // I.e. to calculate the absolute sector of cluster#2 = partition_start + first_cluster_sector
 
+int nosys = 0;  // a flag to ignore system partition
 unsigned int syspart_start = 0;
 unsigned int syspart_size = 0;
 unsigned int syspart_freeze_area = 0;
@@ -273,6 +274,7 @@ void usage(void)
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Almost always 2000000 is the correct answer).\n");
   fprintf(stderr, "  -b - Name of bitstream file to load.\n");
+  fprintf(stderr, "  -n - suppress scanning of 'system' partition (handy when connecting to partial sdcard dump files).\n");
   fprintf(stderr, "\n");
   exit(-3);
 }
@@ -689,7 +691,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
   start_usec = gettime_us();
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:n")) != -1) {
     switch (opt) {
     case 'D':
       debug_serial = 1;
@@ -725,6 +727,9 @@ int DIRTYMOCK(main)(int argc, char** argv)
       break;
     case 'p':
       password = strdup(optarg);
+      break;
+    case 'n':
+      nosys = 1;
       break;
     default: /* '?' */
       usage();
@@ -1454,7 +1459,7 @@ int open_file_system(void)
       }
     }
 
-    if (syspart_start) {
+    if (syspart_start && !nosys) {
       // Ok, so we know where the partition starts, so now find the FATs
       if (read_sector(syspart_start, syspart_sector0, CACHE_YES, 0)) {
         printf("ERROR: Could not read system partition sector 0\n");
@@ -3591,6 +3596,10 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
         break;
       }
     } // end while
+  }
+
+  if (needs_long_name && !is_tilde_needed(long_name)) {
+      get_dotted_shortname(short_name_with_dot, short_name);
   }
 
   if (needs_long_name)
