@@ -1,0 +1,11 @@
+# List of regression tests used by regression-test.sh
+#
+# only list tests that utilise the unit test framework correctly!
+#
+# Format:
+# TESTNAME TIMEOUT
+# TIMEOUT is used as parameter to m65 -u
+#
+test_468.prg    10
+test_585.prg    20
+# END OF FILE

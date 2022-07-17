@@ -176,6 +176,7 @@ char* d81file = NULL;
 char* filename = NULL;
 char* romfile = NULL;
 char* logfile = NULL;
+char* unittest_logfile = NULL;
 char* flashmenufile = NULL;
 char* charromfile = NULL;
 char* colourramfile = NULL;
@@ -474,6 +475,27 @@ void show_hyppo_report(void)
   printf("  Process name: ");
   for(int i=0;i<16;i++) printf("%c",pd_buffer[0x01+i]);
   printf("\n");
+}
+
+static char system_bitstream_version[64] = "VERSION NOT FOUND";
+char *get_system_bitstream_version(void) {
+  char buf[256], *found, *end;
+  size_t len=0;
+
+  // fetch version info via monitor 'h'
+  slow_write(fd, "h\r", 2);
+  usleep(20000);
+  while (!(len = serialport_read(fd, (unsigned char *)buf, 256)));
+
+  found = strstr(buf, "build GIT: ");
+  if (found == NULL) return system_bitstream_version;
+  found = found + 11; // skip found prefix
+  end = strchr(found, '\r');
+  if (end == NULL) return system_bitstream_version;
+  *end = 0;
+  strncpy(system_bitstream_version, found, 63);
+  system_bitstream_version[63] = 0;
+  return system_bitstream_version;
 }
 
 void progress_to_RTI(void)
@@ -1403,7 +1425,11 @@ void unit_test_log(unsigned char bytes[4])
   case 0xff: // Last test complete
     fprintf(stderr, ">>> Terminating after completion of last test.\n");
     if (logPtr) {
-      fprintf(logPtr, ">>> Terminating after completion of last test.\n");
+      if (failcount > 0)
+        fprintf(logPtr, "!!!!! FAILCOUNT: %d\n", failcount);
+      else
+        fprintf(logPtr, "===== FAILCOUNT: 0\n");
+      fprintf(logPtr, "<<<<< TEST COMPLETED\n");
       fclose(logPtr);
     }
     do_exit(failcount);
@@ -1428,20 +1454,21 @@ void enterTestMode()
 
   currentTime = time(NULL);
 
-  if (logfile) {
+  if (unittest_logfile) {
 
-    logPtr = fopen(logfile, "a");
+    logPtr = fopen(unittest_logfile, "a");
     if (!logPtr) {
-      fprintf(stderr, "could not open logfile %s for appending. aborting\n", logfile);
+      fprintf(stderr, "could not open logfile %s for appending. aborting\n", unittest_logfile);
       exit(127);
     }
 
     ts = asctime(localtime(&currentTime));
     ts[strlen(ts) - 1] = 0;
 
-    fprintf(stderr, "logging test results in %s\n", logfile);
-    fprintf(logPtr, "\n>>> begin testing %s; FILE: %s\n", ts, filename);
+    fprintf(stderr, "logging test results in %s\n", unittest_logfile);
+    fprintf(logPtr, ">>>>> TEST: %s\n===== BITSTREAM: %s\n", filename, system_bitstream_version);
   }
+  fprintf(stderr, "System version: %s\n", system_bitstream_version);
 
   while (time(NULL) - currentTime < unit_test_timeout) {
 
@@ -1519,7 +1546,9 @@ void enterTestMode()
   }
   fprintf(stderr, "timeout encountered while running tests. aborting.\n");
   if (logPtr) {
-    fprintf(logPtr, "timeout encountered while running tests. aborting.\n");
+    fprintf(logPtr, "!!!!! TIMEOUT\n");
+    fprintf(logPtr, "!!!!! FAILCOUNT: %d\n", failcount+1);
+    fprintf(logPtr, "<<<<< TEST COMPLETED\n");
     fclose(logPtr);
   }
   do_exit(UT_RES_TIMEOUT);
@@ -1713,7 +1742,7 @@ int main(int argc, char** argv)
       set_vcd_file(optarg);
       break;
     case 'w':
-      logfile = strdup(optarg);
+      unittest_logfile = strdup(optarg);
       break;
     case 'k':
       hyppo = strdup(optarg);
@@ -1838,6 +1867,16 @@ int main(int argc, char** argv)
 
   rxbuff_detect();
   monitor_sync();
+
+  // if we load a bitstream and do a unit test, we have to wait till the bitstream has fully started
+  if (unit_test_mode && bitstream) {
+    fprintf(stderr, "Unit Test mode, waiting for the system to settle...\n");
+    sleep(4);
+  }
+
+  // fetch version information
+  if (unit_test_mode)
+    get_system_bitstream_version();
 
   if (debug_load_memory) {
     printf("Testing load memory function.\n");
@@ -2669,9 +2708,8 @@ int main(int argc, char** argv)
     }
   }
 
-  if (unit_test_mode) {
+  if (unit_test_mode)
     enterTestMode();
-  }
 
   // XXX - loop for virtualisation, JTAG boundary scanning etc
 
