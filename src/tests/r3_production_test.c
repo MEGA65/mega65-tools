@@ -66,6 +66,9 @@ void graphics_mode(void)
   // Disable hot regs
   POKE(0xD05D, PEEK(0xD05D) & 0x7f);
 
+  // Enable temperature compensation for internal RTC
+  lpoke(0xffd311d,lpeek(0xffd311d)|0xe0);
+  
   // Layout screen so that graphics data comes from $40000 -- $4FFFF
 
   i = 0x40000 / 0x40;
@@ -139,7 +142,7 @@ unsigned char eth_pass = 0;
 unsigned char iec_pass = 0, v, y;
 unsigned int x;
 unsigned char colours[10] = { 0, 2, 5, 6, 0, 11, 12, 15, 1, 0 };
-struct m65_tm tm;
+struct m65_tm tm,tm2;
 char msg[80];
 
 unsigned char sin_table[32] = {
@@ -315,6 +318,43 @@ unsigned char joy_test(unsigned char port,unsigned char maj, unsigned char min, 
 
 unsigned char errs=0;
 
+unsigned char rtc_bad=1;
+unsigned char frame_prev,frame_count,frame_num;
+
+void test_rtc(void)
+{
+    getrtc(&tm);
+    frame_prev=PEEK(0xD7FA);
+    frame_count=0;
+    rtc_bad=1;
+    unit_test_set_current_name("rtc ticks");
+    while(rtc_bad)
+    {
+      //      snprintf(msg,80,"%d frames, %d vs %d seconds.   ",frame_count,tm.tm_sec,tm2.tm_sec);
+      //      print_text(0, 13, 1, msg);
+      
+      frame_num=PEEK(0xD7FA);
+      if (frame_num!=frame_prev) frame_count+=(frame_num-frame_prev);
+      frame_prev=frame_num;
+      if (frame_count>75) {
+	rtc_bad=1;
+	break;
+      }
+      getrtc(&tm2);
+      if (tm.tm_sec != tm2.tm_sec) {
+	// Reset frame counter on first tick
+	if (frame_count<40) {
+	  frame_count=0;
+	  tm=tm2;
+	} else if (frame_count<65) {
+	  // 40--65 frames per tick = seems to be ticking right
+	  rtc_bad=0;
+	  break;
+	}
+      }
+    }
+}
+
 void main(void)
 {
   // Fast CPU, M65 IO
@@ -342,7 +382,7 @@ void main(void)
   graphics_mode();
   graphics_clear_double_buffer();
 
-  print_text(0, 0, 1, "MEGA65 R3 PCB Production Test programme");
+  print_text(0, 0, 1, "MEGA65 R3 PCB Production Test programme V2");
   snprintf(msg, 80, "Hardware model = %d", detect_target());
   print_text(0, 15, 1, msg);
 
@@ -443,9 +483,9 @@ void main(void)
 
     // Real-time clock
     POKE(0xD020, 5);
-    getrtc(&tm);
-    unit_test_set_current_name("rtc ticks");
-    if (tm.tm_sec || tm.tm_hour || tm.tm_min) {
+    test_rtc();
+    
+    if (rtc_bad==0) {
       unit_test_report(5, 1, TEST_PASS);
       snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
       print_text(0, 4, 5, msg);
@@ -461,9 +501,12 @@ void main(void)
 
       // Now wait a couple of seconds and try again
       for(a=0;a<50;a++) usleep(50000);
+
+      POKE(0xD020, 6);
+      test_rtc();
       
       getrtc(&tm);
-      if (tm.tm_sec || tm.tm_hour || tm.tm_min) {
+      if (rtc_bad==0) {
         unit_test_report(5, 1, TEST_PASS);
         snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
         print_text(0, 4, 5, msg);
@@ -471,8 +514,6 @@ void main(void)
         unit_test_report(5, 1, TEST_FAIL);
         print_text(0, 4, 2, "FAIL RTC Not running             ");
       }
-      
-      
     }
 
     // Play two different tones out of the left and right speakers alternately
