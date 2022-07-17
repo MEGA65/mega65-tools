@@ -90,7 +90,8 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_579.prg \
 		$(TESTDIR)/test_585.prg \
 		$(TESTDIR)/test_340.prg \
-		$(TESTDIR)/test_mandelbrot.prg
+		$(TESTDIR)/test_mandelbrot.prg \
+		$(B65DIR)/eth_rxd_test.prg \
 
 TOOLDIR=	$(SRCDIR)/tools
 
@@ -348,6 +349,11 @@ $(TESTDIR)/r3_production_test.prg:       $(TESTDIR)/r3_production_test.c $(CC65)
 $(B65DIR)/wirekrill.prg:       $(EXAMPLEDIR)/wirekrill.c $(CC65)
 	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
+$(B65DIR)/eth_rxd_test.prg:       $(TESTDIR)/eth_rxd_test.c $(CC65)
+	$(SUBMODULEUPDATE)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+
 
 bin/wirekrill:	$(EXAMPLEDIR)/wirekrill.c
 	$(CC) $(COPT) -DNATIVE_TEST -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/wirekrill $(EXAMPLEDIR)/wirekrill.c -lpcap
