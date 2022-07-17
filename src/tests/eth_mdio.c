@@ -37,6 +37,8 @@ int main(void)
   POKE(0xd02f, 0x53);
   POKE(0, 65); // make sure we don't go too fast
 
+  POKE(0x286,0x01);
+  
   POKE(0xd6e0, 0x01);
 
   for (a = 0; a != 0x20; a++)
@@ -78,14 +80,12 @@ int main(void)
   TEST(1, vv, 1, "Jabber detected");
   TEST(1, vv, 0, "Supports ex-cap regs");
 
-  for (x = 0x10; x < 0x20; x++) {
+  for (x = 0x00; x < 0x20; x++) {
+    if (!(x&3)) printf("\n%02x:  ",x);
     vv = mdio_read_register(a, x);
-    printf("Reg $%x = $%x", x, vv);
-    if (x & 1)
-      printf("\n");
-    else
-      printf(",    ");
+    printf("%04x ", vv);
   }
+  printf("\n");
 
   return 0;
 }

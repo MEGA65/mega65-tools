@@ -17,6 +17,8 @@ pcap_t* p = NULL;
 // Make PEEK(0xD6E1) always indicate that a packet is always ready to be received
 #define PEEK(X) 0x20
 
+#define RX_DEBUG
+
 void lcopy(long src, long dst, int count)
 {
   if (src == 0xFFDE800L) {
@@ -229,7 +231,35 @@ void send_frame(void)
 
   frame_counter++;
 }
-  
+
+void do_dma(void);
+
+void lcopy_fixed_src(long source_address, long destination_address, unsigned int count)
+{
+  dmalist.option_0b = 0x0b;
+  dmalist.option_80 = 0x80;
+  dmalist.source_mb = source_address >> 20;
+  dmalist.option_81 = 0x81;
+  dmalist.dest_mb = (destination_address >> 20);
+  dmalist.end_of_options = 0x00;
+  dmalist.sub_cmd = 0x00;
+
+  dmalist.command = 0x00; // copy
+  dmalist.count = count;
+  dmalist.sub_cmd = 0x02; // hold source address F018B
+
+  dmalist.source_addr = source_address & 0xffff;
+  dmalist.source_bank = (source_address >> 16) & 0x0f;
+  //  dmalist.source_bank|=0x10; // hold source address
+
+  dmalist.dest_addr = destination_address & 0xffff;
+  dmalist.dest_bank = (destination_address >> 16) & 0x0f;
+
+  do_dma();
+  return;
+}
+
+
 unsigned short mdio0 = 0, mdio1 = 0, last_mdio0 = 0, last_mdio1 = 0, frame_count = 0;
 unsigned char phy, last_frame_num = 0, show_hex = 1, last_d6ef = 0;
 
@@ -240,13 +270,15 @@ void main(void)
   unsigned short start_of_protocol_header;
   // looping
   int i;
+  unsigned short x=0;
   
   POKE(0x0286, 0x01);
 
   m65_io_enable();
 
-  h640_text_mode();
-
+  // Disable RX debug mode for eth controller
+  POKE(0xD6E4,0xd0);  
+  
   // Clear reset on ethernet controller
   POKE(0xD6E0, 0x00);
   POKE(0xD6E0, 0x03);
@@ -261,11 +293,60 @@ void main(void)
   POKE(0xd6e1, 3);
   POKE(0xd6e1, 0);
 
-  // Enable RX debug mode
-  POKE(0xD6e4,0xde);
+  // Set to 10mbit mode
+  POKE(0xD6E4,0x10); // 10mbit
+#ifdef RX_DEBUG
+  // Keep full sampling rate, so that we can see fine structure of 10mbit
+  // frames (otherwise the decimation of the input bits happens first)
+  POKE(0xD6E4,0x11); // 100mbit 
+#endif
   
+  // And force MDIO renegotiation to 10mbit
+
+  // 1. Advertise 10mbit only
+  POKE(0xD6E6,(PEEK(0xD6E6)&0xe0)+4); // select register 4
+  wait_10ms();
+  printf("MDIO reg 4 = $%02x%02x\n",PEEK(0xD6E8),PEEK(0xD6E7));
+  POKE(0xD6E7,0x61); // 10mbit half and full duplex supported
+  POKE(0xD6E8,0x00); // no 100mbit supported, no next page support
+  wait_10ms();
+  printf("MDIO reg 4 = $%02x%02x\n",PEEK(0xD6E8),PEEK(0xD6E7));
+
+  // 2. Request re-negotation
+  POKE(0xD6E6,(PEEK(0xD6E6)&0xe0)+0); // select register 0
+  wait_10ms();
+  printf("MDIO reg 0 = $%02x%02x\n",PEEK(0xD6E8),PEEK(0xD6E7));
+  POKE(0xD6E7,0x00); //
+  POKE(0xD6E8,0x13); // 10mbs, and force re-negotiation  
+  wait_10ms();
+  printf("MDIO reg 0 = $%02x%02x\n",PEEK(0xD6E8),PEEK(0xD6E7));
+
+  // Ack RX buffers of eth controller until all buffers are free
+  while(PEEK(0xD6E1)&0x20) {
+    POKE(0xD6E1,1);
+    POKE(0xD6E1,3);
+
+    // Show state of first 4 buffers
+    POKE(0x0400,PEEK(0xD6E3)>>4);
+    // Count of free buffers
+    POKE(0x0401,'0'+(PEEK(0xD6E1)>>1)&3);
+    // CPU and ETH RX buffer number low bits
+    POKE(0x0402,'0'+(PEEK(0xD6EF)>>0)&3);
+    POKE(0x0403,'0'+(PEEK(0xD6EF)>>2)&3);
+    
+    
+    // So that we can see if we are running or not
+    POKE(0x0427,PEEK(0x0427)+1);
+  }
+  
+  //  while(1) continue;
+    
+  h640_text_mode();
+     
   // Accept broadcast and multicast frames, and enable promiscuous mode
   POKE(0xD6E5, 0x30);
+  // XXX Disable RX CRC check for now
+  POKE(0xD6E5, 0x31);
 
   // Find PHY for MDIO access, and select register 1 that has the signals we really care about
   for (phy = 0; phy != 0x20; phy++)
@@ -288,25 +369,44 @@ void main(void)
       }
       POKE(0xD610,0);
     }
-    
+
+#if 0
     if (PEEK(0xD6EF) != last_d6ef) {
       last_d6ef = PEEK(0xD6EF);
       snprintf(msg, 160, "#$%02x : $D6EF change: CPU buf=%d, ETH buf=%d, toggles=%d, rotates=%d, free=%d, b=%x", PEEK(0xD7FA),
 	       (PEEK(0xD6EF) >> 0) & 3, (PEEK(0xD6EF) >> 2) & 3, (PEEK(0xD6EF) >> 6) & 3, (PEEK(0xD6EF) >> 4) & 0x3,
 	       (PEEK(0xD6E1)&0x6)>>1,
-	       PEEK(0xD6E3)>>4);
+	       PEEK(0xD6E3)>>4); 
       //      while(!PEEK(0xD610)) continue; POKE(0xD610,0);
     }
-
+#endif
+    
     // Check for new packets
     if (!(PEEK(0xD6E1) & 0x20)) {
-      // POKE(0xD020,PEEK(0xD020)+1);
+#ifdef RX_DEBUG
+	// Prime for next debug RX frame
+	POKE(0xD6e4,0xde);
+#endif	
+#if 0
+      //      POKE(0xD020,PEEK(0xD020)+1);
+      x=0xf00;
+      while(x==0xf00) {
+	lcopy_fixed_src(0xffd36e0,0xc000,0xf00);
+	for(x=0;x<0xf00;x++) if (PEEK(0xc000+x)!=0x81) break;
+      }
+      while(!PEEK(0xD610)); POKE(0xD610,0);
+#endif
+      POKE(0xc000,PEEK(0xc000)+1);
     } else
       {
 	char is_broadcast, is_icmp, is_ping;
+
+	//	POKE(0xD6e4,0xd0);
 	
 	// Ethernet frame received      
 	lcopy(0xFFDE800L, (long)frame_buffer, 0x0800);
+
+	if (frame_buffer[2]==0x00) goto empty;
 	
 	POKE(0xD020,1);
 	POKE(0xD020,0);
@@ -337,24 +437,28 @@ void main(void)
 	  }
 	} 
 	
-	
-#define START_OFS 60
 
-	if (is_broadcast&&is_ping) {
+#define SAMPLES_PER_BYTE 4
+#define START_OFS ETH_DST_OFS+(60*SAMPLES_PER_BYTE)
+
+	//	if (is_broadcast&&is_ping)
+	// if (is_broadcast)
+	if (1)
+	{
 	  lcopy(frame_buffer,0xc000,80);
 	  lfill(0xff80000,1,80);
 	  lcopy(frame_buffer,0xc800,0x800);
 
 	  // Show individual bits and count differences
 	  for(i=0;i<80;i++) {
-	    char v=((frame_buffer[START_OFS+i/4]>>((3^(i&3))<<1))&0x02)?0xa3:0x20;
+	    char v=((frame_buffer[START_OFS+i/4]>>((0^(i&3))<<1))&0x02)?0xa3:0x20;
 	    if (PEEK(0xc000+3*80+i)!=v) POKE(0xc000+7*80+i,PEEK(0xc000+7*80+i)+1);
 	    POKE(0xc000+3*80+i,v);
-	    v=((frame_buffer[START_OFS+i/4]>>((3^(i&3))<<1))&0x01)?0xa3:0x20;
+	    v=((frame_buffer[START_OFS+i/4]>>((0^(i&3))<<1))&0x01)?0xa3:0x20;
 	    if (PEEK(0xc000+4*80+i)!=v) POKE(0xc000+8*80+i,PEEK(0xc000+8*80+i)+1);
 	    POKE(0xc000+4*80+i,v);
 	    POKE(0xc000+5*80+i,'0'+i/4);
-	    POKE(0xc000+1*80+START_OFS+i/4,'0'+i/4);
+
 	  }
 
 	  // Show hex decode
@@ -369,13 +473,13 @@ void main(void)
 	  }
 	  
 	}
-
+      empty:
+	// Free the buffer, ready for the next frame
 	POKE(0xD6E1,3);
 	POKE(0xD6E1,1);
 
-	// Prime for next debug RX frame
+	// Clear RX debug status, if it was set
 	POKE(0xD6e4,0xd0);
-	POKE(0xD6e4,0xde);
 	
       }
   }
