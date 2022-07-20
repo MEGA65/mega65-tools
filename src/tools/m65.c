@@ -478,7 +478,9 @@ void show_hyppo_report(void)
 }
 
 static char system_bitstream_version[64] = "VERSION NOT FOUND";
-char *get_system_bitstream_version(void) {
+static char system_hardware_model_name[64] = "UNKNOWN";
+static unsigned char system_hardware_model = 0;
+void get_system_bitstream_version(void) {
   char buf[256], *found, *end;
   size_t len=0;
 
@@ -488,14 +490,59 @@ char *get_system_bitstream_version(void) {
   while (!(len = serialport_read(fd, (unsigned char *)buf, 256)));
 
   found = strstr(buf, "build GIT: ");
-  if (found == NULL) return system_bitstream_version;
-  found = found + 11; // skip found prefix
-  end = strchr(found, '\r');
-  if (end == NULL) return system_bitstream_version;
-  *end = 0;
-  strncpy(system_bitstream_version, found, 63);
-  system_bitstream_version[63] = 0;
-  return system_bitstream_version;
+  if (found != NULL) {
+    found += 11; // skip found prefix
+    end = strchr(found, '\r');
+    if (end != NULL) {
+      *end = 0;
+      strncpy(system_bitstream_version, found, 63);
+      system_bitstream_version[63] = 0;
+    }
+  }
+
+  slow_write(fd, "mffd3629 1\r", 11);
+  usleep(20000);
+  while (!(len = serialport_read(fd, (unsigned char *)buf, 256)));
+  // search version byte and translate
+  found = strstr(buf, ":0FFD3629:");
+  if (found != NULL) {
+    found += 10;
+    system_hardware_model = ((unsigned char)found[0] - (found[0]>57?55:48))*16 + (unsigned char)found[1] - (found[1]>57?55:48);
+    switch (system_hardware_model) {
+    case 1:
+      strcpy(system_hardware_model_name, "MEGA65 R1");
+      break;
+    case 2:
+      strcpy(system_hardware_model_name, "MEGA65 R2");
+      break;
+    case 3:
+      strcpy(system_hardware_model_name, "MEGA65 R3");
+      break;
+    case 33:
+      strcpy(system_hardware_model_name, "MEGAPHONE R1 PROTOTYPE");
+      break;
+    case 64:
+      strcpy(system_hardware_model_name, "NEXYS 4 PSRAM");
+      break;
+    case 65:
+      strcpy(system_hardware_model_name, "NEXYS 4 DDR (NO WIDGET)");
+      break;
+    case 66:
+      strcpy(system_hardware_model_name, "NEXYS 4 DDR (WIDGET)");
+      break;
+    case 253:
+      strcpy(system_hardware_model_name, "QMTECH WUKONG BOARD");
+      break;
+    case 254:
+      strcpy(system_hardware_model_name, "SIMULATED MEGA65");
+      break;
+    case 255:
+      strcpy(system_hardware_model_name, "HARDWARE NOT SPECIFIED");
+      break;
+    default:
+      snprintf(system_hardware_model_name, 31, "UNKNOWN MODEL $%02X", system_hardware_model);
+    }
+  }
 }
 
 void progress_to_RTI(void)
@@ -1460,7 +1507,8 @@ void enterTestMode()
     ts[strlen(ts) - 1] = 0;
 
     fprintf(stderr, "logging test results in %s\n", unittest_logfile);
-    fprintf(logPtr, ">>>>> TEST: %s\n===== BITSTREAM: %s\n", filename, system_bitstream_version);
+    fprintf(logPtr, ">>>>> TEST: %s\n===== BITSTREAM: %s\n===== MODELCODE: %02X\n===== MODEL: %s\n",
+            filename, system_bitstream_version, system_hardware_model, system_hardware_model_name);
   }
   fprintf(stderr, "System version: %s\n", system_bitstream_version);
 
@@ -1516,6 +1564,7 @@ void enterTestMode()
         if (recent_bytes[3] == 0xfe || recent_bytes[3] == 0xfd) {
           // if we are starting to receive a new log line, and already have one, we need to output it
           if (recent_bytes[3] == 0xfd && testlog[0]) {
+            currentTime = time(NULL);
             unit_test_logline(test_last_issue, test_last_sub, 0xd, testlog);
             testlog[0] = 0;
           }

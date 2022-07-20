@@ -23,6 +23,12 @@ declare -i fail
 
 parse_test_log () {
     local logfile=$1
+    if [[ ! -e ${logfile} ]]; then
+        echo "  Logfile is missing!"
+        echo "  Test result: failed"
+        FAILED+=1
+        return
+    fi
     # parse bitstream version
     temp=$(grep "===== BITSTREAM: " $logfile)
     temp=${temp##*BITSTREAM: }
@@ -73,13 +79,13 @@ while read -r test timeout; do
     if [[ $test =~ ^# || -z $test ]]; then
         continue
     fi
-    # check if tiemout is an number or use default timeout
+    # check if timeout is an number or use default timeout
     if [[ !($timeout =~ ^[0-9]+$) ]]; then
         timeout=$DEFAULT_TIMEOUT
     fi
     COUNT+=1
     echo "running ${test}..."
-    ${SCRIPTPATH}/../../bin/m65 -b "${BITSTREAM}" -4 -r -w ${LOGPATH}/ut-${test%%.prg}.log -u $timeout "${SCRIPTPATH}/${test}" >& /dev/null
+    ${SCRIPTPATH}/../../bin/m65 ${DEVICE} -b "${BITSTREAM}" -4 -r -w ${LOGPATH}/ut-${test%%.prg}.log -u $timeout "${SCRIPTPATH}/${test}" >& /dev/null
     parse_test_log ${LOGPATH}/ut-${test%%.prg}.log
 done < ${SCRIPTPATH}/regression-tests.lst
 
