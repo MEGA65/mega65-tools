@@ -87,6 +87,12 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_342.prg \
 		$(TESTDIR)/test_378.prg \
 		$(TESTDIR)/test_390.prg \
+		$(TESTDIR)/test_458.prg \
+		$(TESTDIR)/test_459.prg \
+		$(TESTDIR)/test_468.prg \
+		$(TESTDIR)/test_495.prg \
+		$(TESTDIR)/test_497.prg \
+		$(TESTDIR)/test_535.prg \
 		$(TESTDIR)/test_579.prg \
 		$(TESTDIR)/test_585.prg \
 		$(TESTDIR)/test_340.prg \
