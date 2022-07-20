@@ -81,8 +81,8 @@ char* load_binary = NULL;
 int viciv_mode_report(unsigned char* viciv_regs);
 
 int do_screen_shot(void);
-int fpgajtag_main(char* bitstream, char* serialport);
-void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idcode);
+int fpgajtag_main(char* bitstream);
+char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode);
 int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity);
 void set_vcd_file(char* name);
 void do_exit(int retval);
@@ -187,7 +187,7 @@ char* bitstream = NULL;
 char* vivado_bat = NULL;
 char* hyppo = NULL;
 char* fpga_serial = NULL;
-char* serial_port = NULL; // XXX do a better job auto-detecting this
+char* serial_port = NULL;
 char modeline_cmd[1024] = "";
 int break_point = -1;
 int jtag_only = 0;
@@ -1261,13 +1261,7 @@ void load_bitstream(char* bitstream)
   }
   else {
     // No Vivado.bat, so try to use internal fpgajtag implementation.
-    fprintf(stderr, "INFO: NOT using vivado.bat file\n");
-    if (fpga_serial) {
-      fpgajtag_main(bitstream, fpga_serial);
-    }
-    else {
-      fpgajtag_main(bitstream, NULL);
-    }
+    fpgajtag_main(bitstream);
   }
   timestamp_msg("Bitstream loaded.\n");
 }
@@ -1571,6 +1565,8 @@ unsigned char checkUSBPermissions()
     struct libusb_device_descriptor desc;
     if (libusb_get_device_descriptor(dev, &desc) < 0)
       continue;
+    if (desc.idVendor != 0x0403) // others do not matter, suppress complaint
+      continue;
     int open_result = libusb_open(dev, &usbhandle);
     if (open_result < 0) {
       return 0;
@@ -1776,11 +1772,9 @@ int main(int argc, char** argv)
   // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
 #if defined(__APPLE__) || defined(WINDOWS)
   if (bitstream && !serial_port)
-#else
-  if (!serial_port)
 #endif
   {
-    unsigned int fpga_id = 0x3631093, found =0;
+    unsigned int fpga_id = 0xffffffff, found = 0; // now defaulting to mega65r3
     if (bitstream) {
       fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
       FILE* f = fopen(bitstream, "rb");
@@ -1796,8 +1790,7 @@ int main(int argc, char** argv)
             fpga_id |= buff[i + 2] << 8;
             fpga_id |= buff[i + 3] << 0;
 
-            timestamp_msg("");
-            fprintf(stderr, "INFO: Detected FPGA ID %x from bitstream file.\n", fpga_id);
+            fprintf(stderr, "INFO: Detected FPGA ID %08x from bitstream file.\n", fpga_id);
             found = 1;
             break;
           }
@@ -1806,7 +1799,7 @@ int main(int argc, char** argv)
       }
     }
     if (!found)
-      fprintf(stderr, "INFO: Using default fpga_id %x\n", fpga_id);
+      fprintf(stderr, "INFO: Using default fpga_id %08x\n", fpga_id);
     if (!checkUSBPermissions()) {
       fprintf(stderr, "WARNING: May not be able to auto-detect USB port due to insufficient permissions.\n");
       fprintf(stderr,
@@ -1818,7 +1811,15 @@ int main(int argc, char** argv)
           "         and then log out, and log back in again, or failing that, reboot your computer and try again.\n"
           "\n");
     }
-    init_fpgajtag(NULL, bitstream, fpga_id);
+    char* res = init_fpgajtag(fpga_serial, serial_port, fpga_id);
+    if (res == NULL) {
+      fprintf(stderr, "no valid serial port not found, aborting\n");
+      exit(1);
+    }
+    if (serial_port) {
+      free(serial_port);
+    }
+    serial_port = res;
   }
 
 #ifdef WINDOWS
@@ -1862,6 +1863,7 @@ int main(int argc, char** argv)
     timestamp_msg(msg);
   }
 
+  fprintf(stderr, "opening serial port %s\n", serial_port);
   open_the_serial_port(serial_port);
   xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 

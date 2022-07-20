@@ -82,14 +82,11 @@
 #define IDCODE_ARRAY_SIZE 20
 #define SEGMENT_LENGTH 256 /* sizes above 256bytes seem to get more bytes back in response than were requested */
 
-extern char* serial_port;
-extern char* bitstream;
-
 uint8_t* input_fileptr;
 int input_filesize, found_cortex = -1, jtag_index = -1, dcount, idcode_count;
 int tracep; //= 1;
 
-static int debug, verbose, skip_idcode, match_any_idcode, trailing_len, first_time_idcode_read = 1, dc2trail, interface_id;
+static int debug, verbose, match_any_idcode, trailing_len, first_time_idcode_read = 1, dc2trail, interface_id = 0;
 static USB_INFO* uinfo;
 static uint32_t idcode_array[IDCODE_ARRAY_SIZE], idcode_len[IDCODE_ARRAY_SIZE];
 static uint8_t* rstatus = DITEM(
@@ -735,10 +732,16 @@ char *trim_path_component(char* s, unsigned int num)
   return NULL;
 }
 
-void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idcode)
+char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode)
 {
   ENTER();
-  int i, j;
+  int i, j, bus, pnum_len, last_index = -1, last_match = -1;
+  uint8_t pnum[8];
+  struct dirent* de = NULL;
+  char serial_path[1024] = "", last_path[1024];
+  char path[1024];
+  char link[1024]; // possible problem: PATH_MAX is probably 4096 on UNIX systems
+  char match[1024];
 
   /*
    * Initialize USB, FTDI
@@ -746,173 +749,83 @@ void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idc
   for (i = 0; i < sizeof(bitswap); i++)
     bitswap[i] = BSWAP(i);
   uinfo = fpgausb_init(); /*** Initialize USB interface ***/
-  int usb_index = 0;
   for (i = 0; uinfo[i].dev; i++) {
-    timestamp_msg("");
-    fprintf(stderr, "#%d: fpgajtag: %s:%s:%s; bcd:%x", i, uinfo[i].iManufacturer, uinfo[i].iProduct, uinfo[i].iSerialNumber,
-        uinfo[i].bcdDevice);
-    if (!filename) {
-      idcode_count = 0;
-      if (uinfo[i].idVendor == USB_JTAG_ALTERA) {
-        printf("Altera device");
-      }
-      else
-        get_deviceid(i, interface_id); /*** Generic initialization of FTDI chip ***/
-      fpgausb_close();
-      if (idcode_count)
-        fprintf(stderr, "; IDCODE:");
-      for (j = 0; j < idcode_count; j++)
-        fprintf(stderr, "  %x", idcode_array[j]);
+    bus = libusb_get_bus_number(uinfo[i].dev);
+    pnum_len = libusb_get_port_numbers(uinfo[i].dev, pnum, 8);
+
+    fprintf(stderr, "#%d: fpgajtag found %s usb device (serial %s, bcd %x) on bus=%d, port=[", i,
+            uinfo[i].iManufacturer, uinfo[i].iSerialNumber, uinfo[i].bcdDevice, bus);
+    for (j = 0; j < pnum_len; j++)
+      fprintf(stderr, "%d%s", pnum[j], j+1==pnum_len?"":",");
+    fprintf(stderr, "]\n");
+
+    if (uinfo[i].idVendor == USB_JTAG_ALTERA) {
+      fprintf(stderr, "  ignoring ALTERA device.\n");
+      continue;
     }
-    fprintf(stderr, "\n");
-  }
-  //    if (!filename)
-  //        exit(1);
-  while (1) {
-    //      printf("Trying usb_index=%d\n",usb_index);
-    if (!uinfo[usb_index].dev) {
-      fprintf(stderr, "fpgajtag: Can't find usable usb interface\n");
-      if (!bitstream)
-        exit(-1);
-      else
-        return;
-    }
-    if (uinfo[usb_index].idVendor == USB_JTAG_ALTERA) {
-      fprintf(stderr, "Ignoring ALTERA device.\n");
-    }
-    else if (!serialno || !strcmp(serialno, (char*)uinfo[usb_index].iSerialNumber)) {
-      // Found the correct interface.
-      // Now extract the real serial port name as well, so that monitor_load can use it.
 
-#if 0
-	  fprintf(stderr,"USB device info: dev=%p, idVendor=%x, idProduct=%x, bcdDevice=%x(0d%d)\n",
-		  uinfo[usb_index].dev,
-		  uinfo[usb_index].idVendor,
-		  uinfo[usb_index].idProduct,
-		  uinfo[usb_index].bcdDevice,
-		  uinfo[usb_index].bcdDevice
-		  );
-	  fprintf(stderr,"USB bus=%d, port_number=%d\n",
-		  libusb_get_bus_number(uinfo[usb_index].dev),
-		  libusb_get_port_number(uinfo[usb_index].dev));
-#endif
-      int bus = libusb_get_bus_number(uinfo[usb_index].dev);
-      int port = libusb_get_port_number(uinfo[usb_index].dev);
+#ifndef WINDOWS
+    // find the usb device matching this bus:port
+    DIR* d = opendir("/sys/bus/usb-serial/devices");
+    if (d) {
+      while ((de = readdir(d)) != NULL) {
+        if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
 
-      // Iterate through /sys/bus/usb-serial/devices to see if any of the entries there have
-      // symlinks that make sense for this device bus and port number.
-#ifdef WINDOWS
-      // NOTE: I don't think fpgajtag really needs to know the Windows COM port number, so let's skip this
-      // if (!serial_port)
-      // {
-      //   printf("On Windows, please specify COM port for your JTAG connection via the -l argument\n");
-      //   printf("E.g.: m65 -l COM9 -b mybitstream.bit\n");
-      printf("In case it helps: bus=%d, port=%d\n", bus, port);
-      //   exit(-1);
-      // }
-#else
-      if (!serial_port||(!serial_port[0]||strncmp(serial_port,"tcp",3)))
-      {
-        DIR* d = opendir("/sys/bus/usb-serial/devices");
-        if (d) {
-          struct dirent* de = NULL;
-          char serial_path[1024] = "";
-          char path[1024];
-          char link[1024]; // possible problem: PATH_MAX is probably 4096 on UNIX systems
-          char match[1024];
-          char *linkslash;
-          FILE *f;
-          int vendor = 0, product = 0, isDigilent = 0;
+        snprintf(path, 1024, "/sys/bus/usb-serial/devices/%s", de->d_name);
+        if (!realpath(path, link)) continue; // could not resolve
 
-          while ((de = readdir(d)) != NULL) {
-            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
-            snprintf(path, 1024, "/sys/bus/usb-serial/devices/%s", de->d_name);
-            if (!realpath(path, link)) continue;
-            fprintf(stderr, "  Checking '%s' -> '%s'\n", path, link);
+        snprintf(match, 1024, "/%d-%d/%d-%d.%d", bus, pnum[0], bus, pnum[0], pnum[1]);
+        if (!strstr(link, match)) continue; // does not match
 
-            // Now get vendor and product IDs
-            linkslash = trim_path_component(link, 2); // keep last slash position
-            if (linkslash == NULL) continue;
+        snprintf(serial_path, 1024, "/dev/%s", de->d_name);
+        fprintf(stderr, "  found %s", serial_path);
 
-            strcpy(linkslash, "/idVendor");
-            f = fopen(link, "r");
-            if (f) {
-              char line[1024];
-              fread(line, 1024, 1, f);
-              sscanf(line, "%x", &vendor);
-              fclose(f);
-            }
-
-            strcpy(linkslash, "/idProduct");
-            f = fopen(link, "r");
-            if (f) {
-              char line[1024];
-              fread(line, 1024, 1, f);
-              sscanf(line, "%x", &product);
-              fclose(f);
-            }
-
-            strcpy(linkslash, "/manufacturer");
-            f = fopen(link, "r");
-            if (f) {
-              char line[1024];
-              fread(line, 1024, 1, f);
-              if (strstr(line, "Digilent"))
-                isDigilent = 1;
-              fclose(f);
-            }
-
-            fprintf(stderr, "USB vendor:product is %04x:%04x (%d)\n", vendor, product, isDigilent);
-            snprintf(match, 1024, "/%d-%d/%d-%d:1.1", bus, port, bus, port);
-            snprintf(serial_path, 1024, "/dev/%s", de->d_name);
-            if ((vendor == 0x0403 && product == 0x6010 && isDigilent) || strstr(link, match)) {
-              timestamp_msg("");
-              fprintf(stderr, "Auto-detected serial port '%s'\n", serial_path);
-              serial_port = strdup(serial_path);
-            }
-          }
-          closedir(d);
-
-          if (!serial_port && serial_path[0]) {
-            fprintf(stderr, "Auto-guessing serial port '%s' due to lack of exact match\n", serial_path);
-            serial_port = strdup(serial_path);
-          }
+        if (serialport != NULL && strcmp(serial_path, serialport)) {
+          fprintf(stderr, ", does not match supplied device name, skipping\n");
+          continue;
         }
+
+        get_deviceid(i, interface_id); /*** Generic initialization of FTDI chip ***/
+        fpgausb_close();
+        fprintf(stderr, ", got %d id%s: ", idcode_count, idcode_count>1?"s":"");
+        for (j = 0; j < idcode_count; j++)     /*** look for device matching file idcode ***/
+          fprintf(stderr, j+1==idcode_count?"%08x":"%08x,", idcode_array[j]);
+        fprintf(stderr, "\n");
+        if (idcode_array[0] == 0x0fffffff) {
+          fprintf(stderr, "  device seems to be disabled, please power on\n");
+          break;
+        }
+
+        if (serialno && strcmp(serialno, (char*)uinfo[i].iSerialNumber)) {
+          fprintf(stderr, "  requested serial %s does not match, skipping\n", serialno);
+          break;
+        }
+        // look for device matching file idcode
+        for (j = 0; j < idcode_count; j++)
+          if (idcode_array[j] == file_idcode || file_idcode == 0xffffffff || match_any_idcode) {
+            fprintf(stderr, "  id code %08x matches %08x\n", idcode_array[j], file_idcode);
+            last_index = j;
+            last_match = i;
+            strcpy(last_path, serial_path);
+            break;
+          }
       }
-#endif
-
-      break;
-    }
-    else {
-      printf("This device doesn't seem to match.\n");
-#if 1
-      fprintf(stderr, "USB device info: dev=%p, idVendor=%x, idProduct=%x, bcdDevice=%x(0d%d)\n", uinfo[usb_index].dev,
-          uinfo[usb_index].idVendor, uinfo[usb_index].idProduct, uinfo[usb_index].bcdDevice, uinfo[usb_index].bcdDevice);
-      fprintf(stderr, "USB bus=%d, port_number=%d\n", libusb_get_bus_number(uinfo[usb_index].dev),
-          libusb_get_port_number(uinfo[usb_index].dev));
-      fprintf(stderr, "serialno='%s'\n", serialno ? serialno : "<null>");
-      fprintf(stderr, "USB serial='%s'\n", (char*)uinfo[usb_index].iSerialNumber);
+      closedir(d);
 #endif
     }
-
-    usb_index++;
   }
 
-  /*
-   * Set JTAG clock speed and GPIO pins for our i/f
-   */
-  get_deviceid(usb_index, interface_id); /*** Generic initialization of FTDI chip ***/
-  for (i = 0; i < idcode_count; i++)     /*** look for device matching file idcode ***/
-    if (idcode_array[i] == file_idcode || file_idcode == 0xffffffff || match_any_idcode) {
-      jtag_index = i;
-      if (skip_idcode-- <= 0)
-        break;
-    }
-  if (jtag_index == -1) {
-    printf("[%s] id %x from file does not match actual id %x\n", __FUNCTION__, file_idcode, idcode_array[0]);
-    //        exit(-1);
+  if (last_match != -1) {
+    fprintf(stderr, "selecting device %s\n", last_path);
+    jtag_index = last_index;
+    get_deviceid(last_match, interface_id); // this reopens the device and leaves it 'dangeling' for flashing
+    return strdup(last_path);
   }
+
+  printf("id %x from file does not match usb interface\n", file_idcode);
+
   EXIT();
+  return NULL;
 }
 
 #ifndef WINDOWS
@@ -925,12 +838,11 @@ int min(int a, int b)
 }
 #endif
 
-int fpgajtag_main(char* bitstream, char* serialport)
+int fpgajtag_main(char* bitstream)
 {
   ENTER();
   uint32_t ret;
   int rflag = 0, mflag = 0, cflag = 0, xflag = 0; // rescan = 0;
-  //    const char *serialno = serialport;
 
   match_any_idcode = 1;
   logfile = stdout;

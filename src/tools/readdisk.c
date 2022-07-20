@@ -73,7 +73,7 @@ char* load_binary = NULL;
 int viciv_mode_report(unsigned char* viciv_regs);
 
 int fpgajtag_main(char* bitstream, char* serialport);
-void init_fpgajtag(const char* serialno, const char* filename, uint32_t file_idcode);
+char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode);
 int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity);
 void set_vcd_file(char* name);
 void do_exit(int retval);
@@ -1393,7 +1393,7 @@ int main(int argc, char** argv)
 #endif
   {
     fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
-    unsigned int fpga_id = 0x3631093;
+    unsigned int fpga_id = 0xffffffff;
     FILE* f = fopen(bitstream, "rb");
     if (f) {
       unsigned char buff[8192];
@@ -1408,13 +1408,13 @@ int main(int argc, char** argv)
           fpga_id |= buff[i + 3] << 0;
 
           timestamp_msg("");
-          fprintf(stderr, "Detected FPGA ID %x from bitstream file.\n", fpga_id);
+          fprintf(stderr, "Detected FPGA ID %08x from bitstream file.\n", fpga_id);
           break;
         }
       }
       fclose(f);
     }
-    fprintf(stderr, "INFO: Using fpga_id %x\n", fpga_id);
+    fprintf(stderr, "INFO: Using fpga_id %08x\n", fpga_id);
     if (!checkUSBPermissions()) {
       fprintf(stderr, "WARNING: May not be able to auto-detect USB port due to insufficient permissions.\n");
       fprintf(stderr,
@@ -1426,7 +1426,9 @@ int main(int argc, char** argv)
           "         and then log out, and log back in again, or failing that, reboot your computer and try again.\n"
           "\n");
     }
-    init_fpgajtag(NULL, bitstream, fpga_id);
+    res = init_fpgajtag(NULL, NULL, fpga_id);
+    if (res != NULL)
+      serial_port = res;
   }
 
   open_the_serial_port(serial_port);
