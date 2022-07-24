@@ -1475,7 +1475,8 @@ void set_serial_speed(int fd, int serial_speed)
   struct termios t;
 
   if (fd < 0) {
-    fprintf(stderr, "WARNING: serial port file descriptor is -1\n");
+    log_error("set_serial_speed: invalid fd");
+    return;
   }
 
 #ifdef __APPLE__
@@ -1484,7 +1485,7 @@ void set_serial_speed(int fd, int serial_speed)
    * setting 'strange' baud rates (like 2000000) via tcsetattr().
    */
   speed_t speed = serial_speed;
-  log_debug("setting serial speed to %d bps using OSX method", (int)speed);
+  log_debug("set_serial_speed: %d bps (OSX)", serial_speed);
   if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
     log_error("failed to set output baud rate using IOSSIOSPEED");
   }
@@ -1501,6 +1502,7 @@ void set_serial_speed(int fd, int serial_speed)
   //without this.
   tcflush(fd, TCIFLUSH);
 #else
+  log_debug("set_serial_speed: %d bps (termios)", serial_speed);
   if (serial_speed == 230400) {
     if (cfsetospeed(&t, B230400))
       log_error("failed to set output baud rate");

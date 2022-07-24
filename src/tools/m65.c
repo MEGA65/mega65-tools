@@ -207,6 +207,7 @@ int jtag_only = 0;
 int bitstream_only = 0;
 uint32_t zap_addr;
 int zap = 0;
+int wait_for_bitstream = 0;
 
 int hypervisor_paused = 0;
 
@@ -490,27 +491,28 @@ static char system_bitstream_version[64] = "VERSION NOT FOUND";
 static char system_hardware_model_name[64] = "UNKNOWN";
 static unsigned char system_hardware_model = 0;
 int get_system_bitstream_version(void) {
-  char buf[256], *found, *end;
+  char buf[512], *found, *end;
   size_t len=0;
   time_t timeout;
 
   log_debug("get_system_bitstream_version: start");
   // fetch version info via monitor 'h'
+  // don' forget to sync console with '\xf#\r'
 #ifdef WINDOWS
-  slow_write(fd, "h\r", 2);
+  slow_write(fd, "\xf#\rh\r", 5);
 #else
-  write(fd, "h\r", 2);
+  write(fd, "\xf#\rh\r", 5);
 #endif
   usleep(20000);
   timeout = time(NULL);
   while (timeout+2 > time(NULL)) {
-    len = serialport_read(fd, (unsigned char *)buf, 256);
+    len = serialport_read(fd, (unsigned char *)buf, 512);
     if (len != 0) break;
   }
   if (len == 0)
     return -1;
 
-  log_debug("get_system_bitstream_version: got help answer");
+  log_debug("get_system_bitstream_version: got help answer (len=%d)", len);
   found = strstr(buf, "build GIT: ");
   if (found != NULL) {
     found += 11; // skip found prefix
@@ -530,7 +532,7 @@ int get_system_bitstream_version(void) {
   log_debug("get_system_bitstream_version: dumping $FFD3629");
   slow_write(fd, "mffd3629 1\r", 11);
   usleep(20000);
-  while (!(len = serialport_read(fd, (unsigned char *)buf, 256)));
+  while (!(len = serialport_read(fd, (unsigned char *)buf, 512)));
   // search version byte and translate
   found = strstr(buf, ":0FFD3629:");
   if (found != NULL) {
@@ -572,6 +574,11 @@ int get_system_bitstream_version(void) {
     }
     log_debug("get_system_bitstream_version: hardware $%02X '%s'", system_hardware_model, system_hardware_model_name);
   }
+  else {
+    log_debug("get_system_bitstream_version: hardware not detected");
+    return -1;
+  }
+
   return 0;
 }
 
@@ -1532,7 +1539,7 @@ void unit_test_log(unsigned char bytes[4])
   case 0xfe: // Set name of current test
     break;
   case 0xff: // Last test complete
-    log_note(">>> Terminating after completion of last test.");
+    log_note("terminating after completion of unit test");
     if (logPtr) {
       if (failcount > 0)
         fprintf(logPtr, "!!!!! FAILCOUNT: %d\n", failcount);
@@ -1715,6 +1722,7 @@ int main(int argc, char** argv)
       usage();
     case '@':
       load_binary = optarg;
+      wait_for_bitstream = 1;
       break;
     case 'a':
       show_audio_mixer = 1;
@@ -1775,21 +1783,25 @@ int main(int argc, char** argv)
       break;
     case '4':
       do_go64 = 1;
+      wait_for_bitstream = 1;
       break;
     case '1':
       comma_eight_comma_one = 1;
       break;
     case 'p':
       pal_mode = 1;
+      wait_for_bitstream = 1;
       break;
     case 'n':
       ntsc_mode = 1;
+      wait_for_bitstream = 1;
       break;
     case 'F':
       reset_first = 1;
       break;
     case 'r':
       do_run = 1;
+      wait_for_bitstream = 1;
       break;
     case 'f':
       fpga_serial = strdup(optarg);
@@ -1868,6 +1880,7 @@ int main(int argc, char** argv)
         exit(-1);
       }
       if (unit_test_timeout < UT_TIMEOUT) unit_test_timeout = UT_TIMEOUT;
+      wait_for_bitstream = 1;
       break;
     default: /* '?' */
       usage();
@@ -1877,6 +1890,7 @@ int main(int argc, char** argv)
   if (argv[optind]) {
     filename = strdup(argv[optind]);
     check_file_access(filename, "programme");
+    wait_for_bitstream = 1;
   }
 
   if (argc - optind > 1)
@@ -1964,10 +1978,11 @@ int main(int argc, char** argv)
     load_bitstream(bitstream);
     if (bitstream_only)
       do_exit(0);
+    if (wait_for_bitstream) {
+      log_note("waiting for the system to settle...");
+      sleep(4);
+    }
   }
-
-  if (virtual_f011)
-    log_note("vf011 - remote access to disk image '%s' requested", d81file);
 
 #ifndef WINDOWS
   // if we do not have a serial port yet (MacOS without -l option)
@@ -1986,12 +2001,6 @@ int main(int argc, char** argv)
 
   rxbuff_detect();
   monitor_sync();
-
-  // if we load a bitstream and do a unit test, we have to wait till the bitstream has fully started
-  if (unit_test_mode && bitstream) {
-    log_note("Unit Test mode, waiting for the system to settle...");
-    sleep(4);
-  }
 
   // fetch version information
   if (unit_test_mode)
@@ -2060,6 +2069,9 @@ int main(int argc, char** argv)
     // XXX This can take a while, which we should accommodate
     monitor_sync();
   }
+
+  if (virtual_f011)
+    log_note("vf011 - remote access to disk image '%s' requested", d81file);
 
   if (hyppo_report)
     show_hyppo_report();
