@@ -52,6 +52,7 @@
 #endif
 
 #include "m65common.h"
+#include "logging.h"
 
 #define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
@@ -127,15 +128,6 @@ PORT_TYPE fd = { WINPORT_TYPE_INVALID, INVALID_HANDLE_VALUE, INVALID_SOCKET };
 #else
 PORT_TYPE fd = -1;
 #endif
-
-void timestamp_msg(char* msg)
-{
-  if (!start_time)
-    start_time = time(0);
-  fprintf(stderr, "[T+%lldsec] %s", (long long)time(0) - start_time, msg);
-
-  return;
-}
 
 int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* file, const int line)
 {
@@ -406,12 +398,11 @@ void purge_and_check_for_vf011_jobs(int stopP)
 int fake_stop_cpu(void)
 {
   if (cpu_stopped) {
-    //    printf("CPU already stopped.\n");
+    //    log_debug("CPU already stopped.");
     return 1;
   }
   // Stop CPU
-  // timestamp_msg("");
-  //  fprintf(stderr, "Stopping CPU\n");
+  //  log_debug("Stopping CPU");
   if (no_rxbuff)
     do_usleep(50000);
   slow_write_safe(fd, "t1\r", 3);
@@ -425,12 +416,11 @@ int fake_stop_cpu(void)
 int real_stop_cpu(void)
 {
   if (cpu_stopped) {
-    //    printf("CPU already stopped.\n");
+    //    log_debug("CPU already stopped.");
     return 1;
   }
   // Stop CPU
-  //  timestamp_msg("");
-  // fprintf(stderr, "Stopping CPU\n");
+  // log_debug("Stopping CPU");
   if (no_rxbuff)
     do_usleep(50000);
   cpu_stopped = 1;
@@ -443,8 +433,7 @@ int start_cpu(void)
 {
   // Stop CPU
   if (cpu_stopped) {
-    //    timestamp_msg("");
-    //    fprintf(stderr, "Starting CPU\n");
+    //    log_debug("Starting CPU\n");
   }
   if (no_rxbuff)
     do_usleep(50000);
@@ -459,7 +448,7 @@ int load_file(char* filename, int load_addr, int patchHyppo)
 
   FILE* f = fopen(filename, "rb");
   if (!f) {
-    fprintf(stderr, "Could not open file '%s'\n", filename);
+    log_crit("could not open file '%s'", filename);
     exit(-2);
   }
 
@@ -474,17 +463,17 @@ int load_file(char* filename, int load_addr, int patchHyppo)
   int b = fread(buf, 1, max_bytes, f);
   while (b > 0) {
     if (patchHyppo) {
-      printf("patching...\n");
+      log_debug("patching hyppo...");
       // Look for BIT $nnnn / BIT $1234, and change to JMP $nnnn to skip
       // all SD card activities
       for (int i = 0; i < (b - 5); i++) {
         if ((buf[i] == 0x2c) && (buf[i + 3] == 0x2c) && (buf[i + 4] == 0x34) && (buf[i + 5] == 0x12)) {
-          fprintf(stderr, "Patching Hyppo @ $%04x to skip SD card and ROM checks.\n", 0x8000 + i);
+          log_debug("patching Hyppo @ $%04x to skip SD card and ROM checks", 0x8000 + i);
           buf[i] = 0x4c;
         }
       }
     }
-    printf("Read to $%04x (%d bytes)\n", load_addr, b);
+    log_debug("read to $%04x (%d bytes)", load_addr, b);
     fflush(stdout);
     // load_addr=0x400;
     // XXX - The l command requires the address-1, and doesn't cross 64KB boundaries.
@@ -496,7 +485,7 @@ int load_file(char* filename, int load_addr, int patchHyppo)
 
 #ifdef WINDOWS_GUS
     // Windows doesn't seem to work with the l fast-load monitor command
-    printf("Asking Gus to write data...\n");
+    log_debug("asking Gus to write data...");
     for (int i = 0; i < b; i += 16) {
       int ofs = 0;
       sprintf(cmd, "s%x", load_addr + i);
@@ -543,9 +532,7 @@ int load_file(char* filename, int load_addr, int patchHyppo)
   }
 
   fclose(f);
-  char msg[1024];
-  snprintf(msg, 1024, "File '%s' loaded.\n", filename);
-  timestamp_msg(msg);
+  log_info("file '%s' loaded", filename);
   return 0;
 }
 
@@ -615,15 +602,16 @@ int stuff_keybuffer(char* s)
     buffer_len_addr = 0xd0;
   }
 
-  timestamp_msg("Injecting string into key buffer at ");
-  fprintf(stderr, "$%04X : ", buffer_addr);
+  log_concat(NULL);
+  log_concat("Injecting string into key buffer at ");
+  log_concat("$%04X : ", buffer_addr);
   for (int i = 0; s[i]; i++) {
     if (s[i] >= ' ' && s[i] < 0x7c)
-      fprintf(stderr, "%c", s[i]);
+      log_concat("%c", s[i]);
     else
-      fprintf(stderr, "[$%02x]", s[i]);
+      log_concat("[$%02x]", s[i]);
   }
-  fprintf(stderr, "\n");
+  log_debug(NULL);
 
   char cmd[1024];
   snprintf(cmd, 1024, "s%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\rs%x %d\r", buffer_addr, s[0], s[1], s[2], s[3],
@@ -656,7 +644,7 @@ int rxbuff_detect(void)
   // Send two commands one after the other with no delay.
   // If we have RX buffering, both commands will execute.
   // If not, then only the first one will execute
-  printf("Checking if MEGA65 has RX buffer\n");
+  log_info("checking if MEGA65 has RX buffer");
   serialport_write(fd, (unsigned char*)"\025m0\rm1\r", 7);
   do_usleep(20000); // Give plenty of time for things to settle
   int b = 1;
@@ -667,7 +655,7 @@ int rxbuff_detect(void)
     //    dump_bytes(0,"bytes from serial port",read_buff,b);
     if ((strstr((char*)read_buff, ":00000000:")) && (strstr((char*)read_buff, ":00000001:"))) {
       no_rxbuff = 0;
-      timestamp_msg("RX buffer detected.  Latency will be reduced.\n");
+      log_info("RX buffer detected. Latency will be reduced.");
       break;
     }
   }
@@ -771,7 +759,7 @@ int monitor_sync(void)
     else
       do_usleep(1000);
   }
-  printf("Failed to synchronise with the monitor.\n");
+  log_warn("failed to synchronise with the monitor");
   return 1;
 }
 
@@ -856,8 +844,7 @@ int breakpoint_wait(void)
   int match_state = 0;
 
   // Now read until we see the requested PC
-  timestamp_msg("");
-  fprintf(stderr, "Waiting for breakpoint at $%04X to trigger.\n", breakpoint_pc);
+  log_info("waiting for breakpoint at $%04X to trigger", breakpoint_pc);
   while (1) {
     int b = serialport_read(fd, (unsigned char*)read_buff, 8192);
 
@@ -870,8 +857,7 @@ int breakpoint_wait(void)
     for (int i = 0; i < b; i++) {
       if (read_buff[i] == pattern[match_state]) {
         if (match_state == 4) {
-          timestamp_msg("");
-          fprintf(stderr, "Breakpoint @ $%04X triggered.\n", breakpoint_pc);
+          log_info("breakpoint @ $%04X triggered", breakpoint_pc);
           slow_write(fd, "t1\r", 3);
           cpu_stopped = 1;
           //	  printf("stopped following breakpoing.\n");
@@ -998,9 +984,7 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
     if (s && (strlen(s) >= 42)) {
       char b = s[42];
       s[42] = 0;
-      if (0) {
-        printf("Found data for $%08x:\n%s\n", (unsigned int)addr, s);
-      }
+      // log_debug("found data for $%08x: %s", (unsigned int)addr, s);
       s[42] = b;
       for (int i = 0; i < 16; i++) {
 
@@ -1027,9 +1011,8 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
     return 0;
   }
   else {
-    fprintf(stderr, "ERROR: Could not read requested memory region.\n");
+    log_crit("could not read requested memory region.");
     exit(-1);
-    return 1;
   }
 }
 
@@ -1098,7 +1081,7 @@ int detect_mode(void)
     mem_buff[9] = 0;
     int date_code = atoi((const char*)&mem_buff[1]);
     if (date_code > 2000000) {
-      fprintf(stderr, "Detected OpenROM version %d\n", date_code);
+      log_debug("detected OpenROM version %d\n", date_code);
       saw_openrom = 1;
       saw_c64_mode = 1;
       return 0;
@@ -1113,7 +1096,7 @@ int detect_mode(void)
     fetch_ram(0xffd3030, 1, mem_buff);
     while (mem_buff[0] & 0x01) {
       if (last_settle_msg_time != time(0)) {
-        timestamp_msg("Waiting for MEGA65 KERNAL/OS to settle...\n");
+        log_debug("waiting for MEGA65 KERNAL/OS to settle...");
         last_settle_msg_time = time(0);
       }
       if (no_rxbuff)
@@ -1134,29 +1117,26 @@ int detect_mode(void)
     fetch_ram(0xffd3030, 1, mem_buff);
     if (mem_buff[0] == 0x64) {
       saw_c65_mode = 1;
-      timestamp_msg("");
-      fprintf(stderr, "In C65 Mode.\n");
+      log_debug("in C65 mode");
       return 0;
     }
 
     // Use screen address to guess mode
     fetch_ram(0xffd3060, 3, mem_buff);
     if (mem_buff[1] == 0x04) {
-      printf("Screen is at $0400\n");
+      log_debug("screen is at $0400");
       // check $01 port value
       fetch_ram(0x7770001, 1, mem_buff);
-      printf("Port $01 contains $%02x\n", mem_buff[0]);
+      log_debug("port $01 contains $%02x", mem_buff[0]);
       if ((mem_buff[0] & 0xf) == 0x07) {
         saw_c64_mode = 1;
-        timestamp_msg("");
-        fprintf(stderr, "In C64 Mode.\n");
+        log_debug("in C64 mode");
         return 0;
       }
     }
     if (mem_buff[1] == 0x08) {
       saw_c65_mode = 1;
-      timestamp_msg("");
-      fprintf(stderr, "In C65 Mode.\n");
+      log_debug("in C65 mode");
       return 0;
     }
   }
@@ -1178,7 +1158,7 @@ int detect_mode(void)
 	// Or something else it does while booting
 	if (pc>=0xfeb0&&pc<0xfed0) sleep(1);
 	else {
-	  //	  fprintf(stderr,"Odd PC=$%04x\n",pc);
+	  //	  log_debug(stderr,"Odd PC=$%04x",pc);
 	  do_usleep(5000);
 	}
       }
@@ -1186,8 +1166,7 @@ int detect_mode(void)
     if (in_range>3) {
       // We are in C65 BASIC main loop, so assume it is C65 mode
       saw_c65_mode=1;
-      timestamp_msg("");
-      fprintf(stderr,"CPU in C65 BASIC 10 main loop.\n");
+      log_debug("CPU in C65 BASIC 10 main loop.");
       return 0;
     }
   } else if (mem_buff[0]==0x00) {
@@ -1198,21 +1177,20 @@ int detect_mode(void)
       // XXX Might not work with OpenROMs?
       if (pc>=0xe5cd&&pc<=0xe5d5) in_range++;
       else {
-	printf("Odd PC=$%04x\n",pc);
+	log_debug("odd PC=$%04x",pc);
 	do_usleep(5000);
       }
     }
     if (in_range>3) {
       // We are in C64 BASIC main loop, so assume it is C65 mode
       saw_c64_mode=1;
-      timestamp_msg("");
-      fprintf(stderr,"CPU in C64 BASIC 2 main loop.\n");
+      log_debug("CPU in C64 BASIC 2 main loop.");
       return 0;
     }
   }
 #endif
 
-  timestamp_msg("Could not determine C64/C65/MEGA65 mode.\n");
+  log_debug("could not determine C64/C65/MEGA65 mode");
   return 1;
 }
 
@@ -1229,7 +1207,7 @@ void print_error(const char* context)
   if (size == 0) {
     buffer[0] = 0;
   }
-  fprintf(stderr, "%s: %s\n", context, buffer);
+  log_error("%s: %s", context, buffer);
 }
 
 // Opens the specified serial port, configures its timeouts, and sets its
@@ -1506,18 +1484,18 @@ void set_serial_speed(int fd, int serial_speed)
    * setting 'strange' baud rates (like 2000000) via tcsetattr().
    */
   speed_t speed = serial_speed;
-  fprintf(stderr, "Setting serial speed to %d bps using OSX method.\n", (int)speed);
+  log_debug("setting serial speed to %d bps using OSX method", (int)speed);
   if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
-    perror("Failed to set output baud rate using IOSSIOSPEED");
+    log_error("failed to set output baud rate using IOSSIOSPEED");
   }
   if (tcgetattr(fd, &t))
-    perror("Failed to get terminal parameters");
+    log_error("failed to get terminal parameters");
   cfmakeraw(&t);
   //TCSASOFT prevents some fields (most importantly the baud rate)
   //from being changed.  MacOS does not support 'strange' baud rates
   //that might be set by the ioctl above.
   if (tcsetattr(fd, TCSANOW | TCSASOFT, &t))
-    perror("Failed to set OSX terminal parameters");
+    log_error("failed to set OSX terminal parameters");
 
   //Serial port will be unresponsive after returning from FREEZER
   //without this.
@@ -1525,33 +1503,33 @@ void set_serial_speed(int fd, int serial_speed)
 #else
   if (serial_speed == 230400) {
     if (cfsetospeed(&t, B230400))
-      perror("Failed to set output baud rate");
+      log_error("failed to set output baud rate");
     if (cfsetispeed(&t, B230400))
-      perror("Failed to set input baud rate");
+      log_error("failed to set input baud rate");
   }
   else if (serial_speed == 2000000) {
     if (cfsetospeed(&t, B2000000))
-      perror("Failed to set output baud rate");
+      log_error("failed to set output baud rate");
     if (cfsetispeed(&t, B2000000))
-      perror("Failed to set input baud rate");
+      log_error("failed to set input baud rate");
   }
   else if (serial_speed == 1000000) {
     if (cfsetospeed(&t, B1000000))
-      perror("Failed to set output baud rate");
+      log_error("failed to set output baud rate");
     if (cfsetispeed(&t, B1000000))
-      perror("Failed to set input baud rate");
+      log_error("failed to set input baud rate");
   }
   else if (serial_speed == 1500000) {
     if (cfsetospeed(&t, B1500000))
-      perror("Failed to set output baud rate");
+      log_error("failed to set output baud rate");
     if (cfsetispeed(&t, B1500000))
-      perror("Failed to set input baud rate");
+      log_error("failed to set input baud rate");
   }
   else {
     if (cfsetospeed(&t, B4000000))
-      perror("Failed to set output baud rate");
+      log_error("failed to set output baud rate");
     if (cfsetispeed(&t, B4000000))
-      perror("Failed to set input baud rate");
+      log_error("failed to set input baud rate");
   }
 
   t.c_cflag &= ~PARENB;
@@ -1563,7 +1541,7 @@ void set_serial_speed(int fd, int serial_speed)
   t.c_iflag &= ~(BRKINT | ICRNL | IGNBRK | IGNCR | INLCR | INPCK | ISTRIP | IXON | IXOFF | IXANY | PARMRK);
   t.c_oflag &= ~OPOST;
   if (tcsetattr(fd, TCSANOW, &t))
-    perror("Failed to set terminal parameters");
+    log_error("failed to set terminal parameters");
 
   // Also set USB serial port to low latency
   struct serial_struct serial;
@@ -1806,25 +1784,17 @@ void open_the_serial_port(char* serial_port)
 
 int switch_to_c64mode(void)
 {
-  printf("Trying to switch to C64 mode...\n");
-  monitor_sync();
-  stuff_keybuffer("GO64\rY\r");
+  log_note("trying to switch to C64 mode");
   saw_c65_mode = 0;
   //    do_usleep(100000);
-  detect_mode();
-  int count = 0;
-  while (!saw_c64_mode) {
-    fprintf(stderr, "WARNING: Failed to switch to C64 mode.\n");
+  int retries = 0;
+  while (!saw_c64_mode && retries < 10) {
     monitor_sync();
-    count++;
-    fprintf(stderr, "count=%d\n", count);
-    if (count > 0) {
-      fprintf(stderr, "Retyping GO64\n");
-      stuff_keybuffer("\r\rGO64\rY\r");
-      do_usleep(50000);
-      count = 0;
-    }
+    log_debug("go64 retry %d", retries);
+    stuff_keybuffer("\r\rGO64\rY\r");
+    do_usleep(50000);
     detect_mode();
+    retries++;
   }
-  return 0;
+  return saw_c64_mode == 0;
 }

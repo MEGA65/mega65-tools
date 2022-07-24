@@ -64,6 +64,7 @@ extern int log_depth;
 #else
 #define ENTER()
 #define EXIT()
+#define LOGNOTE(M)
 #endif
 
 #ifdef USE_LIBFTDI

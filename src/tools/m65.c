@@ -52,10 +52,13 @@
 #endif
 
 #include "m65common.h"
+#include "logging.h"
 
 #define UT_TIMEOUT 10
 
 #define UT_RES_TIMEOUT 127
+
+#define TOOLNAME "MEGA65 Cross-Development Tool"
 
 extern int pending_vf011_read;
 extern int pending_vf011_write;
@@ -93,17 +96,22 @@ void do_exit(int retval);
 int do_screen_shot_ascii(void);
 void get_video_state(void);
 
+extern const char *version_string;
+
 void usage(void)
 {
-  fprintf(stderr, "MEGA65 cross-development tool.\n");
+  fprintf(stderr, TOOLNAME"\n");
+  fprintf(stderr, "Version: %s\n\n", version_string);
   fprintf(stderr,
-      "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
-      "<hickup file>] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
-      "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] "
-      "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flash addr>] [-@ file@addr] [-N] "
+      "usage: m65 [-h|-?] [-0 LVL] [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
+      "<hickup file>] [-r] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
+      "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [-x]"
+      "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flashaddr>] [-@ file@addr] [-N]"
       "[-u timeout]\n");
 
-  fprintf(stderr, "  -@ - Load a binary file at a specific address.\n"
+  fprintf(stderr, "  -0 - set log level to NUM (0 = quiet ... 3 = everything)\n"
+                  "  -x - expert user, remove all warnings for newbies.\n"
+                  "  -@ - Load a binary file at a specific address.\n"
                   "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n"
                   "  -4 - Switch to C64 mode before exiting.\n"
                   "  -A - Set audio coefficient(s) xx (and optionally to yy) to ppp percent of maximum volume.\n"
@@ -116,6 +124,7 @@ void usage(void)
                   "  -E - Enable streaming of video via ethernet.\n"
                   "  -F - Force reset on start\n"
                   "  -f - Specify which FPGA to reconfigure when calling fpgajtag\n"
+                  "  -h/-? - display this help and exit\n"
                   "  -H - Halt CPU after loading ROMs.\n"
                   "  -J - Do JTAG boundary scan of attached FPGA, using the provided XDC and BSDL files.\n"
                   "       A sensitivity list can also be provided, to restrict the set of signals monitored.\n"
@@ -146,7 +155,7 @@ void usage(void)
                   "  -w - Write (or append) unit test results to a logfile\n"
                   "  -V - Write JTAG change log to VCD file, instead of to stdout.\n"
                   "  -X - Show a report of current Hypervisor status.\n"
-                  "  -Z - Zap (reconfigure) FPGA from specified hex address in flash.\n"
+                  "  -Z flashaddr - Zap (reconfigure) FPGA from specified hex address in flash.\n"
                   "  filename - Load and run this file before exiting.\n"
                   "\n");
   exit(-3);
@@ -309,9 +318,8 @@ int virtual_f011_read(int device, int track, int sector, int side)
   mega65_poke(0xffd3086, side & 0x7f);
   start_cpu();
 
-  timestamp_msg("");
   vf011_bytes_read += 256;
-  fprintf(stderr, "READ  device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec\n", device, track, sector, side,
+  log_info("READ  device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec", device, track, sector, side,
       vf011_bytes_read * 1.0 / (gettime_ms() - vf011_first_read_time));
 
   return 0;
@@ -327,16 +335,14 @@ int virtual_f011_write(int device, int track, int sector, int side)
   if (!vf011_first_read_time)
     vf011_first_read_time = start - 1;
 
-#if 1
-  fprintf(stderr, "T+%lld ms : Servicing hypervisor request for F011 FDC sector write.\n", gettime_ms() - start);
-#endif
+  log_debug("servicing hypervisor request for F011 FDC sector write.");
 
   if (fd81 == NULL) {
 
     fd81 = fopen(d81file, "wb+");
     if (!fd81) {
 
-      fprintf(stderr, "Could not open D81 file: '%s'\n", d81file);
+      log_crit("could not open D81 file: '%s'", d81file);
       exit(-1);
     }
   }
@@ -355,15 +361,15 @@ int virtual_f011_write(int device, int track, int sector, int side)
 
   if (result) {
 
-    fprintf(stderr, "Error finding D81 sector %d @ 0x%x\n", result, (track * 20 + physical_sector) * 512);
+    log_crit("failed to find D81 sector %d @ 0x%x", result, (track * 20 + physical_sector) * 512);
     exit(-2);
   }
   else {
     int b = fwrite(buf, 1, 512, fd81);
-    //	fprintf(stderr, " bytes read: %d @ 0x%x\n", b,(track*20+physical_sector)*512);
+    //	log_debeg("bytes read: %d @ 0x%x", b,(track*20+physical_sector)*512);
 
     if (b != 512) {
-      fprintf(stderr, "ERROR: Short write of %d bytes\n", b);
+      log_warn("short write of %d bytes", b);
     }
   }
 
@@ -372,9 +378,8 @@ int virtual_f011_write(int device, int track, int sector, int side)
   mega65_poke(0xffd3086, side & 0x0f);
   start_cpu();
 
-  timestamp_msg("");
   vf011_bytes_read += 256;
-  fprintf(stderr, "WRITE device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec\n", device, track, sector, side,
+  log_info("WRITE device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec", device, track, sector, side,
       vf011_bytes_read * 1.0 / (gettime_ms() - vf011_first_read_time));
 
   return 0;
@@ -489,6 +494,7 @@ int get_system_bitstream_version(void) {
   size_t len=0;
   time_t timeout;
 
+  log_debug("get_system_bitstream_version: start");
   // fetch version info via monitor 'h'
 #ifdef WINDOWS
   slow_write(fd, "h\r", 2);
@@ -504,6 +510,7 @@ int get_system_bitstream_version(void) {
   if (len == 0)
     return -1;
 
+  log_debug("get_system_bitstream_version: got help answer");
   found = strstr(buf, "build GIT: ");
   if (found != NULL) {
     found += 11; // skip found prefix
@@ -512,9 +519,15 @@ int get_system_bitstream_version(void) {
       *end = 0;
       strncpy(system_bitstream_version, found, 63);
       system_bitstream_version[63] = 0;
+      log_debug("get_system_bitstream_version: version %s", system_bitstream_version);
     }
   }
+  else {
+    log_debug("get_system_bitstream_version: version not found");
+    return -1;
+  }
 
+  log_debug("get_system_bitstream_version: dumping $FFD3629");
   slow_write(fd, "mffd3629 1\r", 11);
   usleep(20000);
   while (!(len = serialport_read(fd, (unsigned char *)buf, 256)));
@@ -557,6 +570,7 @@ int get_system_bitstream_version(void) {
     default:
       snprintf(system_hardware_model_name, 31, "UNKNOWN MODEL $%02X", system_hardware_model);
     }
+    log_debug("get_system_bitstream_version: hardware $%02X '%s'", system_hardware_model, system_hardware_model_name);
   }
   return 0;
 }
@@ -571,7 +585,7 @@ char* find_serial_port() {
 #else
     "/dev/ttyUSB*";
 #endif
-  fprintf(stderr, "No serial device given, trying brute-force autodetect\n");
+  log_note("no serial device given, trying brute-force autodetect");
   glob_t result;
   if (glob(devglob, 0, NULL, &result)) {
     globfree(&result);
@@ -580,9 +594,10 @@ char* find_serial_port() {
   for (i=0; i<result.gl_pathc; i++) {
     fd = open(result.gl_pathv[i], O_RDWR);
     if (fd == -1) {
-      fprintf(stderr, "  %s: failed to open\n", result.gl_pathv[i]);
+      log_error("%s: failed to open", result.gl_pathv[i]);
       continue;
     }
+    log_debug("find_serial_port: setting speed");
     set_serial_speed(fd, serial_speed);
 
     res = get_system_bitstream_version();
@@ -591,11 +606,11 @@ char* find_serial_port() {
     fd = -1;
 
     if (!res) {
-      fprintf(stderr, "  %s: %s %s\n", result.gl_pathv[i], system_hardware_model_name, system_bitstream_version);
+      log_note("%s: %s (%s)", result.gl_pathv[i], system_hardware_model_name, system_bitstream_version);
       device = strdup(result.gl_pathv[i]);
       break;
     } else
-      fprintf(stderr, "  %s: no device found\n", result.gl_pathv[i]);
+      log_note("%s: no reply", result.gl_pathv[i]);
   }
 
   globfree(&result);
@@ -626,7 +641,7 @@ void progress_to_RTI(void)
         }
         else if (match_state == 2 && buff[i] == 'I') {
           slow_write_safe(fd, "\r", 1);
-          fprintf(stderr, "RTI seen after %d bytes\n", bytes);
+          log_debug("RTI seen after %d bytes", bytes);
           return;
         }
         else
@@ -648,7 +663,7 @@ void do_type_key(unsigned char key)
   if (key == '~') {
     type_serial_mode ^= 1;
     if (type_serial_mode) {
-      fprintf(stderr, "NOTE: Switching to ASCII stuffing of buffered UART.\n");
+      log_note("switching to ASCII stuffing of buffered UART");
     }
     return;
   }
@@ -929,7 +944,7 @@ void do_type_key(unsigned char key)
 
 void do_type_text(char* type_text)
 {
-  fprintf(stderr, "Typing text via virtual keyboard...\n");
+  log_note("typing text via virtual keyboard...");
 
   time_t last_time_check=0;
   
@@ -963,13 +978,13 @@ void do_type_text(char* type_text)
         // Allow time for a keyboard scan interrupt
         usleep(20000);
 
-	// Display screen updates while typing if requested
-	if (screen_shot) {
-	  real_stop_cpu();
-	  get_video_state();
-	  do_screen_shot_ascii();
-	  start_cpu();
-	}
+	      // Display screen updates while typing if requested
+        if (screen_shot) {
+          real_stop_cpu();
+          get_video_state();
+          do_screen_shot_ascii();
+          start_cpu();
+        }
 	
         line[0] = 0;
         fgets(line, 1024, stdin);
@@ -1320,25 +1335,23 @@ void load_bitstream(char* bitstream)
           fpga_id |= buff[i + 2] << 8;
           fpga_id |= buff[i + 3] << 0;
 
-          timestamp_msg("");
-          fprintf(stderr, "Detected FPGA ID %x from bitstream file.\n", fpga_id);
+          log_info("detected FPGA ID %x from bitstream file", fpga_id);
           break;
         }
       }
       fclose(f);
     }
-    else {
-      fprintf(stderr, "WARNING: Could not open bitstream file '%s'\n", bitstream);
-    }
+    else
+      log_warn("could not open bitstream file '%s'", bitstream);
 
     char* part_name = "xc7a100t_0";
-    fprintf(stderr, "INFO: Expecting FPGA Part ID %x\n", fpga_id);
+    log_info("expecting FPGA Part ID %x", fpga_id);
     if (fpga_id == 0x3636093)
       part_name = "xc7a200t_0";
 
     FILE* tclfile = fopen("temp.tcl", "w");
     if (!tclfile) {
-      fprintf(stderr, "ERROR: Could not create temp.tcl");
+      log_crit("Could not create temp.tcl");
       exit(-1);
     }
     fprintf(tclfile,
@@ -1360,7 +1373,7 @@ void load_bitstream(char* bitstream)
     fclose(tclfile);
     char cmd[8192];
     snprintf(cmd, 8192, "%s -mode batch -nojournal -nolog -notrace -source temp.tcl", vivado_bat);
-    printf("Running %s...\n", cmd);
+    log_note("Running %s...", cmd);
     system(cmd);
     unlink("temp.tcl");
   }
@@ -1368,7 +1381,7 @@ void load_bitstream(char* bitstream)
     // No Vivado.bat, so try to use internal fpgajtag implementation.
     fpgajtag_main(bitstream);
   }
-  timestamp_msg("Bitstream loaded.\n");
+  log_note("Bitstream loaded");
 }
 
 void enter_hypervisor_mode(void)
@@ -1395,11 +1408,10 @@ int check_file_access(char* file, char* purpose)
 {
   FILE* f = fopen(file, "rb");
   if (!f) {
-    fprintf(stderr, "ERROR: Cannot access %s file '%s'\n", purpose, file);
+    fprintf(stderr, "cannot access %s file '%s'\n", purpose, file);
     exit(-1);
   }
-  else
-    fclose(f);
+  fclose(f);
 
   return 0;
 }
@@ -1449,8 +1461,6 @@ void handle_vf011_requests()
   }
 }
 
-extern const char* version_string;
-
 char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", "C#$06", "C#$07", "C#$08", "C#$09", "C#$0A",
   "C#$0B", "C#$0C", "  LOG", " NAME", " DONE" };
 
@@ -1480,7 +1490,7 @@ void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char sta
   }
   strncat(outstring, temp, 254);
 
-  fprintf(stderr, "%s\n", outstring);
+  log_note(outstring);
   if (logPtr) {
     fprintf(logPtr, "%s\n", outstring);
     fflush(logPtr);
@@ -1522,7 +1532,7 @@ void unit_test_log(unsigned char bytes[4])
   case 0xfe: // Set name of current test
     break;
   case 0xff: // Last test complete
-    fprintf(stderr, ">>> Terminating after completion of last test.\n");
+    log_note(">>> Terminating after completion of last test.");
     if (logPtr) {
       if (failcount > 0)
         fprintf(logPtr, "!!!!! FAILCOUNT: %d\n", failcount);
@@ -1542,9 +1552,8 @@ void enterTestMode()
   unsigned char receiveString, recent_bytes_fill = 0;
   int currentMessagePos;
   time_t currentTime;
-  char* ts;
 
-  fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
+  log_note("Entering unit test mode. Waiting for test results.");
   testname[0] = 0; // initialize test name with empty string
   testlog[0] = 0;
   receiveString = 0;
@@ -1557,18 +1566,15 @@ void enterTestMode()
 
     logPtr = fopen(unittest_logfile, "a");
     if (!logPtr) {
-      fprintf(stderr, "could not open logfile %s for appending. aborting\n", unittest_logfile);
+      log_error("could not open logfile %s for appending. aborting", unittest_logfile);
       exit(127);
     }
 
-    ts = asctime(localtime(&currentTime));
-    ts[strlen(ts) - 1] = 0;
-
-    fprintf(stderr, "logging test results in %s\n", unittest_logfile);
+    log_note("logging test results in %s", unittest_logfile);
     fprintf(logPtr, ">>>>> TEST: %s\n===== BITSTREAM: %s\n===== MODELCODE: %02X\n===== MODEL: %s\n",
             filename, system_bitstream_version, system_hardware_model, system_hardware_model_name);
   }
-  fprintf(stderr, "System version: %s\n", system_bitstream_version);
+  log_note("System version: %s", system_bitstream_version);
 
   while (time(NULL) - currentTime < unit_test_timeout) {
 
@@ -1639,13 +1645,7 @@ void enterTestMode()
     }
   }
 
-  if (testname[0]) {
-    fprintf(stderr, "%s: ", testname);
-    if (logPtr) {
-      fprintf(logPtr, "%s: ", testname);
-    }
-  }
-  fprintf(stderr, "timeout encountered while running tests. aborting.\n");
+  log_error("timeout encountered while running tests. aborting.");
   if (logPtr) {
     fprintf(logPtr, "!!!!! TIMEOUT\n");
     fprintf(logPtr, "!!!!! FAILCOUNT: %d\n", failcount+1);
@@ -1686,22 +1686,24 @@ unsigned char checkUSBPermissions()
 
 int main(int argc, char** argv)
 {
+  int loglevel = 1;
   start_time = time(0);
 
-  fprintf(stderr,
-      "MEGA65 Cross-Platform tool.\n"
-      "version: %s\n\n",
-      version_string);
-
-  timestamp_msg("");
-  fprintf(stderr, "Getting started..\n");
+  // so we can see errors while parsing args
+  log_setup(stderr, LOG_NOTE);
 
   if (argc == 1)
     usage();
 
   int opt;
-  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:u:U:v:V:w:XyZ:?")) != -1) {
+  while ((opt = getopt(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:Ss:t:T:u:U:v:V:w:XyZ:?h0:")) != -1) {
     switch (opt) {
+    case '0':
+      loglevel = log_parse_level(optarg);
+      if (loglevel == -1)
+        log_warn("failed to parse log level!");
+      log_setup(stderr, loglevel);
+      break;
     case 'y':
       debug_load_memory = 1;
       break;
@@ -1731,7 +1733,6 @@ int main(int argc, char** argv)
     case 'Z': {
       // Zap (reconfig) FPGA via MEGA65 reconfig registers
       sscanf(optarg, "%x", &zap_addr);
-      fprintf(stderr, "Reconfiguring FPGA using bitstream at $%08x\n", zap_addr);
       zap = 1;
     } break;
     case 'B':
@@ -1863,7 +1864,7 @@ int main(int argc, char** argv)
       unit_test_mode = 1;
       unit_test_timeout = strtol(optarg, &endp, 10);
       if (*endp != '\0') {
-        fprintf(stderr, "-u option requires a numeric argument\n");
+        log_error("-u option requires a numeric argument");
         exit(-1);
       }
       if (unit_test_timeout < UT_TIMEOUT) unit_test_timeout = UT_TIMEOUT;
@@ -1872,6 +1873,18 @@ int main(int argc, char** argv)
       usage();
     }
   }
+
+  if (argv[optind]) {
+    filename = strdup(argv[optind]);
+    check_file_access(filename, "programme");
+  }
+
+  if (argc - optind > 1)
+    usage();
+
+  log_debug("parameter parsing done");
+
+  log_note("%s %s", TOOLNAME, version_string);
 
   // Automatically find the serial port on Linux, if one has not been
   // provided
@@ -1883,12 +1896,12 @@ int main(int argc, char** argv)
   {
     unsigned int fpga_id = 0xffffffff, found = 0; // wildcard match for the last valid device
     if (bitstream) {
-      fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
+      log_info("Scanning bitstream file '%s' for device ID", bitstream);
       FILE* f = fopen(bitstream, "rb");
       if (f) {
         unsigned char buff[8192];
         int len = fread(buff, 1, 8192, f);
-        fprintf(stderr, "NOTE: Read %d bytes to search\n", len);
+        log_debug("  read %d bytes to search", len);
         for (int i = 0; i < len; i++) {
           if ((buff[i + 0] == 0x30) && (buff[i + 1] == 0x01) && (buff[i + 2] == 0x80) && (buff[i + 3] == 0x01)) {
             i += 4;
@@ -1897,7 +1910,7 @@ int main(int argc, char** argv)
             fpga_id |= buff[i + 2] << 8;
             fpga_id |= buff[i + 3] << 0;
 
-            fprintf(stderr, "INFO: Detected FPGA ID %08x from bitstream file.\n", fpga_id);
+            log_info("detected FPGA ID %08x from bitstream file.", fpga_id);
             found = 1;
             break;
           }
@@ -1906,21 +1919,19 @@ int main(int argc, char** argv)
       }
     }
     if (!found)
-      fprintf(stderr, "INFO: Using default fpga_id %08x\n", fpga_id);
+      log_info("using default fpga_id %x\n", fpga_id);
     if (!checkUSBPermissions()) {
-      fprintf(stderr, "WARNING: May not be able to auto-detect USB port due to insufficient permissions.\n");
-      fprintf(stderr,
-          "         You may be able to solve this problem via the following:\n"
-          "           sudo usermod -a -G dialout <your username>\n"
-          "         and then:\n"
-          "           echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
-          "sudo tee /etc/udev/rules.d/40-xilinx.rules\n"
-          "         and then log out, and log back in again, or failing that, reboot your computer and try again.\n"
-          "\n");
+      log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
+      log_warn("    You may be able to solve this problem via the following:");
+      log_warn("        sudo usermod -a -G dialout <your username>");
+      log_warn("    and then:");
+      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
+               "sudo tee /etc/udev/rules.d/40-xilinx.rules");
+      log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
     }
     char* res = init_fpgajtag(fpga_serial, serial_port, fpga_id);
     if (res == NULL) {
-      fprintf(stderr, "no valid serial port not found, aborting\n");
+      log_crit("no valid serial port not found, aborting");
       exit(1);
     }
     if (serial_port) {
@@ -1932,33 +1943,21 @@ int main(int argc, char** argv)
       serial_port = res;
   }
 
+  if (boundary_scan) {
 #ifdef WINDOWS
-  if (boundary_scan) {
-    fprintf(stderr, "WARNING: JTAG boundary scan not implemented on Windows.\n");
-  }
+    log_warn("JTAG boundary scan not implemented on Windows.");
 #else
-  if (boundary_scan) {
-    fprintf(stderr, "ERROR: threading on Windows not implemented.\n");
-    exit(-1);
     // Launch boundary scan in a separate thread, so that we can monitor signals while
     // running other operations.
     if (pthread_create(&threads[thread_count++], NULL, run_boundary_scan, NULL))
-      perror("Failed to create JTAG boundary scan thread.\n");
+      log_error("failed to create JTAG boundary scan thread.");
     else
-      fprintf(stderr, "JTAG boundary scan launched in separate thread.\n");
-  }
+      log_note("JTAG boundary scan launched in separate thread.");
 #endif
+  }
 
   if (jtag_only)
     do_exit(0);
-
-  if (argv[optind]) {
-    filename = strdup(argv[optind]);
-    check_file_access(filename, "programme");
-  }
-
-  if (argc - optind > 1)
-    usage();
 
   // -b Load bitstream if file provided
   if (bitstream) {
@@ -1967,24 +1966,21 @@ int main(int argc, char** argv)
       do_exit(0);
   }
 
-  if (virtual_f011) {
-    char msg[1024];
-    snprintf(msg, 1024, "Remote access to disk image '%s' requested.\n", d81file);
-    timestamp_msg(msg);
-  }
+  if (virtual_f011)
+    log_note("vf011 - remote access to disk image '%s' requested", d81file);
 
 #ifndef WINDOWS
   // if we do not have a serial port yet (MacOS without -l option)
   // we try to detect by opening the serial ports we find
   if (!serial_port) {
     if (!(serial_port = find_serial_port())) {
-      fprintf(stderr, "could not find a mega65 device on a serial port!\n");
+      log_crit("could not find a mega65 device on a serial port!");
       exit(1);
     }
   }
 #endif
 
-  fprintf(stderr, "opening serial port %s\n", serial_port);
+  log_info("opening serial port %s", serial_port);
   open_the_serial_port(serial_port);
   xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
@@ -1993,7 +1989,7 @@ int main(int argc, char** argv)
 
   // if we load a bitstream and do a unit test, we have to wait till the bitstream has fully started
   if (unit_test_mode && bitstream) {
-    fprintf(stderr, "Unit Test mode, waiting for the system to settle...\n");
+    log_note("Unit Test mode, waiting for the system to settle...");
     sleep(4);
   }
 
@@ -2002,7 +1998,7 @@ int main(int argc, char** argv)
     get_system_bitstream_version();
 
   if (debug_load_memory) {
-    printf("Testing load memory function.\n");
+    log_note("Testing load memory function.");
     unsigned char buf[65536];
 
 #if 0
@@ -2052,6 +2048,7 @@ int main(int argc, char** argv)
   }
 
   if (zap) {
+    fprintf(stderr, "Reconfiguring FPGA using bitstream at $%08x\n", zap_addr);
     char cmd[1024];
     monitor_sync();
     snprintf(cmd, 1024, "sffd36c8 %x %x %x %x\r", (zap_addr >> 0) & 0xff, (zap_addr >> 8) & 0xff, (zap_addr >> 16) & 0xff,
@@ -2071,7 +2068,7 @@ int main(int argc, char** argv)
   // extract one out of the running bitstream.
   if (!hyppo) {
     if (virtual_f011) {
-      timestamp_msg("Extracting HYPPO from running system...\n");
+      log_note("extracting HYPPO from running system...");
       unsigned char hyppo_data[0x4000];
       fetch_ram(0xFFF8000, 0x4000, hyppo_data);
 #ifdef WINDOWS
@@ -2081,7 +2078,7 @@ int main(int argc, char** argv)
 #endif
       FILE* f = fopen(temp_name, "wb");
       if (!f) {
-        perror("Could not create temporary HYPPO file.");
+        log_crit("could not create temporary HYPPO file.");
         exit(-1);
       }
       fwrite(hyppo_data, 0x4000, 1, f);
@@ -2097,20 +2094,26 @@ int main(int argc, char** argv)
       enter_hypervisor_mode();
       if (romfile) {
         // Un-protect
+        log_info("replacing rom");
         mega65_poke(0xffd367d, mega65_peek(0xffd367d) & (0xff - 4));
 
         load_file(romfile, 0x20000, 0);
         // reenable ROM write protect
         mega65_poke(0xffd367d, mega65_peek(0xffd367d) | 0x04);
       }
-      if (charromfile)
+      if (charromfile) {
+        log_info("replacing colourr ram");
         load_file(charromfile, 0xFF7E000, 0);
+      }
       return_from_hypervisor_mode();
     }
 
-    if (colourramfile)
+    if (colourramfile) {
+      log_info("replacing colourram");
       load_file(colourramfile, 0xFF80000, 0);
+    }
     if (flashmenufile) {
+      log_info("replacing flashmenu");
       load_file(flashmenufile, 0x50000, 0);
     }
   }
@@ -2119,25 +2122,30 @@ int main(int argc, char** argv)
     if (romfile && (!flashmenufile))
       patchKS = 1;
 
-    timestamp_msg("Replacing HYPPO...\n");
-
     real_stop_cpu();
     if (hyppo) {
-      real_stop_cpu();
+      log_note("replacing hyppo...");
+    real_stop_cpu();
       load_file(hyppo, 0xfff8000, patchKS);
     }
     if (flashmenufile) {
+      log_note("replacing flaschmenu");
       load_file(flashmenufile, 0x50000, 0);
     }
     if (romfile) {
+      log_info("replacing rom");
       load_file(romfile, 0x20000, 0);
     }
-    if (charromfile)
+    if (charromfile) {
+      log_info("replacing character rom");
       load_file(charromfile, 0xFF7E000, 0);
-    if (colourramfile)
+    }
+    if (colourramfile) {
+      log_info("replacing colourram");
       load_file(colourramfile, 0xFF80000, 0);
+    }
     if (virtual_f011) {
-      timestamp_msg("Virtualising F011 FDC access.\n");
+      log_note("virtualising F011 FDC access");
 
       // Enable FDC virtualisation
       mega65_poke(0xffd3659, 0x01);
@@ -2150,6 +2158,7 @@ int main(int argc, char** argv)
 
   // -F reset
   if (reset_first) {
+    log_note("resetting MEGA65");
     start_cpu();
     slow_write(fd, "\r!\r", 3);
     monitor_sync();
@@ -2185,7 +2194,7 @@ int main(int argc, char** argv)
   }
 
   if (break_point != -1) {
-    fprintf(stderr, "Setting CPU breakpoint at $%04x\n", break_point);
+    log_note("setting CPU breakpoint at $%04x", break_point);
     char cmd[1024];
     sprintf(cmd, "b%x\r", break_point);
     do_usleep(20000);
@@ -2194,6 +2203,7 @@ int main(int argc, char** argv)
   }
 
   if (pal_mode) {
+    log_info("switching to PAL mode");
     mega65_poke(0xFFD306fL, 0x00);
     mega65_poke(0xFFD3072L, 0x00);
     mega65_poke(0xFFD3048L, 0x68);
@@ -2208,6 +2218,7 @@ int main(int argc, char** argv)
     mega65_poke(0xffd3d0el, mega65_peek(0xffd3d0el) | 0x80);
   }
   if (ntsc_mode) {
+    log_info("switching to NTSC mode");
     mega65_poke(0xFFD306fL, 0x87);
     mega65_poke(0xFFD3072L, 0x18);
     mega65_poke(0xFFD3048L, 0x2A);
@@ -2222,9 +2233,11 @@ int main(int argc, char** argv)
     mega65_poke(0xffd3d0el, mega65_peek(0xffd3d0el) & 0x7f);
   }
   if (ethernet_video) {
+    log_note("enabling ethernet video");
     mega65_poke(0xffd36e1, 0x29);
   }
   if (ethernet_cpulog) {
+    log_note("enabling ethernet cpulog");
     mega65_poke(0xffd36e1, 0x05);
   }
 
@@ -2241,7 +2254,7 @@ int main(int argc, char** argv)
     int load_addr = 0;
 
     if (sscanf(load_binary, "%[^@]@%x", filename, &load_addr) != 2) {
-      fprintf(stderr, "ERROR: -@ option format is file@hexaddr\n");
+      log_crit("-@ option format is file@hexaddr");
       usage();
     }
 
@@ -2251,7 +2264,7 @@ int main(int argc, char** argv)
     mega65_poke(0xffd367d, mega65_peek(0xffd367d) & (0xff - 4));
 
     load_file(filename, load_addr, 0);
-    fprintf(stderr, "Loaded file '%s' @ $%x\n", filename, load_addr);
+    log_note("loaded file '%s' @ $%x", filename, load_addr);
 
     return_from_hypervisor_mode();
   }
@@ -2391,8 +2404,7 @@ int main(int argc, char** argv)
   }
 
   if (filename || do_go64) {
-    timestamp_msg("");
-    fprintf(stderr, "Detecting C64/C65 mode status.\n");
+    log_info("detecting C64/C65 mode status");
     detect_mode();
   }
 
@@ -2419,7 +2431,7 @@ int main(int argc, char** argv)
   // OSK enable
   if (osk_enable) {
     mega65_poke(0xffd361f, 0xff);
-    printf("OSK Enabled\n");
+    log_note("OSK enabled");
   }
 
   // -S screen shot
@@ -2431,8 +2443,7 @@ int main(int argc, char** argv)
   }
 
   if (filename) {
-    timestamp_msg("");
-    fprintf(stderr, "Loading file '%s'\n", filename);
+    log_note("loading file '%s'", filename);
 
     unsigned int load_routine_addr = 0xf664;
 
@@ -2443,14 +2454,14 @@ int main(int argc, char** argv)
     while (do_go64 && (!saw_c64_mode)) {
       detect_mode();
       if (!saw_c64_mode) {
-        fprintf(stderr, "ERROR: In C65 mode, but expected C64 mode\n");
+        log_crit("in C65 mode, but expected C64 mode");
         exit(-1);
       }
     }
     while ((!do_go64) && (!saw_c65_mode)) {
       detect_mode();
       if (!saw_c65_mode) {
-        fprintf(stderr, "ERROR: Should be in C65 mode, but don't seem to be.\n");
+        log_crit("should be in C65 mode, but don't seem to be");
         exit(-1);
       }
     }
@@ -2460,13 +2471,13 @@ int main(int argc, char** argv)
       if (saw_c64_mode) {
         // Assume LOAD vector in C64 mode is fixed
         load_routine_addr = 0xf4a5;
-        fprintf(stderr, "NOTE: Assuming LOAD routine at $F4A5 for C64 mode\n");
+        log_info("assuming LOAD routine at $F4A5 for C64 mode");
       }
       else {
         unsigned char vectorbuff[2];
         fetch_ram(0x3FFD6, 2, vectorbuff);
         load_routine_addr = vectorbuff[0] + (vectorbuff[1] << 8);
-        fprintf(stderr, "NOTE: LOAD vector from ROM is $%04x\n", load_routine_addr);
+        log_info("LOAD vector from ROM is $%04x", load_routine_addr);
       }
       // Type LOAD command and set breakpoint to catch the ROM routine
       // when it executes.
@@ -2499,8 +2510,7 @@ int main(int argc, char** argv)
       char requested_name[256];
       fetch_ram(filename_addr, filename_len, (unsigned char*)requested_name);
       requested_name[filename_len] = 0;
-      timestamp_msg("");
-      fprintf(stderr, "Requested file is '%s' (len=%d)\n", requested_name, filename_len);
+      log_info("requested file is '%s' (len=%d)", requested_name, filename_len);
       // If we caught the boot load request, then feed the DLOAD command again
       if (!strcmp(requested_name, "0:AUTOBOOT.C65*"))
         first_time = 1;
@@ -2520,7 +2530,7 @@ int main(int argc, char** argv)
 
     FILE* f = fopen(filename, "rb");
     if (f == NULL) {
-      fprintf(stderr, "Could not find file '%s'\n", filename);
+      log_crit("could not find file '%s'", filename);
       exit(-1);
     }
     else {
@@ -2530,7 +2540,7 @@ int main(int argc, char** argv)
       if ((load_addr == 0x5350) || (load_addr == 0x5352)) {
         // It's probably a SID file
 
-        timestamp_msg("Examining SID file...\n");
+        log_info("examining SID file...");
 
         // Read header
         unsigned char sid_header[0x7c];
@@ -2544,8 +2554,7 @@ int main(int argc, char** argv)
         char* author = (char*)&sid_header[0x36 - 0x02];
         char* released = (char*)&sid_header[0x56 - 0x02];
 
-        timestamp_msg("");
-        fprintf(stderr, "SID tune '%s' by '%s' (%s)\n", name, author, released);
+        log_info("SID tune '%s' by '%s' (%s)", name, author, released);
 
         // Also show player info on the screen
         char player_screen[1000] = { "                                        "
@@ -2591,13 +2600,12 @@ int main(int argc, char** argv)
 
         // Patch load address
         load_addr = (sid_header[0x7d - 0x02] << 8) + sid_header[0x7c - 0x02];
-        timestamp_msg("");
-        fprintf(stderr, "SID load address is $%04x\n", load_addr);
+        log_debug("SID load address is $%04x", load_addr);
         //	dump_bytes(0,"sid header",sid_header,0x7c);
 
         // Prepare simple play routine
         // XXX For now it is always VIC frame locked
-        timestamp_msg("Uploading play routine\n");
+        log_note("uploading SID play routine");
         int b = 56;
         unsigned char player[56] = { 0x78, 0xa9, 0x35, 0x85, 0x01, 0xa9, 0x01, 0x20, 0x34, 0x12, 0xa9, 0x80, 0xcd, 0x12,
           0xd0, 0xd0, 0xfb, 0xa9, 0x01, 0x8d, 0x20, 0xd0, 0x20, 0x78, 0x56, 0xa9, 0x00, 0x8d, 0x20, 0xd0, 0xa9, 0x80, 0xcd,
@@ -2641,18 +2649,16 @@ int main(int argc, char** argv)
           load_addr = 0x0801;
         else
           load_addr = 0x2001;
-        timestamp_msg("");
-        fprintf(stderr, "Forcing load address to $%04X\n", load_addr);
+        log_info("forcing load address to $%04X", load_addr);
       }
       else
-        printf("Load address is $%04x\n", load_addr);
+        log_info("load address is $%04x", load_addr);
 
       unsigned char buf[32768];
       int max_bytes = 32768;
       int b = fread(buf, 1, max_bytes, f);
       while (b > 0) {
-        timestamp_msg("");
-        fprintf(stderr, "Read block for $%04x -- $%04x (%d bytes)\n", load_addr, load_addr + b - 1, b);
+        log_debug("read block for $%04x -- $%04x (%d bytes)", load_addr, load_addr + b - 1, b);
 
         if (is_sid_tune) {
           int num_sids = 0;
@@ -2687,18 +2693,18 @@ int main(int argc, char** argv)
                       break;
                   if (j == num_sids) {
                     sid_addrs[num_sids++] = this_sid;
-                    fprintf(stderr, "Tune uses SID at $%04x\n", this_sid);
+                    log_info("tune uses SID at $%04x", this_sid);
                   }
                 }
               }
               break;
             }
           }
-          fprintf(stderr, "Tune uses a total of %d SIDs.\n", num_sids);
+          log_info("tune uses a total of %d SIDs", num_sids);
           for (int i = 0; i < num_sids; i++) {
             if (sid_addrs[i] >= 0xd600) {
               fix_addrs[i] = 0xd400 + 0x20 * i;
-              fprintf(stderr, "Relocating SID at $%02x to $%04x\n", sid_addrs[i], fix_addrs[i]);
+              log_info("relocating SID at $%02x to $%04x", sid_addrs[i], fix_addrs[i]);
             }
             else
               fix_addrs[i] = sid_addrs[i];
@@ -2730,7 +2736,7 @@ int main(int argc, char** argv)
                     if ((this_sid & 0xffe0) == sid_addrs[j])
                       break;
                   if (fix_addrs[j] != sid_addrs[j]) {
-                    fprintf(stderr, "@ $%04X Patching $%04X to $%04X\n", i + load_addr, this_sid,
+                    log_debug("@ $%04X Patching $%04X to $%04X", i + load_addr, this_sid,
                         fix_addrs[j] | (this_sid & 0x1f));
                     int fixed_addr = fix_addrs[j] | (this_sid & 0x1f);
                     buf[i - 1] = fixed_addr & 0xff;
@@ -2745,7 +2751,7 @@ int main(int argc, char** argv)
 
 #ifdef WINDOWS_GUS
         // Windows doesn't seem to work with the l fast-load monitor command
-        printf("Asking Gus to write data...\n");
+        log_info("asking Gus to write data...");
         for (int i = 0; i < b; i += 16) {
           int ofs = 0;
           sprintf(cmd, "s%x", load_addr + i);
@@ -2794,14 +2800,13 @@ int main(int argc, char** argv)
         load_addr_bytes[0] = load_addr;
         load_addr_bytes[1] = load_addr >> 8;
         push_ram(top_of_mem_ptr_addr, 2, load_addr_bytes);
-        fprintf(stderr, "NOTE: Storing end of program pointer at $%x\n", top_of_mem_ptr_addr);
+        log_info("storing end of program pointer at $%x", top_of_mem_ptr_addr);
       }
 
       // We need to set X and Y to load address before
       // returning: LDX #$ll / LDY #$yy / CLC / RTS
       sprintf(cmd, "s380 a2 %x a0 %x 18 60\r", load_addr & 0xff, (load_addr >> 8) & 0xff);
-      timestamp_msg("");
-      fprintf(stderr, "Returning top of load address = $%04X\n", load_addr);
+      log_info("returning top of load address = $%04X", load_addr);
       slow_write(fd, cmd, strlen(cmd));
       monitor_sync();
 
@@ -2811,7 +2816,6 @@ int main(int argc, char** argv)
       else
         sprintf(cmd, "g0400\r");
 
-#if 1
       slow_write(fd, cmd, strlen(cmd));
       //      monitor_sync();
 
@@ -2821,13 +2825,10 @@ int main(int argc, char** argv)
 
       if (do_run) {
         stuff_keybuffer("RUN:\r");
-        timestamp_msg("RUNning.\n");
-      }
-#endif
-
-      // loaded ok.
-      timestamp_msg("");
-      fprintf(stderr, "LOADED.\n");
+        log_note("running");
+      } else
+        // loaded ok.
+        log_note("loaded");
     }
   }
 
@@ -2837,7 +2838,7 @@ int main(int argc, char** argv)
   // XXX - loop for virtualisation, JTAG boundary scanning etc
 
   if (virtual_f011) {
-    fprintf(stderr, "Entering virtualised F011 wait loop...\n");
+    log_note("entering virtualised F011 wait loop...");
 
     while (1) {
       unsigned char buff[8192];
@@ -2864,8 +2865,7 @@ void do_exit(int retval)
 {
 #ifndef WINDOWS
   if (thread_count) {
-    timestamp_msg("");
-    fprintf(stderr, "Background tasks may be running. CONTROL+C to stop...\n");
+    log_crit("background tasks may be running. CONTROL+C to stop...");
     for (int i = 0; i < thread_count; i++)
       pthread_join(threads[i], NULL);
   }

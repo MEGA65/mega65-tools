@@ -51,31 +51,7 @@
 #include <libusb.h>
 #include "util.h"
 #include "fpga.h"
-
-#ifdef USE_LOGGING
-#define ENTER()                                                                                                             \
-  {                                                                                                                         \
-    fflush(stdout);                                                                                                         \
-    fprintf(stderr, "Entering %s()\n", __FUNCTION__);                                                                       \
-    fflush(stderr);                                                                                                         \
-  }
-#define EXIT()                                                                                                              \
-  {                                                                                                                         \
-    fflush(stdout);                                                                                                         \
-    fprintf(stderr, "Exiting %s()\n", __FUNCTION__);                                                                        \
-    fflush(stderr);                                                                                                         \
-  }
-#define LOGNOTE(M)                                                                                                          \
-  {                                                                                                                         \
-    fflush(stdout);                                                                                                         \
-    fprintf(stderr, "%s:%d:%s():%s\n", __FILE__, __LINE__, __FUNCTION__, M);                                                \
-    fflush(stderr);                                                                                                         \
-  }
-#else
-#define ENTER()
-#define EXIT()
-#define LOGNOTE(M)
-#endif
+#include "logging.h"
 
 #define FILE_READSIZE 6464
 #define MAX_SINGLE_USB_DATA 4046
@@ -86,7 +62,7 @@ uint8_t* input_fileptr;
 int input_filesize, found_cortex = -1, jtag_index = -1, dcount, idcode_count;
 int tracep; //= 1;
 
-static int debug, verbose, match_any_idcode, trailing_len, first_time_idcode_read = 1, dc2trail, interface_id = 0;
+static int match_any_idcode, trailing_len, first_time_idcode_read = 1, dc2trail, interface_id = 0;
 static USB_INFO* uinfo;
 static uint32_t idcode_array[IDCODE_ARRAY_SIZE], idcode_len[IDCODE_ARRAY_SIZE];
 static uint8_t* rstatus = DITEM(
@@ -128,7 +104,7 @@ static void pulse_gpio(int adelay)
     delay = CLOCK_FREQUENCY / 80;
     break;
   default:
-    printf("pulse_gpio: unsupported time delay %d\n", adelay);
+    log_crit("pulse_gpio: unsupported time delay %d", adelay);
     exit(-1);
   }
   write_item(DITEM(SET_LSB_DIRECTION(GPIO_DONE | GPIO_01), SET_LSB_DIRECTION(GPIO_DONE)));
@@ -161,7 +137,7 @@ void write_tms_transition(char* tail)
   int len = 0;
 
   if (!match_state(tail[0]))
-    printf("fpgajtag: TMS Error: current %c target %s last %s\n", current_state, tail, lasttail);
+    log_debug("fpgajtag: TMS Error: current %c target %s last %s", current_state, tail, lasttail);
   lasttail = tail;
   current_state = tail[1];
   while (*p) {
@@ -193,7 +169,7 @@ void ENTER_TMS_STATE(char required)
     p++;
   }
   if (!match_state(required))
-    printf("[%s:%d] %c should be %c\n", __FUNCTION__, __LINE__, current_state, required);
+    log_debug("[%s:%d] %c should be %c", __FUNCTION__, __LINE__, current_state, required);
   EXIT();
 }
 void tmsw_delay(int delay_time, int extra)
@@ -224,7 +200,7 @@ static void reset_mark_clock(int clock)
     access_mdm(2, 0, 1);
   else
     access_mdm(0, 1, 0);
-  DPRINT("[%s:%d]\n", __FUNCTION__, __LINE__);
+  log_debug("[%s:%d]", __FUNCTION__, __LINE__);
   marker_for_reset(0);
   if (clock)
     set_clock_divisor();
@@ -474,7 +450,7 @@ void write_irreg(int read, int command, int idindex, char tail)
       befbits += idcode_len[i];
   }
   if (tracep)
-    printf("[%s:%d] read %d command %x idindex %d bef %d aft %d\n", __FUNCTION__, __LINE__, read, command, idindex, befbits,
+    log_debug("[%s:%d] read %d command %x idindex %d bef %d aft %d", __FUNCTION__, __LINE__, read, command, idindex, befbits,
         afterbits);
   flush_write(NULL);
   ENTER_TMS_STATE('I');
@@ -583,10 +559,10 @@ uint32_t fetch_result(int idindex, int command, int resp_len, int fd)
 
   if (idindex >= 0 && resp_len) {
     write_dirreg(command, idindex);
-    DPRINT("[%s:%d] idindex %d\n", __FUNCTION__, __LINE__, idindex);
+    log_debug("[%s:%d] idindex %d", __FUNCTION__, __LINE__, idindex);
     write_bit(0, (dcount - 2) * (idindex && 0 != idcode_count - 1 - idindex), 0, 0);
   }
-  DPRINT("[%s:%d]\n", __FUNCTION__, __LINE__);
+  log_debug("[%s:%d]", __FUNCTION__, __LINE__);
   while (resp_len > 0) {
     int size = resp_len;
     if (size > SEGMENT_LENGTH)
@@ -632,7 +608,7 @@ static uint32_t readout_seq(int idindex, uint8_t* req, int resp_len, int fd)
   ENTER();
   write_dirreg(IRREG_CFG_IN, idindex);
   write_req(0, req, !idindex);
-  DPRINT("[%s:%d] idindex %d\n", __FUNCTION__, __LINE__, idindex);
+  log_debug("[%s:%d] idindex %d", __FUNCTION__, __LINE__, idindex);
   write_above2(0, idindex);
   uint32_t r = fetch_result(idindex, IRREG_CFG_OUT, resp_len, fd);
   EXIT();
@@ -645,21 +621,21 @@ static void readout_status0(void)
   int ret, idindex;
 
   for (idindex = 0; idindex < idcode_count; idindex++) {
-    DPRINT("[%s:%d] idindex %d/%d\n", __FUNCTION__, __LINE__, idindex, idcode_count);
+    log_debug("[%s:%d] idindex %d/%d", __FUNCTION__, __LINE__, idindex, idcode_count);
     if (idindex != found_cortex)
       if ((ret = fetch_result(idindex, IRREG_USERCODE, sizeof(uint32_t), -1)) != 0xffffffff)
-        printf("fpgajtag: USERCODE value %x\n", ret);
+        log_debug("fpgajtag: USERCODE value %x", ret);
     write_cbypass(DREAD, idcode_count);
     if (idindex != found_cortex) {
       write_cbypass(DREAD, idcode_count);
       write_cbypass(DREAD, idcode_count);
       ENTER_TMS_STATE('R');
-      DPRINT("[%s:%d] idindex %d/%d\n", __FUNCTION__, __LINE__, idindex, idcode_count);
+      log_debug("[%s:%d] idindex %d/%d", __FUNCTION__, __LINE__, idindex, idcode_count);
       ret = readout_seq(idindex, rstatus, sizeof(uint32_t), -1);
       uint32_t status = ret >> 8;
-      if (verbose && (bitswap[M(ret)] != 2 || status != 0x301900))
-        printf("[%s:%d] expect %x mismatch %x\n", __FUNCTION__, __LINE__, 0x301900, ret);
-      printf("STATUS %08x done %x release_done %x eos %x startup_state %x\n", status, status & 0x4000, status & 0x2000,
+      if (bitswap[M(ret)] != 2 || status != 0x301900)
+        log_debug("[%s:%d] expect %x mismatch %x", __FUNCTION__, __LINE__, 0x301900, ret);
+      log_debug("STATUS %08x done %x release_done %x eos %x startup_state %x", status, status & 0x4000, status & 0x2000,
           status & 0x10, (status >> 18) & 7);
       ENTER_TMS_STATE('R');
     }
@@ -756,14 +732,16 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
     bus = libusb_get_bus_number(uinfo[i].dev);
     pnum_len = libusb_get_port_numbers(uinfo[i].dev, pnum, 8);
 
-    fprintf(stderr, "#%d: fpgajtag found %s usb device (serial %s, bcd %x) on bus=%d, port=[", i,
-            uinfo[i].iManufacturer, uinfo[i].iSerialNumber, uinfo[i].bcdDevice, bus);
+    log_concat(NULL);
+    log_concat("#%d: %s (serial %s) [%d, [", i,
+            uinfo[i].iManufacturer, uinfo[i].iSerialNumber, bus);
     for (j = 0; j < pnum_len; j++)
-      fprintf(stderr, "%d%s", pnum[j], j+1==pnum_len?"":",");
-    fprintf(stderr, "]\n");
+      log_concat("%d%s", pnum[j], j+1==pnum_len?"":",");
+    log_concat("]]");
+    log_info(NULL);
 
     if (uinfo[i].idVendor == USB_JTAG_ALTERA) {
-      fprintf(stderr, "  ignoring ALTERA device.\n");
+      log_info("  ignoring ALTERA device");
       continue;
     }
 
@@ -785,32 +763,35 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
         if (!strstr(link, match)) continue; // does not match
 
         snprintf(serial_path, 1024, "/dev/%s", de->d_name);
-        fprintf(stderr, "  found %s", serial_path);
+
+        log_info("  linux device is %s", serial_path);
 
         if (serialport != NULL && strcmp(serial_path, serialport)) {
-          fprintf(stderr, ", does not match supplied device name, skipping\n");
-          continue;
+          log_info("  does not match supplied device name, skipping");
+          break;
         }
 #endif
-        get_deviceid(i, interface_id); /*** Generic initialization of FTDI chip ***/
-        fpgausb_close();
-        fprintf(stderr, ", got %d id%s: ", idcode_count, idcode_count>1?"s":"");
-        for (j = 0; j < idcode_count; j++)     /*** look for device matching file idcode ***/
-          fprintf(stderr, j+1==idcode_count?"%08x":"%08x,", idcode_array[j]);
-        fprintf(stderr, "\n");
-        if (idcode_count == 16 && (idcode_array[0] == 0x0fffffff || idcode_array[0] == 0x0)) {
-          fprintf(stderr, "  device seems to be disabled, please power on\n");
+        if (serialno && strcmp(serialno, (char*)uinfo[i].iSerialNumber)) {
+          log_info("  serial %s does not match, skipping", serialno);
           break;
         }
 
-        if (serialno && strcmp(serialno, (char*)uinfo[i].iSerialNumber)) {
-          fprintf(stderr, "  requested serial %s does not match, skipping\n", serialno);
+        get_deviceid(i, interface_id); /*** Generic initialization of FTDI chip ***/
+        fpgausb_close();
+        log_concat(NULL);
+        log_concat("  got %d id code%s: ", idcode_count, idcode_count>1?"s":"");
+        for (j = 0; j < idcode_count; j++)     /*** look for device matching file idcode ***/
+          log_concat(j+1==idcode_count?"%08x":"%08x,", idcode_array[j]);
+        log_debug(NULL);
+        if (idcode_count == 16 && (idcode_array[0] == 0x0fffffff || idcode_array[0] == 0x0)) {
+          log_info("  device seems to be disabled, please power on");
           break;
         }
+
         // look for device matching file idcode
         for (j = 0; j < idcode_count; j++)
           if (idcode_array[j] == file_idcode || file_idcode == 0xffffffff || match_any_idcode) {
-            fprintf(stderr, "  id code %08x matches %08x\n", idcode_array[j], file_idcode);
+            log_info("  id code %08x matches %08x", idcode_array[j], file_idcode);
             last_index = j;
             last_match = i;
             strcpy(last_path, serial_path);
@@ -826,16 +807,16 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
 
   if (last_match != -1) {
 #ifdef __APPLE__
-    fprintf(stderr, "selecting device #%d: %s usb device (serial %s)\n", last_match, uinfo[i].iManufacturer, uinfo[i].iSerialNumber);
+    log_note("selecting device #%d: %s usb device (serial %s)", last_match, uinfo[i].iManufacturer, uinfo[i].iSerialNumber);
 #else
-    fprintf(stderr, "selecting device %s\n", last_path);
+    log_note("selecting device %s\n", last_path);
 #endif
     jtag_index = last_index;
     get_deviceid(last_match, interface_id); // this reopens the device and leaves it 'dangeling' for flashing
     return strdup(last_path);
   }
 
-  printf("requested id %x does not match any usb interface\n", file_idcode);
+  log_info("requested id %x does not match any usb interface", file_idcode);
 
   EXIT();
   return NULL;
@@ -879,8 +860,7 @@ int fpgajtag_main(char* bitstream)
     if (magic[0] != 0x000000bb || magic[1] != 0x11220044) {
       uint8_t* buffer = (uint8_t*)malloc(input_filesize);
       int i;
-      if (debug)
-        fprintf(stderr, "mismatched magic: %08x.%08x expected %08x.%08x\n", magic[0], magic[1], 0x000000bb, 0x11220044);
+      log_debug("mismatched magic: %08x.%08x expected %08x.%08x", magic[0], magic[1], 0x000000bb, 0x11220044);
       memcpy(buffer, input_fileptr, input_filesize);
       for (i = 0; i < input_filesize / 4; i++) {
         int* bufl = (int*)buffer;
@@ -888,26 +868,25 @@ int fpgajtag_main(char* bitstream)
         bufl[i] = ntohl(inputl[i]);
       }
       memcpy(&magic, buffer + 32, 8);
-      if (debug)
-        fprintf(stderr, "updated magic: %08x.%08x expected %08x.%08x\n", magic[0], magic[1], 0x000000bb, 0x11220044);
+      log_debug("updated magic: %08x.%08x expected %08x.%08x", magic[0], magic[1], 0x000000bb, 0x11220044);
       input_fileptr = buffer;
     }
 #ifndef WINDOWS
     int rc = setuid(0);
     const char* filename = (mflag) ? "/lib/firmware/fpga.bin" : "/dev/xdevcfg";
     if (rc != 0)
-      fprintf(stderr, "setuid status %d uid %d euid %d\n", rc, getuid(), geteuid());
+      log_debug("setuid status %d uid %d euid %d", rc, getuid(), geteuid());
 #endif
     int fd = open(filename, (mflag) ? (O_WRONLY | O_CREAT) : O_WRONLY);
     if (fd < 0) {
-      fprintf(stderr, "[%s:%d] failed to open %s: fd=%d errno=%d %s\n", __FUNCTION__, __LINE__, filename, fd, errno,
+      log_crit("[%s:%d] failed to open %s: fd=%d errno=%d %s", __FUNCTION__, __LINE__, filename, fd, errno,
           strerror(errno));
       exit(-1);
     }
     while (input_filesize) {
       int len = write(fd, input_fileptr, min(input_filesize, 4096));
       if (len <= 0) {
-        fprintf(stderr, "[%s:%d] failed to write to %s: len=%d errno=%d %s\n", __FUNCTION__, __LINE__, filename, len, errno,
+        log_crit("[%s:%d] failed to write to %s: len=%d errno=%d %s", __FUNCTION__, __LINE__, filename, len, errno,
             strerror(errno));
         exit(-1);
       }
@@ -919,7 +898,7 @@ int fpgajtag_main(char* bitstream)
       filename = "/sys/class/fpga_manager/fpga0/firmware";
       fd = open(filename, O_WRONLY);
       if (fd < 0) {
-        fprintf(stderr, "[%s:%d] failed to open %s: fd=%d errno=%d %s\n", __FUNCTION__, __LINE__, filename, fd, errno,
+        log_crit("[%s:%d] failed to open %s: fd=%d errno=%d %s", __FUNCTION__, __LINE__, filename, fd, errno,
             strerror(errno));
         exit(-1);
       }
@@ -933,13 +912,13 @@ int fpgajtag_main(char* bitstream)
   dcount = idcode_count - (found_cortex != -1) - 1;
   trailing_len = idcode_count - 1 - jtag_index;
   dc2trail = dcount == 2 && !trailing_len;
-  printf("count %d/%d cortex %d dcount %d trail %d\n", jtag_index, idcode_count, found_cortex, dcount, trailing_len);
+  log_debug("count %d/%d cortex %d dcount %d trail %d", jtag_index, idcode_count, found_cortex, dcount, trailing_len);
 
   /*
    * See if we are reading out data
    */
   if (rflag) {
-    fprintf(stderr, "fpgajtag: readout fpga config into xx.bozo\n");
+    log_debug("fpgajtag: readout fpga config into xx.bozo");
     /* this size was taken from the TYPE2 record in the original bin file
      * (and must be converted to bits)
      */
@@ -988,45 +967,44 @@ int fpgajtag_main(char* bitstream)
   write_cirreg(0, IRREG_ISC_NOOP);
   pulse_gpio(12500 /*msec*/);
   if ((ret = write_cirreg(DREAD, IRREG_ISC_NOOP)) != INPROGRAMMING)
-    printf("[%s:%d] NOOP/INPROGRAMMING mismatch %x\n", __FUNCTION__, __LINE__, ret);
+    log_debug("[%s:%d] NOOP/INPROGRAMMING mismatch %x", __FUNCTION__, __LINE__, ret);
 
   /*
    * Step 6: Load Configuration Data Frames
    */
-  printf("fpgajtag: Starting to send file\n");
+  log_note("fpgajtag: Starting to send file");
   send_data_file(
       DREAD, !dcount && jtag_index, input_fileptr, input_filesize, NULL, DITEM(INT32(0)), !(jtag_index && dcount), 1);
-  printf("fpgajtag: Done sending file\n");
+  log_note("fpgajtag: Done sending file\n");
 
   /*
    * Step 8: Startup
    */
   pulse_gpio(1250 /*msec*/);
   if ((ret = read_config_reg(CONFIG_REG_BOOTSTS)) != (jtag_index ? 0x03000000 : 0x01000000))
-    printf("[%s:%d] CONFIG_REG_BOOTSTS mismatch %x\n", __FUNCTION__, __LINE__, ret);
+    log_debug("[%s:%d] CONFIG_REG_BOOTSTS mismatch %x", __FUNCTION__, __LINE__, ret);
   write_cirreg(0, IRREG_JSTART);
   tmsw_delay(14, 1);
   if ((ret = write_cirreg(DREAD, IRREG_BYPASS)) != FINISHED)
-    printf("[%s:%d] mismatch %x\n", __FUNCTION__, __LINE__, ret);
+    log_debug("[%s:%d] mismatch %x", __FUNCTION__, __LINE__, ret);
   if ((ret = read_config_reg(CONFIG_REG_STAT)) != (found_cortex != -1 ? 0xf87f1046 : 0xfc791040))
-    if (verbose)
-      printf("[%s:%d] CONFIG_REG_STAT mismatch %x\n", __FUNCTION__, __LINE__, ret);
+    log_debug("[%s:%d] CONFIG_REG_STAT mismatch %x", __FUNCTION__, __LINE__, ret);
 
   marker_for_reset(0);
   ret = write_cbypass(DREAD, idcode_count) & 0xff;
   if (ret == FIRST_TIME)
-    printf("fpgajtag: bypass first time %x\n", ret);
+    log_debug("fpgajtag: bypass first time %x", ret);
   else if (ret == PROGRAMMED)
-    printf("fpgajtag: bypass already programmed %x\n", ret);
+    log_debug("fpgajtag: bypass already programmed %x", ret);
   else
-    printf("fpgajtag: bypass unknown %x\n", ret);
+    log_debug("fpgajtag: bypass unknown %x", ret);
 
   reset_mark_clock(0);
   ret = readout_seq(jtag_index, rstatus, sizeof(uint32_t), -1);
   int status = ret >> 8;
-  if (verbose && (bitswap[M(ret)] != 2 || status != 0xf07910))
-    printf("[%s:%d] expect %x mismatch %x\n", __FUNCTION__, __LINE__, 0xf07910, ret);
-  printf("STATUS %08x done %x release_done %x eos %x startup_state %x\n", status, status & 0x4000, status & 0x2000,
+  if (bitswap[M(ret)] != 2 || status != 0xf07910)
+    log_debug("[%s:%d] expect %x mismatch %x", __FUNCTION__, __LINE__, 0xf07910, ret);
+  log_debug("STATUS %08x done %x release_done %x eos %x startup_state %x", status, status & 0x4000, status & 0x2000,
       status & 0x10, (status >> 18) & 7);
   access_mdm(0, 0, 1);
   // rescan = 1;

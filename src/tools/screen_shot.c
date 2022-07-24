@@ -22,6 +22,7 @@
 #endif
 
 #include "m65common.h"
+#include "logging.h"
 
 #define SCREEN_POSITION ((800 - 720) / 2)
 
@@ -97,16 +98,15 @@ int set_pixel(int x, int y, int r, int g, int b)
   if (y < min_y || y > max_y)
     return 0;
   if (y < 0 || y > (is_pal_mode ? 575 : 479)) {
-    //    fprintf(stderr,"ERROR: Impossible y value %d\n",y);
-    //    exit(-1);
+    log_debug("set_pixel: y=%d out of bounds", y);
     return 1;
   }
   if (x < 0 || x > 719) {
-    fprintf(stderr, "ERROR: Impossible x value %d\n", x);
-    exit(-1);
+    log_debug("set_pixel: x=%d out of bounds", x);
+    return 1;
   }
 
-  //  printf("Setting pixel at %d,%d to #%02x%02x%02x\n",x,y,b,g,r);
+  //  log_debug("Setting pixel at %d,%d to #%02x%02x%02x",x,y,b,g,r);
   ((unsigned char*)png_rows[y])[x * 3 + 0] = r;
   ((unsigned char*)png_rows[y])[x * 3 + 1] = g;
   ((unsigned char*)png_rows[y])[x * 3 + 2] = b;
@@ -412,16 +412,16 @@ void get_video_state(void)
 {
 
   fetch_ram_invalidate();
-  // printf("Calling fetch_ram\n");
+  // log_debug("Calling fetch_ram");
   fetch_ram(0xffd3000, 0x0100, vic_regs);
-  // printf("Got video regs, pal = $%02X\n", vic_regs[0x70]);
+  // log_debug("Got video regs, pal = $%02X", vic_regs[0x70]);
   unsigned char palreg = vic_regs[0x70];
   unsigned char altpalsel = vic_regs[0x70]&0x3;
   unsigned char btpalsel  = (vic_regs[0x70]&0x30)>>4;
   unsigned char mapedpal  = vic_regs[0x70]>>6;
   unsigned char mapbtpal  = (palreg & 0x3f) | (btpalsel<<6);
   unsigned char mapaltpal = (palreg & 0x3f) | (altpalsel<<6);
-  // printf("palreg = $%02X, btpalsel = %d(%02X), altpalsel = %d(%02X)\n", palreg, btpalsel, mapbtpal, altpalsel, mapaltpal);
+  // log_debug("palreg = $%02X, btpalsel = %d(%02X), altpalsel = %d(%02X)", palreg, btpalsel, mapbtpal, altpalsel, mapaltpal);
   if (mapedpal != btpalsel)
     push_ram(0xffd3070, 1, &mapbtpal);
   fetch_ram(0xffd3100, 0x0300, vic_regs+0x100);
@@ -461,8 +461,8 @@ void get_video_state(void)
   multicolour_mode = vic_regs[0x16] & 0x10;
   bitmap_mode = vic_regs[0x11] & 0x20;
 
-  if (0) printf("bitmap_mode=%d, multicolour_mode=%d, extended_background_mode=%d\n", bitmap_mode, multicolour_mode,
-      extended_background_mode);
+  //  log_debug("bitmap_mode=%d, multicolour_mode=%d, extended_background_mode=%d", bitmap_mode, multicolour_mode,
+  //      extended_background_mode);
 
   border_colour = vic_regs[0x20];
   background_colour = vic_regs[0x21];
@@ -500,7 +500,7 @@ void get_video_state(void)
   x_step = x_scale_120 / 120.0;
   if (!h640)
     x_step /= 2;
-  //  printf("x_scale_120=$%02x\n", x_scale_120);
+  //  log_debug("x_scale_120=$%02x\n", x_scale_120);
 
   // Check if we are in 16-bit text mode, without full-colour chars for char IDs > 255
   if (sixteenbit_mode && (!(vic_regs[0x54] & 4))) {
@@ -508,36 +508,35 @@ void get_video_state(void)
   }
 
   if (screen_size > MAX_SCREEN_SIZE) {
-    fprintf(stderr, "ERROR: Implausibly large screen size of %d bytes: %d rows, %d columns\n", screen_size, screen_line_step,
+    log_crit("implausibly large screen size of %d bytes: %d rows, %d columns", screen_size, screen_line_step,
         screen_rows);
     exit(-1);
   }
 
-  if (0) {
-    fprintf(stderr, "Screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes, uppercase=%d, line_step= %d\n",
-	    screen_address, screen_width, screen_rows, screen_size, upper_case, screen_line_step);
-    fprintf(stderr, "charset_address=$%x\n", charset_address);
-  }
+   log_debug("screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes",
+	   screen_address, screen_width, screen_rows, screen_size);
+   log_debug("  uppercase=%d, line_step= %d charset_address=$%x",
+     upper_case, screen_line_step, charset_address);
 
-  //  fprintf(stderr, "Fetching screen data,");
+  log_debug("fetching screen data");
   fflush(stderr);
   fetch_ram(screen_address, screen_size, screen_data);
-  //  fprintf(stderr, "colour data,");
+  log_debug("fetching colour data");
   fflush(stderr);
   fetch_ram(0xff80000 + colour_address, screen_size, colour_data);
 
-  //  fprintf(stderr, "charset");
+  log_debug("fetching charset");
   fflush(stderr);
   fetch_ram(charset_address, charset_size, char_data);
 
-  //  fprintf(stderr, "\nDone\n");
+  log_debug("fetching done");
 
   return;
 }
 
 void paint_screen_shot(void)
 {
-  printf("Painting rasters %d -- %d\n", min_y, max_y);
+  log_debug("Painting rasters %d -- %d", min_y, max_y);
 
   // Now render the text display
   int y_position = chargen_y;
@@ -605,8 +604,7 @@ void paint_screen_shot(void)
         foreground_colour = char_value & 0xf;
         background_colour = char_value >> 4;
         bitmap_multi_colour = colour_data[cy * screen_line_step + cx * (1 + sixteenbit_mode)];
-        if (0)
-          printf("Bitmap fore/background colours are $%x / $%x\n", foreground_colour, background_colour);
+        // log_debug("bitmap fore/background colours are $%x/$%x", foreground_colour, background_colour);
       }
 
       if (vic_regs[0x54] & 2)
@@ -639,7 +637,7 @@ void paint_screen_shot(void)
         }
         else {
           // Use existing char data we have already fetched
-          // printf("Chardata for char $%03x = $%02x\n",char_id,char_data[char_id*8+glyph_row]);
+          // log_Debug("Chardata for char $%03x = $%02x",char_id,char_data[char_id*8+glyph_row]);
           if (!bitmap_mode) {
             for (int i = 0; i < 8; i++)
               if ((char_data[char_id * 8 + glyph_row] >> i) & 1)
@@ -656,8 +654,7 @@ void paint_screen_shot(void)
             }
             unsigned char pixels;
             fetch_ram_cacheable(addr, 1, &pixels);
-            if (0)
-              printf("Reading bitmap data from $%x = $%02x, charset_address=$%x\n", addr, pixels, charset_address);
+            // log_debug("reading bitmap data from $%x = $%02x, charset_address=$%x", addr, pixels, charset_address);
             for (int i = 0; i < 8; i++)
               if ((pixels >> i) & 1)
                 glyph_data[i] = 0xff;
@@ -798,7 +795,7 @@ void paint_screen_shot(void)
                 r = mega65_rgb(foreground_colour, 0, glyph_altpalette);
                 g = mega65_rgb(foreground_colour, 1, glyph_altpalette);
                 b = mega65_rgb(foreground_colour, 2, glyph_altpalette);
-                //	      printf("Foreground pixel. colour = $%02x = #%02x%02x%02x\n",
+                //	      log_debug("Foreground pixel. colour = $%02x = #%02x%02x%02x",
                 //		     foreground_colour,b,g,r);
                 is_foreground = 1;
               }
@@ -818,7 +815,7 @@ void paint_screen_shot(void)
       }
 
       // Advance for width of the glyph
-      //      printf("Char was %d pixels wide.\n",xc);
+      //      log_debug("Char was %d pixels wide",xc);
       x_position += xc;
     }
     y_position += 8 * (1 + y_scale);
@@ -829,17 +826,17 @@ void paint_screen_shot(void)
 
 int do_screen_shot(void)
 {
-  //  printf("Syncing to monitor.\n");
+  log_note("fetching screenshot");
+  log_debug("syncing to monitor");
   monitor_sync();
-  // printf("Synced to monitor\n");
+  log_debug("synced to monitor");
 
   get_video_state();
 
-  //  printf("Got video state.\n");
+  log_debug("got video state");
 
+  log_note("got ASCII screenshot");
   do_screen_shot_ascii();
-
-  //  printf("Got ASCII screenshot.\n");
 
   FILE* f = NULL;
   char filename[1024];
@@ -851,20 +848,20 @@ int do_screen_shot(void)
   }
   f = fopen(filename, "wb");
   if (!f) {
-    fprintf(stderr, "ERROR: Could not open '%s' for writing.\n",filename);
+    log_error("could not open '%s' for writing.", filename);
     return -1;
   }
-  // printf("Rendering pixel-exact version to %s...\n", filename);
+  log_debug("rendering pixel-exact version to %s...", filename);
 
   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
   if (!png_ptr) {
-    fprintf(stderr, "ERROR: Could not creat PNG structure.\n");
+    log_error("could not create PNG structure");
     return -1;
   }
 
   png_infop info_ptr = png_create_info_struct(png_ptr);
   if (!info_ptr) {
-    fprintf(stderr, "ERROR: Could not creat PNG info structure.\n");
+    log_error("Could not create PNG info structure");
     return -1;
   }
 
@@ -877,7 +874,7 @@ int do_screen_shot(void)
   png_write_info(png_ptr, info_ptr);
 
   // Allocate frame buffer for image, and set all pixels to the border colour by default
-  // printf("Allocating PNG frame buffer...\n");
+  log_debug("allocating PNG frame buffer...");
   for (int y = 0; y < (is_pal_mode ? 576 : 480); y++) {
     png_rows[y] = (png_bytep)malloc(3 * 720 * sizeof(png_byte));
     if (!png_rows[y]) {
@@ -892,7 +889,7 @@ int do_screen_shot(void)
     }
   }
 
-  printf("Rendering screen...\n");
+  log_note("rendering screen...");
 
   // Start by drawing the non-border area
   for (int y = top_border_y; y < bottom_border_y && (y < (is_pal_mode ? 576 : 480)); y++) {
@@ -909,13 +906,13 @@ int do_screen_shot(void)
    */
   //  raster_interrupt_count=0;
 
-  // printf("Finding raster splits...\n");
-  // printf("next_raster_interrupt=%d\n", next_raster_interrupt);
+  // log_debug("Finding raster splits...");
+  // log_debug("next_raster_interrupt=%d", next_raster_interrupt);
   raster_interrupt_enabled = 0;
   if (raster_interrupt_enabled) {
     progress_to_RTI();
     get_video_state();
-    // printf("Current raster line is $%x, next raster interrupt at $%x\n", current_physical_raster, next_raster_interrupt);
+    // log_debug("Current raster line is $%x, next raster interrupt at $%x", current_physical_raster, next_raster_interrupt);
 
     // At this point, the screen is (presumably) set up for raster #next_raster_interrupt
     // But we don't yet know which raster we can render from, because CPU was stopped before
@@ -930,8 +927,8 @@ int do_screen_shot(void)
     // #start_raster to #next_raster_interrupt
 
     while (next_raster_interrupt != start_raster) {
-      // printf("Current raster line is $%x, next raster interrupt at $%x\n", current_physical_raster, next_raster_interrupt);
-      // printf("Rendering from raster %d -- %d\n", last_raster, next_raster_interrupt);
+      // log_debug("Current raster line is $%x, next raster interrupt at $%x", current_physical_raster, next_raster_interrupt);
+      // log_debug("Rendering from raster %d -- %d", last_raster, next_raster_interrupt);
       if (last_raster < next_raster_interrupt) {
         min_y = last_raster;
         max_y = next_raster_interrupt;
@@ -952,13 +949,13 @@ int do_screen_shot(void)
     }
   }
   else {
-    //     printf("Video mode does not use raster splits. Drawing normally.\n");
+    //     log_debug("Video mode does not use raster splits. Drawing normally.");
     min_y = 0;
     max_y = is_pal_mode ? 576 : 480;
     paint_screen_shot();
   }
 
-  //  printf("Writing out PNG frame buffer...\n");
+  //  log_debug("Writing out PNG frame buffer...");
   // Write out each row of the PNG
   for (int y = 0; y < (is_pal_mode ? 576 : 480); y++)
     png_write_row(png_ptr, png_rows[y]);
@@ -967,7 +964,7 @@ int do_screen_shot(void)
 
   fclose(f);
 
-  printf("Wrote screen capture to %s...\n", filename);
+  log_note("Wrote screen capture to %s", filename);
   // start_cpu();
   // exit(0);
 

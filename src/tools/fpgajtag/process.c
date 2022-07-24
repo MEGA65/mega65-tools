@@ -27,6 +27,7 @@
 #include <inttypes.h>
 #include "util.h"
 #include "fpga.h"
+#include "logging.h"
 
 #define BUFFER_MAX_LEN 100000000
 #define TOHEX(A)                                                                                                            \
@@ -60,8 +61,7 @@ void process_command_list(void)
       input_fileptr++;
       continue;
     }
-    if (trace)
-      printf("[%s:%d] %s\n", __FUNCTION__, __LINE__, str);
+    log_debug("[%s:%d] %s", __FUNCTION__, __LINE__, str);
     if (!strcmp(str, "IR")) {
       mode = 0;
     }
@@ -85,9 +85,9 @@ void process_command_list(void)
       if (trace)
         memdump(tempbuf, len, "VAL");
       if (*stro)
-        printf("fpgajtag: didn't parse entire number '%s'\n", str);
+        log_debug("fpgajtag: didn't parse entire number '%s'", str);
       else if (mode == -1)
-        printf("fpgajtag: mode not set!\n");
+        log_debug("fpgajtag: mode not set!");
       else if (mode == 0) {
         int t = tempbuf[0];
         t |= (t & 0xe0) << 3; /* high order byte contains bits 5 and higher */
@@ -104,12 +104,13 @@ void process_command_list(void)
         ENTER_TMS_STATE('I');
         uint8_t* rdata = read_data();
         int i = 0;
+        log_concat(NULL);
         while (i < len) {
           uint8_t t = rdata[len - 1 - i];
-          printf("%02x", t);
+          log_concat("%02x", t);
           i++;
         }
-        printf("\n");
+        log_debug(NULL);
         // memdump(rdata, len, "           RVAL");
       }
     }

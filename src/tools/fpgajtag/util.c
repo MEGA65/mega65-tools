@@ -43,6 +43,8 @@ extern int usedk;
 #include <libusb.h>
 #endif
 
+#include "logging.h"
+
 // for using libftdi.so
 //#define USE_LIBFTDI
 
@@ -143,7 +145,7 @@ static int ftdi_write_data(struct ftdi_context* ftdi, const unsigned char* buf, 
 #endif
 #endif
   if (ret < 0) {
-    fprintf(stderr, "fpgajtag: usb bulk write failed: ret %d req size %d act %d\n", ret, size, actual_length);
+    log_crit("fpgajtag: usb bulk write failed: ret %d req size %d act %d", ret, size, actual_length);
     exit(-1);
   }
 #ifndef WINDOWS
@@ -167,8 +169,8 @@ static int ftdi_read_data(struct ftdi_context* ftdi, unsigned char* buf, int siz
 #endif
 #endif
     if (ret < 0) {
-      fprintf(stderr, "fpgajtag: usb bulk read failed: rc %d\n", ret);
-      fprintf(stderr, "size %d act %d count %d\n", size, actual_length, count);
+      log_error("fpgajtag: usb bulk read failed: rc %d", ret);
+      log_debug("size %d act %d count %d", size, actual_length, count);
       // exit(-1);
       return -1;
     }
@@ -183,7 +185,7 @@ static int ftdi_read_data(struct ftdi_context* ftdi, unsigned char* buf, int siz
   if (actual_length > 0) {
     memcpy(buf, usbreadbuffer + 2, actual_length);
     if (actual_length != size) {
-      fprintf(stderr, "[%s] actual_length %d does not match request size %d\n", __FUNCTION__, actual_length, size);
+      log_debug("[%s] actual_length %d does not match request size %d", __FUNCTION__, actual_length, size);
       // if (!trace)
       // exit(-1);
     }
@@ -300,7 +302,7 @@ uint8_t* read_data(void)
   int i, j, expected_len = 0, extra_bytes = 0;
 
   if (trace)
-    printf("[%s]\n", __FUNCTION__);
+    log_debug("[%s] enter", __FUNCTION__);
   if (buffer_current_size())
     *usbreadbuffer_ptr++ = SEND_IMMEDIATE; /* tell the FTDI that we are waiting... */
   flush_write(NULL);
@@ -331,7 +333,7 @@ uint8_t* read_data(void)
       if (read_size[i] < 0) {
         validbits -= read_size[i];
         if (validbits < 0 || validbits > 8) {
-          printf("[%s] validbits %d big\n", __FUNCTION__, validbits);
+          log_debug("[%s] validbits %d big", __FUNCTION__, validbits);
           validbits = 8;
           // exit(-1);
         }
@@ -376,29 +378,28 @@ USB_INFO* fpgausb_init(void)
    * Locate USB interface for JTAG
    */
   if (libusb_init(&usb_context) < 0 || libusb_get_device_list(usb_context, &device_list) < 0) {
-    printf("libusb_init failed\n");
+    log_crit("libusb_init failed");
     exit(-1);
   }
 
-#ifdef LIOBUSB_OPTION_USE_USBDK
+#ifdef LIBUSB_OPTION_USE_USBDK
   if (usedk) {
-    printf("Requesting to use USBDK backend.\n");
+    log_info("requesting to use USBDK backend.");
     int res = libusb_set_option(usb_context, LIBUSB_OPTION_USE_USBDK);
     if (res < 0) {
-      printf("WARNING: Failed to switch to USEDK backend: %s\n", libusb_strerror(res));
+      log_warn("failed to switch to USEDK backend: %s", libusb_strerror(res));
     }
   }
 #else
   //#warning No USBDK support in libusb
   // this is not bad, so don't call it a warning
-  printf("INFO: using libusb without USBDK support\n");
+  log_info("using libusb without USBDK support");
 #endif
 
   while ((dev = device_list[i++])) {
     struct libusb_device_descriptor desc;
     if (libusb_get_device_descriptor(dev, &desc) < 0)
       continue;
-    //	fprintf(stderr,"USB device %04x:%04x\n",desc.idVendor,desc.idProduct);
     if (desc.idVendor == 0x403
         && (desc.idProduct == 0x6001 || desc.idProduct == 0x6010 || desc.idProduct == 0x6011
             || desc.idProduct == 0x6014)) { /* Xilinx */
@@ -409,18 +410,19 @@ USB_INFO* fpgausb_init(void)
       usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
       int open_result = libusb_open(dev, &usbhandle);
       if (open_result < 0) {
-        fprintf(stderr, "ERROR: Could not open USB device[VID: %04X, PID: %04X]: Error code %d\n", desc.idVendor, desc.idProduct, open_result);
-        fprintf(stderr, "       libusb says: %s\n", libusb_strerror(open_result));
+        log_error("Could not open USB device[VID: %04X, PID: %04X]: Error code %d", desc.idVendor, desc.idProduct, open_result);
+        log_error("  libusb says: %s", libusb_strerror(open_result));
         continue; // keep looking for other devices E.g. my system has multiple FTDIs some for work (which will fail to open here)
                   // so keep looking for another that might open (i.e., the proper MEGA65 JTAG one)
       }
       else {
-        fprintf(stderr, "INFO: Successfully opened USB device[VID: %04X, PID: %04X]\n", desc.idVendor, desc.idProduct);
+        log_debug("successfully opened USB device[VID: %04X, PID: %04X]", desc.idVendor, desc.idProduct);
         if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
-          printf("WARNING: Error getting USB device attributes (iManuf=%x, iProd=%x, iSerial=%x)\n", UDESC(iManufacturer),
+          log_debug("error getting USB device attributes (iManuf=%x, iProd=%x, iSerial=%x)", UDESC(iManufacturer),
               UDESC(iProduct), UDESC(iSerialNumber));
           libusb_close(usbhandle);
           usbhandle = NULL;
+          continue;
         }
       }
       usbinfo_array_index++;
@@ -432,8 +434,9 @@ USB_INFO* fpgausb_init(void)
       usbinfo_array[usbinfo_array_index].bcdDevice = desc.bcdDevice;
       usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
       if (libusb_open(dev, &usbhandle) < 0) {
-        printf("Error getting USB device attributes (libusb_open() returned failure)\n");
-        exit(-1);
+        log_error("error getting USB device attributes (libusb_open() returned failure), skipping");
+        usbhandle = NULL;
+        continue;
       }
       libusb_close(usbhandle);
       usbhandle = NULL;
@@ -441,7 +444,7 @@ USB_INFO* fpgausb_init(void)
     }
   }
 #endif
-  fprintf(stderr, "Found %d candidate USB devices.\n", usbinfo_array_index);
+  log_info("Found %d candidate USB devices.", usbinfo_array_index);
   return usbinfo_array;
 }
 
@@ -476,38 +479,34 @@ void fpgausb_open(int device_index, int interface)
 #ifndef DARWIN // not supported on Mac-OS
   int claim_interface_result = libusb_claim_interface(usbhandle, interface);
   if (claim_interface_result < 0) {
-    fprintf(stderr, "\nlibusb_claim_interface failed: Code %d\n", claim_interface_result);
+    log_debug("libusb_claim_interface failed: Code %d", claim_interface_result);
     switch (claim_interface_result) {
     case -6: /* LIBUSB_ERROR_BUSY: */
-      fprintf(stderr, "USB Device is busy (some other process has opened it?)\n");
+      log_debug("USB Device is busy (some other process has opened it?)");
       // So try detaching whatever has it
-      fprintf(stderr, "Trying to disconnect existing claimant...\n");
+      log_debug("trying to disconnect existing claimant...");
       int disconnect_result = libusb_detach_kernel_driver(usbhandle, interface);
       if (!disconnect_result) {
-        fprintf(stderr, "Disconnected claimant, trying again to claim it for ourselves...\n");
+        log_debug("disconnected claimant, trying again to claim it for ourselves...");
         claim_interface_result = libusb_claim_interface(usbhandle, interface);
-        if (!claim_interface_result) {
-          fprintf(stderr, "Success.\n");
-        }
-        else {
-          fprintf(stderr, "Which unfortunately didn't work.\n");
-        }
+        if (!claim_interface_result)
+          log_debug("successfully claimed device");
+        else
+          log_debug("failed to claim device");
       }
-      else {
-        fprintf(stderr, "libusb_detach_kernal_driver failed with code %d\n", disconnect_result);
-      }
+      else
+        log_debug("libusb_detach_kernal_driver failed with code %d", disconnect_result);
       break;
     case -4: /* LIBUSB_ERROR_NO_DEVICE: */
-      fprintf(stderr, "No USB device (unplugged?)\n");
+      log_debug("no USB device (unplugged?)");
       break;
     case -5: /* LIBUSB_ERROR_NOTFOUND: */
-      fprintf(stderr, "USB Device not found (wrong or faulty USB device?)\n");
+      log_debug("USB Device not found (wrong or faulty USB device?)");
       break;
     }
   }
   if (claim_interface_result < 0) {
-    fprintf(stderr, "Sorry, I still couldn't claim the interface.  Please check if the Vivado hw_server is running in the "
-                    "background, as this can cause this problem.\n");
+    log_error("could not claim the interface (vivado hw_server running?)");
     goto error;
   }
 #endif
@@ -535,7 +534,7 @@ void fpgausb_open(int device_index, int interface)
   return;
 error:
 #endif
-  printf("Error opening usb interface: %d\n", step);
+  log_error("error opening usb interface: %d", step);
   //    exit(-1);
 }
 
@@ -576,7 +575,7 @@ void sync_ftdi(int val)
   ftdi_write_data(global_ftdi, illegal_command, sizeof(illegal_command));
   if (ftdi_read_data(global_ftdi, retcode, sizeof(retcode)) != sizeof(retcode)
       || memcmp(retcode, errorcode_ret, sizeof(errorcode_ret))) {
-    printf("%s: error in sync %x\n", __FUNCTION__, val);
+    log_debug("%s: error in sync %x", __FUNCTION__, val);
     memdump(retcode, sizeof(retcode), "ACTUAL");
   }
 }
@@ -625,7 +624,7 @@ uint32_t read_inputfile(const char* filename)
     inputfd = open(filename, O_RDONLY);
 #endif
     if (inputfd == -1) {
-      printf("fpgajtag: Unable to open file '%s'\n", filename);
+      log_error("fpgajtag: Unable to open file '%s'", filename);
       exit(-1);
     }
   }
@@ -641,7 +640,7 @@ uint32_t read_inputfile(const char* filename)
 #define IS64() (elfh->h32.e_ident[4] == ELFCLASS64)
 #define HELF(A) (IS64() ? elfh->h64.A : elfh->h32.A)
 #define SELF(ENT, A) (IS64() ? sech->s64[ENT].A : sech->s32[ENT].A)
-    printf("fpgajtag: elf input file, len %d class %d\n", input_filesize, elfh->h32.e_ident[4]);
+    log_debug("fpgajtag: elf input file, len %d class %d", input_filesize, elfh->h32.e_ident[4]);
     int shnum = HELF(e_shnum);
     ELF_SECTION* sech = (ELF_SECTION*)&input_fileptr[HELF(e_shoff)];
     uint8_t* stringTable = &input_fileptr[SELF(HELF(e_shstrndx), sh_offset)];
@@ -655,12 +654,12 @@ uint32_t read_inputfile(const char* filename)
       }
     }
     if (!found) {
-      printf("fpgajtag: attempt to use elf file, but no 'fpgadata' section found\n");
+      log_crit("fpgajtag: attempt to use elf file, but no 'fpgadata' section found");
       exit(-1);
     }
   }
   if (!memcmp(input_fileptr, gzmagic, sizeof(gzmagic))) {
-    printf("fpgajtag: unzip input file, len %d\n", input_filesize);
+    log_debug("fpgajtag: unzip input file, len %d", input_filesize);
     z_stream strm;
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
@@ -701,7 +700,7 @@ uint32_t read_inputfile(const char* filename)
   tempidcode = (M(tempidcode) << 24) | (M(tempidcode >> 8) << 16) | (M(tempidcode >> 16) << 8) | M(tempidcode >> 24);
   return tempidcode;
 badlen:
-  printf(
-      "fpgajtag: Input file length exceeds static buffer size %ld.  You must recompile fpgajtag.\n", (long)sizeof(filebuf));
+  log_crit(
+      "fpgajtag: Input file length exceeds static buffer size %ld.  You must recompile fpgajtag.", (long)sizeof(filebuf));
   exit(-1);
 }

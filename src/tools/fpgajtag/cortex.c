@@ -26,6 +26,7 @@
 #include <inttypes.h>
 #include "util.h"
 #include "fpga.h"
+#include "logging.h"
 
 static void loaddr(int aread, uint32_t v, int extra3bits)
 {
@@ -61,10 +62,10 @@ static void check_read_cortex(int linenumber, uint32_t* buf, int load)
     uint64_t ret = 0;                   // Clear out MSB before copy
     memcpy(&ret, rdata, 5);             // copy into bottom of uint64 data target
     if ((ret & 7) != DPACC_RESPONSE_OK) /* IHI0031C_debug_interface_as.pdf: 3.4.3 */
-      printf("fpgajtag:%d Info in cortex response %x \n", linenumber, (int)(ret & 7));
+      log_debug("fpgajtag:%d Info in cortex response %x", linenumber, (int)(ret & 7));
     uint32_t ret32 = ret >> 3;
     if ((ret32 & 0x1fffffff) != (*testp & 0x1fffffff)) {
-      printf("fpgajtag:%d Info [%ld] act %x expect %x\n", linenumber, (long)(testp - buf), ret32, *testp);
+      log_debug("fpgajtag:%d Info [%ld] act %x expect %x", linenumber, (long)(testp - buf), ret32, *testp);
       memdump(rdata, 5, "RX");
     }
     testp++;
