@@ -1426,9 +1426,15 @@ int main(int argc, char** argv)
           "         and then log out, and log back in again, or failing that, reboot your computer and try again.\n"
           "\n");
     }
-    res = init_fpgajtag(NULL, NULL, fpga_id);
-    if (res != NULL)
-      serial_port = res;
+    res = init_fpgajtag(NULL, serial_port, fpga_id);
+    if (res == NULL) {
+      fprintf(stderr, "no valid serial port not found, aborting\n");
+      exit(1);
+    }
+    if (serial_port) {
+      free(serial_port);
+    }
+    serial_port = res;
   }
 
   open_the_serial_port(serial_port);

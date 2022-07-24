@@ -738,7 +738,7 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
   int i, j, bus, pnum_len, last_index = -1, last_match = -1;
   uint8_t pnum[8];
   struct dirent* de = NULL;
-  char serial_path[1024] = "", last_path[1024];
+  char serial_path[1024] = "", last_path[1024] = "NULL";
   char path[1024];
   char link[1024]; // possible problem: PATH_MAX is probably 4096 on UNIX systems
   char match[1024];
@@ -765,6 +765,7 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
     }
 
 #ifndef WINDOWS
+#ifdef __linux__
     // find the usb device matching this bus:port
     DIR* d = opendir("/sys/bus/usb-serial/devices");
     if (d) {
@@ -774,7 +775,10 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
         snprintf(path, 1024, "/sys/bus/usb-serial/devices/%s", de->d_name);
         if (!realpath(path, link)) continue; // could not resolve
 
-        snprintf(match, 1024, "/%d-%d/%d-%d.%d", bus, pnum[0], bus, pnum[0], pnum[1]);
+        if (pnum_len > 1)
+          snprintf(match, 1024, "/%d-%d/%d-%d.%d", bus, pnum[0], bus, pnum[0], pnum[1]);
+        else
+          snprintf(match, 1024, "/%d-%d/%d-%d", bus, pnum[0], bus, pnum[0]);
         if (!strstr(link, match)) continue; // does not match
 
         snprintf(serial_path, 1024, "/dev/%s", de->d_name);
@@ -784,14 +788,14 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
           fprintf(stderr, ", does not match supplied device name, skipping\n");
           continue;
         }
-
+#endif
         get_deviceid(i, interface_id); /*** Generic initialization of FTDI chip ***/
         fpgausb_close();
         fprintf(stderr, ", got %d id%s: ", idcode_count, idcode_count>1?"s":"");
         for (j = 0; j < idcode_count; j++)     /*** look for device matching file idcode ***/
           fprintf(stderr, j+1==idcode_count?"%08x":"%08x,", idcode_array[j]);
         fprintf(stderr, "\n");
-        if (idcode_array[0] == 0x0fffffff) {
+        if (idcode_count == 16 && (idcode_array[0] == 0x0fffffff || idcode_array[0] == 0x0)) {
           fprintf(stderr, "  device seems to be disabled, please power on\n");
           break;
         }
@@ -810,19 +814,25 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
             break;
           }
       }
+#ifdef __linux__
       closedir(d);
 #endif
     }
+#endif
   }
 
   if (last_match != -1) {
+#ifdef __APPLE__
+    fprintf(stderr, "selecting device #%d: %s usb device (serial %s)\n", last_match, uinfo[i].iManufacturer, uinfo[i].iSerialNumber);
+#else
     fprintf(stderr, "selecting device %s\n", last_path);
+#endif
     jtag_index = last_index;
     get_deviceid(last_match, interface_id); // this reopens the device and leaves it 'dangeling' for flashing
     return strdup(last_path);
   }
 
-  printf("id %x from file does not match usb interface\n", file_idcode);
+  printf("requested id %x does not match any usb interface\n", file_idcode);
 
   EXIT();
   return NULL;

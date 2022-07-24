@@ -47,6 +47,10 @@
 #include <pthread.h>
 #include <libusb.h>
 
+#ifndef WINDOWS
+#include <glob.h>
+#endif
+
 #include "m65common.h"
 
 #define UT_TIMEOUT 10
@@ -480,14 +484,21 @@ void show_hyppo_report(void)
 static char system_bitstream_version[64] = "VERSION NOT FOUND";
 static char system_hardware_model_name[64] = "UNKNOWN";
 static unsigned char system_hardware_model = 0;
-void get_system_bitstream_version(void) {
+int get_system_bitstream_version(void) {
   char buf[256], *found, *end;
   size_t len=0;
+  time_t timeout;
 
   // fetch version info via monitor 'h'
-  slow_write(fd, "h\r", 2);
+  write(fd, "h\r", 2);
   usleep(20000);
-  while (!(len = serialport_read(fd, (unsigned char *)buf, 256)));
+  timeout = time(NULL);
+  while (timeout+2 > time(NULL)) {
+    len = serialport_read(fd, (unsigned char *)buf, 256);
+    if (len != 0) break;
+  }
+  if (len == 0)
+    return -1;
 
   found = strstr(buf, "build GIT: ");
   if (found != NULL) {
@@ -543,7 +554,50 @@ void get_system_bitstream_version(void) {
       snprintf(system_hardware_model_name, 31, "UNKNOWN MODEL $%02X", system_hardware_model);
     }
   }
+  return 0;
 }
+
+#ifndef WINDOWS
+char* find_serial_port() {
+  int i, res;
+  char* device = NULL;
+  static char* devglob = 
+#if defined(__APPLE__)
+    "/dev/cu.usbserial-*";
+#else
+    "/dev/ttyUSB*";
+#endif
+  fprintf(stderr, "No serial device given, trying brute-force autodetect\n");
+  glob_t result;
+  if (glob(devglob, 0, NULL, &result)) {
+    globfree(&result);
+    return NULL;
+  }
+  for (i=0; i<result.gl_pathc; i++) {
+    fd = open(result.gl_pathv[i], O_RDWR);
+    if (fd == -1) {
+      fprintf(stderr, "  %s: failed to open\n", result.gl_pathv[i]);
+      continue;
+    }
+    set_serial_speed(fd, serial_speed);
+
+    res = get_system_bitstream_version();
+
+    close(fd);
+    fd = -1;
+
+    if (!res) {
+      fprintf(stderr, "  %s: %s %s\n", result.gl_pathv[i], system_hardware_model_name, system_bitstream_version);
+      device = strdup(result.gl_pathv[i]);
+      break;
+    } else
+      fprintf(stderr, "  %s: no device found\n", result.gl_pathv[i]);
+  }
+
+  globfree(&result);
+  return device;
+}
+#endif
 
 void progress_to_RTI(void)
 {
@@ -1823,7 +1877,7 @@ int main(int argc, char** argv)
   if (bitstream && !serial_port)
 #endif
   {
-    unsigned int fpga_id = 0xffffffff, found = 0; // now defaulting to mega65r3
+    unsigned int fpga_id = 0xffffffff, found = 0; // wildcard match for the last valid device
     if (bitstream) {
       fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
       FILE* f = fopen(bitstream, "rb");
@@ -1868,7 +1922,10 @@ int main(int argc, char** argv)
     if (serial_port) {
       free(serial_port);
     }
-    serial_port = res;
+    if (!strcmp(res, "NULL"))
+      serial_port = NULL;
+    else
+      serial_port = res;
   }
 
 #ifdef WINDOWS
@@ -1911,6 +1968,17 @@ int main(int argc, char** argv)
     snprintf(msg, 1024, "Remote access to disk image '%s' requested.\n", d81file);
     timestamp_msg(msg);
   }
+
+#ifndef WINDOWS
+  // if we do not have a serial port yet (MacOS without -l option)
+  // we try to detect by opening the serial ports we find
+  if (!serial_port) {
+    if (!(serial_port = find_serial_port())) {
+      fprintf(stderr, "could not find a mega65 device on a serial port!\n");
+      exit(1);
+    }
+  }
+#endif
 
   fprintf(stderr, "opening serial port %s\n", serial_port);
   open_the_serial_port(serial_port);
