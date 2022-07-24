@@ -490,7 +490,11 @@ int get_system_bitstream_version(void) {
   time_t timeout;
 
   // fetch version info via monitor 'h'
+#ifdef WINDOWS
+  slow_write(fd, "h\r", 2);
+#else
   write(fd, "h\r", 2);
+#endif
   usleep(20000);
   timeout = time(NULL);
   while (timeout+2 > time(NULL)) {
@@ -1464,7 +1468,7 @@ void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char sta
   struct timeval currentTime;
 
   gettimeofday(&currentTime, NULL);
-  strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
+  strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime((const time_t *)&(currentTime.tv_sec)));
 
   snprintf(temp, 255, ".%03dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec/1000, test_states[state], issue, sub);
   strncat(outstring, temp, 254);

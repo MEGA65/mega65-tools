@@ -816,8 +816,8 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
             strcpy(last_path, serial_path);
             break;
           }
-      }
 #ifdef __linux__
+      }
       closedir(d);
     }
 #endif
