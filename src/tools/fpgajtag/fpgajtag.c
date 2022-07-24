@@ -737,11 +737,13 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
   ENTER();
   int i, j, bus, pnum_len, last_index = -1, last_match = -1;
   uint8_t pnum[8];
-  struct dirent* de = NULL;
   char serial_path[1024] = "", last_path[1024];
+#ifdef __linux__
   char path[1024];
   char link[1024]; // possible problem: PATH_MAX is probably 4096 on UNIX systems
   char match[1024];
+  struct dirent* de = NULL;
+#endif
 
   /*
    * Initialize USB, FTDI
@@ -817,8 +819,8 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
       }
 #ifdef __linux__
       closedir(d);
-#endif
     }
+#endif
 #endif
   }
 
