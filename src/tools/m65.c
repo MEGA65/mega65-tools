@@ -103,13 +103,13 @@ void usage(void)
   fprintf(stderr, TOOLNAME"\n");
   fprintf(stderr, "Version: %s\n\n", version_string);
   fprintf(stderr,
-      "usage: m65 [-h|-?] [-0 LVL] [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
+      "usage: m65 [-h|-?] [-0 <log level>] [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v <vivado.bat>] [[-k "
       "<hickup file>] [-r] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
       "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [-x]"
       "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flashaddr>] [-@ file@addr] [-N]"
       "[-u timeout]\n");
 
-  fprintf(stderr, "  -0 - set log level to NUM (0 = quiet ... 3 = everything)\n"
+  fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n"
                   "  -x - expert user, remove all warnings for newbies.\n"
                   "  -@ - Load a binary file at a specific address.\n"
                   "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n"
@@ -1693,7 +1693,7 @@ unsigned char checkUSBPermissions()
 
 int main(int argc, char** argv)
 {
-  int loglevel = 1;
+  int loglevel = LOG_NOTE;
   start_time = time(0);
 
   // so we can see errors while parsing args
@@ -1709,7 +1709,8 @@ int main(int argc, char** argv)
       loglevel = log_parse_level(optarg);
       if (loglevel == -1)
         log_warn("failed to parse log level!");
-      log_setup(stderr, loglevel);
+      else
+        log_setup(stderr, loglevel);
       break;
     case 'y':
       debug_load_memory = 1;

@@ -1674,21 +1674,21 @@ PORT_TYPE open_tcp_port(char* portname)
 
   localfd = socket(AF_INET, SOCK_STREAM, 0);
   if (localfd < 0) {
-    printf("error %d creating tcp/ip socket: %s\n", errno, strerror(errno));
+    log_error("could not create creating tcp/ip socket: %s", strerror(errno));
     return 0;
   }
 
   char ip[100];
 
   hostname_to_ip(hostname, ip);
-  printf("%s resolved to %s\n", hostname, ip);
+  log_info("%s resolved to %s", hostname, ip);
 
   sock_st.sin_addr.s_addr = inet_addr(ip);
   sock_st.sin_family = AF_INET;
   sock_st.sin_port = htons(port);
 
   if (connect(localfd, (struct sockaddr*)&sock_st, sizeof(sock_st)) < 0) {
-    printf("error %d connecting to tcp/ip socket %s:%d: %s\n", errno, hostname, port, strerror(errno));
+    log_error("failed to connect to socket %s:%d: %s\n", hostname, port, strerror(errno));
     close(localfd);
     exit(1);
   }
@@ -1723,19 +1723,26 @@ void close_default_tcp_port(void)
 
 void open_the_serial_port(char* serial_port)
 {
+  if (serial_port == NULL) {
+    log_crit("serial port not set, aborting");
+    exit(-1);
+  }
+
   serial_port_is_tcp=0;
   if (!strncasecmp(serial_port, "tcp", 3)) {
     fd = open_tcp_port(serial_port);
     serial_port_is_tcp=1;
     return;
   }
+
+  log_debug("opening serial port %s", serial_port);
 #ifdef WINDOWS
   fd.type = WINPORT_TYPE_FILE;
   fd.fdfile = open_serial_port(serial_port, 2000000);
   if (fd.fdfile == INVALID_HANDLE_VALUE) {
-    fprintf(stderr, "Could not open serial port '%s'\n", serial_port);
-    fprintf(stderr, "  (could the port be in use by another application?)\n");
-    fprintf(stderr, "  (could the usb cable be disconnected or faulty?)\n");
+    log_error("could not open serial port '%s'", serial_port);
+    log_error("  (could the port be in use by another application?)");
+    log_error("  (could the usb cable be disconnected or faulty?)");
     exit(-1);
   }
 
@@ -1743,8 +1750,7 @@ void open_the_serial_port(char* serial_port)
   errno = 0;
   fd = open(serial_port, O_RDWR);
   if (fd == -1) {
-    fprintf(stderr, "Could not open serial port '%s'\n", serial_port);
-    perror("open");
+    log_error("could not open serial port '%s'", serial_port);
     exit(-1);
   }
   
@@ -1766,17 +1772,15 @@ void open_the_serial_port(char* serial_port)
     if (latency != 1) {
       f = fopen(latency_file, "w");
       if (!f) {
-        fprintf(stderr, "WARNING: Cannot write to '%s' to reduce USB port latency.  Performance will be reduced.\n",
+        log_warn("cannot write to '%s' to reduce USB port latency. Performance will be reduced.",
             latency_file);
-        fprintf(stderr,
-            "         You can try something like the following to fix it:\n"
-            "         echo 1 | sudo tee %s\n",
-            latency_file);
+        log_warn("  You can try something like the following to fix it:");
+        log_warn("    echo 1 | sudo tee %s\n", latency_file);
       }
       else {
         fprintf(f, "1\n");
         fclose(f);
-        fprintf(stderr, "Reduced USB latency from %d ms to 1 ms.\n", latency);
+        log_info("reduced USB latency from %d ms to 1 ms.", latency);
       }
     }
   }
