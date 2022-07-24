@@ -38,10 +38,13 @@
 #include <libusb.h>
 
 #include "m65common.h"
+#include "logging.h"
 
 #define UT_TIMEOUT 10
 
 #define UT_RES_TIMEOUT 127
+
+#define TOOLNAME "MEGA65 ReadDisk Test"
 
 extern int pending_vf011_read;
 extern int pending_vf011_write;
@@ -203,7 +206,7 @@ int virtual_f011_read(int device, int track, int sector, int side)
     fd81 = fopen(d81file, "rb+");
     if (!fd81) {
 
-      fprintf(stderr, "Could not open D81 file: '%s'\n", d81file);
+      log_crit("could not open D81 file: '%s'", d81file);
       exit(-1);
     }
   }
@@ -227,12 +230,12 @@ int virtual_f011_read(int device, int track, int sector, int side)
 
     if (result) {
 
-      fprintf(stderr, "Error finding D81 sector %d @ 0x%x\n", result, (track * 20 + physical_sector) * 512);
+      log_crit("error finding D81 sector %d @ 0x%x", result, (track * 20 + physical_sector) * 512);
       exit(-2);
     }
     else {
       b = fread(buf, 1, 512, fd81);
-      //	fprintf(stderr, " bytes read: %d @ 0x%x\n", b,(track*20+physical_sector)*512);
+      //	log_debug("bytes read: %d @ 0x%x", b,(track*20+physical_sector)*512);
 
       if (b == 512) {
 
@@ -249,9 +252,8 @@ int virtual_f011_read(int device, int track, int sector, int side)
   mega65_poke(0xffd3086, side & 0x7f);
   start_cpu();
 
-  timestamp_msg("");
   vf011_bytes_read += 256;
-  fprintf(stderr, "READ  device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec\n", device, track, sector, side,
+  log_info("READ  device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec", device, track, sector, side,
       vf011_bytes_read * 1.0 / (gettime_ms() - vf011_first_read_time));
 
   return 0;
@@ -267,16 +269,14 @@ int virtual_f011_write(int device, int track, int sector, int side)
   if (!vf011_first_read_time)
     vf011_first_read_time = start - 1;
 
-#if 1
-  fprintf(stderr, "T+%lld ms : Servicing hypervisor request for F011 FDC sector write.\n", gettime_ms() - start);
-#endif
+  log_debug("servicing hypervisor request for F011 FDC sector write.");
 
   if (fd81 == NULL) {
 
     fd81 = fopen(d81file, "wb+");
     if (!fd81) {
 
-      fprintf(stderr, "Could not open D81 file: '%s'\n", d81file);
+      log_crit("could not open D81 file: '%s'", d81file);
       exit(-1);
     }
   }
@@ -295,7 +295,7 @@ int virtual_f011_write(int device, int track, int sector, int side)
 
   if (result) {
 
-    fprintf(stderr, "Error finding D81 sector %d @ 0x%x\n", result, (track * 20 + physical_sector) * 512);
+    log_crit("failed to find D81 sector %d @ 0x%x", result, (track * 20 + physical_sector) * 512);
     exit(-2);
   }
   else {
@@ -303,7 +303,7 @@ int virtual_f011_write(int device, int track, int sector, int side)
     //	fprintf(stderr, " bytes read: %d @ 0x%x\n", b,(track*20+physical_sector)*512);
 
     if (b != 512) {
-      fprintf(stderr, "ERROR: Short write of %d bytes\n", b);
+      log_warn("short write of %d bytes", b);
     }
   }
 
@@ -312,9 +312,8 @@ int virtual_f011_write(int device, int track, int sector, int side)
   mega65_poke(0xffd3086, side & 0x0f);
   start_cpu();
 
-  timestamp_msg("");
   vf011_bytes_read += 256;
-  fprintf(stderr, "WRITE device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec\n", device, track, sector, side,
+  log_info("WRITE device: %d  track: %d  sector: %d  side: %d @ %3.2fKB/sec", device, track, sector, side,
       vf011_bytes_read * 1.0 / (gettime_ms() - vf011_first_read_time));
 
   return 0;
@@ -436,7 +435,7 @@ void progress_to_RTI(void)
         }
         else if (match_state == 2 && buff[i] == 'I') {
           slow_write_safe(fd, "\r", 1);
-          fprintf(stderr, "RTI seen after %d bytes\n", bytes);
+          log_debug("RTI seen after %d bytes", bytes);
           return;
         }
         else
@@ -458,7 +457,7 @@ void do_type_key(unsigned char key)
   if (key == '~') {
     type_serial_mode ^= 1;
     if (type_serial_mode) {
-      fprintf(stderr, "NOTE: Switching to ASCII stuffing of buffered UART.\n");
+      log_note("switching to ASCII stuffing of buffered UART");
     }
     return;
   }
@@ -899,25 +898,23 @@ void load_bitstream(char* bitstream)
           fpga_id |= buff[i + 2] << 8;
           fpga_id |= buff[i + 3] << 0;
 
-          timestamp_msg("");
-          fprintf(stderr, "Detected FPGA ID %x from bitstream file.\n", fpga_id);
+          log_info("detected FPGA ID %x from bitstream file", fpga_id);
           break;
         }
       }
       fclose(f);
     }
-    else {
-      fprintf(stderr, "WARNING: Could not open bitstream file '%s'\n", bitstream);
-    }
+    else
+      log_warn("could not open bitstream file '%s'", bitstream);
 
     char* part_name = "xc7a100t_0";
-    fprintf(stderr, "INFO: Expecting FPGA Part ID %x\n", fpga_id);
+    log_info("expecting FPGA Part ID %x", fpga_id);
     if (fpga_id == 0x3636093)
       part_name = "xc7a200t_0";
 
     FILE* tclfile = fopen("temp.tcl", "w");
     if (!tclfile) {
-      fprintf(stderr, "ERROR: Could not create temp.tcl");
+      log_crit("Could not create temp.tcl");
       exit(-1);
     }
     fprintf(tclfile,
@@ -939,7 +936,7 @@ void load_bitstream(char* bitstream)
     fclose(tclfile);
     char cmd[8192];
     snprintf(cmd, 8192, "%s -mode batch -nojournal -nolog -notrace -source temp.tcl", vivado_bat);
-    printf("Running %s...\n", cmd);
+    log_note("Running %s...", cmd);
     system(cmd);
     unlink("temp.tcl");
   }
@@ -953,7 +950,7 @@ void load_bitstream(char* bitstream)
       fpgajtag_main(bitstream, NULL);
     }
   }
-  timestamp_msg("Bitstream loaded.\n");
+  log_note("Bitstream loaded");
 }
 
 void enter_hypervisor_mode(void)
@@ -1032,178 +1029,6 @@ void handle_vf011_requests()
 
 extern const char* version_string;
 
-char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", "C#$06", "C#$07", "C#$08", "C#$09", "C#$0A",
-  "C#$0B", "C#$0C", "  LOG", " NAME", " DONE" };
-
-char msgbuf[160], *endp;
-char testname[160];
-unsigned char inbuf[8192];
-unsigned int failcount;
-FILE* logPtr;
-
-void unit_test_log(unsigned char bytes[4])
-{
-  int test_issue = bytes[0] + (bytes[1] << 8);
-  int test_sub = bytes[2];
-  char outstring[255];
-  char temp[255];
-
-  struct timeval currentTime;
-
-  // dump_bytes(0, "bytes", bytes, 4);
-
-  gettimeofday(&currentTime, NULL);
-  strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
-
-  sprintf(temp, ".%03dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec/1000, test_states[bytes[3] - 0xf0], test_issue, test_sub);
-  strcat(outstring, temp);
-
-  // append current test name if we have one
-  if (testname[0]) {
-    sprintf(temp, " - %s)", testname);
-  }
-  else {
-    sprintf(temp, ")");
-  }
-  strcat(outstring, temp);
-
-  fprintf(stderr, "%s\n", outstring);
-  if (logPtr) {
-    fprintf(logPtr, "%s\n", outstring);
-    fflush(logPtr);
-  }
-
-  switch (bytes[3]) {
-  case 0xf0: // Starting a test
-    break;
-  case 0xf1: // Skipping a test
-    break;
-  case 0xf2: // Test pass
-    break;
-  case 0xf3: // Test failure (ie test ran, but detected failure of test condition)
-    failcount++;
-    break;
-  case 0xf4: // Error trying to run test
-    failcount++;
-    break;
-  case 0xfd: // Log message
-    break;
-  case 0xfe: // Set name of current test
-    break;
-  case 0xff: // Last test complete
-    fprintf(stderr, ">>> Terminating after completion of last test.\n");
-    if (logPtr) {
-      fprintf(logPtr, ">>> Terminating after completion of last test.\n");
-      fclose(logPtr);
-    }
-    do_exit(failcount);
-    break;
-  }
-}
-
-void enterTestMode()
-{
-
-  unsigned char receiveString;
-  int currentMessagePos;
-  time_t currentTime;
-  char* ts;
-
-  fprintf(stderr, "Entering unit test mode. Waiting for test results.\n");
-  testname[0] = 0; // initialize test name with empty string
-  receiveString = 0;
-  failcount = 0;
-  logPtr = NULL;
-
-  currentTime = time(NULL);
-
-  if (logfile) {
-
-    logPtr = fopen(logfile, "a");
-    if (!logPtr) {
-      fprintf(stderr, "could not open logfile %s for appending. aborting\n", logfile);
-      exit(127);
-    }
-
-    ts = asctime(localtime(&currentTime));
-    ts[strlen(ts) - 1] = 0;
-
-    fprintf(stderr, "logging test results in %s\n", logfile);
-    fprintf(logPtr, "\n>>> begin testing %s; FILE: %s\n", ts, filename);
-  }
-
-  while (time(NULL) - currentTime < unit_test_timeout) {
-
-    int b = serialport_read(fd, inbuf, 8192);
-
-    for (int i = 0; i < b; i++) {
-
-      // message receive mode: fill message buffer until end of string is reached
-      if (receiveString) {
-        msgbuf[currentMessagePos] = inbuf[i];
-
-        // (ugly workaround: use pound sign as string end marker, because zeroes
-        // sometimes get corrupted when using the serial line...)
-        if (msgbuf[currentMessagePos] == 92) {
-          msgbuf[currentMessagePos] = 0;
-          receiveString = 0;
-          if (recent_bytes[3] == 0xfd) { // log message to console
-            fprintf(stderr, "%s\n", msgbuf);
-            if (logPtr) {
-              fprintf(logPtr, "%s\n", msgbuf);
-            }
-          }
-          else if (recent_bytes[3] == 0xfe) { // set current test name
-            strncpy(testname, msgbuf, 160);
-          }
-          bzero(recent_bytes, 4);
-        }
-
-        currentMessagePos++;
-      }
-      else {
-        recent_bytes[0] = recent_bytes[1];
-        recent_bytes[1] = recent_bytes[2];
-        recent_bytes[2] = recent_bytes[3];
-        recent_bytes[3] = inbuf[i];
-        check_for_vf011_requests();
-      }
-      handle_vf011_requests();
-
-      // check if we should receive a string
-      if (!receiveString) {
-        if (recent_bytes[3] == 0xfe || recent_bytes[3] == 0xfd) {
-          // receive message
-          receiveString = 1;
-          currentMessagePos = 0;
-        }
-      }
-
-      // not receiving a string? handle unit test token if needed
-      if (!receiveString) {
-        if (recent_bytes[3] >= 0xf0) {
-          // handle unit test token and update time
-          currentTime = time(NULL);
-          unit_test_log(recent_bytes);
-        }
-      }
-    }
-  }
-
-  if (testname[0]) {
-    fprintf(stderr, "%s: ", testname);
-    if (logPtr) {
-      fprintf(logPtr, "%s: ", testname);
-    }
-  }
-  fprintf(stderr, "timeout encountered while running tests. aborting.\n");
-  if (logPtr) {
-    fprintf(logPtr, "timeout encountered while running tests. aborting.\n");
-    fclose(logPtr);
-  }
-  do_exit(UT_RES_TIMEOUT);
-}
-
 unsigned char checkUSBPermissions()
 {
 #ifndef WINDOWS
@@ -1280,8 +1105,7 @@ unsigned char read_a_sector(unsigned char track_number, unsigned char side, unsi
 
   if (mega65_peek(0xffD3082) & 0x18) {
     // Read failed
-    fprintf(stderr,"ERROR: Failed to read T:%02x, S:%02x, H:%02x\n",
-	    track_number,sector,side);
+    log_error("failed to read T:%02x, S:%02x, H:%02x", track_number, sector, side);
     return 1;
   }
   else {
@@ -1342,13 +1166,9 @@ int main(int argc, char** argv)
 {
   start_time = time(0);
 
-  fprintf(stderr,
-      "MEGA65 Remote Disk Reading tool.\n"
-      "version: %s\n\n",
-      version_string);
-
-  timestamp_msg("");
-  fprintf(stderr, "Getting started..\n");
+  // so we can see errors while parsing args
+  log_setup(stderr, LOG_NOTE);
+  log_note("%s %s", TOOLNAME, version_string);
 
   if (argc == 1)
     usage();
@@ -1393,13 +1213,13 @@ int main(int argc, char** argv)
 #endif
   {
     char* res;
-    fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
+    log_info("scanning bitstream file '%s' for device ID", bitstream);
     unsigned int fpga_id = 0xffffffff;
     FILE* f = fopen(bitstream, "rb");
     if (f) {
       unsigned char buff[8192];
       int len = fread(buff, 1, 8192, f);
-      fprintf(stderr, "NOTE: Read %d bytes to search\n", len);
+      log_debug("read %d bytes to search", len);
       for (int i = 0; i < len; i++) {
         if ((buff[i + 0] == 0x30) && (buff[i + 1] == 0x01) && (buff[i + 2] == 0x80) && (buff[i + 3] == 0x01)) {
           i += 4;
@@ -1408,28 +1228,25 @@ int main(int argc, char** argv)
           fpga_id |= buff[i + 2] << 8;
           fpga_id |= buff[i + 3] << 0;
 
-          timestamp_msg("");
-          fprintf(stderr, "Detected FPGA ID %08x from bitstream file.\n", fpga_id);
+          log_info("detected FPGA ID %08x from bitstream file.\n", fpga_id);
           break;
         }
       }
       fclose(f);
     }
-    fprintf(stderr, "INFO: Using fpga_id %08x\n", fpga_id);
+    log_info("using fpga_id %08x", fpga_id);
     if (!checkUSBPermissions()) {
-      fprintf(stderr, "WARNING: May not be able to auto-detect USB port due to insufficient permissions.\n");
-      fprintf(stderr,
-          "         You may be able to solve this problem via the following:\n"
-          "           sudo usermod -a -G dialout <your username>\n"
-          "         and then:\n"
-          "           echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
-          "sudo tee /etc/udev/rules.d/40-xilinx.rules\n"
-          "         and then log out, and log back in again, or failing that, reboot your computer and try again.\n"
-          "\n");
+      log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
+      log_warn("    You may be able to solve this problem via the following:");
+      log_warn("        sudo usermod -a -G dialout <your username>");
+      log_warn("    and then:");
+      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
+               "sudo tee /etc/udev/rules.d/40-xilinx.rules");
+      log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
     }
     res = init_fpgajtag(NULL, serial_port, fpga_id);
     if (res == NULL) {
-      fprintf(stderr, "no valid serial port not found, aborting\n");
+      log_crit("no valid serial port not found, aborting");
       exit(1);
     }
     if (serial_port) {
@@ -1462,14 +1279,14 @@ int main(int argc, char** argv)
       continue;    
 
     usleep(50000);
-    printf("Current track is T:%02x, H:%02x\n",mega65_peek(0xffd36a3),mega65_peek(0xffd36a5));
+    log_note("current track is T:%02x, H:%02x", mega65_peek(0xffd36a3), mega65_peek(0xffd36a5));
     
     for(int side=0;side<2;side++) {
       // Allow a little bit of time for a sector to pass under the head,
       // so that we can check the track and head, and step if we need      
       
       for(int sector=1;sector<=10;sector++) {
-	      fprintf(stdout,"Reading T:%02x, S:%02x, H:%02x\n",
+	      log_note("reading T:%02x, S:%02x, H:%02x",
 		    track,sector,side);
 	      read_a_sector(track,side,sector);
       }
@@ -1487,8 +1304,7 @@ void do_exit(int retval)
 {
 #ifndef WINDOWS
   if (thread_count) {
-    timestamp_msg("");
-    fprintf(stderr, "Background tasks may be running. CONTROL+C to stop...\n");
+    log_crit("background tasks may be running. CONTROL+C to stop...");
     for (int i = 0; i < thread_count; i++)
       pthread_join(threads[i], NULL);
   }
