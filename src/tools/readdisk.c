@@ -1392,6 +1392,7 @@ int main(int argc, char** argv)
   if (!serial_port)
 #endif
   {
+    char* res;
     fprintf(stderr, "NOTE: Scanning bitstream file '%s' for device ID\n", bitstream);
     unsigned int fpga_id = 0xffffffff;
     FILE* f = fopen(bitstream, "rb");
@@ -1468,9 +1469,9 @@ int main(int argc, char** argv)
       // so that we can check the track and head, and step if we need      
       
       for(int sector=1;sector<=10;sector++) {
-	fprintf(stdout,"Reading T:%02x, S:%02x, H:%02x\n",
-		track,sector,side);
-	int r=read_a_sector(track,side,sector);
+	      fprintf(stdout,"Reading T:%02x, S:%02x, H:%02x\n",
+		    track,sector,side);
+	      read_a_sector(track,side,sector);
       }
     }
   }
