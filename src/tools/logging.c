@@ -58,7 +58,15 @@ void log_format(const int level, const char *message, va_list args)
   gettimeofday(&currentTime, NULL);
   strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
 
+#ifndef __linux__
+  // hack: apple and windows sometimes make %03d really long...
+  char milli[128];
+  snprintf(milli, 127, "%03ld", currentTime.tv_usec/1000);
+  milli[3] = 0;
+  int pos = snprintf(outstring, 1023, "%s.%sZ %s ", date, milli, log_level_name[level]);
+#else
   int pos = snprintf(outstring, 1023, "%s.%03ldZ %s ", date, currentTime.tv_usec/1000, log_level_name[level]);
+#endif
   int pos2 = vsnprintf(outstring+pos, 1023-pos, message, args);
   if (outstring[strlen(outstring)-1] != '\n') {
     outstring[pos+pos2] = '\n';
