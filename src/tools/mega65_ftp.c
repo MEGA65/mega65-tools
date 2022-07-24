@@ -46,6 +46,7 @@
 #include "filehost.h"
 #include "diskman.h"
 #include "dirtymock.h"
+#include "logging.h"
 
 #define BOOL int
 #define TRUE 1
@@ -197,6 +198,7 @@ int first_go64 = 1;
 unsigned char viciv_regs[0x100];
 int mode_report = 0;
 
+int serial_port_set = 0;
 char serial_port[1024] = "/dev/ttyUSB1";
 char device_name[1024] = "";
 char* bitstream = NULL;
@@ -268,7 +270,8 @@ void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr, "version: %s\n\n", version_string);
-  fprintf(stderr, "usage: mega65_ftp [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  [-b bitstream] [[-c command] ...]\n");
+  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  [-b bitstream] [[-c command] ...]\n");
+  fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
@@ -290,9 +293,8 @@ int queue_command(char* c)
 {
   if (queued_command_count < MAX_QUEUED_COMMANDS)
     queued_commands[queued_command_count++] = c;
-  else {
-    fprintf(stderr, "ERROR: Too many commands queued via -c\n");
-  }
+  else
+    log_error("too many commands queued via -c");
   return 0;
 }
 
@@ -300,7 +302,7 @@ unsigned char show_buf[512];
 int show_sector(unsigned int sector_num)
 {
   if (read_sector(sector_num, show_buf, CACHE_YES, 0)) {
-    printf("ERROR: Could not read sector %d ($%x)\n", sector_num, sector_num);
+    log_error("could not read sector %d ($%x)", sector_num, sector_num);
     return -1;
   }
   dump_bytes(0, "Sector contents", show_buf, 512);
@@ -455,7 +457,7 @@ int execute_command(char* cmd)
   unsigned int sector_num;
 
   if (strlen(cmd) > 1000) {
-    fprintf(stderr, "ERROR: Command too long\n");
+    log_error("command too long");
     return -1;
   }
   int slot = 0;
@@ -463,7 +465,7 @@ int execute_command(char* cmd)
   char dst[1024];
   if ((!strcmp(cmd, "exit")) || (!strcmp(cmd, "quit"))) {
     if (!direct_sdcard_device) {
-      printf("Reseting MEGA65 and exiting.\n");
+      log_note("reseting MEGA65 and exiting");
 
       request_quit();
       if (xemu_flag)
@@ -634,7 +636,7 @@ int execute_command(char* cmd)
     printf("quit - leave this programme.\n");
   }
   else {
-    fprintf(stderr, "ERROR: Unknown command or invalid syntax. Type help for help.\n");
+    log_error("unknown command or invalid syntax. Type help for help");
     return -1;
   }
   return 0;
@@ -687,12 +689,22 @@ int DIRTYMOCK(main)(int argc, char** argv)
   setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
 #endif
+  int loglevel = LOG_NOTE;
   start_time = time(0);
   start_usec = gettime_us();
 
+  log_setup(stderr, LOG_NOTE);
+
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:n")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:0:n")) != -1) {
     switch (opt) {
+    case '0':
+      loglevel = log_parse_level(optarg);
+      if (loglevel == -1)
+        log_warn("failed to parse log level!");
+      else
+        log_setup(stderr, loglevel);
+      break;
     case 'D':
       debug_serial = 1;
       break;
@@ -747,7 +759,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
   if (direct_sdcard_device) {
     fsdcard = fopen(device_name, "r+b");
     if (fsdcard == NULL) {
-      fprintf(stderr, "ERROR: Could not open device '%s'\n", device_name);
+      log_error("could not open device '%s'", device_name);
       exit(-3);
     }
   }
@@ -900,7 +912,7 @@ int sdhc_check(void)
   int r200 = read_sector(0x200, buffer, CACHE_NO, 0);
   //  printf("%d %d %d\n",r0,r1,r200);
   if (r0 || r200) {
-    fprintf(stderr, "Could not detect SD/SDHC card\n");
+    log_error("could not detect SD/SDHC card");
     exit(-3);
   }
   if (r1)
@@ -908,7 +920,7 @@ int sdhc_check(void)
   else
     sdhc = 1;
   if (sdhc)
-    fprintf(stderr, "SD card is SDHC\n");
+    log_note("SD card is SDHC");
   return sdhc;
 }
 
@@ -930,9 +942,9 @@ int load_helper(void)
       buffer[8192] = 0;
       if (bytes >= (int)strlen("MEGA65FT1.0")) {
         for (int i = 0; i < bytes - strlen("MEGA65FT1.0"); i++) {
-          printf("i=%d, bytes=%d, strlen=%d\n", i, bytes, (int)strlen("MEGA65FT1.0"));
+          log_debug("i=%d, bytes=%d, strlen=%d", i, bytes, (int)strlen("MEGA65FT1.0"));
           if (!strncmp("MEGA65FT1.0", &buffer[i], strlen("MEGA65FT1.0"))) {
-            printf("Helper already running. Nothing to do.\n");
+            log_debug("helper already running. Nothing to do");
             return 0;
           }
         }
@@ -951,8 +963,7 @@ int load_helper(void)
 
       // Load helper, minus the 2 byte load address header
       push_ram(0x0801, helperroutine_len - 2, &helperroutine[2]);
-
-      printf("Helper in memory\n");
+      log_debug("pushed helper into memory");
 
       if (saw_openrom) {
         stuff_keybuffer("RUN\r");
@@ -969,7 +980,7 @@ int load_helper(void)
       wait_for_prompt();
 
       helper_installed = 1;
-      printf("\nNOTE: Fast SD card access routine installed.\n");
+      log_note("fast SD card access routine installed");
     }
   } while (0);
   return retVal;
@@ -988,8 +999,8 @@ uint8_t q_rle_count = 0, q_raw_count = 0, q_rle_enable = 0;
 void queue_data_decode(uint8_t v)
 {
   if (0)
-    fprintf(stderr, "Decoding $%02x, rle_count=%d, raw_count=%d, data_byte_count=$%04x\n", v, q_rle_count, q_raw_count,
-        data_byte_count);
+    log_debug("decoding $%02x, rle_count=%d, raw_count=%d, data_byte_count=$%04x",
+        v, q_rle_count, q_raw_count, data_byte_count);
   if (q_rle_count) {
     //    fprintf(stderr,"$%02x x byte $%02x\n",q_rle_count,v);
     data_byte_count -= q_rle_count;
@@ -1023,7 +1034,7 @@ void queue_data_decode(uint8_t v)
 void queue_data_decode_raw(uint8_t v)
 {
   if (0)
-    fprintf(stderr, "Decoding raw byte $%02x, data_byte_count=$%04x\n", v, data_byte_count);
+    log_debug("decoding raw byte $%02x, data_byte_count=$%04x", v, data_byte_count);
   if (queue_read_len < 1024 * 1024)
     queue_read_data[queue_read_len++] = v;
   if (data_byte_count)
@@ -1178,7 +1189,7 @@ int execute_write_queue(void)
   int retVal = 0;
   do {
     if (0)
-      printf("Executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)\n", write_sector_count,
+      log_debug("executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)", write_sector_count,
           write_buffer_offset);
     push_ram(0x50000, write_buffer_offset, &write_data_buffer[0]);
 
@@ -1376,7 +1387,7 @@ int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buff
 
   } while (0);
   if (retVal)
-    printf("FAIL reading sector %d\n", sector_number);
+    log_error("failed to read sector %d", sector_number);
   return retVal;
 }
 
@@ -1428,7 +1439,7 @@ int DIRTYMOCK(write_sector)(const unsigned int sector_number, unsigned char* buf
 
   } while (0);
   if (retVal)
-    printf("FAIL writing sector %d\n", sector_number);
+    log_error("failed to write sector %d", sector_number);
   return retVal;
 }
 
@@ -1437,7 +1448,7 @@ int open_file_system(void)
   int retVal = 0;
   do {
     if (read_sector(0, mbr, CACHE_YES, 0)) {
-      fprintf(stderr, "ERROR: Could not read MBR\n");
+      log_error("could not read MBR");
       retVal = -1;
       break;
     }
@@ -1448,13 +1459,13 @@ int open_file_system(void)
       if (part_ent[4] == 0x0c || part_ent[4] == 0x0b) {
         partition_start = part_ent[8] + (part_ent[9] << 8) + (part_ent[10] << 16) + (part_ent[11] << 24);
         partition_size = part_ent[12] + (part_ent[13] << 8) + (part_ent[14] << 16) + (part_ent[15] << 24);
-        printf("Found FAT32 partition in partition slot %d : start sector=$%x, size=%d MB\n", i, partition_start,
+        log_info("found FAT32 partition in partition slot %d : start sector=$%x, size=%d MB", i, partition_start,
             partition_size / 2048);
       }
       if (part_ent[4] == 0x41) {
         syspart_start = part_ent[8] + (part_ent[9] << 8) + (part_ent[10] << 16) + (part_ent[11] << 24);
         syspart_size = part_ent[12] + (part_ent[13] << 8) + (part_ent[14] << 16) + (part_ent[15] << 24);
-        printf("Found MEGA65 system partition in partition slot %d : start sector=$%x, size=%d MB\n", i, syspart_start,
+        log_info("found MEGA65 system partition in partition slot %d : start sector=$%x, size=%d MB", i, syspart_start,
             syspart_size / 2048);
       }
     }
@@ -1462,12 +1473,12 @@ int open_file_system(void)
     if (syspart_start && !nosys) {
       // Ok, so we know where the partition starts, so now find the FATs
       if (read_sector(syspart_start, syspart_sector0, CACHE_YES, 0)) {
-        printf("ERROR: Could not read system partition sector 0\n");
+        log_error("could not read system partition sector 0");
         retVal = -1;
         break;
       }
       if (strncmp("MEGA65SYS00", (char*)&syspart_sector0[0], 10)) {
-        printf("ERROR: MEGA65 System Partition is missing MEGA65SYS00 marker.\n");
+        log_error("MEGA65 System Partition is missing MEGA65SYS00 marker");
         dump_bytes(0, "SYSPART Sector 0", syspart_sector0, 512);
         retVal = -1;
         break;
@@ -1501,29 +1512,29 @@ int open_file_system(void)
 
     // Ok, so we know where the partition starts, so now find the FATs
     if (read_sector(partition_start, fat_mbr, CACHE_YES, 0)) {
-      printf("ERROR: Could not read FAT MBR\n");
+      log_error("could not read FAT MBR");
       retVal = -1;
       break;
     }
 
     if (fat_mbr[510] != 0x55) {
-      printf("ERROR: Invalid FAT MBR signature in sector %d ($%x)\n", partition_start, partition_start);
+      log_error("invalid FAT MBR signature in sector %d ($%x)", partition_start, partition_start);
       retVal = -1;
       break;
     }
     if (fat_mbr[511] != 0xAA) {
-      printf("ERROR: Invalid FAT MBR signature in sector %d ($%x)\n", partition_start, partition_start);
+      log_error("invalid FAT MBR signature in sector %d ($%x)", partition_start, partition_start);
       dump_bytes(0, "fat_mbr", fat_mbr, 512);
       retVal = -1;
       break;
     }
     if (fat_mbr[12] != 2) {
-      printf("ERROR: FAT32 file system uses a sector size other than 512 bytes\n");
+      log_error("FAT32 file system uses a sector size other than 512 bytes");
       retVal = -1;
       break;
     }
     if (fat_mbr[16] != 2) {
-      printf("ERROR: FAT32 file system has more or less than 2 FATs\n");
+      log_error("FAT32 file system has more or less than 2 FATs");
       retVal = -1;
       break;
     }
@@ -1537,9 +1548,9 @@ int open_file_system(void)
     fat2_sector = fat1_sector + sectors_per_fat;
     first_cluster_sector = fat2_sector + sectors_per_fat;
 
-    printf("FAT32 file system has %dMB formatted capacity, first cluster = %d, %d sectors per FAT\n", data_sectors / 2048,
+    log_info("FAT32 file system has %dMB formatted capacity, first cluster = %d, %d sectors per FAT", data_sectors / 2048,
         first_cluster, sectors_per_fat);
-    printf("FATs begin at sector 0x%x and 0x%x\n", fat1_sector, fat2_sector);
+    log_info("FATs begin at sector 0x%x and 0x%x", fat1_sector, fat2_sector);
 
     file_system_found = 1;
 
@@ -1645,7 +1656,7 @@ int fat_opendir(char* path, int show_errmsg)
             }
             else {
               if (show_errmsg)
-                fprintf(stderr, "ERROR: %s is not a directory\n", path_seg);
+                log_error("%s is not a directory", path_seg);
               retVal = -1;
               break;
             }
@@ -1655,7 +1666,7 @@ int fat_opendir(char* path, int show_errmsg)
         }
         if (!found) {
           if (show_errmsg)
-            fprintf(stderr, "ERROR: Could not find directory segment '%s'\n", path_seg);
+            log_error("could not find directory segment '%s'", path_seg);
 
           dir_cluster = first_cluster;
           dir_sector = first_cluster_sector;
@@ -1670,7 +1681,7 @@ int fat_opendir(char* path, int show_errmsg)
         break;
     }
 
-    // printf("dir_cluster = $%x, dir_sector = $%x\n", dir_cluster, partition_start + dir_sector);
+    // log_debug("dir_cluster = $%x, dir_sector = $%x", dir_cluster, partition_start + dir_sector);
 
   } while (0);
   return retVal;
@@ -1951,7 +1962,7 @@ int chain_cluster(unsigned int cluster, unsigned int next_cluster)
     int fat_sector_num = cluster / (512 / 4);
     int fat_sector_offset = (cluster * 4) & 0x1FF;
     if (fat_sector_num >= sectors_per_fat) {
-      printf("ERROR: cluster number too large. (cluster=%d, next_cluster=%d)\n", cluster, next_cluster);
+      log_error("cluster number too large. (cluster=%d, next_cluster=%d)", cluster, next_cluster);
       retVal = -1;
       break;
     }
@@ -1959,7 +1970,7 @@ int chain_cluster(unsigned int cluster, unsigned int next_cluster)
     // Read in the sector of FAT1
     unsigned char fat_sector[512];
     if (read_sector(partition_start + fat1_sector + fat_sector_num, fat_sector, CACHE_YES, 0)) {
-      printf("ERROR: Failed to read sector $%x of first FAT\n", fat_sector_num);
+      log_error("failed to read sector $%x of first FAT", fat_sector_num);
       retVal = -1;
       break;
     }
@@ -1967,7 +1978,7 @@ int chain_cluster(unsigned int cluster, unsigned int next_cluster)
     //    dump_bytes(0,"FAT sector",fat_sector,512);
 
     if (0)
-      printf("Marking cluster $%x in use by writing to offset $%x of FAT sector $%x\n", cluster, fat_sector_offset,
+      log_debug("marking cluster $%x in use by writing to offset $%x of FAT sector $%x", cluster, fat_sector_offset,
           fat_sector_num);
 
     // Set the bytes for this cluster to $0FFFFF8 to mark end of chain and in use
@@ -1977,11 +1988,11 @@ int chain_cluster(unsigned int cluster, unsigned int next_cluster)
     fat_sector[fat_sector_offset + 3] = (next_cluster >> 24) & 0x0f;
 
     if (0)
-      printf("Marking cluster in use in FAT1\n");
+      log_debug("Marking cluster in use in FAT1");
 
     // Write sector back to FAT1
     if (write_sector(partition_start + fat1_sector + fat_sector_num, fat_sector)) {
-      printf("ERROR: Failed to write updated FAT sector $%x to FAT1\n", fat_sector_num);
+      log_error("failed to write updated FAT sector $%x to FAT1", fat_sector_num);
       retVal = -1;
       break;
     }
@@ -1991,13 +2002,13 @@ int chain_cluster(unsigned int cluster, unsigned int next_cluster)
 
     // Write sector back to FAT2
     if (write_sector(partition_start + fat2_sector + fat_sector_num, fat_sector)) {
-      printf("ERROR: Failed to write updated FAT sector $%x to FAT1\n", fat_sector_num);
+      log_error("failed to write updated FAT sector $%x to FAT1", fat_sector_num);
       retVal = -1;
       break;
     }
 
     if (0)
-      printf("Done allocating cluster\n");
+      log_debug("done allocating cluster");
 
   } while (0);
 
@@ -2012,7 +2023,7 @@ int set_fat_cluster_ptr(unsigned int cluster, unsigned int value)
     int fat_sector_num = cluster / (512 / 4);
     int fat_sector_offset = (cluster * 4) & 0x1FF;
     if (fat_sector_num >= sectors_per_fat) {
-      printf("ERROR: cluster number too large.\n");
+      log_error("cluster number too large");
       retVal = -1;
       break;
     }
@@ -2020,7 +2031,7 @@ int set_fat_cluster_ptr(unsigned int cluster, unsigned int value)
     // Read in the sector of FAT1
     unsigned char fat_sector[512];
     if (read_sector(partition_start + fat1_sector + fat_sector_num, fat_sector, CACHE_YES, 0)) {
-      printf("ERROR: Failed to read sector $%x of first FAT\n", fat_sector_num);
+      log_error("failed to read sector $%x of first FAT", fat_sector_num);
       retVal = -1;
       break;
     }
@@ -2028,7 +2039,7 @@ int set_fat_cluster_ptr(unsigned int cluster, unsigned int value)
     //    dump_bytes(0,"FAT sector",fat_sector,512);
 
     if (0)
-      printf("Marking cluster $%x in use by writing to offset $%x of FAT sector $%x\n", cluster, fat_sector_offset,
+      log_debug("marking cluster $%x in use by writing to offset $%x of FAT sector $%x", cluster, fat_sector_offset,
           fat_sector_num);
 
     // Set the bytes for this cluster to $0FFFFF8 to mark end of chain and in use
@@ -2038,27 +2049,27 @@ int set_fat_cluster_ptr(unsigned int cluster, unsigned int value)
     fat_sector[fat_sector_offset + 3] = (value >> 24) & 0xff;
 
     if (0)
-      printf("Marking cluster in use in FAT1\n");
+      log_debug("marking cluster in use in FAT1");
 
     // Write sector back to FAT1
     if (write_sector(partition_start + fat1_sector + fat_sector_num, fat_sector)) {
-      printf("ERROR: Failed to write updated FAT sector $%x to FAT1\n", fat_sector_num);
+      log_error("failed to write updated FAT sector $%x to FAT1", fat_sector_num);
       retVal = -1;
       break;
     }
 
     if (0)
-      printf("Marking cluster in use in FAT2\n");
+      log_debug("marking cluster in use in FAT2");
 
     // Write sector back to FAT2
     if (write_sector(partition_start + fat2_sector + fat_sector_num, fat_sector)) {
-      printf("ERROR: Failed to write updated FAT sector $%x to FAT1\n", fat_sector_num);
+      log_error("failed to write updated FAT sector $%x to FAT1", fat_sector_num);
       retVal = -1;
       break;
     }
 
     if (0)
-      printf("Done allocating cluster\n");
+      log_debug("done allocating cluster");
 
   } while (0);
 
@@ -2083,7 +2094,7 @@ unsigned int chained_cluster(unsigned int cluster)
     int fat_sector_num = cluster / (512 / 4);
     int fat_sector_offset = (cluster * 4) & 0x1FF;
     if (fat_sector_num >= sectors_per_fat) {
-      printf("ERROR: cluster number too large.\n");
+      log_error("cluster number too large");
       retVal = -1;
       break;
     }
@@ -2091,7 +2102,7 @@ unsigned int chained_cluster(unsigned int cluster)
     // Read in the sector of FAT1
     unsigned char fat_sector[512];
     if (read_sector(partition_start + fat1_sector + fat_sector_num, fat_sector, CACHE_YES, 0)) {
-      printf("ERROR: Failed to read sector $%x of first FAT\n", fat_sector_num);
+      log_error("failed to read sector $%x of first FAT", fat_sector_num);
       retVal = -1;
       break;
     }
@@ -2118,7 +2129,7 @@ BOOL is_free_cluster(unsigned int cluster)
   o = cluster % (512 / 4) * 4;
 
   if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
-    printf("ERROR: Failed to read sector $%x of first FAT\n", i);
+    log_error("failed to read sector $%x of first FAT", i);
     exit(-1);
   }
 
@@ -2145,7 +2156,7 @@ unsigned int find_free_cluster(unsigned int first_cluster)
       // Read FAT sector
       //      printf("Checking FAT sector $%x for free clusters.\n",i);
       if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
-        printf("ERROR: Failed to read sector $%x of first FAT\n", i);
+        log_error("failed to read sector $%x of first FAT", i);
         retVal = -1;
         break;
       }
@@ -2280,7 +2291,7 @@ int read_direntries(llist* lst, char* path)
   if (fat_opendir(path, TRUE)) {
     return 0;
   }
-  // printf("Opened directory, dir_sector=%d (absolute sector = %d)\n",dir_sector,partition_start+dir_sector);
+  // log_debug("Opened directory, dir_sector=%d (absolute sector = %d)",dir_sector,partition_start+dir_sector);
   while (!fat_readdir(&de, FALSE)) {
     if (!de.d_name[0])
       continue;
@@ -3911,7 +3922,7 @@ int upload_file(char* name, char* dest_name)
   d = opendir(".");
   if (d) {
     while ((dir = readdir(d)) != NULL) {
-      if (dir->d_name && !is_match(dir->d_name, name, 1))
+      if (!is_match(dir->d_name, name, 1))
         continue;
 
       struct stat file_stats;

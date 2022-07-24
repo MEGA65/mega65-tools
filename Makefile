@@ -102,23 +102,23 @@ TESTS=		$(TESTDIR)/ascii.prg \
 TOOLDIR=	$(SRCDIR)/tools
 
 TOOLSUNX=	$(BINDIR)/etherload \
-	$(BINDIR)/m65 \
-	$(BINDIR)/readdisk \
-	$(BINDIR)/mega65_ftp \
-	$(BINDIR)/monitor_save \
-	$(BINDIR)/romdiff \
-	$(BINDIR)/pngprepare \
-	$(BINDIR)/giftotiles \
-	$(BINDIR)/m65ftp_test \
-	$(BINDIR)/mfm-decode \
-	$(BINDIR)/bit2core \
-	$(BINDIR)/bit2mcs
+		$(BINDIR)/m65 \
+		$(BINDIR)/readdisk \
+		$(BINDIR)/mega65_ftp \
+		$(BINDIR)/monitor_save \
+		$(BINDIR)/romdiff \
+		$(BINDIR)/pngprepare \
+		$(BINDIR)/giftotiles \
+		$(BINDIR)/m65ftp_test \
+		$(BINDIR)/mfm-decode \
+		$(BINDIR)/bit2core \
+		$(BINDIR)/bit2mcs
 
-TOOLSWIN= $(BINDIR)/m65.exe \
-	$(BINDIR)/mega65_ftp.exe \
-	$(BINDIR)/bit2core.exe \
-	$(BINDIR)/bit2mcs.exe \
-	$(BINDIR)/romdiff.exe
+TOOLSWIN=	$(BINDIR)/m65.exe \
+		$(BINDIR)/mega65_ftp.exe \
+		$(BINDIR)/bit2core.exe \
+		$(BINDIR)/bit2mcs.exe \
+		$(BINDIR)/romdiff.exe
 
 TOOLS=$(TOOLSUNX) $(TOOLSWIN)
 
@@ -548,12 +548,13 @@ $(1).exe: $(2)
 	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $$(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic $(3)
 endef
 
-MEGA65FTP_SRC=$(TOOLDIR)/mega65_ftp.c \
-							$(TOOLDIR)/m65common.c \
-							$(TOOLDIR)/ftphelper.c \
-							$(TOOLDIR)/filehost.c \
-							$(TOOLDIR)/diskman.c \
-							$(TOOLDIR)/bit2mcs.c
+MEGA65FTP_SRC=	$(TOOLDIR)/mega65_ftp.c \
+		$(TOOLDIR)/m65common.c \
+		$(TOOLDIR)/logging.c \
+		$(TOOLDIR)/ftphelper.c \
+		$(TOOLDIR)/filehost.c \
+		$(TOOLDIR)/diskman.c \
+		$(TOOLDIR)/bit2mcs.c
 
 # Gives two targets of:
 # - gtest/bin/mega65_ftp.test
@@ -585,23 +586,23 @@ test.exe: $(GTESTBINDIR)/mega65_ftp.test.exe $(GTESTBINDIR)/bit2core.test.exe
 	@echo "===================="
 	cd $(GTESTBINDIR) ; ./bit2core.test.exe
 
-$(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) Makefile
+$(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) include/*.h Makefile
 	$(MAKE_VERSION)
 	$(CC) $(COPT) -D_FILE_OFFSET_BITS=64 -Iinclude -o $(BINDIR)/mega65_ftp $(MEGA65FTP_SRC) $(TOOLDIR)/version.c $(BUILD_STATIC) -lreadline -lncurses -ltinfo -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
+$(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) include/*.h Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
 	$(MAKE_VERSION)
 	$(CC) $(COPT) -Iinclude -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) Makefile 
+$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) include/*.h Makefile
 	$(MAKE_VERSION)
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) Makefile 
+$(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) include/*.h Makefile
 	$(MAKE_VERSION)
 	$(CC) $(COPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/mega65_ftp.osx $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 -lz -lpthread -lreadline -DINCLUDE_BIT2MCS
 
-$(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile 
+$(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
 
 
