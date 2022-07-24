@@ -738,7 +738,7 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
   int i, j, bus, pnum_len, last_index = -1, last_match = -1;
   uint8_t pnum[8];
   struct dirent* de = NULL;
-  char serial_path[1024] = "", last_path[1024] = "NULL";
+  char serial_path[1024] = "", last_path[1024];
   char path[1024];
   char link[1024]; // possible problem: PATH_MAX is probably 4096 on UNIX systems
   char match[1024];
@@ -750,6 +750,7 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
     bitswap[i] = BSWAP(i);
   uinfo = fpgausb_init(); /*** Initialize USB interface ***/
   for (i = 0; uinfo[i].dev; i++) {
+    strcpy(serial_path, "NULL");
     bus = libusb_get_bus_number(uinfo[i].dev);
     pnum_len = libusb_get_port_numbers(uinfo[i].dev, pnum, 8);
 
