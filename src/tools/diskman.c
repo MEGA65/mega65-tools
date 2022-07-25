@@ -160,6 +160,16 @@ static void write_sector(int track, int sector, char* chunk)
   update_bam(track, sector);
 }
 
+int check_file_access(char* file)
+{
+  FILE* f = fopen(file, "rb");
+  if (!f)
+    return -1;
+  fclose(f);
+
+  return 0;
+}
+
 void add_prg(char* fname)
 {
   // load the prg
@@ -210,6 +220,12 @@ void save_d81(char* fname)
 char* create_d81_for_prg(char* prgfname)
 {
   static char d81name[256];
+
+  if (check_file_access(prgfname)) {
+    printf("ERROR: Cannot open file '%s'\n", prgfname);
+    return NULL;
+  }
+
   memset(data, 0, 819200);
   write_header("PRG WRAPPER", "GI");
   add_prg(prgfname);

@@ -2812,7 +2812,8 @@ void list_all_roms(void)
 
 void wrap_upload(char* fname)
 {
-  char* d81name = create_d81_for_prg(fname);
+  char* d81name;
+  if (!(d81name = create_d81_for_prg(fname))) return;
   strcpy(fname, d81name);
 
   if (fname) {
