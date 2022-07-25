@@ -1735,7 +1735,6 @@ void open_the_serial_port(char* serial_port)
     return;
   }
 
-  log_debug("opening serial port %s", serial_port);
 #ifdef WINDOWS
   fd.type = WINPORT_TYPE_FILE;
   fd.fdfile = open_serial_port(serial_port, 2000000);
@@ -1761,6 +1760,7 @@ void open_the_serial_port(char* serial_port)
   for (int i = 0; serial_port[i]; i++)
     if (serial_port[i] == '/')
       last_part = &serial_port[i + 1];
+
   char latency_file[1024];
   snprintf(latency_file, 1024, "/sys/bus/usb-serial/devices/%s/latency_timer", last_part);
   FILE* f = fopen(latency_file, "r");

@@ -272,8 +272,7 @@ int virtual_f011_read(int device, int track, int sector, int side)
 
     fd81 = fopen(d81file, "rb+");
     if (!fd81) {
-
-      fprintf(stderr, "Could not open D81 file: '%s'\n", d81file);
+      log_crit("could not open D81 file: '%s'", d81file);
       exit(-1);
     }
   }
@@ -296,8 +295,7 @@ int virtual_f011_read(int device, int track, int sector, int side)
     int result = fseek(fd81, (track * 20 + physical_sector) * 512, SEEK_SET);
 
     if (result) {
-
-      fprintf(stderr, "Error finding D81 sector %d @ 0x%x\n", result, (track * 20 + physical_sector) * 512);
+      log_crit("error finding D81 sector %d @ 0x%x", result, (track * 20 + physical_sector) * 512);
       exit(-2);
     }
     else {
@@ -342,7 +340,6 @@ int virtual_f011_write(int device, int track, int sector, int side)
 
     fd81 = fopen(d81file, "wb+");
     if (!fd81) {
-
       log_crit("could not open D81 file: '%s'", d81file);
       exit(-1);
     }
@@ -361,7 +358,6 @@ int virtual_f011_write(int device, int track, int sector, int side)
   int result = fseek(fd81, (track * 20 + physical_sector) * 512, SEEK_SET);
 
   if (result) {
-
     log_crit("failed to find D81 sector %d @ 0x%x", result, (track * 20 + physical_sector) * 512);
     exit(-2);
   }
@@ -2138,7 +2134,7 @@ int main(int argc, char** argv)
     real_stop_cpu();
     if (hyppo) {
       log_note("replacing hyppo...");
-    real_stop_cpu();
+      real_stop_cpu();
       load_file(hyppo, 0xfff8000, patchKS);
     }
     if (flashmenufile) {
@@ -2851,24 +2847,21 @@ int main(int argc, char** argv)
   // XXX - loop for virtualisation, JTAG boundary scanning etc
 
   if (virtual_f011) {
+    unsigned char buff[8192];
+    int b, i;
+
     log_note("entering virtualised F011 wait loop...");
-
     while (1) {
-      unsigned char buff[8192];
-
-      int b = serialport_read(fd, buff, 8192);
+      b = serialport_read(fd, buff, 8192);
       // if (b > 0) dump_bytes(2, "VF011 wait", buff, b);
-      for (int i = 0; i < b; i++) {
+      for (i = 0; i < b; i++) {
         recent_bytes[0] = recent_bytes[1];
         recent_bytes[1] = recent_bytes[2];
         recent_bytes[2] = recent_bytes[3];
         recent_bytes[3] = buff[i];
         check_for_vf011_requests();
       }
-
       handle_vf011_requests();
-
-      continue;
     }
   }
   do_exit(0);
