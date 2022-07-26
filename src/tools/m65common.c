@@ -1419,7 +1419,7 @@ SSIZE_T do_serial_port_read(WINPORT port, uint8_t* buffer, size_t size, const ch
 }
 
 void close_serial_port(void) {
-  CloseHandle(port);
+  CloseHandle(fd.fdfile);
 }
 
 #else
