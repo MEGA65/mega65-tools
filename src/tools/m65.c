@@ -49,6 +49,9 @@
 
 #ifndef WINDOWS
 #include <glob.h>
+#include <sys/ioctl.h>
+#else
+#include <windows.h>
 #endif
 
 #include "m65common.h"
@@ -277,6 +280,20 @@ int last_virtual_side = -1;
 long long vf011_first_read_time = 0;
 int vf011_bytes_read = 0;
 
+int get_terminal_size(void) {
+#ifndef WINDOWS
+  struct winsize w;
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == -1)
+    return 80;
+  return w.ws_col;
+#else
+  CONSOLE_SCREEN_BUFFER_INFO csbi;
+  if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+    return 80;
+  retrun csbi.dwSize.X;
+#endif
+}
+
 char *wrap_line(const char *line, int wrap, int *offset) {
   int pos;
   char *buffer;
@@ -287,15 +304,20 @@ char *wrap_line(const char *line, int wrap, int *offset) {
   }
 
   for (pos = wrap; line[pos] != ' '; pos--);
-  buffer = strndup(line, pos);
-  *offset = pos+1;
+  buffer = malloc(pos + 1);
+  if (buffer != NULL) {
+    strncpy(buffer, line, pos);
+    buffer[pos] = 0;
+  }
+  *offset = pos + 1;
 
   return buffer;
 }
 
 void usage(int exitcode, char *message) {
   char optstr[80], *argstr, *temp;
-  int offset=0, first;
+  int optlen, offset=0, first, width = get_terminal_size() - 1;
+  if (width > 99) width = 99;
 
   fprintf(stderr, TOOLNAME"\n");
   fprintf(stderr, "Version: %s\n\n", version_string);
@@ -304,15 +326,16 @@ void usage(int exitcode, char *message) {
 
   for (int i=0; i < cmd_count; i++) {
     if (cmd_opts[i].val && !cmd_opts[i].flag)
-      snprintf(optstr, 79, "-%c|--%s", cmd_opts[i].val, cmd_opts[i].name);
+      snprintf(optstr, width, "-%c|--%s", cmd_opts[i].val, cmd_opts[i].name);
     else
-      snprintf(optstr, 79, "--%s", cmd_opts[i].name);
+      snprintf(optstr, width, "--%s", cmd_opts[i].name);
 
-    argstr = optstr + strlen(optstr);
+    optlen = strlen(optstr);
+    argstr = optstr + optlen;
     if (cmd_opts[i].has_arg == 2)
-      snprintf(argstr, 79 - strlen(optstr), "[=<%s>]", cmd_arg[i]);
+      snprintf(argstr, width - optlen - 5, "[=<%s>]", cmd_arg[i]);
     else if (cmd_opts[i].has_arg == 1)
-      snprintf(argstr, 79 - strlen(optstr), " <%s>", cmd_arg[i]);
+      snprintf(argstr, width - optlen - 5, " <%s>", cmd_arg[i]);
 
     fprintf(stderr, "  %-15s ", optstr);
     if (strlen(optstr) > 15)
@@ -321,7 +344,7 @@ void usage(int exitcode, char *message) {
     first = 1;
     argstr = cmd_desc[i];
     while (1) {
-      temp = wrap_line(argstr, 79-16, &offset);
+      temp = wrap_line(argstr, width - 20, &offset);
       if (!first)
         fprintf(stderr, "                  ");
       else
@@ -388,10 +411,10 @@ void init_cmd_options(void) {
   CMD_OPTION("charrom",   1, 0,         'C', "file",  "Character ROM <file> to preload at $FF7E000.");
   CMD_OPTION("colourrom", 1, 0,         'c', "file",  "Colour RAM <file> to preload at $FF80000.");
 
-  CMD_OPTION("virttype",  1, 0,         't', "-|text|file",
+  CMD_OPTION("vtype",     1, 0,         't', "-|text|file",
                   "Type <text> via keyboard virtualisation. If a <file>name is provided, the contents of the file are typed. "
                   "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
-  CMD_OPTION("virttyperet", 1, 0,       'T', "-|text|file", "As virttype, but add a RETRUN at the end of the line.");
+  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text|file", "As virttype, but add a RETRUN at the end of the line.");
 
   CMD_OPTION("boundaryscan", 1, 0,      'J', "xdc,bsdl[,sens[,log]]",
                   "Do JTAG boundary scan of attached FPGA, using the provided <xdc> and <bsdl> files. "
