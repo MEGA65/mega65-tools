@@ -290,7 +290,7 @@ int get_terminal_size(void) {
   CONSOLE_SCREEN_BUFFER_INFO csbi;
   if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
     return 80;
-  retrun csbi.dwSize.X;
+  return csbi.dwSize.X;
 #endif
 }
 
