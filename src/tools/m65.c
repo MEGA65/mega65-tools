@@ -116,7 +116,7 @@ void get_video_state(void);
 extern const char *version_string;
 
 #define MAX_CMD_OPTS 50
-int cmd_count = 0;
+int cmd_count = 0, cmd_log_start = -1, cmd_log_end = -1;
 char *cmd_desc[MAX_CMD_OPTS];
 char *cmd_arg[MAX_CMD_OPTS];
 struct option cmd_opts[MAX_CMD_OPTS];
@@ -365,9 +365,11 @@ void usage(int exitcode, char *message) {
 
 void init_cmd_options(void) {
   CMD_OPTION("help",      0, 0,         'h', "",      "Display help and exit.");
+  cmd_log_start = cmd_count;
   CMD_OPTION("quiet",     0, &loglevel, 1,   "",      "Only display errors or critical errors.");
   CMD_OPTION("verbose",   0, &loglevel, 4,   "",      "More verbose logging.");
   CMD_OPTION("debug",     0, &loglevel, 5,   "",      "Enable debug logging.");
+  cmd_log_end = cmd_count;
   CMD_OPTION("log",       1, 0,         '0', "level", "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
   CMD_OPTION("autodiscover", 0, 0,      'j', "",      "Try to autodiscover device and exit.");
@@ -1880,13 +1882,15 @@ int main(int argc, char** argv)
   int opt;
   while ((opt = getopt_long(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:S::s:t:T:u::U:v:V:w:XyZ:h0:", cmd_opts, &opt_index)) != -1) {
     if (opt==0) {
+      if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
+        log_setup(stderr, loglevel);
       if (ethernet_cpulog && ethernet_video) {
         log_crit("Can't specify multiple ethernet streaming options!");
         exit(-3);
       }
       continue;
     }
-    fprintf(stderr, "got %02x %p %d\n", opt, optarg, opt_index);
+    // fprintf(stderr, "got %02x %p %d\n", opt, optarg, opt_index);
     switch (opt) {
     case '0':
       loglevel = log_parse_level(optarg);
