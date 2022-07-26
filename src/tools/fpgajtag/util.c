@@ -382,19 +382,19 @@ USB_INFO* fpgausb_init(void)
     exit(-1);
   }
 
-#ifdef LIBUSB_OPTION_USE_USBDK
   if (usedk) {
+#ifdef LIBUSB_OPTION_USE_USBDK
     log_info("requesting to use USBDK backend.");
     int res = libusb_set_option(usb_context, LIBUSB_OPTION_USE_USBDK);
     if (res < 0) {
       log_warn("failed to switch to USEDK backend: %s", libusb_strerror(res));
     }
-  }
 #else
   //#warning No USBDK support in libusb
   // this is not bad, so don't call it a warning
-  log_info("using libusb without USBDK support");
+    log_warn("using libusb without USBDK support");
 #endif
+  }
 
   while ((dev = device_list[i++])) {
     struct libusb_device_descriptor desc;
