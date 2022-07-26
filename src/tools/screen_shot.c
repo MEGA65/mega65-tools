@@ -824,7 +824,7 @@ void paint_screen_shot(void)
   return;
 }
 
-int do_screen_shot(void)
+int do_screen_shot(char *userfilename)
 {
   log_note("fetching screenshot");
   log_debug("syncing to monitor");
@@ -840,12 +840,15 @@ int do_screen_shot(void)
 
   FILE* f = NULL;
   char filename[1024];
-  for (int n = 0; n < 1000000; n++) {
-    snprintf(filename, 1024, "mega65-screen-%06d.png", n);
-    f = fopen(filename, "rb");
-    if (!f)
-      break;
-  }
+  if (userfilename != NULL)
+    strncpy(filename, userfilename, 1023);
+  else
+    for (int n = 0; n < 1000000; n++) {
+      snprintf(filename, 1024, "mega65-screen-%06d.png", n);
+      f = fopen(filename, "rb");
+      if (!f)
+        break;
+    }
   f = fopen(filename, "wb");
   if (!f) {
     log_error("could not open '%s' for writing.", filename);
