@@ -425,6 +425,7 @@ void init_cmd_options(void) {
   CMD_OPTION("ethvideo",  0, 0,         'E', "",      "Enable streaming of video via ethernet.");
   CMD_OPTION("ethcpulog", 0, 0,         'L', "",      "Enable streaming of CPU instruction log via ethernet.");
   CMD_OPTION("phoneosk",  0, 0,         'o', "",      "Enable on-screen keyboard (MEGAphone).");
+  CMD_OPTION("debugloadmem", 0, &debug_load_memory, 1, "", "DEBUG - test load memory function.");
 }
 
 int virtual_f011_read(int device, int track, int sector, int side)
@@ -1880,7 +1881,7 @@ int main(int argc, char** argv)
     usage(-3, "No arguments given!");
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:S::s:t:T:u::U:v:V:w:XyZ:h0:", cmd_opts, &opt_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "@:14aA:B:b:q:c:C:d:DEFHf:jJ:Kk:Ll:MnNoprR:S::s:t:T:u::U:v:V:w:XZ:h0:", cmd_opts, &opt_index)) != -1) {
     if (opt==0) {
       if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
         log_setup(stderr, loglevel);
@@ -1898,9 +1899,6 @@ int main(int argc, char** argv)
         log_warn("failed to parse log level!");
       else
         log_setup(stderr, loglevel);
-      break;
-    case 'y':
-      debug_load_memory = 1;
       break;
     case 'D':
       debug_serial = 1;
@@ -2253,16 +2251,28 @@ int main(int argc, char** argv)
   }
 
   if (zap) {
-    fprintf(stderr, "Reconfiguring FPGA using bitstream at $%08x\n", zap_addr);
+    if (zap_addr < 8) {
+      int slot = zap_addr;
+      zap_addr = slot * 0x800000;
+      log_note("Reconfiguring FPGA using core in slot %d ($%08x)", slot, zap_addr);
+    }
+    else {
+      if (zap_addr % 0x800000)
+        log_warn("zap address not aligned to $800000");
+      log_note("Reconfiguring FPGA using core at $%08x (slot %d)", zap_addr, zap_addr / 0x800000);
+    }
     char cmd[1024];
     monitor_sync();
-    snprintf(cmd, 1024, "sffd36c8 %x %x %x %x\r", (zap_addr >> 0) & 0xff, (zap_addr >> 8) & 0xff, (zap_addr >> 16) & 0xff,
-        (zap_addr >> 24) & 0xff);
+    // addr needs to be shifted right by 8!
+    snprintf(cmd, 1024, "sffd36c8 %x %x %x %x\r", (zap_addr >> 8) & 0xff, (zap_addr >> 16) & 0xff, (zap_addr >> 24) & 0xff, 0);
     slow_write(fd, cmd, strlen(cmd));
     monitor_sync();
     mega65_poke(0xffd36cf, 0x42);
-    fprintf(stderr, "FPGA reconfigure command issued.\n");
+    log_note("waiting for the system to settle...");
     // XXX This can take a while, which we should accommodate
+    if (wait_for_bitstream) {
+      sleep(4);
+    }
     monitor_sync();
   }
 
