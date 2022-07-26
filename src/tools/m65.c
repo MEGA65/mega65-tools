@@ -949,9 +949,9 @@ void do_type_text(char* type_text)
 {
   log_note("typing text via virtual keyboard...");
 
+#ifndef WINDOWS
   time_t last_time_check=0;
   
-#ifndef WINDOWS
   int use_line_mode = 0;
 #endif
     
@@ -2138,7 +2138,7 @@ int main(int argc, char** argv)
       load_file(hyppo, 0xfff8000, patchKS);
     }
     if (flashmenufile) {
-      log_note("replacing flaschmenu");
+      log_note("replacing flashmenu");
       load_file(flashmenufile, 0x50000, 0);
     }
     if (romfile) {
@@ -2876,6 +2876,6 @@ void do_exit(int retval)
       pthread_join(threads[i], NULL);
   }
 #endif
-  close_default_tcp_port();
+  close_communication_port();
   exit(retval);
 }

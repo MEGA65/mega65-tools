@@ -73,6 +73,7 @@ HANDLE open_serial_port(const char* device, uint32_t baud_rate);
 void set_serial_speed(int fd, int serial_speed);
 #endif
 void open_the_serial_port(char* serial_port);
+void close_communication_port(void);
 int switch_to_c64mode(void);
 PORT_TYPE open_tcp_port(char* portname);
 void close_tcp_port(PORT_TYPE localfd);

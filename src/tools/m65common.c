@@ -1418,6 +1418,10 @@ SSIZE_T do_serial_port_read(WINPORT port, uint8_t* buffer, size_t size, const ch
   return 0;
 }
 
+void close_serial_port(void) {
+  CloseHandle(port);
+}
+
 #else
 int do_serial_port_write(int fd, uint8_t* buffer, size_t size, const char* function, const char* file, const int line)
 {
@@ -1552,6 +1556,11 @@ void set_serial_speed(int fd, int serial_speed)
   ioctl(fd, TIOCSSERIAL, &serial);
 #endif
 }
+
+void close_serial_port(void) {
+  close(fd);
+}
+
 #endif
 
 /*
@@ -1698,7 +1707,7 @@ PORT_TYPE open_tcp_port(char* portname)
 
 void close_tcp_port(PORT_TYPE localfd)
 {
-  // TODO: do I need to do any nice closing of the socket in linux too?
+  close(localfd);
 }
 
 // provide an implementation of stricmp for linux/mac
@@ -1719,6 +1728,13 @@ int stricmp(const char* a, const char* b)
 void close_default_tcp_port(void)
 {
   close_tcp_port(fd);
+}
+
+void close_communication_port(void) {
+  if (serial_port_is_tcp)
+    close_tcp_port(fd);
+  else
+    close_serial_port();
 }
 
 void open_the_serial_port(char* serial_port)
