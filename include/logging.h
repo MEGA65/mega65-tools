@@ -10,6 +10,7 @@
 
 int log_parse_level(char *levelarg);
 void log_setup(FILE *outfile, const int level);
+void log_raiselevel(const int level);
 void log_concat(char *message, ...);
 void log_crit(const char *message, ...);
 void log_error(const char *message, ...);

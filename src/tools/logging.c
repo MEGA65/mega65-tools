@@ -40,6 +40,11 @@ void log_setup(FILE *outfile, const int level) {
   log_fallback = 0;
 }
 
+void log_raiselevel(const int level) {
+  if (log_level < level)
+    log_level = level;
+}
+
 void log_format(const int level, const char *message, va_list args)
 {
   if (message == NULL)
