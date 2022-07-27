@@ -2286,7 +2286,7 @@ int main(int argc, char** argv)
   // extract one out of the running bitstream.
   if (!hyppo) {
     if (virtual_f011) {
-      log_note("extracting HYPPO from running system...");
+      log_info("extracting HYPPO from running system...");
       unsigned char hyppo_data[0x4000];
       fetch_ram(0xFFF8000, 0x4000, hyppo_data);
 #ifdef WINDOWS
@@ -2342,12 +2342,12 @@ int main(int argc, char** argv)
 
     real_stop_cpu();
     if (hyppo) {
-      log_note("replacing hyppo...");
+      log_info("replacing hyppo...");
       real_stop_cpu();
       load_file(hyppo, 0xfff8000, patchKS);
     }
     if (flashmenufile) {
-      log_note("replacing flashmenu");
+      log_info("replacing flashmenu");
       load_file(flashmenufile, 0x50000, 0);
     }
     if (romfile) {
@@ -3059,10 +3059,44 @@ int main(int argc, char** argv)
     unsigned char buff[8192];
     int b, i;
 
+    log_raiselevel(LOG_NOTE);
+#ifndef WINDOWS
+    log_note("entering virtualised F011 wait loop... press 'q' plus <RETURN> to exit");
+#else
     log_note("entering virtualised F011 wait loop...");
+#endif
+    log_warn("resetting the system might render your D81 image unusable!");
     while (1) {
+#ifndef WINDOWS
+      fd_set read_set;
+      FD_SET(fd, &read_set);
+      FD_SET(STDIN_FILENO, &read_set);
+      if (select(fd+1, &read_set, NULL, NULL, NULL) < 1) {
+        log_debug("vF011: select false");
+        continue;
+      } else
+        log_debug("vF011: select true");
+      if (FD_ISSET(STDIN_FILENO, &read_set) && fgetc(stdin) == 'q') {
+        log_crit("exit requested, please power cycle your MEGA65");
+        break;
+      }
+      if (!FD_ISSET(fd, &read_set)) continue;
+#endif
+
       b = serialport_read(fd, buff, 8192);
       // if (b > 0) dump_bytes(2, "VF011 wait", buff, b);
+
+      /* 
+       * after reset the system will search for "MEDA65.ROM", so that
+       * already might be a boiler plate? put the bytes that get read on
+       * reset can be interpreted as write requests by check_for_vf011_requests
+       * and might kill the D81 image... so better bail out here!
+       */
+      if (b > 64 && strstr((char *)buff, "MEGA65 Serial Monitor")) {
+        log_crit("reset detected, please power cycle your MEGA65");
+        break;
+      }
+
       for (i = 0; i < b; i++) {
         recent_bytes[0] = recent_bytes[1];
         recent_bytes[1] = recent_bytes[2];
@@ -3072,6 +3106,14 @@ int main(int argc, char** argv)
       }
       handle_vf011_requests();
     }
+    if (fd81 != NULL) {
+      log_debug("closing d81 image file");
+      fclose(fd81);
+    }
+    // disable vF011
+    mega65_poke(0xffd3659, 0x00);
+    mega65_poke(0xffd368b, 0x07);
+    do_exit(0);
   }
   do_exit(0);
 }
