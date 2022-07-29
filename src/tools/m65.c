@@ -58,8 +58,8 @@
 #include "logging.h"
 
 #define UT_TIMEOUT 10
-
 #define UT_RES_TIMEOUT 127
+#define MAX_TERM_WIDTH 100 // for help only currently
 
 #define TOOLNAME "MEGA65 Cross-Development Tool"
 #if defined(WINDOWS)
@@ -280,18 +280,18 @@ int last_virtual_side = -1;
 long long vf011_first_read_time = 0;
 int vf011_bytes_read = 0;
 
-int get_terminal_size(void) {
+int get_terminal_size(int max_width) {
+  int width = 80;
 #ifndef WINDOWS
   struct winsize w;
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == -1)
-    return 80;
-  return w.ws_col;
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) != -1)
+    width = w.ws_col;
 #else
   CONSOLE_SCREEN_BUFFER_INFO csbi;
-  if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
-    return 80;
-  return csbi.dwSize.X;
+  if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+    width = csbi.dwSize.X;
 #endif
+  return max_width > 0 && width > max_width ? max_width : width;
 }
 
 char *wrap_line(const char *line, int wrap, int *offset) {
@@ -314,11 +314,9 @@ char *wrap_line(const char *line, int wrap, int *offset) {
   return buffer;
 }
 
-#define MAX_TERM_WIDTH 99
 void usage(int exitcode, char *message) {
   char optstr[MAX_TERM_WIDTH + 1], *argstr, *temp;
-  int optlen, offset=0, first, width = get_terminal_size() - 1;
-  if (width > MAX_TERM_WIDTH) width = MAX_TERM_WIDTH;
+  int optlen, offset=0, first, width = get_terminal_size(MAX_TERM_WIDTH) - 1;
 
   fprintf(stderr, TOOLNAME"\n");
   fprintf(stderr, "Version: %s\n\n", version_string);
