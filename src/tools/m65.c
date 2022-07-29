@@ -3022,19 +3022,22 @@ int main(int argc, char** argv)
 
       // We need to set X and Y to load address before
       // returning: LDX #$ll / LDY #$yy / CLC / RTS
+      unsigned char membuf[6];
+      fetch_ram(0x380l, 6, membuf);
+
       sprintf(cmd, "s380 a2 %x a0 %x 18 60\r", load_addr & 0xff, (load_addr >> 8) & 0xff);
       log_info("returning top of load address = $%04X", load_addr);
       slow_write(fd, cmd, strlen(cmd));
       monitor_sync();
 
-      if ((!is_sid_tune) || (!do_run)) {
+      if ((!is_sid_tune) || (!do_run))
         sprintf(cmd, "g0380\r");
-      }
       else
         sprintf(cmd, "g0400\r");
-
       slow_write(fd, cmd, strlen(cmd));
-      //      monitor_sync();
+      monitor_sync();
+
+      push_ram(0x380l, 6, membuf);
 
       if (!halt) {
         start_cpu();
