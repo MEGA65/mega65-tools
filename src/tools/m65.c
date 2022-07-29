@@ -314,10 +314,11 @@ char *wrap_line(const char *line, int wrap, int *offset) {
   return buffer;
 }
 
+#define MAX_TERM_WIDTH 99
 void usage(int exitcode, char *message) {
-  char optstr[80], *argstr, *temp;
+  char optstr[MAX_TERM_WIDTH + 1], *argstr, *temp;
   int optlen, offset=0, first, width = get_terminal_size() - 1;
-  if (width > 99) width = 99;
+  if (width > MAX_TERM_WIDTH) width = MAX_TERM_WIDTH;
 
   fprintf(stderr, TOOLNAME"\n");
   fprintf(stderr, "Version: %s\n\n", version_string);
