@@ -82,6 +82,82 @@ void usage(void)
   exit(-3);
 }
 
+enum FILE_STATE { FS_WAIT, FS_WRITE };
+
+void parse_packet(char* pkt) {
+  static enum FILE_STATE file_state = FS_WAIT;
+  static char fname[256] = "";
+  static FILE* f = NULL;
+
+  printf("parsing packet: \n%s\n", pkt);
+
+  switch(file_state) {
+    case FS_WAIT:
+      if (strncmp(pkt, "/FILE:", 6) == 0) {
+        printf("got here...\n");
+        strcpy(fname, pkt+6);
+        // fname[strlen(fname)-1] = '\0';
+        printf("Writing to file \"%s\"...\n", fname);
+        f = fopen(fname, "wb");
+        file_state = FS_WRITE;
+      }
+      break;
+
+    case FS_WRITE:
+      if (strcmp(pkt, "/") == 0) {
+        fclose(f);
+        printf("Closing file \"%s\"...\n", fname);
+        file_state = FS_WAIT;
+      }
+      else {
+        unsigned int len = strlen(pkt);
+        fwrite(pkt, 1, len, f);
+        printf("..writing %d bytes..\n", len);
+      }
+      break;
+  }
+}
+
+enum PARSE_STATE { PS_HDR1, PS_HDR2, PS_HDR3, PS_HDR4, PS_LEN, PS_STR };
+
+void parse_bytes(unsigned char* bytes, int numbytes)
+{
+  static enum PARSE_STATE state = PS_HDR1;
+  static unsigned int len = 0;
+  static unsigned int cnt = 0;
+  static char str[8192] = "";
+
+  for (int k = 0; k < numbytes; k++) {
+    unsigned char ch = bytes[k];
+    switch(state) {
+      case PS_HDR1:
+        state = (ch == 0x00 ? PS_HDR2 : PS_HDR1); break;
+      case PS_HDR2:
+        state = (ch == 0x00 ? PS_HDR3 : PS_HDR1); break;
+      case PS_HDR3:
+        state = (ch == 0x00 ? PS_HDR4 : PS_HDR1); break;
+      case PS_HDR4:
+        state = (ch == 0xfd ? PS_LEN : PS_HDR1); break;
+      case PS_LEN:
+        len = (unsigned int)ch;
+        cnt = 0;
+        state = PS_STR;
+        break;
+      case PS_STR:
+        str[cnt] = ch;
+        cnt++;
+        if (cnt == len) {
+          cnt--;  // remove trailing '\\' character
+          str[cnt] = '\0';
+          parse_packet(str);
+          state = PS_HDR1;
+        }
+        break;
+    } // end switch
+    printf("state = %d\n", state);
+  } // end for
+}
+
 int DIRTYMOCK(main)(int argc, char** argv)
 {
 #ifdef WINDOWS
@@ -131,7 +207,11 @@ int DIRTYMOCK(main)(int argc, char** argv)
     int b = serialport_read(fd, read_buff, 8192);
     if (b > 0) {
       read_buff[b] = '\0';
-      printf("Received: %s\n", read_buff);
+       printf("Received: %s ", read_buff);
+      for (int k = 0; k < b; k++)
+        printf("[%02X] ", read_buff[k]);
+      printf("\n");
+      parse_bytes(read_buff, b);
     }
   }
 
