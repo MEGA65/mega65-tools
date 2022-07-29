@@ -616,20 +616,21 @@ $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 
 # ========== m65dbg ==========
 
-M65DBG_SOURCES = $(TOOLDIR)/m65dbg.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c Makefile
-M65DBG_INCLUDES = -Iinclude
+M65DBG_SOURCES = $(TOOLDIR)/m65dbg/m65dbg.c $(TOOLDIR)/logging.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/version.c
+M65DBG_INCLUDES = -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/
+M65DBG_LIBRARIES = -lpng -lpthread -lusb-1.0 -lz
 
-$(BINDIR)/m65dbg:	$(M65DBG_SOURCES)
+$(BINDIR)/m65dbg:	$(M65DBG_SOURCES) Makefile
 	$(MAKE_VERSION)
-	$(CC) $(COPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg $(M65DBG_SOURCES)
+	$(CC) $(COPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
 
-$(BINDIR)/m65dbg.osx:	$(M65DBG_SOURCES)
+$(BINDIR)/m65dbg.osx:	$(M65DBG_SOURCES) Makefile
 	$(MAKE_VERSION)
-	$(CC) $(COPT) -D__APPLE__ $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.osx $(M65DBG_SOURCES)
+	$(CC) $(COPT) -D__APPLE__ $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.osx $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
 
-$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES)
+$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) Makefile
 	$(MAKE_VERSION)
-	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
+	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
 
 
 #-----------------------------------------------------------------------------

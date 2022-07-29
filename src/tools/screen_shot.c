@@ -42,11 +42,11 @@ unsigned char bitmap_multi_colour;
 unsigned int current_physical_raster;
 unsigned int next_raster_interrupt;
 int raster_interrupt_enabled;
-extern unsigned int screen_address;
+unsigned int screen_address = 0;
 unsigned int charset_address;
-extern unsigned int screen_line_step;
+unsigned int screen_line_step = 0;
 unsigned int colour_address;
-extern unsigned int screen_width;
+unsigned int screen_width = 0;
 unsigned int upper_case;
 unsigned int screen_rows;
 unsigned int sixteenbit_mode;
@@ -775,7 +775,7 @@ void paint_screen_shot(void)
   return;
 }
 
-int do_screen_shot(char *userfilename)
+int do_screen_shot(char* userfilename)
 {
   log_note("fetching screenshot");
   log_debug("syncing to monitor");

@@ -1477,7 +1477,7 @@ int do_serial_port_write(int fd, uint8_t *buffer, size_t size, const char *funct
   return size;
 }
 
-size_t do_serial_port_read(int fd, uint8_t *buffer, size_t size, const char *function, const char *file, const int line)
+size_t do_serial_port_read(int fd, uint8_t* buffer, size_t size, const char* function, const char* file, const int line)
 {
   int count;
 
@@ -1846,4 +1846,38 @@ int switch_to_c64mode(void)
     retries++;
   }
   return saw_c64_mode == 0;
+}
+
+void progress_to_RTI(void)
+{
+  /* int bytes = 0; */
+  int match_state = 0;
+  int b = 0;
+  unsigned char buff[8192];
+  slow_write_safe(fd, "tc\r", 3);
+  while (1) {
+    b = serialport_read(fd, buff, 8192);
+    if (b > 0)
+      dump_bytes(2, "RTI search input", buff, b);
+    if (b > 0) {
+      /* bytes += b; */
+      buff[b] = 0;
+      for (int i = 0; i < b; i++) {
+        if (match_state == 0 && buff[i] == 'R') {
+          match_state = 1;
+        }
+        else if (match_state == 1 && buff[i] == 'T') {
+          match_state = 2;
+        }
+        else if (match_state == 2 && buff[i] == 'I') {
+          slow_write_safe(fd, "\r", 1);
+          /* log_debug("RTI seen after %d bytes", bytes); */
+          return;
+        }
+        else
+          match_state = 0;
+      }
+    }
+    fflush(stdout);
+  }
 }

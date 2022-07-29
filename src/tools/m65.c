@@ -105,18 +105,19 @@ char *load_binary = NULL;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
-int fpgajtag_main(char *bitstream);
-char *init_fpgajtag(const char *serialno, const char *serialport, uint32_t file_idcode);
-int xilinx_boundaryscan(char *xdc, char *bsdl, char *sensitivity);
-void set_vcd_file(char *name);
+int do_screen_shot(char* userfilename);
+int fpgajtag_main(char* bitstream);
+char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode);
+int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity);
+void set_vcd_file(char* name);
 void do_exit(int retval);
 
-extern const char *version_string;
+extern const char* version_string;
 
 #define MAX_CMD_OPTS 50
 int cmd_count = 0, cmd_log_start = -1, cmd_log_end = -1;
-char *cmd_desc[MAX_CMD_OPTS];
-char *cmd_arg[MAX_CMD_OPTS];
+char* cmd_desc[MAX_CMD_OPTS];
+char* cmd_arg[MAX_CMD_OPTS];
 struct option cmd_opts[MAX_CMD_OPTS];
 #define CMD_OPTION(Oname, Ohas, Oflag, Oval, Oarg, Odesc)                                                                   \
   cmd_opts[cmd_count].name = Oname;                                                                                         \
@@ -246,11 +247,11 @@ int hypervisor_paused = 0;
 int screen_shot = 0;
 char *screen_shot_file = NULL;
 int screen_rows_remaining = 0;
-int screen_address = 0;
+extern unsigned int screen_address;
 int next_screen_address = 0;
 int screen_line_offset = 0;
-int screen_line_step = 0;
-int screen_width = 0;
+extern unsiggned int screen_line_step;
+extern unsigned int screen_width;
 unsigned char screen_line_buffer[256];
 
 char *type_text = NULL;
@@ -296,10 +297,10 @@ int get_terminal_size(int max_width)
   return max_width > 0 && width > max_width ? max_width : width;
 }
 
-char *wrap_line(const char *line, int wrap, int *offset)
+char* wrap_line(const char* line, int wrap, int* offset)
 {
   int pos;
-  char *buffer;
+  char* buffer;
 
   if (strlen(line) <= wrap) {
     *offset = -1;
@@ -318,7 +319,7 @@ char *wrap_line(const char *line, int wrap, int *offset)
   return buffer;
 }
 
-void usage(int exitcode, char *message)
+void usage(int exitcode, char* message)
 {
   char optstr[MAX_TERM_WIDTH + 1], *argstr, *temp;
   int optlen, offset = 0, first, width = get_terminal_size(MAX_TERM_WIDTH) - 1;
@@ -370,72 +371,71 @@ void usage(int exitcode, char *message)
 
 void init_cmd_options(void)
 {
-  // clang-format off
-  CMD_OPTION("help",      0, 0,         'h', "",      "Display help and exit.");
+  CMD_OPTION("help", 0, 0, 'h', "", "Display help and exit.");
   cmd_log_start = cmd_count;
-  CMD_OPTION("quiet",     0, &loglevel, 1,   "",      "Only display errors or critical errors.");
-  CMD_OPTION("verbose",   0, &loglevel, 4,   "",      "More verbose logging.");
-  CMD_OPTION("debug",     0, &loglevel, 5,   "",      "Enable debug logging.");
+  CMD_OPTION("quiet", 0, &loglevel, 1, "", "Only display errors or critical errors.");
+  CMD_OPTION("verbose", 0, &loglevel, 4, "", "More verbose logging.");
+  CMD_OPTION("debug", 0, &loglevel, 5, "", "Enable debug logging.");
   cmd_log_end = cmd_count;
-  CMD_OPTION("log",       1, 0,         '0', "level", "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
+  CMD_OPTION("log", 1, 0, '0', "level", "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
-  CMD_OPTION("autodiscover", 0, 0,      'j', "",      "Try to autodiscover device and exit.");
-  CMD_OPTION("device",    1, 0,         'l', "port",  "Name of serial <port> to use, e.g., "DEVICENAME".");
-  CMD_OPTION("fpga",      1, 0,         'f', "serial","Select which FPGA to reconfigure by specifying JTAG <serial>.");
-  CMD_OPTION("speed",     1, 0,         's', "230400|1000000|1500000|2000000|4000000",
-                  "Speed of serial port in <bits per second> (defaults to 2000000). This needs to match the speed your bitstream uses!");
-  CMD_OPTION("usedk",     0, 0,         'K', "",      "Use DK backend for libUSB, if available.");
+  CMD_OPTION("autodiscover", 0, 0, 'j', "", "Try to autodiscover device and exit.");
+  CMD_OPTION("device", 1, 0, 'l', "port", "Name of serial <port> to use, e.g., " DEVICENAME ".");
+  CMD_OPTION("fpga", 1, 0, 'f', "serial", "Select which FPGA to reconfigure by specifying JTAG <serial>.");
+  CMD_OPTION("speed", 1, 0, 's', "230400|1000000|1500000|2000000|4000000",
+      "Speed of serial port in <bits per second> (defaults to 2000000). This needs to match the speed your bitstream uses!");
+  CMD_OPTION("usedk", 0, 0, 'K', "", "Use DK backend for libUSB, if available.");
 
-  CMD_OPTION("bootslot",  1, 0,         'Z', "slot|addr", "Reconfigure FPGA from specified <slot> (argument<8) or <addr>ess (hex) in flash.");
-  CMD_OPTION("bit",       1, 0,         'b', "file",  "name of a FPGA bitstream <file> to load.");
-  CMD_OPTION("bitonly",   1, 0,         'q', "file",  "name of a FPGA bitstream <file> to load and then directly quit. Use this for cores other than MEGA65.");
-  CMD_OPTION("vivadopath",1, 0,         'v', "",      "The location of the Vivado executable to use for -b on Windows.");
+  CMD_OPTION("bootslot", 1, 0, 'Z', "slot|addr",
+      "Reconfigure FPGA from specified <slot> (argument<8) or <addr>ess (hex) in flash.");
+  CMD_OPTION("bit", 1, 0, 'b', "file", "name of a FPGA bitstream <file> to load.");
+  CMD_OPTION("bitonly", 1, 0, 'q', "file",
+      "name of a FPGA bitstream <file> to load and then directly quit. Use this for cores other than MEGA65.");
+  CMD_OPTION("vivadopath", 1, 0, 'v', "", "The location of the Vivado executable to use for -b on Windows.");
 
-  CMD_OPTION("reset",     0, 0,         'F', "",      "Force reset on start.");
-  CMD_OPTION("halt",      0, 0,         'H', "",      "Halt CPU after loading ROMs and program.");
-  CMD_OPTION("nocart",    0, 0,         'N', "",      "Disable a running cartridge, and boot to C64 mode.");
-  CMD_OPTION("run",       0, 0,         'r', "",      "Automatically RUN programme after loading.");
-  CMD_OPTION("break",     1, 0,         'B', "addr",  "set a breakpoint at <addr>ess (hex) on synchronising, and then immediately exit.");
+  CMD_OPTION("reset", 0, 0, 'F', "", "Force reset on start.");
+  CMD_OPTION("halt", 0, 0, 'H', "", "Halt CPU after loading ROMs and program.");
+  CMD_OPTION("nocart", 0, 0, 'N', "", "Disable a running cartridge, and boot to C64 mode.");
+  CMD_OPTION("run", 0, 0, 'r', "", "Automatically RUN programme after loading.");
+  CMD_OPTION("break", 1, 0, 'B', "addr", "set a breakpoint at <addr>ess (hex) on synchronising, and then immediately exit.");
 
-  CMD_OPTION("hyppostatus", 0, 0,       'X', "",      "Show a report of current Hypervisor status.");
-  CMD_OPTION("inject",    1, 0,         '@', "file@addr", "Load a binary <file> at <addr>ess (hex).");
-  CMD_OPTION("c64mode",   0, 0,         '4', "",      "Switch to C64 mode.");
-  CMD_OPTION("volume",    1, 0,         'A', "x[-y]=p", "Set audio coefficient(s) <x> (and optionally up to <y>) to <p> percent of maximum volume.");
-  CMD_OPTION("mixer",     0, 0,         'a', "",      "Read and display audio cross-bar mixer status.");
-  CMD_OPTION("pal",       0, 0,         'p', "",      "switch to PAL video mode.");
-  CMD_OPTION("ntsc",      0, 0,         'n', "",      "switch to NTSC video mode.");
+  CMD_OPTION("hyppostatus", 0, 0, 'X', "", "Show a report of current Hypervisor status.");
+  CMD_OPTION("inject", 1, 0, '@', "file@addr", "Load a binary <file> at <addr>ess (hex).");
+  CMD_OPTION("c64mode", 0, 0, '4', "", "Switch to C64 mode.");
+  CMD_OPTION("volume", 1, 0, 'A', "x[-y]=p",
+      "Set audio coefficient(s) <x> (and optionally up to <y>) to <p> percent of maximum volume.");
+  CMD_OPTION("mixer", 0, 0, 'a', "", "Read and display audio cross-bar mixer status.");
+  CMD_OPTION("pal", 0, 0, 'p', "", "switch to PAL video mode.");
+  CMD_OPTION("ntsc", 0, 0, 'n', "", "switch to NTSC video mode.");
 
-  CMD_OPTION("virtuald81",1, 0,         'd', "d81",   "enable virtual D81 access on local <d81> image.");
+  CMD_OPTION("virtuald81", 1, 0, 'd', "d81", "enable virtual D81 access on local <d81> image.");
 
-  CMD_OPTION("unittest",  2, 0,         'u', "timeout", "run program in unit test mode (<timeout> in seconds, defaults to 10).");
-  CMD_OPTION("utlog",     1, 0,         'w', "file",  "append unit test results to <file>.");
+  CMD_OPTION("unittest", 2, 0, 'u', "timeout", "run program in unit test mode (<timeout> in seconds, defaults to 10).");
+  CMD_OPTION("utlog", 1, 0, 'w', "file", "append unit test results to <file>.");
 
-  CMD_OPTION("screenshot", 2, 0,        'S', "file",  "show text rendering of MEGA65 screen, optionally save PNG screenshot to <file>.");
+  CMD_OPTION(
+      "screenshot", 2, 0, 'S', "file", "show text rendering of MEGA65 screen, optionally save PNG screenshot to <file>.");
 
-  CMD_OPTION("hyppo",     1, 0,         'k', "file",  "HICKUP <file> to replace the HYPPO in the bitstream.");
-    /* NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware
-       for the bitstream, and @issue/tag for HYPPO. */
-  CMD_OPTION("flashmenu", 1, 0,         'U', "file",  "Flash menu <file> to preload at $50000-$57FFF.");
-  CMD_OPTION("basicrom",  1, 0,         'R', "file",  "BASIC ROM <file> to preload at $20000-$3FFFF.");
-  CMD_OPTION("charrom",   1, 0,         'C', "file",  "Character ROM <file> to preload at $FF7E000.");
-  CMD_OPTION("colourrom", 1, 0,         'c', "file",  "Colour RAM <file> to preload at $FF80000.");
+  CMD_OPTION("hyppo", 1, 0, 'k', "file", "HICKUP <file> to replace the HYPPO in the bitstream.");
+  /* NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware
+     for the bitstream, and @issue/tag for HYPPO. */
+  CMD_OPTION("flashmenu", 1, 0, 'U', "file", "Flash menu <file> to preload at $50000-$57FFF.");
+  CMD_OPTION("basicrom", 1, 0, 'R', "file", "BASIC ROM <file> to preload at $20000-$3FFFF.");
+  CMD_OPTION("charrom", 1, 0, 'C', "file", "Character ROM <file> to preload at $FF7E000.");
+  CMD_OPTION("colourrom", 1, 0, 'c', "file", "Colour RAM <file> to preload at $FF80000.");
 
-  CMD_OPTION("vtype",     1, 0,         't', "-|text|file",
-                  "Type <text> via keyboard virtualisation. If a <file>name is provided, the contents of the file are typed. "
-                  "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
-  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text|file", "As virttype, but add a RETRUN at the end of the line.");
+  CMD_OPTION("vtype", 1, 0, 't', "-|text|file",
+      "Type <text> via keyboard virtualisation. If a <file>name is provided, the contents of the file are typed. "
+      "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
+  CMD_OPTION("vtyperet", 1, 0, 'T', "-|text|file", "As virttype, but add a RETRUN at the end of the line.");
 
-  CMD_OPTION("memsave",   1, 0,         0x81, "[addr:addr;]filename", "saves memory range addr:addr (hex) to filename. "
-                  "If addr range is omitted, save current basic memory. "
-                  "Only BASIC save without addr range will add load addr in front of data!");
-
-  CMD_OPTION("boundaryscan", 1, 0,      'J', "xdc,bsdl[,sens[,log]]",
-                  "Do JTAG boundary scan of attached FPGA, using the provided <xdc> and <bsdl> files. "
-                  "A <sens>itivity list can also be provided, to restrict the set of signals monitored. "
-                  "Result is logged into the specified <log> file, if provided.");
-  CMD_OPTION("ethvideo",  0, 0,         'E', "",      "Enable streaming of video via ethernet.");
-  CMD_OPTION("ethcpulog", 0, 0,         'L', "",      "Enable streaming of CPU instruction log via ethernet.");
-  CMD_OPTION("phoneosk",  0, 0,         'o', "",      "Enable on-screen keyboard (MEGAphone).");
+  CMD_OPTION("boundaryscan", 1, 0, 'J', "xdc,bsdl[,sens[,log]]",
+      "Do JTAG boundary scan of attached FPGA, using the provided <xdc> and <bsdl> files. "
+      "A <sens>itivity list can also be provided, to restrict the set of signals monitored. "
+      "Result is logged into the specified <log> file, if provided.");
+  CMD_OPTION("ethvideo", 0, 0, 'E', "", "Enable streaming of video via ethernet.");
+  CMD_OPTION("ethcpulog", 0, 0, 'L', "", "Enable streaming of CPU instruction log via ethernet.");
+  CMD_OPTION("phoneosk", 0, 0, 'o', "", "Enable on-screen keyboard (MEGAphone).");
   CMD_OPTION("debugloadmem", 0, &debug_load_memory, 1, "", "DEBUG - test load memory function.");
   // clang-format on
 }
@@ -767,7 +767,7 @@ int get_system_bitstream_version(void)
   usleep(20000);
   timeout = time(NULL);
   while (timeout + 2 > time(NULL)) {
-    len = serialport_read(fd, (unsigned char *)buf, 512);
+    len = serialport_read(fd, (unsigned char*)buf, 512);
     if (len != 0)
       break;
   }
@@ -794,7 +794,7 @@ int get_system_bitstream_version(void)
   log_debug("get_system_bitstream_version: dumping $FFD3629");
   slow_write(fd, "mffd3629 1\r", 11);
   usleep(20000);
-  while (!(len = serialport_read(fd, (unsigned char *)buf, 512)))
+  while (!(len = serialport_read(fd, (unsigned char*)buf, 512)))
     ;
   // search version byte and translate
   found = strstr(buf, ":0FFD3629:");
@@ -847,11 +847,11 @@ int get_system_bitstream_version(void)
 }
 
 #ifndef WINDOWS
-char *find_serial_port()
+char* find_serial_port()
 {
   int i, res;
-  char *device = NULL;
-  static char *devglob =
+  char* device = NULL;
+  static char* devglob =
 #if defined(__APPLE__)
       "/dev/cu.usbserial-*";
 #else
@@ -890,40 +890,6 @@ char *find_serial_port()
   return device;
 }
 #endif
-
-void progress_to_RTI(void)
-{
-  int bytes = 0;
-  int match_state = 0;
-  int b = 0;
-  unsigned char buff[8192];
-  slow_write_safe(fd, "tc\r", 3);
-  while (1) {
-    b = serialport_read(fd, buff, 8192);
-    if (b > 0)
-      dump_bytes(2, "RTI search input", buff, b);
-    if (b > 0) {
-      bytes += b;
-      buff[b] = 0;
-      for (int i = 0; i < b; i++) {
-        if (match_state == 0 && buff[i] == 'R') {
-          match_state = 1;
-        }
-        else if (match_state == 1 && buff[i] == 'T') {
-          match_state = 2;
-        }
-        else if (match_state == 2 && buff[i] == 'I') {
-          slow_write_safe(fd, "\r", 1);
-          log_debug("RTI seen after %d bytes", bytes);
-          return;
-        }
-        else
-          match_state = 0;
-      }
-    }
-    fflush(stdout);
-  }
-}
 
 int type_serial_mode = 0;
 
@@ -1749,7 +1715,7 @@ unsigned char inbuf[8192];
 unsigned int failcount, test_last_issue, test_last_sub;
 FILE *logPtr;
 
-void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char state, char *msg)
+void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char state, char* msg)
 {
   char outstring[255];
   char temp[255];
@@ -1757,7 +1723,7 @@ void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char sta
   struct timeval currentTime;
 
   gettimeofday(&currentTime, NULL);
-  strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime((const time_t *)&(currentTime.tv_sec)));
+  strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime((const time_t*)&(currentTime.tv_sec)));
 
   snprintf(temp, 255, ".%03dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec / 1000, test_states[state],
       issue, sub);
@@ -2341,7 +2307,7 @@ int main(int argc, char **argv)
     mega65_poke(0xFFD3060,0x800>>0);
     mega65_poke(0xFFD3061,0x800>>8);
     mega65_poke(0xFFD3062,0x800>>16);
-    mega65_poke(0xffd3054,0x00); 
+    mega65_poke(0xffd3054,0x00);
     mega65_poke(0xffd3031,0x80); // 80 columns
     for(int i=0;i<=256;i++) {
       for(int y=0;y<25;y++) for(int x=0;x<80;x++) buf[y*80+x]=x+i;
@@ -3230,7 +3196,7 @@ int main(int argc, char **argv)
        * reset can be interpreted as write requests by check_for_vf011_requests
        * and might kill the D81 image... so better bail out here!
        */
-      if (b > 64 && strstr((char *)buff, "MEGA65 Serial Monitor")) {
+      if (b > 64 && strstr((char*)buff, "MEGA65 Serial Monitor")) {
         log_crit("reset detected, please power cycle your MEGA65");
         break;
       }
