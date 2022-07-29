@@ -120,13 +120,21 @@ TOOLSWIN=	$(BINDIR)/m65.exe \
 		$(BINDIR)/bit2mcs.exe \
 		$(BINDIR)/romdiff.exe
 
+TOOLSMAC=	$(BINDIR)/m65.osx \
+		$(BINDIR)/mega65_ftp.osx \
+		$(BINDIR)/romdiff.osx \
+		$(BINDIR)/m65dbg.osx
+
+# TOOLS omits TOOLSMAC. Linux users can make all. To make Mac binaries, use
+# a Mac to make allmac. See README.md.
 TOOLS=$(TOOLSUNX) $(TOOLSWIN)
 
 SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
 
 all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
-
+allmac:	$(SDCARD_FILES) $(TOOLSMAC) $(UTILITIES) $(TESTS)
+allwin:	$(SDCARD_FILES) $(TOOLSWIN) $(UTILITIES) $(TESTS)
 allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(UTILITIES) $(TESTS)
 
 tests: $(TESTS)
@@ -285,10 +293,10 @@ $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -Iinclude/ -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/pulseoxy.prg:       $(TESTDIR)/pulseoxy.c $(CC65)
-	$(CL65) -O -o $*.prg --mapfile $*.map $< 
+	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
 $(TESTDIR)/qspitest.prg:       $(TESTDIR)/qspitest.c $(CC65)
-	$(CL65) -O -o $*.prg --mapfile $*.map $< 
+	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
 $(EXAMPLES)/unicorns.prg:       $(EXAMPLES)/unicorns.c $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $<
@@ -297,7 +305,7 @@ $(EXAMPLEDIR)/bmpview.prg:       $(EXAMPLEDIR)/bmpview.c $(CC65)
 	$(CL65)  -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/eth_mdio.prg:       $(TESTDIR)/eth_mdio.c $(CC65)
-	$(CL65) -O -o $*.prg --mapfile $*.map $< 
+	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
 $(TESTDIR)/instructiontiming.prg:       $(TESTDIR)/instructiontiming.c $(TESTDIR)/instructiontiming_asm.s $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/instructiontiming_asm.s
@@ -387,10 +395,6 @@ $(TESTDIR)/opcodes65.prg:       $(TESTDIR)/opcodes65.c $(CC65)
 $(UTILDIR)/avtest.prg:       $(UTILDIR)/avtest.c $(CC65)
 	$(SUBMODULEUPDATE)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
-
-
-
-
 
 
 $(TESTDIR)/hyperramtest.prg:       $(TESTDIR)/hyperramtest.c $(CC65) $(wildcard $(SRCDIR)/mega65-libc/cc65/src/*.c) $(wildcard $(SRCDIR)/mega65-libc/cc65/src/*.s) $(wildcard $(SRCDIR)/mega65-libc/cc65/include/*.h)
@@ -488,7 +492,7 @@ $(BINDIR)/md2h65:	$(TOOLDIR)/pngprepare/md2h65.c Makefile $(TOOLDIR)/ascii_font.
 $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
 	$(CC) $(COPT) -o $(BINDIR)/utilpacker $(TOOLDIR)/utilpacker/utilpacker.c
 
-/usr/bin/convert: 
+/usr/bin/convert:
 	echo "Could not find the program 'convert'. Try the following:"
 	echo "sudo apt-get install imagemagick"
 
@@ -517,6 +521,7 @@ $(BINDIR)/readdisk:	$(TOOLDIR)/readdisk.c $(TOOLDIR)/m65common.c $(TOOLDIR)/scre
 	$(CC) $(COPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/readdisk $(TOOLDIR)/readdisk.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
 
+# ========== m65 ==========
 
 $(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
 	$(MAKE_VERSION)
@@ -526,11 +531,13 @@ $(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c 
 	$(MAKE_VERSION)
 	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/m65.osx $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
-
 $(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
 	$(MAKE_VERSION)
 	$(WINCC) $(WINCOPT) -g -Wall -Iinclude `pkg-config --cflags libusb-1.0` -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c $(BUILD_STATIC) -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
+
+
+# ========== mega65_ftp ==========
 
 $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
 	$(OPHIS) $(OPHISOPT) $(TOOLDIR)/ftphelper.a65
@@ -606,6 +613,26 @@ $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
 
 
+# ========== m65dbg ==========
+
+M65DBG_SOURCES = $(TOOLDIR)/m65dbg.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c Makefile
+M65DBG_INCLUDES = -Iinclude
+
+$(BINDIR)/m65dbg:	$(M65DBG_SOURCES)
+	$(MAKE_VERSION)
+	$(CC) $(COPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg $(M65DBG_SOURCES)
+
+$(BINDIR)/m65dbg.osx:	$(M65DBG_SOURCES)
+	$(MAKE_VERSION)
+	$(CC) $(COPT) -D__APPLE__ $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.osx $(M65DBG_SOURCES)
+
+$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES)
+	$(MAKE_VERSION)
+	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
+
+
+#-----------------------------------------------------------------------------
+
 # Create targets for binary (linux) and binary.exe (mingw) easily, minimising repetition
 # arg1 = target name (without .exe)
 # arg2 = pre-requisites
@@ -624,10 +651,10 @@ endef
 # - bin/bit2core.exe (for mingw)
 $(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c Makefile))
 
-$(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile 
+$(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
 
-$(BINDIR)/bit2mcs.exe:	$(TOOLDIR)/bit2mcs.c Makefile 
+$(BINDIR)/bit2mcs.exe:	$(TOOLDIR)/bit2mcs.c Makefile
 	$(WINCC) $(WINCOPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
 
 $(BINDIR)/monitor_save:	$(TOOLDIR)/monitor_save.c Makefile
