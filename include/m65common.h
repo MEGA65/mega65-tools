@@ -80,6 +80,7 @@ void close_tcp_port(PORT_TYPE localfd);
 void close_default_tcp_port(void);
 void do_write(PORT_TYPE localfd, char* str);
 int do_read(PORT_TYPE localfd, char* str, int max);
+void progress_to_RTI(void);
 
 #ifdef WINDOWS
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)

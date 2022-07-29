@@ -293,7 +293,8 @@ void wait_for_string(char* s)
   int b = 1;
   int offset = 0;
   while (1) {
-    b = serialport_read(fd, read_buff + offset, 1); // let's try read it one byte at a time, to assure we don't read more than necessary
+    b = serialport_read(
+        fd, read_buff + offset, 1); // let's try read it one byte at a time, to assure we don't read more than necessary
     // if (b > 0) dump_bytes(0, "wait_for_string", read_buff, b + offset);
     if (b < 0 || b > 8191)
       continue;
@@ -1418,7 +1419,8 @@ SSIZE_T do_serial_port_read(WINPORT port, uint8_t* buffer, size_t size, const ch
   return 0;
 }
 
-void close_serial_port(void) {
+void close_serial_port(void)
+{
   CloseHandle(fd.fdfile);
 }
 
@@ -1452,7 +1454,7 @@ int do_serial_port_write(int fd, uint8_t* buffer, size_t size, const char* funct
 }
 
 size_t do_serial_port_read(int fd, uint8_t* buffer, size_t size, const char* function, const char* file, const int line)
-{  
+{
   int count;
 
   if (serial_port_is_tcp) {
@@ -1461,7 +1463,8 @@ size_t do_serial_port_read(int fd, uint8_t* buffer, size_t size, const char* fun
 #else
     count = recv(fd, buffer, size, 0);
 #endif
-  } else
+  }
+  else
     count = read(fd, buffer, size);
   if (last_read_count || count) {
     if (debug_serial) {
@@ -1496,14 +1499,14 @@ void set_serial_speed(int fd, int serial_speed)
   if (tcgetattr(fd, &t))
     log_error("failed to get terminal parameters");
   cfmakeraw(&t);
-  //TCSASOFT prevents some fields (most importantly the baud rate)
-  //from being changed.  MacOS does not support 'strange' baud rates
-  //that might be set by the ioctl above.
+  // TCSASOFT prevents some fields (most importantly the baud rate)
+  // from being changed.  MacOS does not support 'strange' baud rates
+  // that might be set by the ioctl above.
   if (tcsetattr(fd, TCSANOW | TCSASOFT, &t))
     log_error("failed to set OSX terminal parameters");
 
-  //Serial port will be unresponsive after returning from FREEZER
-  //without this.
+  // Serial port will be unresponsive after returning from FREEZER
+  // without this.
   tcflush(fd, TCIFLUSH);
 #else
   log_debug("set_serial_speed: %d bps (termios)", serial_speed);
@@ -1557,7 +1560,8 @@ void set_serial_speed(int fd, int serial_speed)
 #endif
 }
 
-void close_serial_port(void) {
+void close_serial_port(void)
+{
   close(fd);
 }
 
@@ -1730,7 +1734,8 @@ void close_default_tcp_port(void)
   close_tcp_port(fd);
 }
 
-void close_communication_port(void) {
+void close_communication_port(void)
+{
   if (serial_port_is_tcp)
     close_tcp_port(fd);
   else
@@ -1744,10 +1749,10 @@ void open_the_serial_port(char* serial_port)
     exit(-1);
   }
 
-  serial_port_is_tcp=0;
+  serial_port_is_tcp = 0;
   if (!strncasecmp(serial_port, "tcp", 3)) {
     fd = open_tcp_port(serial_port);
-    serial_port_is_tcp=1;
+    serial_port_is_tcp = 1;
     return;
   }
 
@@ -1768,7 +1773,7 @@ void open_the_serial_port(char* serial_port)
     log_error("could not open serial port '%s'", serial_port);
     exit(-1);
   }
-  
+
   set_serial_speed(fd, serial_speed);
 
   // Also try to reduce serial port latency
@@ -1788,8 +1793,7 @@ void open_the_serial_port(char* serial_port)
     if (latency != 1) {
       f = fopen(latency_file, "w");
       if (!f) {
-        log_warn("cannot write to '%s' to reduce USB port latency. Performance will be reduced.",
-            latency_file);
+        log_warn("cannot write to '%s' to reduce USB port latency. Performance will be reduced.", latency_file);
         log_warn("  You can try something like the following to fix it:");
         log_warn("    echo 1 | sudo tee %s\n", latency_file);
       }
@@ -1801,7 +1805,6 @@ void open_the_serial_port(char* serial_port)
     }
   }
 #endif
-
 }
 
 int switch_to_c64mode(void)
@@ -1819,4 +1822,38 @@ int switch_to_c64mode(void)
     retries++;
   }
   return saw_c64_mode == 0;
+}
+
+void progress_to_RTI(void)
+{
+  /* int bytes = 0; */
+  int match_state = 0;
+  int b = 0;
+  unsigned char buff[8192];
+  slow_write_safe(fd, "tc\r", 3);
+  while (1) {
+    b = serialport_read(fd, buff, 8192);
+    if (b > 0)
+      dump_bytes(2, "RTI search input", buff, b);
+    if (b > 0) {
+      /* bytes += b; */
+      buff[b] = 0;
+      for (int i = 0; i < b; i++) {
+        if (match_state == 0 && buff[i] == 'R') {
+          match_state = 1;
+        }
+        else if (match_state == 1 && buff[i] == 'T') {
+          match_state = 2;
+        }
+        else if (match_state == 2 && buff[i] == 'I') {
+          slow_write_safe(fd, "\r", 1);
+          /* log_debug("RTI seen after %d bytes", bytes); */
+          return;
+        }
+        else
+          match_state = 0;
+      }
+    }
+    fflush(stdout);
+  }
 }
