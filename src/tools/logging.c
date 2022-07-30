@@ -15,6 +15,12 @@ static char log_temp_message[LOG_TEMP_MESSAGE_MAX + 1] = "";
 static char *log_level_name[] = { "CRIT", "ERRO", "WARN", "NOTE", "INFO", "DEBG" };
 static char *log_level_name_low[] = { "crit", "erro", "warn", "note", "info", "debu" };
 
+/*
+ * log_parse_level(levelarg)
+ *
+ * parses levelarg for a number or log_level_name_low part to
+ * convert it to a log_level number
+ */
 int log_parse_level(char *levelarg)
 {
   int loglevel = -1, i;
@@ -32,6 +38,12 @@ int log_parse_level(char *levelarg)
   return loglevel;
 }
 
+/*
+ * log_setup(outfile, level)
+ *
+ * sets the output FILE for all logging and the
+ * minimum log level that gets logged.
+ */
 void log_setup(FILE *outfile, const int level)
 {
   if (outfile != NULL)
@@ -42,16 +54,34 @@ void log_setup(FILE *outfile, const int level)
   log_fallback = 0;
 }
 
+/*
+ * log_raiselevel(level)
+ *
+ * sets minimum log_level to level, if the
+ * current log_level is less than level
+ */
 void log_raiselevel(const int level)
 {
   if (log_level < level)
     log_level = level;
 }
 
+/*
+ * log_format(level, message, args)
+ *
+ * formats and outputs message with args to the defined
+ * FILE (log_setup). Ignores messages with a level higher
+ * than log_level.
+ *
+ * if message is NULL, log_temp_message will be used (see log_concat)
+ */
 void log_format(const int level, const char *message, va_list args)
 {
   if (message == NULL)
     message = log_temp_message;
+
+  if (message == NULL)
+    return;
 
   if (log_fallback) {
     vfprintf(stderr, message, args);
@@ -85,6 +115,16 @@ void log_format(const int level, const char *message, va_list args)
   fprintf(log_file, outstring);
 }
 
+/*
+ * log_concat(message, ...)
+ *
+ * used to concat longer log messages.
+ * To start, call with NULL as messages. Each consequent call
+ * will append to the global log_temp_message.
+ *
+ * use a log_LEVEL function with message NULL to use the
+ * log_temp_message.
+ */
 void log_concat(char *message, ...)
 {
   if (message == NULL) {
@@ -101,6 +141,11 @@ void log_concat(char *message, ...)
   va_end(args);
 }
 
+/*
+ * log_LEVEL(message, ...)
+ *
+ * format and log message with level LEVEL.
+ */
 void log_crit(const char *message, ...)
 {
   va_list args;
