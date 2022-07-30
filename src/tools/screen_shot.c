@@ -26,13 +26,6 @@
 
 #define SCREEN_POSITION ((800 - 720) / 2)
 
-int monitor_sync(void);
-int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer);
-int fetch_ram_invalidate(void);
-int fetch_ram_cacheable(unsigned long address, unsigned int count, unsigned char *buffer);
-int detect_mode(void);
-void progress_to_RTI(void);
-
 #ifdef WINDOWS
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
 #define bcopy(b1, b2, len) (memmove((b2), (b1), (len)), (void)0)
@@ -42,11 +35,11 @@ unsigned char bitmap_multi_colour;
 unsigned int current_physical_raster;
 unsigned int next_raster_interrupt;
 int raster_interrupt_enabled;
-extern unsigned int screen_address;
+unsigned int screen_address = 0;
 unsigned int charset_address;
-extern unsigned int screen_line_step;
+unsigned int screen_line_step = 0;
 unsigned int colour_address;
-extern unsigned int screen_width;
+unsigned int screen_width = 0;
 unsigned int upper_case;
 unsigned int screen_rows;
 unsigned int sixteenbit_mode;
@@ -191,6 +184,7 @@ void print_screencode(unsigned char c, int upper_case)
 {
   // A nice reference for these mappings can be found here:
   // https://style64.org/petscii/
+<<<<<<< HEAD
   static int map_screencode_to_utf8[][2] = { { 0x40, 0x2501 }, // box drawings heavy horizontal
     { 0x43, 0x2501 },                                          // box drawings heavy horizontal
     { 0x60, 0xa0 },                                            // no-break space?
@@ -200,6 +194,19 @@ void print_screencode(unsigned char c, int upper_case)
     { 0x64, 0x2581 },                                          // lower one eigth block
     { 0x65, 0x258e },                                          // left one quarter block
     { 0x66, 0x2592 },                                          // medium shade
+=======
+  // clang-format off
+  static int map_screencode_to_utf8[][2] = {
+    { 0x40, 0x2501 }, // box drawings heavy horizontal
+    { 0x43, 0x2501 }, // box drawings heavy horizontal
+    { 0x60, 0xa0 },   // no-break space?
+    { 0x61, 0x258c }, // left half block
+    { 0x62, 0x2584 }, // lower half block
+    { 0x63, 0x2594 }, // upper one eigth block
+    { 0x64, 0x2581 }, // lower one eigth block
+    { 0x65, 0x258e }, // left one quarter block
+    { 0x66, 0x2592 }, // medium shade
+>>>>>>> dansanderson-refactor-m65
     { 0x67, 0x258a }, // left three quarter block (but it really should be right one quarter block)
     { 0x68, 0x25db }, // no equivalant to lower half medium shade, so got an approximation
     { 0x69, 0x25e4 }, // black upper left triangle
@@ -210,6 +217,7 @@ void print_screencode(unsigned char c, int upper_case)
     { 0x6e, 0x2513 }, // box drawings heavy down and left
     { 0x6f, 0x2582 }, // lower one quarter block
     { -1, -1 } };
+  // clang-format on
   int rev = 0;
   if (c & 0x80) {
     rev = 1;
@@ -469,14 +477,11 @@ void get_video_state(void)
   log_debug("  uppercase=%d, line_step= %d charset_address=$%x", upper_case, screen_line_step, charset_address);
 
   log_debug("fetching screen data");
-  fflush(stderr);
   fetch_ram(screen_address, screen_size, screen_data);
   log_debug("fetching colour data");
-  fflush(stderr);
   fetch_ram(0xff80000 + colour_address, screen_size, colour_data);
 
   log_debug("fetching charset");
-  fflush(stderr);
   fetch_ram(charset_address, charset_size, char_data);
 
   log_debug("fetching done");

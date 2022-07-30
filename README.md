@@ -2,15 +2,15 @@
 
 Tools and Utilities for the MEGA65 Retro Computers, such as:
 
-- **m65**: swiss army knife of tools for automated actions to perform on mega65 hardware
-- **mega65_ftp**: an ftp tool to more easily put and get files to/from your sd-card
-- **bit2core**: a tool for converting bitstreams into core files (.cor)
+-   **m65**: swiss army knife of tools for automated actions to perform on mega65 hardware
+-   **mega65_ftp**: an ftp tool to more easily put and get files to/from your sd-card
+-   **bit2core**: a tool for converting bitstreams into core files (.cor)
 
 # Download
 
 Latest binaries are always available here:
 
-* https://github.com/MEGA65/mega65-tools/releases/tag/CI-latest
+-   https://github.com/MEGA65/mega65-tools/releases/tag/CI-latest
 
 # Building under Linux
 
@@ -46,10 +46,11 @@ sudo update-alternatives --config clang-format
 
 If your official Ubuntu apt repositories only contain older versions, you can download a statically-linked version of v11 from either:
 
-- https://github.com/eozer/clang-tools-static-binaries/releases/download/master-369f669d/clang-format-11_linux-amd64
-- https://github.com/gurcei/clang-tools-static-binaries/releases/download/untagged-3be9747e6ae6df232d87/clang-format-11_linux-amd64
+-   https://github.com/eozer/clang-tools-static-binaries/releases/download/master-369f669d/clang-format-11_linux-amd64
+-   https://github.com/gurcei/clang-tools-static-binaries/releases/download/untagged-3be9747e6ae6df232d87/clang-format-11_linux-amd64
 
 Then do:
+
 ```
 sudo update-alternatives --install /usr/bin/clang-format clang-format /path/to/downloaded/clang-format-11_linux-amd64 20
 ```
@@ -67,13 +68,14 @@ You will need to prepare a mingw64 environment for windows.
 Two possible means of getting mingw64 are:
 
 ## Option 1: Installing msys2:
-- https://www.msys2.org/#installation
-- Run it from: `installpath/msys64/mingw64.exe`
+
+-   https://www.msys2.org/#installation
+-   Run it from: `installpath/msys64/mingw64.exe`
 
 ## Option 2: Install Git for Windows:
-- https://git-scm.com/download/win
-- Run "**Git Bash**", type in `mintty &` and select the "**Mingw-w64 64 bit**" option
 
+-   https://git-scm.com/download/win
+-   Run "**Git Bash**", type in `mintty &` and select the "**Mingw-w64 64 bit**" option
 
 ## Installing pre-requisites
 
@@ -88,8 +90,9 @@ If you chose the msys2 option and don't have Git, then do:
 You should then be able to build with `make`.
 
 If you want to build specific tools, you can run targets like:
-- `make bin/mega65_ftp.exe`
-- `make bin/m65.exe`
+
+-   `make bin/mega65_ftp.exe`
+-   `make bin/m65.exe`
 
 For developers that want to commit code to the repo, it's suggested you also install clang, in order to run clang-format (it presently provides clang-format v11).
 
@@ -99,8 +102,8 @@ pacman -S clang
 
 If you prefer to use a statically-linked binary instead, you can download it from either:
 
-- https://github.com/eozer/clang-tools-static-binaries/releases/download/master-369f669d/clang-format-11_windows-amd64.exe
-- https://github.com/gurcei/clang-tools-static-binaries/releases/download/untagged-3cdbf8ef732ddf71ebdf/clang-format-11_windows-amd64.exe
+-   https://github.com/eozer/clang-tools-static-binaries/releases/download/master-369f669d/clang-format-11_windows-amd64.exe
+-   https://github.com/gurcei/clang-tools-static-binaries/releases/download/untagged-3cdbf8ef732ddf71ebdf/clang-format-11_windows-amd64.exe
 
 You can then apply the enforced style by typing:
 
@@ -118,31 +121,37 @@ src/tools/fpgajtag/util.c:43:10: fatal error: libusb.h: No such file or director
 
 Then tweak this "fpgajtag/util.c" as follows:
 
-* __FROM__: `#include <libusb.h>`
-* __TO__: `#include <libusb-1.0/libusb.h>`
+-   **FROM**: `#include <libusb.h>`
+-   **TO**: `#include <libusb-1.0/libusb.h>`
 
 I'll try sort out that error at some later stage...
 
+# Building under macOS
 
-# Building under Mac OSX
+To build all of the tools currently available for macOS:
 
-Still a bit in flux at this stage, but there are a few individual make targets available already:
+```
+make allmac
+```
 
-- `make bin/m65.osx`
-- `make bin/mega65_ftp.osx`
+You can also make these individually:
 
-Other tools within the suite may or may not compile with their equivalent linux targets, haven't confirmed at this stage...
+```
+make bin/m65.osx
+make bin/mega65_ftp.osx
+make bin/romdiff.osx
+make bin/m65dbg.osx
+```
 
-For developers that want to commit code to thie repo, it's suggested that you install clang-format-11.
+Other tools within the suite may or may not compile with their equivalent Linux targets.
 
-Perhaps homebrew offers an install of this (haven't checked).
+For developers that want to commit code to the repo, it's suggested that you install clang-format-11. On a Mac, you can use [Homebrew](https://brew.sh/) to install it:
 
-Alternately, you can download statically-linked binaries from either:
+```
+brew install clang-format
+```
 
-- https://github.com/eozer/clang-tools-static-binaries/releases/download/master-369f669d/clang-format-11_macosx-amd64
-- https://github.com/gurcei/clang-tools-static-binaries/releases/download/untagged-22ae84d665118b63c4b1/clang-format-11_macosx-amd64
-
-You can then apply the enforced style by typing:
+With `clang-format` installed, you can apply the enforced style to the source files with the `format` make target:
 
 ```
 make format
@@ -155,6 +164,7 @@ Some initial effort is underway to start providing unit tests for our tooling, s
 It presently makes use of gtest release 1.10.0.
 
 To install gtest on linux run the following:
+
 ```
 sudo apt install cmake
 git clone https://github.com/google/googletest.git -b release-1.10.0
@@ -173,11 +183,13 @@ The unit test executables are housed in the 'gtest/bin' folder.
 To generate the tests and run them:
 
 #### Linux:
+
 ```
 make test
 ```
 
 #### Windows
+
 ```
 make test.exe
 ```

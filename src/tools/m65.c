@@ -246,11 +246,8 @@ int hypervisor_paused = 0;
 int screen_shot = 0;
 char *screen_shot_file = NULL;
 int screen_rows_remaining = 0;
-int screen_address = 0;
 int next_screen_address = 0;
 int screen_line_offset = 0;
-int screen_line_step = 0;
-int screen_width = 0;
 unsigned char screen_line_buffer[256];
 
 char *type_text = NULL;
@@ -890,40 +887,6 @@ char *find_serial_port()
   return device;
 }
 #endif
-
-void progress_to_RTI(void)
-{
-  int bytes = 0;
-  int match_state = 0;
-  int b = 0;
-  unsigned char buff[8192];
-  slow_write_safe(fd, "tc\r", 3);
-  while (1) {
-    b = serialport_read(fd, buff, 8192);
-    if (b > 0)
-      dump_bytes(2, "RTI search input", buff, b);
-    if (b > 0) {
-      bytes += b;
-      buff[b] = 0;
-      for (int i = 0; i < b; i++) {
-        if (match_state == 0 && buff[i] == 'R') {
-          match_state = 1;
-        }
-        else if (match_state == 1 && buff[i] == 'T') {
-          match_state = 2;
-        }
-        else if (match_state == 2 && buff[i] == 'I') {
-          slow_write_safe(fd, "\r", 1);
-          log_debug("RTI seen after %d bytes", bytes);
-          return;
-        }
-        else
-          match_state = 0;
-      }
-    }
-    fflush(stdout);
-  }
-}
 
 int type_serial_mode = 0;
 
@@ -2318,19 +2281,6 @@ int main(int argc, char **argv)
   rxbuff_detect();
   monitor_sync();
 
-  // fetch version information
-  if (unit_test_mode)
-    get_system_bitstream_version();
-
-  // let's save as soon as possible, because first
-  // loading an then saving makes no sense, right?
-  if (memsave_filename) {
-    log_info("detecting C64/C65 mode status");
-    detect_mode();
-    if (memory_save(memsave_start, memsave_end, memsave_filename))
-      do_exit(-1);
-  }
-
   if (debug_load_memory) {
     log_note("Testing load memory function.");
     unsigned char buf[65536];
@@ -2340,7 +2290,7 @@ int main(int argc, char **argv)
     mega65_poke(0xFFD3060,0x800>>0);
     mega65_poke(0xFFD3061,0x800>>8);
     mega65_poke(0xFFD3062,0x800>>16);
-    mega65_poke(0xffd3054,0x00); 
+    mega65_poke(0xffd3054,0x00);
     mega65_poke(0xffd3031,0x80); // 80 columns
     for(int i=0;i<=256;i++) {
       for(int y=0;y<25;y++) for(int x=0;x<80;x++) buf[y*80+x]=x+i;
@@ -2406,6 +2356,19 @@ int main(int argc, char **argv)
       sleep(4);
     }
     monitor_sync();
+  }
+
+  // fetch version information
+  if (unit_test_mode)
+    get_system_bitstream_version();
+
+  // let's save as soon as possible, because first
+  // loading an then saving makes no sense, right?
+  if (memsave_filename) {
+    log_info("detecting C64/C65 mode status");
+    detect_mode();
+    if (memory_save(memsave_start, memsave_end, memsave_filename))
+      do_exit(-1);
   }
 
   if (virtual_f011)
@@ -2567,7 +2530,7 @@ int main(int argc, char **argv)
     mega65_poke(0xffd3c0el, mega65_peek(0xffd3c0el) | 0x80);
     mega65_poke(0xffd3d0el, mega65_peek(0xffd3d0el) | 0x80);
   }
-  if (ntsc_mode) {
+  else if (ntsc_mode) {
     log_info("switching to NTSC mode");
     mega65_poke(0xFFD306fL, 0x87);
     mega65_poke(0xFFD3072L, 0x18);
@@ -2582,11 +2545,12 @@ int main(int argc, char **argv)
     mega65_poke(0xffd3c0el, mega65_peek(0xffd3c0el) & 0x7f);
     mega65_poke(0xffd3d0el, mega65_peek(0xffd3d0el) & 0x7f);
   }
+
   if (ethernet_video) {
     log_note("enabling ethernet video");
     mega65_poke(0xffd36e1, 0x29);
   }
-  if (ethernet_cpulog) {
+  else if (ethernet_cpulog) {
     log_note("enabling ethernet cpulog");
     mega65_poke(0xffd36e1, 0x05);
   }
@@ -2794,85 +2758,85 @@ int main(int argc, char **argv)
 
   if (filename) {
     log_note("loading file '%s'", filename);
+    /*
+        unsigned int load_routine_addr = 0xf664;
 
-    unsigned int load_routine_addr = 0xf664;
+        int filename_matches = 0;
+        int first_time = 1;
 
-    int filename_matches = 0;
-    int first_time = 1;
-
-    // We REALLY need to know which mode we are in for LOAD
-    while (do_go64 && (!saw_c64_mode)) {
-      detect_mode();
-      if (!saw_c64_mode) {
-        log_crit("in C65 mode, but expected C64 mode");
-        exit(-1);
-      }
-    }
-    while ((!do_go64) && (!saw_c65_mode)) {
-      detect_mode();
-      if (!saw_c65_mode) {
-        log_crit("should be in C65 mode, but don't seem to be");
-        exit(-1);
-      }
-    }
-
-    while (!filename_matches) {
-
-      if (saw_c64_mode) {
-        // Assume LOAD vector in C64 mode is fixed
-        load_routine_addr = 0xf4a5;
-        log_info("assuming LOAD routine at $F4A5 for C64 mode");
-      }
-      else {
-        unsigned char vectorbuff[2];
-        fetch_ram(0x3FFD6, 2, vectorbuff);
-        load_routine_addr = vectorbuff[0] + (vectorbuff[1] << 8);
-        log_info("LOAD vector from ROM is $%04x", load_routine_addr);
-      }
-      // Type LOAD command and set breakpoint to catch the ROM routine
-      // when it executes.
-      breakpoint_set(load_routine_addr);
-      if (first_time) {
-        if (saw_c64_mode) {
-          // What we stuff in the keyboard buffer here is actually
-          // not important for ,1 loading.  That gets handled in the loading
-          // logic.  But we reflect it here, so that it doesn't confuse people.
-          if (comma_eight_comma_one)
-            stuff_keybuffer("Lo\"!\",8,1\r");
-          else
-            stuff_keybuffer("LOAD\"!\",8\r");
+        // We REALLY need to know which mode we are in for LOAD
+        while (do_go64 && (!saw_c64_mode)) {
+          detect_mode();
+          if (!saw_c64_mode) {
+            log_crit("in C65 mode, but expected C64 mode");
+            exit(-1);
+          }
         }
-        else {
-          // Really wait for C65 to get to READY prompt
-          stuff_keybuffer("DLo\"!\r");
+        while ((!do_go64) && (!saw_c65_mode)) {
+          detect_mode();
+          if (!saw_c65_mode) {
+            log_crit("should be in C65 mode, but don't seem to be");
+            exit(-1);
+          }
         }
-      }
-      first_time = 0;
-      breakpoint_wait();
 
-      int filename_addr = 1;
-      unsigned char filename_len = mega65_peek(0xb7);
-      if (saw_c64_mode)
-        filename_addr = mega65_peek(0xbb) + mega65_peek(0xbc) * 256;
-      else {
-        filename_addr = mega65_peek(0xbb) + mega65_peek(0xbc) * 256 + mega65_peek(0xbe) * 65536;
-      }
-      char requested_name[256];
-      fetch_ram(filename_addr, filename_len, (unsigned char *)requested_name);
-      requested_name[filename_len] = 0;
-      log_info("requested file is '%s' (len=%d)", requested_name, filename_len);
-      // If we caught the boot load request, then feed the DLOAD command again
-      if (!strcmp(requested_name, "0:AUTOBOOT.C65*"))
-        first_time = 1;
+        while (!filename_matches) {
 
-      if (!strcmp(requested_name, "!"))
-        break;
-      if (!strcmp(requested_name, "0:!"))
-        break;
+          if (saw_c64_mode) {
+            // Assume LOAD vector in C64 mode is fixed
+            load_routine_addr = 0xf4a5;
+            log_info("assuming LOAD routine at $F4A5 for C64 mode");
+          }
+          else {
+            unsigned char vectorbuff[2];
+            fetch_ram(0x3FFD6, 2, vectorbuff);
+            load_routine_addr = vectorbuff[0] + (vectorbuff[1] << 8);
+            log_info("LOAD vector from ROM is $%04x", load_routine_addr);
+          }
+          // Type LOAD command and set breakpoint to catch the ROM routine
+          // when it executes.
+          breakpoint_set(load_routine_addr);
+          if (first_time) {
+            if (saw_c64_mode) {
+              // What we stuff in the keyboard buffer here is actually
+              // not important for ,1 loading.  That gets handled in the loading
+              // logic.  But we reflect it here, so that it doesn't confuse people.
+              if (comma_eight_comma_one)
+                stuff_keybuffer("Lo\"!\",8,1\r");
+              else
+                stuff_keybuffer("LOAD\"!\",8\r");
+            }
+            else {
+              // Really wait for C65 to get to READY prompt
+              stuff_keybuffer("DLo\"!\r");
+            }
+          }
+          first_time = 0;
+          breakpoint_wait();
 
-      start_cpu();
-    }
+          int filename_addr = 1;
+          unsigned char filename_len = mega65_peek(0xb7);
+          if (saw_c64_mode)
+            filename_addr = mega65_peek(0xbb) + mega65_peek(0xbc) * 256;
+          else {
+            filename_addr = mega65_peek(0xbb) + mega65_peek(0xbc) * 256 + mega65_peek(0xbe) * 65536;
+          }
+          char requested_name[256];
+          fetch_ram(filename_addr, filename_len, (unsigned char *)requested_name);
+          requested_name[filename_len] = 0;
+          log_info("requested file is '%s' (len=%d)", requested_name, filename_len);
+          // If we caught the boot load request, then feed the DLOAD command again
+          if (!strcmp(requested_name, "0:AUTOBOOT.C65*"))
+            first_time = 1;
 
+          if (!strcmp(requested_name, "!"))
+            break;
+          if (!strcmp(requested_name, "0:!"))
+            break;
+
+          start_cpu();
+        }
+    */
     // We can ignore the filename.
     // Next we just load the file
 
@@ -2884,9 +2848,15 @@ int main(int argc, char **argv)
       exit(-1);
     }
     else {
-      char cmd[1024];
+      char buffer[40];
       int load_addr = fgetc(f);
       load_addr |= fgetc(f) << 8;
+
+      // give some user feedback
+      snprintf(buffer, 40, "REM M65 INJECTING AT $%04X:\r", load_addr);
+      stuff_keybuffer(buffer);
+      usleep(20000);
+      real_stop_cpu();
       if ((load_addr == 0x5350) || (load_addr == 0x5352)) {
         // It's probably a SID file
 
@@ -3001,8 +2971,13 @@ int main(int argc, char **argv)
           load_addr = 0x2001;
         log_info("forcing load address to $%04X", load_addr);
       }
-      else
+      else {
+        if (saw_c64_mode && load_addr == 0x2001)
+          log_warn("loading BASIC65 PRG in C64 mode!");
+        else if (!saw_c64_mode && load_addr == 0x0801)
+          log_warn("loading C64 BASIC PRG in C65 mode!");
         log_info("load address is $%04x", load_addr);
+      }
 
       unsigned char buf[32768];
       int max_bytes = 32768;
@@ -3127,18 +3102,20 @@ int main(int argc, char **argv)
       // jump to end of load routine, resume CPU at a CLC, RTS
       monitor_sync();
 
-      // Clear keyboard input buffer
-      if (saw_c64_mode)
-        sprintf(cmd, "sc6 0\r");
-      else
-        sprintf(cmd, "sd0 0\r");
-      slow_write(fd, cmd, strlen(cmd));
-      monitor_sync();
+      /*
+            // Clear keyboard input buffer
+            if (saw_c64_mode)
+              sprintf(cmd, "sc6 0\r");
+            else
+              sprintf(cmd, "sd0 0\r");
+            slow_write(fd, cmd, strlen(cmd));
+            monitor_sync();
 
-      // Remove breakpoint
-      sprintf(cmd, "b\r");
-      slow_write(fd, cmd, strlen(cmd));
-      monitor_sync();
+            // Remove breakpoint
+            sprintf(cmd, "b\r");
+            slow_write(fd, cmd, strlen(cmd));
+            monitor_sync();
+      */
 
       // Set end of memory pointer
       {
@@ -3149,28 +3126,28 @@ int main(int argc, char **argv)
         load_addr_bytes[0] = load_addr;
         load_addr_bytes[1] = load_addr >> 8;
         push_ram(top_of_mem_ptr_addr, 2, load_addr_bytes);
-        log_info("storing end of program pointer at $%x", top_of_mem_ptr_addr);
+        log_info("storing end of program pointer $%04x at $%02x", load_addr, top_of_mem_ptr_addr);
       }
+      /*
+            // We need to set X and Y to load address before
+            // returning: LDX #$ll / LDY #$yy / CLC / RTS
+            unsigned char membuf[6];
+            fetch_ram(0x380l, 6, membuf);
 
-      // We need to set X and Y to load address before
-      // returning: LDX #$ll / LDY #$yy / CLC / RTS
-      unsigned char membuf[6];
-      fetch_ram(0x380l, 6, membuf);
+            sprintf(cmd, "s380 a2 %x a0 %x 18 60\r", load_addr & 0xff, (load_addr >> 8) & 0xff);
+            log_info("returning top of load address = $%04X", load_addr);
+            slow_write(fd, cmd, strlen(cmd));
+            monitor_sync();
 
-      sprintf(cmd, "s380 a2 %x a0 %x 18 60\r", load_addr & 0xff, (load_addr >> 8) & 0xff);
-      log_info("returning top of load address = $%04X", load_addr);
-      slow_write(fd, cmd, strlen(cmd));
-      monitor_sync();
+            if ((!is_sid_tune) || (!do_run))
+              sprintf(cmd, "g0380\r");
+            else
+              sprintf(cmd, "g0400\r");
+            slow_write(fd, cmd, strlen(cmd));
+            monitor_sync();
 
-      if ((!is_sid_tune) || (!do_run))
-        sprintf(cmd, "g0380\r");
-      else
-        sprintf(cmd, "g0400\r");
-      slow_write(fd, cmd, strlen(cmd));
-      monitor_sync();
-
-      push_ram(0x380l, 6, membuf);
-
+            push_ram(0x380l, 6, membuf);
+      */
       if (!halt) {
         start_cpu();
       }

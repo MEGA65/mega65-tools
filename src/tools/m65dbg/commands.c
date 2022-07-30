@@ -9,11 +9,14 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include "m65common.h"
 #include "commands.h"
 #include "serial.h"
 #include "gs4510.h"
 #include "screen_shot.h"
-#include "m65.h"
+
+char pathBitstream[256] = "";
+char devSerial[100] = "/dev/ttyUSB1";
 
 int get_sym_value(char *token);
 
@@ -1974,7 +1977,7 @@ int oneShotAssembly(int *paddr, char *strCommand)
 
 void cmdAssemble(void)
 {
-  int addr;
+  int addr = 0;
   char str[128] = { 0 };
   char *token = strtok(NULL, " ");
   if (token != NULL) {
@@ -3175,8 +3178,6 @@ void cmdSearch(void)
   }
 }
 
-extern int fd;
-
 void cmdScreenshot(void)
 {
   int orig_fcntl = fcntl(fd, F_GETFL, NULL);
@@ -3186,7 +3187,8 @@ void cmdScreenshot(void)
   fcntl(fd, F_SETFL, orig_fcntl);
 }
 
-extern int type_text_cr;
+/** TODO: refactor do_type_text out of m65.c **/
+/** extern **/ int type_text_cr = 0;
 void cmdType(void)
 {
   char *tok = strtok(NULL, "\0");
@@ -3195,17 +3197,13 @@ void cmdType(void)
 
   if (tok != NULL) {
     type_text_cr = 1;
-    do_type_text(tok);
+    /** TODO: do_type_text(tok); */
   }
   else {
-    do_type_text("-");
+    /** TODO: do_type_text("-"); */
   }
   fcntl(fd, F_SETFL, orig_fcntl);
 }
-
-extern char pathBitstream[];
-int do_ftp(char *bitstream);
-extern char devSerial[];
 
 void cmdFtp(void)
 {

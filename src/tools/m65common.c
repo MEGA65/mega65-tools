@@ -475,7 +475,6 @@ int load_file(char *filename, int load_addr, int patchHyppo)
       }
     }
     log_debug("read to $%04x (%d bytes)", load_addr, b);
-    fflush(stdout);
     // load_addr=0x400;
     // XXX - The l command requires the address-1, and doesn't cross 64KB boundaries.
     // Thus writing to $xxx0000 requires adding 64K to fix the actual load address
@@ -596,7 +595,8 @@ int dump_bytes(int col, char *msg, unsigned char *bytes, int length)
 int stuff_keybuffer(char *s)
 {
   int buffer_addr = 0x277;
-  int buffer_len_addr = 0xc6;
+  int buffer_len_addr = 0xc6, i;
+  char cmd[1024], *pos;
 
   if (saw_c65_mode) {
     buffer_addr = 0x2b0;
@@ -604,8 +604,7 @@ int stuff_keybuffer(char *s)
   }
 
   log_concat(NULL);
-  log_concat("Injecting string into key buffer at ");
-  log_concat("$%04X : ", buffer_addr);
+  log_concat("injecting string into key buffer at $%04X: ");
   for (int i = 0; s[i]; i++) {
     if (s[i] >= ' ' && s[i] < 0x7c)
       log_concat("%c", s[i]);
@@ -614,10 +613,24 @@ int stuff_keybuffer(char *s)
   }
   log_debug(NULL);
 
-  char cmd[1024];
-  snprintf(cmd, 1024, "s%x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\rs%x %d\r", buffer_addr, s[0], s[1], s[2], s[3],
-      s[4], s[5], s[6], s[7], s[8], s[9], buffer_len_addr, (int)strlen(s));
-  return slow_write(fd, cmd, strlen(cmd));
+  snprintf(cmd, 1024, "s%x 0\r", buffer_len_addr);
+  slow_write(fd, cmd, strlen(cmd));
+  usleep(10000);
+
+  pos = s;
+  while (*pos) {
+    snprintf(cmd, 1024, "s%04x", buffer_addr);
+    for (i = 0; i < 10 && pos[i]; i++) {
+      snprintf(cmd + 5 + i * 3, 6, " %02x", toupper(pos[i]));
+    }
+    log_debug("stuff_keybuffer: '%s' %d", cmd, i);
+    snprintf(cmd + 5 + i * 3, 40, "\rs%x %d\r", buffer_len_addr, i);
+    slow_write(fd, cmd, strlen(cmd));
+    if (i == 10)
+      usleep(25000);
+    pos = pos + i;
+  }
+  return 0;
 }
 
 int read_and_print(PORT_TYPE fd)
@@ -1066,8 +1079,6 @@ int fetch_ram_cacheable(unsigned long address, unsigned int count, unsigned char
   for (int i = 0; i < count; i++) {
     if (!ram_cache_valids[address + i]) {
       // Cache not valid here -- so read some data
-      printf(".");
-      fflush(stdout);
       //      printf("Fetching $%08x for cache.\n",address);
       fetch_ram(address, 256, &ram_cache[address]);
       for (int j = 0; j < 256; j++)
@@ -1846,4 +1857,38 @@ int switch_to_c64mode(void)
     retries++;
   }
   return saw_c64_mode == 0;
+}
+
+void progress_to_RTI(void)
+{
+  /* int bytes = 0; */
+  int match_state = 0;
+  int b = 0;
+  unsigned char buff[8192];
+  slow_write_safe(fd, "tc\r", 3);
+  while (1) {
+    b = serialport_read(fd, buff, 8192);
+    if (b > 0)
+      dump_bytes(2, "RTI search input", buff, b);
+    if (b > 0) {
+      /* bytes += b; */
+      buff[b] = 0;
+      for (int i = 0; i < b; i++) {
+        if (match_state == 0 && buff[i] == 'R') {
+          match_state = 1;
+        }
+        else if (match_state == 1 && buff[i] == 'T') {
+          match_state = 2;
+        }
+        else if (match_state == 2 && buff[i] == 'I') {
+          slow_write_safe(fd, "\r", 1);
+          /* log_debug("RTI seen after %d bytes", bytes); */
+          return;
+        }
+        else
+          match_state = 0;
+      }
+    }
+    fflush(stdout);
+  }
 }

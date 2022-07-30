@@ -1,8 +1,5 @@
-/* vim: set expandtab shiftwidth=2 tabstop=2: */
-
-/**
- * serial.h
- */
+#ifndef SERIAL_H
+#define SERIAL_H
 
 #include <stdbool.h>
 
@@ -18,3 +15,9 @@ void serialWrite(char *string);
 bool serialRead(char *buf, int bufsize);
 void serialBaud(bool fastmode);
 void serialFlush(void);
+
+/** TODO: m65common defines this, I guess: extern int fd; **/
+
+extern int do_ftp(char *bitstream);
+
+#endif

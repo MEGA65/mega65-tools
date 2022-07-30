@@ -1,5 +1,8 @@
 /* vim: set expandtab shiftwidth=2 tabstop=2: */
 
+#ifndef GS4510_H
+#define GS4510_H
+
 extern char *instruction_lut[];
 
 typedef struct {
@@ -31,3 +34,5 @@ typedef enum {
 
 extern mode_list mode_lut[];
 extern type_opcode_mode opcode_mode[];
+
+#endif

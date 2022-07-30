@@ -1,5 +1,8 @@
 /* vim: set expandtab shiftwidth=2 tabstop=2: */
 
+#ifndef COMMANDS_H
+#define COMMANDS_H
+
 #include <stdbool.h>
 
 void listSearch(void);
@@ -61,6 +64,9 @@ int isValidMnemonic(char *str);
 
 #define BUFSIZE 4096
 
+extern char pathBitstream[];
+extern char devSerial[];
+
 extern char outbuf[];
 extern char inbuf[];
 extern bool ctrlcflag;
@@ -105,3 +111,7 @@ typedef struct we {
 extern type_command_details command_details[];
 extern type_symmap_entry *lstSymMap;
 extern type_watch_entry *lstWatches;
+
+extern bool fastmode;
+
+#endif

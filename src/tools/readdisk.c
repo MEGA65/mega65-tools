@@ -411,40 +411,6 @@ void show_hyppo_report(void)
   printf("SYSPART start = $%02x%02x%02x%02x\n", syspart_buffer[3], syspart_buffer[2], syspart_buffer[1], syspart_buffer[0]);
 }
 
-void progress_to_RTI(void)
-{
-  int bytes = 0;
-  int match_state = 0;
-  int b = 0;
-  unsigned char buff[8192];
-  slow_write_safe(fd, "tc\r", 3);
-  while (1) {
-    b = serialport_read(fd, buff, 8192);
-    if (b > 0)
-      dump_bytes(2, "RTI search input", buff, b);
-    if (b > 0) {
-      bytes += b;
-      buff[b] = 0;
-      for (int i = 0; i < b; i++) {
-        if (match_state == 0 && buff[i] == 'R') {
-          match_state = 1;
-        }
-        else if (match_state == 1 && buff[i] == 'T') {
-          match_state = 2;
-        }
-        else if (match_state == 2 && buff[i] == 'I') {
-          slow_write_safe(fd, "\r", 1);
-          log_debug("RTI seen after %d bytes", bytes);
-          return;
-        }
-        else
-          match_state = 0;
-      }
-    }
-    fflush(stdout);
-  }
-}
-
 int type_serial_mode = 0;
 
 void do_type_key(unsigned char key)

@@ -24,4 +24,11 @@ int do_screen_shot(char *userfilename);
  */
 void get_video_state(void);
 
+/*
+ * print_screencode()
+ *
+ * convert and print a single CBM screen code to the ANSI terminal.
+ */
+void print_screencode(unsigned char c, int upper_case);
+
 #endif /* SCREEN_SHOT_H */

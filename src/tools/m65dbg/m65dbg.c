@@ -5,21 +5,22 @@
  **/
 
 #define _BSD_SOURCE _BSD_SOURCE
+/** (stdio.h must come beforce readline) **/
 #include <stdio.h>
-#include <string.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
-#include "serial.h"
 #include "commands.h"
+#include "screen_shot.h"
+#include "serial.h"
 
 #define VERSION "v1.00"
 
 char *strInput = NULL;
-char pathBitstream[256] = "";
-char devSerial[100] = "/dev/ttyUSB1";
 
 /**
  * retrieves a command via user input and places it in global strInput
@@ -28,8 +29,6 @@ void get_command(void)
 {
   strInput = readline("<dbg>");
 }
-
-extern bool fastmode;
 
 void parse_command(void)
 {
