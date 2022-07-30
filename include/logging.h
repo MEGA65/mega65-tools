@@ -2,6 +2,7 @@
 #define LOG_H
 
 // log level defines
+#define LOG_DISABLE -1
 #define LOG_CRIT 0
 #define LOG_ERROR 1
 #define LOG_WARN 2

@@ -28,10 +28,10 @@ size_t do_serial_port_read(int fd, uint8_t *buffer, size_t size, const char *fun
 int do_serial_port_write(int fd, uint8_t *buffer, size_t size, const char *func, const char *file, const int line);
 #endif
 
-#define serialport_read(A, B, C) do_serial_port_read(A, B, C, __func__, __FILE__, __LINE__)
-#define serialport_write(A, B, C) do_serial_port_write(A, B, C, __func__, __FILE__, __LINE__)
-#define slow_write(A, B, C) do_slow_write(A, B, C, __func__, __FILE__, __LINE__)
-#define slow_write_safe(A, B, C) do_slow_write_safe(A, B, C, __func__, __FILE__, __LINE__)
+#define serialport_read(fdport, buffer, size) do_serial_port_read(fdport, buffer, size, __func__, __FILE__, __LINE__)
+#define serialport_write(fdport, buffer, size) do_serial_port_write(fdport, buffer, size, __func__, __FILE__, __LINE__)
+#define slow_write(fdport, buffer, size) do_slow_write(fdport, buffer, size, __func__, __FILE__, __LINE__)
+#define slow_write_safe(fdport, buffer, size) do_slow_write_safe(fdport, buffer, size, __func__, __FILE__, __LINE__)
 
 #define FAT32_MIN_END_OF_CLUSTER_MARKER 0xffffff8
 
