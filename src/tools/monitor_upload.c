@@ -56,9 +56,9 @@ static const int B4000000 = 4000000;
 time_t start_time = 0;
 long long start_usec = 0;
 
-int upload_file(char* name, char* dest_name);
+int upload_file(char *name, char *dest_name);
 int sdhc_check(void);
-int read_sector(const unsigned int sector_number, unsigned char* buffer, int noCacheP);
+int read_sector(const unsigned int sector_number, unsigned char *buffer, int noCacheP);
 
 int osk_enable = 0;
 
@@ -76,10 +76,10 @@ unsigned char viciv_regs[0x100];
 int mode_report = 0;
 
 int serial_speed = 2000000;
-char* serial_port = "/dev/ttyUSB1";
-char* bitstream = NULL;
+char *serial_port = "/dev/ttyUSB1";
+char *bitstream = NULL;
 
-unsigned char* sd_read_buffer = NULL;
+unsigned char *sd_read_buffer = NULL;
 int sd_read_offset = 0;
 
 // From os.c in serval-dna
@@ -122,7 +122,7 @@ void usage(void)
   exit(-3);
 }
 
-int slow_write(int fd, char* d, int l, int preWait)
+int slow_write(int fd, char *d, int l, int preWait)
 {
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
@@ -180,13 +180,13 @@ int restart_hyppo(void)
   return 0;
 }
 
-void print_spaces(FILE* f, int col)
+void print_spaces(FILE *f, int col)
 {
   for (int i = 0; i < col; i++)
     fprintf(f, " ");
 }
 
-int dump_bytes(int col, char* msg, unsigned char* bytes, int length)
+int dump_bytes(int col, char *msg, unsigned char *bytes, int length)
 {
   print_spaces(stderr, col);
   fprintf(stderr, "%s:\n", msg);
@@ -201,7 +201,7 @@ int dump_bytes(int col, char* msg, unsigned char* bytes, int length)
   return 0;
 }
 
-int process_line(char* line, int live)
+int process_line(char *line, int live)
 {
   //  printf("[%s]\n",line);
   if (!live)
@@ -336,9 +336,9 @@ void set_speed(int fd, int serial_speed)
 
 int queued_command_count = 0;
 #define MAX_QUEUED_COMMANDS 64
-char* queued_commands[MAX_QUEUED_COMMANDS];
+char *queued_commands[MAX_QUEUED_COMMANDS];
 
-int queue_command(char* c)
+int queue_command(char *c)
 {
   if (queued_command_count < MAX_QUEUED_COMMANDS)
     queued_commands[queued_command_count++] = c;
@@ -348,13 +348,13 @@ int queue_command(char* c)
   return 0;
 }
 
-int execute_command(char* cmd)
+int execute_command(char *cmd)
 {
   printf("'%s'\n", cmd);
   return 0;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   start_time = time(0);
   start_usec = gettime_us();
@@ -410,7 +410,7 @@ int main(int argc, char** argv)
       offset--;
     snprintf(latency_timer, 1024, "/sys/bus/usb-serial/devices/%s/latency_timer", &serial_port[offset]);
     int old_latency = 999;
-    FILE* f = fopen(latency_timer, "r");
+    FILE *f = fopen(latency_timer, "r");
     if (f) {
       fscanf(f, "%d", &old_latency);
       fclose(f);
@@ -453,7 +453,7 @@ int main(int argc, char** argv)
     return 0;
   }
   else {
-    char* cmd = NULL;
+    char *cmd = NULL;
     while ((cmd = readline("MEGA65 SD-card> ")) != NULL) {
       execute_command(cmd);
     }
@@ -544,7 +544,7 @@ unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
 unsigned int sector_cache_sectors[SECTOR_CACHE_SIZE];
 
 // XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
-int read_sector(const unsigned int sector_number, unsigned char* buffer, int noCacheP)
+int read_sector(const unsigned int sector_number, unsigned char *buffer, int noCacheP)
 {
   int retVal = 0;
   do {
@@ -624,7 +624,7 @@ int read_sector(const unsigned int sector_number, unsigned char* buffer, int noC
 
 unsigned char verify[512];
 
-int write_sector(const unsigned int sector_number, unsigned char* buffer)
+int write_sector(const unsigned int sector_number, unsigned char *buffer)
 {
   int retVal = 0;
   do {
@@ -738,7 +738,7 @@ int open_file_system(void)
     }
 
     for (int i = 0; i < 4; i++) {
-      unsigned char* part_ent = &mbr[0x1be + (i * 0x10)];
+      unsigned char *part_ent = &mbr[0x1be + (i * 0x10)];
       //      dump_bytes(0,"partent",part_ent,16);
       if (part_ent[4] == 0x0c || part_ent[4] == 0x0b) {
         partition_start = part_ent[8] + (part_ent[9] << 8) + (part_ent[10] << 16) + (part_ent[11] << 24);
@@ -834,7 +834,7 @@ int dir_cluster = 0;
 int dir_sector_in_cluster = 0;
 int dir_sector_offset = 0;
 
-int fat_opendir(char* path)
+int fat_opendir(char *path)
 {
   int retVal = 0;
   do {
@@ -854,7 +854,7 @@ int fat_opendir(char* path)
   return retVal;
 }
 
-int fat_readdir(struct dirent* d)
+int fat_readdir(struct dirent *d)
 {
   int retVal = 0;
   do {
@@ -1135,7 +1135,7 @@ unsigned int find_free_cluster(unsigned int first_cluster)
   return retVal;
 }
 
-int upload_file(char* name, char* dest_name)
+int upload_file(char *name, char *dest_name)
 {
   struct dirent de;
   int retVal = 0;
@@ -1208,7 +1208,7 @@ int upload_file(char* name, char* dest_name)
 
           // Store create time and date
           time_t t = time(0);
-          struct tm* tm = localtime(&t);
+          struct tm *tm = localtime(&t);
           dir[0xe] = (tm->tm_sec >> 1) & 0x1F; // 2 second resolution
           dir[0xe] |= (tm->tm_min & 0x7) << 5;
           dir[0xf] = (tm->tm_min & 0x3) >> 3;
@@ -1286,7 +1286,7 @@ int upload_file(char* name, char* dest_name)
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
     unsigned int sector_number;
-    FILE* f = fopen(name, "r");
+    FILE *f = fopen(name, "r");
 
     if (!f) {
       printf("ERROR: Could not open file '%s' for reading.\n", name);

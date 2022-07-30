@@ -67,7 +67,7 @@ int process_waiting(PORT_TYPE fd)
   return 0;
 }
 
-int process_line(char* line, int live)
+int process_line(char *line, int live)
 {
   int pc, a, x, y, sp, p;
   //   printf("[%s]\n",line);
@@ -283,7 +283,7 @@ int process_line(char* line, int live)
       saw_c65_mode = 1;
       if ((!do_go64) && filename && not_already_loaded) {
         printf("XXX Trying to load from C65 mode\n");
-        char* cmd;
+        char *cmd;
         cmd = "bf664\r";
         slow_write(fd, cmd, strlen(cmd));
         stuff_keybuffer("DLo\"!\r");
@@ -325,7 +325,7 @@ int process_line(char* line, int live)
       || (!strcmp(line, " :000042C 2A 2A 2A 2A 20 0D 05 07 01 36 35 20 0D 05 07 01"))
       || (!strcmp(line, ":0000042C:2A2A2A2A200D0507013635200D050701"))) {
     // C64 mode BASIC -- set LOAD trap, and then issue LOAD command
-    char* cmd;
+    char *cmd;
     if (filename && not_already_loaded) {
       cmd = "bf4a5\r";
       saw_c64_mode = 1;

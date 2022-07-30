@@ -48,7 +48,7 @@ SOFTWARE.
 #include <string.h>
 #include <unistd.h>
 
-extern char* serialport;
+extern char *serialport;
 
 #include <windows.h>
 #include <setupapi.h>
@@ -77,10 +77,10 @@ int listComPorts(void)
   FOR_EACH(objDevice, colDevices, NULL)
   {
 
-    char* name = NULL;
-    char* pnpid = NULL;
-    char* manu = NULL;
-    char* match;
+    char *name = NULL;
+    char *pnpid = NULL;
+    char *manu = NULL;
+    char *match;
 
     dhGetValue(L"%s", &name, objDevice, L".Name");
     dhGetValue(L"%s", &pnpid, objDevice, L".PnPDeviceID");
@@ -89,7 +89,7 @@ int listComPorts(void)
       // 'Manufacturuer' can be null, so only get it if we need it
       dhGetValue(L"%s", &manu, objDevice, L".Manufacturer");
       port_count++;
-      char* comname = strtok(match, "()");
+      char *comname = strtok(match, "()");
 
       if (!strcmp(manu, "FTDI")) {
         if (!serialport) {

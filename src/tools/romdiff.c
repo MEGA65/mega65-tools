@@ -46,7 +46,7 @@ int next_pos[FILE_SIZE];
 unsigned char tokens[FILE_SIZE][128];
 int token_lens[FILE_SIZE];
 
-int decode_diff(unsigned char* ref, unsigned char* diff, int diff_len, unsigned char* out)
+int decode_diff(unsigned char *ref, unsigned char *diff, int diff_len, unsigned char *out)
 {
   int out_ofs = 0;
   for (int ofs = 0; ofs < diff_len;) {
@@ -133,7 +133,7 @@ int decode_diff(unsigned char* ref, unsigned char* diff, int diff_len, unsigned 
     return 0;
 }
 
-char* describe_origin(unsigned char o)
+char *describe_origin(unsigned char o)
 {
   switch (o) {
   case OUT_LITERAL1:
@@ -150,10 +150,10 @@ char* describe_origin(unsigned char o)
 }
 
 char normalised[256];
-char* normalise(char* s)
+char *normalise(char *s)
 {
   int ofs = 0;
-  for (int i = 0; s[i] && ofs<255; i++) {
+  for (int i = 0; s[i] && ofs < 255; i++) {
     if (s[i] == '/' || s[i] == '\\')
       ofs = 0;
     else {
@@ -164,10 +164,10 @@ char* normalise(char* s)
   return normalised;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc == 3) {
-    FILE* f = fopen(argv[1], "rb");
+    FILE *f = fopen(argv[1], "rb");
 
     if (!f) {
       fprintf(stderr, "ERROR: Could not open diff file '%s'\n", argv[1]);
@@ -177,9 +177,9 @@ int main(int argc, char** argv)
     diff_len = fread(diff, 1, 4 * FILE_SIZE, f);
     fclose(f);
 
-    char* reffile = (char*)&diff[32];
+    char *reffile = (char *)&diff[32];
 
-    if (strncmp("MEGA65ROMPATCH01", (char*)diff, 16)) {
+    if (strncmp("MEGA65ROMPATCH01", (char *)diff, 16)) {
       fprintf(stderr, "ERROR: Input file is not a MEGA65 ROM Diff File\n");
       exit(-1);
     }
@@ -244,7 +244,7 @@ int main(int argc, char** argv)
     token_lens[i] = 0;
   }
 
-  FILE* f;
+  FILE *f;
 
   f = fopen(argv[1], "rb");
   if (!f) {
@@ -448,9 +448,9 @@ int main(int argc, char** argv)
   // Write header and reference file name
   unsigned char header[256];
   bzero(header, 256);
-  snprintf((char*)header, 32, "MEGA65ROMPATCH01.00");
-  snprintf((char*)&header[32], 64, "%s", normalise(argv[1]));
-  snprintf((char*)&header[32 + 64], 160, "%s", normalise(argv[2]));
+  snprintf((char *)header, 32, "MEGA65ROMPATCH01.00");
+  snprintf((char *)&header[32], 64, "%s", normalise(argv[1]));
+  snprintf((char *)&header[32 + 64], 160, "%s", normalise(argv[2]));
   fwrite(header, 256, 1, f);
   // Write diff
   fwrite(diff, diff_len, 1, f);

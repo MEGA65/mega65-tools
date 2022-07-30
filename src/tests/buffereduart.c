@@ -117,7 +117,7 @@ void plot_pixel(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 160;
   while (*msg) {
@@ -306,7 +306,7 @@ unsigned char ascii_to_petscii(unsigned char c)
 unsigned char num_uarts = 0;
 unsigned char colour = 1, saved_char, saved_colour;
 
-void serial_write(char* s)
+void serial_write(char *s)
 {
   while (*s) {
     POKE(0xD0E3, *s);

@@ -97,7 +97,7 @@ void graphics_mode(void)
   POKE(0xD021, 0);
 }
 
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg);
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg);
 
 unsigned short pixel_addr;
 unsigned char pixel_temp;
@@ -118,7 +118,7 @@ void plot_pixel_direct(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 80;
   while (*msg) {
@@ -136,7 +136,7 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x + y * 80;
   while (*msg) {
@@ -409,8 +409,8 @@ void draw_line(int x1, int y1, int x2, int y2, unsigned char colour)
   }
 }
 
-unsigned int x,y;
-long x0, y0, x2, y2,xx,yy;
+unsigned int x, y;
+long x0, y0, x2, y2, xx, yy;
 unsigned char colour;
 
 /*
@@ -418,7 +418,14 @@ unsigned char colour;
   We thus need to read the penultimate 4 bytes of the result, and shift them down 4 bits, and take the
   lower 4 bits of the highest byte of result and put them in the upper 4 bits of the result
 */
-#define FASTMULT(RESULT,A,B) { (*(unsigned long *)0xd770)=A; (*(unsigned long *)0xd774)=B; RESULT=(*(unsigned long *)0xd76b); RESULT>>=4; RESULT|=((unsigned long)(*(unsigned char *)0xd76f)<<28); }
+#define FASTMULT(RESULT, A, B)                                                                                              \
+  {                                                                                                                         \
+    (*(unsigned long *)0xd770) = A;                                                                                         \
+    (*(unsigned long *)0xd774) = B;                                                                                         \
+    RESULT = (*(unsigned long *)0xd76b);                                                                                    \
+    RESULT >>= 4;                                                                                                           \
+    RESULT |= ((unsigned long)(*(unsigned char *)0xd76f) << 28);                                                            \
+  }
 
 void main(void)
 {
@@ -460,38 +467,36 @@ void main(void)
   // Y = 0xF0000000 -- 0x0FFFFFFF
   // and X step will be 0x40000000 / 3355443
   // and Y step will be half that = 1677721
-  x0 = 0xe0000000L; 
-  for(x=0;x<320;x++) {
-    y0=0xf0000000L;
-    for(y=0;y<200;y++) {
+  x0 = 0xe0000000L;
+  for (x = 0; x < 320; x++) {
+    y0 = 0xf0000000L;
+    for (y = 0; y < 200; y++) {
 
-      printf("x0=0x%lx, y0=0x%lx\n",x0,y0);
-            
-      colour=0;
-      xx=0; yy=0;
+      printf("x0=0x%lx, y0=0x%lx\n", x0, y0);
+
+      colour = 0;
+      xx = 0;
+      yy = 0;
       if (1) {
-	while( (x2 + y2 < 0x40000000L )
-	      && (colour < 255))
-	  {
-	    printf("  0x%lx x 0x%lx = ",xx,yy);
-	    FASTMULT(yy,xx,yy);
-	    printf("0x%lx\n",yy);
-	    yy = yy<<1;
-	    yy += y0;
-	    xx = x2 - y2 + x0;
-	    FASTMULT(x2,xx,xx);
-	    FASTMULT(y2,yy,yy);
-	    
-	    colour++;
-	    POKE(0xD020,PEEK(0xD020)+1);
-	  }
+        while ((x2 + y2 < 0x40000000L) && (colour < 255)) {
+          printf("  0x%lx x 0x%lx = ", xx, yy);
+          FASTMULT(yy, xx, yy);
+          printf("0x%lx\n", yy);
+          yy = yy << 1;
+          yy += y0;
+          xx = x2 - y2 + x0;
+          FASTMULT(x2, xx, xx);
+          FASTMULT(y2, yy, yy);
+
+          colour++;
+          POKE(0xD020, PEEK(0xD020) + 1);
+        }
       }
       //      colour=(x+y)&0xf;
-      plot_pixel_direct(x,y,colour);
-      
-      y0+=1677721;
+      plot_pixel_direct(x, y, colour);
+
+      y0 += 1677721;
     }
-    x0+=3355443;
+    x0 += 3355443;
   }
-  
 }

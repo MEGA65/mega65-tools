@@ -17,24 +17,24 @@
 
 #include "m65common.h"
 
-char* logfile = NULL;
-char *bitstream=NULL;
+char *logfile = NULL;
+char *bitstream = NULL;
 
-char *serial_port="/dev/ttyUSB0";
+char *serial_port = "/dev/ttyUSB0";
 
 extern PORT_TYPE fd;
 
-int main(int argc,char **argv)
+int main(int argc, char **argv)
 {
-  printf("Opening %s...\n",serial_port);
+  printf("Opening %s...\n", serial_port);
   open_the_serial_port(serial_port);
   printf("Setting speed to 1,000,000bps\n");
   set_serial_speed(fd, 1000000);
 
-  int len=2;
-  uint8_t str[2]={0x01,0x02};
-  
-  while(1) {
-      do_serial_port_write(fd, (uint8_t*)str, len, NULL, NULL, 0);
+  int len = 2;
+  uint8_t str[2] = { 0x01, 0x02 };
+
+  while (1) {
+    do_serial_port_write(fd, (uint8_t *)str, len, NULL, NULL, 0);
   }
 }

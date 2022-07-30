@@ -96,7 +96,7 @@ void draw_pixel(int x, int y, int colour)
   frame[y][x * 4 + 3] = 0xff;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
 
   int count = 0;
@@ -111,7 +111,7 @@ int main(int argc, char** argv)
     for (x = 0; x < MAXX; x++)
       draw_pixel(x, y, 0x26); // Blue everywhere as in freeze menu
 
-  FILE* f = fopen(argv[1], "r");
+  FILE *f = fopen(argv[1], "r");
   unsigned char slot[1048576];
   int bytes = fread(slot, 1, 1048576, f);
   fclose(f);
@@ -152,7 +152,7 @@ void write_image(int image_number)
 
   char filename[1024];
   snprintf(filename, 1024, "frame-%d.png", image_number);
-  FILE* f = fopen(filename, "wb");
+  FILE *f = fopen(filename, "wb");
   if (!f)
     abort();
 

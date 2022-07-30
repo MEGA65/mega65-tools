@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-char* matrix[] = { "+-----+     +-----+-----+-----+-----+-----+-----+-----+-----+-----+               |",
+char *matrix[] = { "+-----+     +-----+-----+-----+-----+-----+-----+-----+-----+-----+               |",
   "| R0  |<----| INS |  #  |  %  |  '  |  )  |     | �   |  !  | NO  |               |",
   "|PIN12|     | DEL |  3  |  5  |  7  |  9  |  +  |     |  1  | SCRL|               |",
   "+-----+     +-----+-----+-----+-----+-----+-----+-----+-----+-----+               |",
@@ -31,7 +31,7 @@ char* matrix[] = { "+-----+     +-----+-----+-----+-----+-----+-----+-----+-----
 unsigned int colour_codes[16] = { 0x00, 0x05, 0x1c, 0x9f, 0x9c, 0x1e, 0x1f, 0x9e, 0x81, 0x95, 0x96, 0x97, 0x98, 0x9a, 0x9b,
   0x9c };
 
-int trim(char* s)
+int trim(char *s)
 {
   char out[6];
   int o = 0;
@@ -43,7 +43,7 @@ int trim(char* s)
   return 0;
 }
 
-char* sanitise(char* s)
+char *sanitise(char *s)
 {
   if (s[0] >= ' ' && s[0] <= 0x7d)
     return s;

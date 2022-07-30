@@ -53,22 +53,22 @@ int create_listen_socket(int port)
     return -1;
 
   int on = 1;
-  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*)&on, sizeof(on)) == -1) {
+  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof(on)) == -1) {
     close(sock);
     return -1;
   }
-  if (ioctl(sock, FIONBIO, (char*)&on) == -1) {
+  if (ioctl(sock, FIONBIO, (char *)&on) == -1) {
     close(sock);
     return -1;
   }
 
   /* Bind it to the next port we want to try. */
   struct sockaddr_in address;
-  bzero((char*)&address, sizeof(address));
+  bzero((char *)&address, sizeof(address));
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = INADDR_ANY;
   address.sin_port = htons(port);
-  if (bind(sock, (struct sockaddr*)&address, sizeof(address)) == -1) {
+  if (bind(sock, (struct sockaddr *)&address, sizeof(address)) == -1) {
     close(sock);
     return -1;
   }
@@ -92,15 +92,15 @@ int accept_incoming(int sock)
   return -1;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  char* dev;
+  char *dev;
   char errbuf[PCAP_ERRBUF_SIZE];
-  pcap_t* descr;
+  pcap_t *descr;
   //    struct bpf_program fp;        /* to hold compiled program */
   bpf_u_int32 pMask; /* subnet mask */
   bpf_u_int32 pNet;  /* ip address*/
-  pcap_if_t* alldevs;
+  pcap_if_t *alldevs;
 
   // Prepare a list of all the devices
   if (pcap_findalldevs(&alldevs, errbuf) == -1) {
@@ -145,7 +145,7 @@ int main(int argc, char** argv)
 
     struct pcap_pkthdr hdr;
     hdr.caplen = 0;
-    const unsigned char* packet = pcap_next(descr, &hdr);
+    const unsigned char *packet = pcap_next(descr, &hdr);
     if (packet) {
       if (hdr.caplen == 2132) {
         // probably a C65GS compressed video frame.

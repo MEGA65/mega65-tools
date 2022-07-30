@@ -30,14 +30,14 @@ png_byte bit_depth;
 png_structp png_ptr;
 png_infop info_ptr;
 int number_of_passes;
-png_bytep* row_pointers;
+png_bytep *row_pointers;
 
-FILE* infile;
-FILE* outfile;
+FILE *infile;
+FILE *outfile;
 
 /* ============================================================= */
 
-void abort_(const char* s, ...)
+void abort_(const char *s, ...)
 {
   va_list args;
   va_start(args, s);
@@ -49,7 +49,7 @@ void abort_(const char* s, ...)
 
 /* ============================================================= */
 
-void read_png_file(char* file_name)
+void read_png_file(char *file_name)
 {
   unsigned char header[8]; // 8 is the maximum size that can be checked
 
@@ -97,9 +97,9 @@ void read_png_file(char* file_name)
   if (setjmp(png_jmpbuf(png_ptr)))
     abort_("[read_png_file] Error during read_image");
 
-  row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * height);
+  row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
   for (y = 0; y < height; y++)
-    row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png_ptr, info_ptr));
+    row_pointers[y] = (png_byte *)malloc(png_get_rowbytes(png_ptr, info_ptr));
 
   png_read_image(png_ptr, row_pointers);
 
@@ -167,7 +167,7 @@ int cut_sprite(int x1, int y1, int x2, int y2)
 
 /* ============================================================= */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc < 2) {
     fprintf(stderr, "Usage: program_name <file in> [sprite cut info]\n");

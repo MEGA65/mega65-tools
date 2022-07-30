@@ -58,7 +58,7 @@ char dma_load_routine[128 + 1024] = {
 // Test routine to increment border colour
 char test_routine[64] = { 0xa9, 0x00, 0xee, 0x21, 0xd0, 0x60 };
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int sockfd;
   struct sockaddr_in servaddr;
@@ -70,7 +70,7 @@ int main(int argc, char** argv)
 
   sockfd = socket(AF_INET, SOCK_DGRAM, 0);
   int broadcastEnable = 1;
-  setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, (char*)&broadcastEnable, sizeof(broadcastEnable));
+  setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, (char *)&broadcastEnable, sizeof(broadcastEnable));
 
   memset(&servaddr, 0, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
@@ -108,7 +108,7 @@ int main(int argc, char** argv)
     memcpy(&dma_load_routine[DATA_OFFSET], buffer, bytes);
 
     printf("Sending\n");
-    sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
+    sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
     usleep(150);
 
     dma_load_routine[PACKET_NUMBER_OFFSET]++;
@@ -127,7 +127,7 @@ int main(int argc, char** argv)
 
       printf(".");
 
-      sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
+      sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
       usleep(150);
     }

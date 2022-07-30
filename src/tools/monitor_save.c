@@ -47,7 +47,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 time_t start_time = 0;
 
-FILE* o = NULL;
+FILE *o = NULL;
 
 unsigned long long gettime_ms(void);
 
@@ -57,7 +57,7 @@ int end_addr_c65 = 0;
 
 int process_char(unsigned char c, int live);
 
-int slow_write(int fd, char* d, int l)
+int slow_write(int fd, char *d, int l)
 {
   // UART is at 230400bps, but reading commands has no FIFO, and echos
   // characters back, meaning we need a 1 char gap between successive
@@ -80,8 +80,8 @@ int fd = -1;
 int state = 99;
 int start_addr = -1;
 int end_addr = -1;
-char* filename = NULL;
-FILE* f = NULL;
+char *filename = NULL;
+FILE *f = NULL;
 char serial_port[1024] = "/dev/ttyUSB1"; // XXX do a better job auto-detecting this
 int serial_speed = 2000000;
 char last_mem_request[128] = { 0 };
@@ -95,7 +95,7 @@ unsigned long long gettime_ms(void)
   return nowtv.tv_sec * 1000LL + nowtv.tv_usec / 1000;
 }
 
-int process_line(char* line, int live)
+int process_line(char *line, int live)
 {
   int pc, a, x, y, sp, p;
   // printf("[%s]\n",line);
@@ -288,7 +288,7 @@ void usage(void)
   exit(-3);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   start_time = time(0);
   last_check = gettime_ms();

@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <gif_lib.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int gif_error = 0;
-  GifFileType* gif = NULL;
+  GifFileType *gif = NULL;
 
   gif = DGifOpenFileName(argv[1], &gif_error);
   if (!gif) {

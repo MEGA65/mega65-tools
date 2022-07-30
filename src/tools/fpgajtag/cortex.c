@@ -47,11 +47,11 @@ static void read_rdbuff(void)
 /*
  * Functions used in testing Cortex core
  */
-static void check_read_cortex(int linenumber, uint32_t* buf, int load)
+static void check_read_cortex(int linenumber, uint32_t *buf, int load)
 {
   int i;
-  uint8_t* rdata;
-  uint32_t* testp = buf + 1;
+  uint8_t *rdata;
+  uint32_t *testp = buf + 1;
 
   if (load)
     write_creg(IRREGA_DPACC);
@@ -93,7 +93,7 @@ static void write_select(int bus)
 
 static void cortex_csw(int wait, int clear_wait)
 {
-  uint32_t* cresp[2];
+  uint32_t *cresp[2];
   int i;
 
   write_creg(IRREGA_ABORT);
@@ -157,7 +157,7 @@ static void tar_write(uint32_t v)
 static void read_csw(int wait, uint32_t val3)
 {
 #define VALC 0x15137030
-  uint32_t* creturn[] = { (uint32_t[]) {
+  uint32_t *creturn[] = { (uint32_t[]) {
                               10,
                               SELECT_DEBUG,
                               val3,
@@ -188,7 +188,7 @@ static void read_csw(int wait, uint32_t val3)
   int i;
   static uint32_t cread[] = { 2, 0x80000002 };
   static uint32_t address_table[] = { ADDRESS_SLCR_ARM_PLL_CTRL, ADDRESS_SLCR_ARM_CLK_CTRL };
-  uint32_t* cresp[] = { (uint32_t[]) {
+  uint32_t *cresp[] = { (uint32_t[]) {
                             3,
                             0,
                             DEFAULT_CSW,

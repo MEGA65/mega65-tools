@@ -56,7 +56,7 @@
 
 extern unsigned char ascii_font[4097];
 
-struct tile_set* ts = NULL;
+struct tile_set *ts = NULL;
 
 /* ============================================================= */
 
@@ -72,12 +72,12 @@ png_byte bit_depth;
 png_structp png_ptr;
 png_infop info_ptr;
 int number_of_passes;
-png_bytep* row_pointers;
+png_bytep *row_pointers;
 int multiplier;
 
 /* ============================================================= */
 
-void abort_(const char* s, ...)
+void abort_(const char *s, ...)
 {
   va_list args;
   va_start(args, s);
@@ -109,7 +109,7 @@ int second_pass_required = 0;
 int pass_num = 1;
 
 struct tile_set {
-  struct tile* tiles;
+  struct tile *tiles;
   int tile_count;
   int max_tiles;
 
@@ -119,10 +119,10 @@ struct tile_set {
   int target_colours[MAX_COLOURS];
   int colour_count;
 
-  struct tile_set* next;
+  struct tile_set *next;
 };
 
-int find_nearest_colour(struct tile_set* ts, int c)
+int find_nearest_colour(struct tile_set *ts, int c)
 {
   int nearest_id = 0;
   int error = 999999999;
@@ -142,7 +142,7 @@ int find_nearest_colour(struct tile_set* ts, int c)
   return nearest_id;
 }
 
-void quantise_colours(struct tile_set* ts)
+void quantise_colours(struct tile_set *ts)
 {
   // Start with all colours mapped to themselves.
   for (int i = 0; i < ts->colour_count; i++)
@@ -179,7 +179,7 @@ void quantise_colours(struct tile_set* ts)
   }
 }
 
-void palette_c64_init(struct tile_set* ts)
+void palette_c64_init(struct tile_set *ts)
 {
   // Pre-load in C64 palette, so that those colours can be re-used if required
 
@@ -203,7 +203,7 @@ void palette_c64_init(struct tile_set* ts)
   fprintf(stderr, "Setup C64 palette.\n");
 }
 
-int palette_lookup(struct tile_set* ts, int r, int g, int b)
+int palette_lookup(struct tile_set *ts, int r, int g, int b)
 {
   int i;
 
@@ -246,9 +246,9 @@ unsigned char nyblswap(unsigned char in)
   return ((in & 0xf) << 4) + ((in & 0xf0) >> 4);
 }
 
-struct tile_set* new_tileset(int max_tiles)
+struct tile_set *new_tileset(int max_tiles)
 {
-  struct tile_set* ts = calloc(sizeof(struct tile_set), 1);
+  struct tile_set *ts = calloc(sizeof(struct tile_set), 1);
   if (!ts) {
     perror("calloc() failed");
     exit(-3);
@@ -266,17 +266,17 @@ struct screen {
   // Unique identifier
   unsigned char screen_id;
   // Which tile set the screen uses
-  struct tile_set* tiles;
+  struct tile_set *tiles;
   unsigned char width, height;
-  unsigned char** screen_rows;
-  unsigned char** colourram_rows;
+  unsigned char **screen_rows;
+  unsigned char **colourram_rows;
 
-  struct screen* next;
+  struct screen *next;
 };
 
-struct screen* new_screen(int id, struct tile_set* tiles, int width, int height)
+struct screen *new_screen(int id, struct tile_set *tiles, int width, int height)
 {
-  struct screen* s = calloc(sizeof(struct screen), 1);
+  struct screen *s = calloc(sizeof(struct screen), 1);
   if (!s) {
     perror("calloc() failed");
     exit(-3);
@@ -291,8 +291,8 @@ struct screen* new_screen(int id, struct tile_set* tiles, int width, int height)
   s->tiles = tiles;
   s->width = width;
   s->height = height;
-  s->screen_rows = calloc(sizeof(unsigned char*), height);
-  s->colourram_rows = calloc(sizeof(unsigned char*), height);
+  s->screen_rows = calloc(sizeof(unsigned char *), height);
+  s->colourram_rows = calloc(sizeof(unsigned char *), height);
   if ((!s->screen_rows) || (!s->colourram_rows)) {
     perror("calloc() failed");
     exit(-3);
@@ -309,7 +309,7 @@ struct screen* new_screen(int id, struct tile_set* tiles, int width, int height)
   return s;
 }
 
-int tile_lookup(struct tile_set* ts, struct tile* t)
+int tile_lookup(struct tile_set *ts, struct tile *t)
 {
   // See if tile matches any that we have already stored.
   // (Also check if it matches flipped in either or both X,Y
@@ -367,11 +367,11 @@ int tile_lookup(struct tile_set* ts, struct tile* t)
   return ts->tile_count++;
 }
 
-struct screen* png_to_screen(int id, struct tile_set* ts)
+struct screen *png_to_screen(int id, struct tile_set *ts)
 {
   int x, y;
 
-  struct screen* s = new_screen(id, ts, 1 + (width / 8), 1 + (height / 8));
+  struct screen *s = new_screen(id, ts, 1 + (width / 8), 1 + (height / 8));
 
   for (y = 0; y < height; y += 8)
     for (x = 0; x < width; x += 8) {
@@ -379,11 +379,11 @@ struct screen* png_to_screen(int id, struct tile_set* ts)
       struct tile t;
       for (int yy = 0; yy < 8; yy++) {
         if ((yy + y) < height) {
-          png_byte* row = row_pointers[yy + y];
+          png_byte *row = row_pointers[yy + y];
           for (int xx = 0; xx < 8; xx++) {
             int r, g, b, a, c;
             if ((xx + x) < width) {
-              png_byte* ptr = &(row[(xx + x) * multiplier]);
+              png_byte *ptr = &(row[(xx + x) * multiplier]);
               r = ptr[0];
               g = ptr[1];
               b = ptr[2];
@@ -439,12 +439,12 @@ struct screen* png_to_screen(int id, struct tile_set* ts)
   return s;
 }
 
-void read_png_file(char* file_name)
+void read_png_file(char *file_name)
 {
   unsigned char header[8]; // 8 is the maximum size that can be checked
 
   /* open file and test for it being a png */
-  FILE* infile = fopen(file_name, "rb");
+  FILE *infile = fopen(file_name, "rb");
   if (infile == NULL)
     abort_("[read_png_file] File %s could not be opened for reading", file_name);
 
@@ -487,9 +487,9 @@ void read_png_file(char* file_name)
   if (setjmp(png_jmpbuf(png_ptr)))
     abort_("[read_png_file] Error during read_image");
 
-  row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * height);
+  row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
   for (y = 0; y < height; y++)
-    row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png_ptr, info_ptr));
+    row_pointers[y] = (png_byte *)malloc(png_get_rowbytes(png_ptr, info_ptr));
 
   png_read_image(png_ptr, row_pointers);
 
@@ -559,7 +559,7 @@ void register_box(int url_id, int x1, int y1, int x2, int y2)
   url_boxes[link_count++].y2 = y2;
 }
 
-int register_url(char* url)
+int register_url(char *url)
 {
   for (int i = 0; i < url_count; i++) {
     if (!strcmp(url, urls[i]))
@@ -578,7 +578,7 @@ char attribute_keys[MAX_ATTRIBUTES][1024];
 char attribute_values[MAX_ATTRIBUTES][1024];
 int attribute_count = 0;
 
-void parse_attributes(char* in)
+void parse_attributes(char *in)
 {
   fprintf(stderr, "Parsing attribute string '%s'\n", in);
   attribute_count = 0;
@@ -640,7 +640,7 @@ void parse_attributes(char* in)
   }
 }
 
-char* get_attribute(char* key)
+char *get_attribute(char *key)
 {
   for (int i = 0; i < attribute_count; i++) {
     if (!strcmp(key, attribute_keys[i]))
@@ -684,7 +684,7 @@ unsigned char ascii_to_screen_code(unsigned char c)
   // if (c>='a'&&c<='z') c=c^0x20;
 }
 
-void emit_word(char* word)
+void emit_word(char *word)
 {
   /* Check for special formatting options:
      - Begins with * = enable bold/italic etc
@@ -744,7 +744,7 @@ void emit_word(char* word)
     // NOT have any spaces in at the moment.
     if (sscanf(word, "![%[^]]](%[^)])", alttext, imgname) == 2) {
       read_png_file(imgname);
-      struct screen* s = png_to_screen(0, ts);
+      struct screen *s = png_to_screen(0, ts);
 
       // Check if the image has a link
       parse_attributes(alttext);
@@ -809,7 +809,7 @@ void emit_word(char* word)
   }
 }
 
-void emit_text(char* text)
+void emit_text(char *text)
 {
   // Emit the text
   int last_was_word = 0;
@@ -861,7 +861,7 @@ void emit_text(char* text)
   }
 }
 
-int do_pass(char** argv)
+int do_pass(char **argv)
 {
   unsigned char block_header[8];
 
@@ -875,13 +875,13 @@ int do_pass(char** argv)
     screen_ram[i + 1] = 0;
   }
 
-  FILE* infile = fopen(argv[1], "r");
+  FILE *infile = fopen(argv[1], "r");
   if (!infile) {
     perror("Could not open input file");
     exit(-3);
   }
 
-  FILE* outfile = fopen(argv[2], "wb");
+  FILE *outfile = fopen(argv[2], "wb");
   if (!outfile) {
     perror("Could not open output file");
     exit(-3);
@@ -1124,7 +1124,7 @@ int do_pass(char** argv)
 
 /* ============================================================= */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
 
   if (argc != 3) {

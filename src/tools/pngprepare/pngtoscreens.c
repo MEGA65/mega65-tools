@@ -21,7 +21,7 @@
 
 /* ============================================================= */
 
-char* vhdl_prefix = "library IEEE;\n"
+char *vhdl_prefix = "library IEEE;\n"
                     "use IEEE.STD_LOGIC_1164.ALL;\n"
                     "use ieee.numeric_std.all;\n"
                     "use work.debugtools.all;\n"
@@ -53,7 +53,7 @@ char* vhdl_prefix = "library IEEE;\n"
                     "signal ram : ram_t := (\n"
                     "\n";
 
-char* vhdl_suffix = ");\n"
+char *vhdl_suffix = ");\n"
                     "\n"
                     "begin\n"
                     "\n"
@@ -84,12 +84,12 @@ png_byte bit_depth;
 png_structp png_ptr;
 png_infop info_ptr;
 int number_of_passes;
-png_bytep* row_pointers;
+png_bytep *row_pointers;
 int multiplier;
 
 /* ============================================================= */
 
-void abort_(const char* s, ...)
+void abort_(const char *s, ...)
 {
   va_list args;
   va_start(args, s);
@@ -112,7 +112,7 @@ struct rgb {
 };
 
 struct tile_set {
-  struct tile* tiles;
+  struct tile *tiles;
   int tile_count;
   int max_tiles;
 
@@ -120,10 +120,10 @@ struct tile_set {
   struct rgb colours[256];
   int colour_count;
 
-  struct tile_set* next;
+  struct tile_set *next;
 };
 
-int palette_lookup(struct tile_set* ts, int r, int g, int b)
+int palette_lookup(struct tile_set *ts, int r, int g, int b)
 {
   int i;
 
@@ -153,9 +153,9 @@ unsigned char nyblswap(unsigned char in)
   return ((in & 0xf) << 4) + ((in & 0xf0) >> 4);
 }
 
-struct tile_set* new_tileset(int max_tiles)
+struct tile_set *new_tileset(int max_tiles)
 {
-  struct tile_set* ts = calloc(sizeof(struct tile_set), 1);
+  struct tile_set *ts = calloc(sizeof(struct tile_set), 1);
   if (!ts) {
     perror("calloc() failed");
     exit(-3);
@@ -173,17 +173,17 @@ struct screen {
   // Unique identifier
   unsigned char screen_id;
   // Which tile set the screen uses
-  struct tile_set* tiles;
+  struct tile_set *tiles;
   unsigned char width, height;
-  unsigned char** screen_rows;
-  unsigned char** colourram_rows;
+  unsigned char **screen_rows;
+  unsigned char **colourram_rows;
 
-  struct screen* next;
+  struct screen *next;
 };
 
-struct screen* new_screen(int id, struct tile_set* tiles, int width, int height)
+struct screen *new_screen(int id, struct tile_set *tiles, int width, int height)
 {
-  struct screen* s = calloc(sizeof(struct screen), 1);
+  struct screen *s = calloc(sizeof(struct screen), 1);
   if (!s) {
     perror("calloc() failed");
     exit(-3);
@@ -198,8 +198,8 @@ struct screen* new_screen(int id, struct tile_set* tiles, int width, int height)
   s->tiles = tiles;
   s->width = width;
   s->height = height;
-  s->screen_rows = calloc(sizeof(unsigned char*), height);
-  s->colourram_rows = calloc(sizeof(unsigned char*), height);
+  s->screen_rows = calloc(sizeof(unsigned char *), height);
+  s->colourram_rows = calloc(sizeof(unsigned char *), height);
   if ((!s->screen_rows) || (!s->colourram_rows)) {
     perror("calloc() failed");
     exit(-3);
@@ -216,7 +216,7 @@ struct screen* new_screen(int id, struct tile_set* tiles, int width, int height)
   return s;
 }
 
-int tile_lookup(struct tile_set* ts, struct tile* t)
+int tile_lookup(struct tile_set *ts, struct tile *t)
 {
   // See if tile matches any that we have already stored.
   // (Also check if it matches flipped in either or both X,Y
@@ -274,7 +274,7 @@ int tile_lookup(struct tile_set* ts, struct tile* t)
   return ts->tile_count++;
 }
 
-struct screen* png_to_screen(int id, struct tile_set* ts)
+struct screen *png_to_screen(int id, struct tile_set *ts)
 {
   int x, y;
 
@@ -283,16 +283,16 @@ struct screen* png_to_screen(int id, struct tile_set* ts)
     exit(-3);
   }
 
-  struct screen* s = new_screen(id, ts, width / 8, height / 8);
+  struct screen *s = new_screen(id, ts, width / 8, height / 8);
 
   for (y = 0; y < height; y += 8)
     for (x = 0; x < width; x += 8) {
       int transparent_tile = 1;
       struct tile t;
       for (int yy = 0; yy < 8; yy++) {
-        png_byte* row = row_pointers[yy + y];
+        png_byte *row = row_pointers[yy + y];
         for (int xx = 0; xx < 8; xx++) {
-          png_byte* ptr = &(row[(xx + x) * multiplier]);
+          png_byte *ptr = &(row[(xx + x) * multiplier]);
           int r, g, b, a, c;
           r = ptr[0];
           g = ptr[1];
@@ -331,12 +331,12 @@ struct screen* png_to_screen(int id, struct tile_set* ts)
   return s;
 }
 
-void read_png_file(char* file_name)
+void read_png_file(char *file_name)
 {
   unsigned char header[8]; // 8 is the maximum size that can be checked
 
   /* open file and test for it being a png */
-  FILE* infile = fopen(file_name, "rb");
+  FILE *infile = fopen(file_name, "rb");
   if (infile == NULL)
     abort_("[read_png_file] File %s could not be opened for reading", file_name);
 
@@ -379,9 +379,9 @@ void read_png_file(char* file_name)
   if (setjmp(png_jmpbuf(png_ptr)))
     abort_("[read_png_file] Error during read_image");
 
-  row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * height);
+  row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
   for (y = 0; y < height; y++)
-    row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png_ptr, info_ptr));
+    row_pointers[y] = (png_byte *)malloc(png_get_rowbytes(png_ptr, info_ptr));
 
   png_read_image(png_ptr, row_pointers);
 
@@ -404,7 +404,7 @@ void read_png_file(char* file_name)
 
 /* ============================================================= */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int i, x, y;
 
@@ -413,7 +413,7 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
-  FILE* outfile = fopen(argv[1], "w");
+  FILE *outfile = fopen(argv[1], "w");
   if (!outfile) {
     perror("Could not open output file");
     exit(-3);
@@ -421,9 +421,9 @@ int main(int argc, char** argv)
 
   // Allow upto 128KB of tiles (we will complain later when
   // saving out, if the whole thing is too big).
-  struct tile_set* ts = new_tileset(2048);
+  struct tile_set *ts = new_tileset(2048);
 
-  struct screen* screen_list[256];
+  struct screen *screen_list[256];
   // Screen 0 is reserved for the current display (it gets constructed
   // by MEGABASIC on initialisation).
   int screen_count = 1;
@@ -439,7 +439,7 @@ int main(int argc, char** argv)
     printf("Reading %s\n", argv[i]);
     read_png_file(argv[i]);
     image_tiles += width * height / 64;
-    struct screen* s = png_to_screen(i - 1, ts);
+    struct screen *s = png_to_screen(i - 1, ts);
     if (!s) {
       fprintf(stderr, "ERROR: Could not produce screen from PNG '%s'\n", argv[i]);
     }
@@ -468,7 +468,7 @@ int main(int argc, char** argv)
   printf("Writing headers...\n");
   unsigned char header[64];
   bzero(header, sizeof(header));
-  snprintf((char*)header, 64, "MEGA65 TILESET00");
+  snprintf((char *)header, 64, "MEGA65 TILESET00");
   header[16] = ts->tile_count & 0xff;
   header[17] = (ts->tile_count >> 8) & 0xff;
   header[18] = ts->colour_count;
@@ -523,7 +523,7 @@ int main(int argc, char** argv)
   for (i = 1; i < screen_count; i++) {
     unsigned char header[64];
     bzero(header, sizeof(header));
-    snprintf((char*)header, 64, "MEGA65 SCREEN00");
+    snprintf((char *)header, 64, "MEGA65 SCREEN00");
     header[15] = screen_list[i]->screen_id;
     header[16] = screen_list[i]->width;
     header[17] = screen_list[i]->height;

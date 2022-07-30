@@ -113,7 +113,7 @@ void mfm_decode(float gap)
   last_gap = gap;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc < 2 || argc > 3) {
     fprintf(
@@ -121,8 +121,8 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
-  FILE* f = fopen(argv[1], "r");
-  FILE* o = NULL;
+  FILE *f = fopen(argv[1], "r");
+  FILE *o = NULL;
   unsigned char buffer[655360];
   int count = fread(buffer, 1, 655360, f);
   printf("Read %d bytes\n", count);

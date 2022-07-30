@@ -27,7 +27,7 @@ int raw_size;
 typedef struct dp_item {
   unsigned char code_byte;
   unsigned char code_byte2;
-  unsigned char* raw_region;
+  unsigned char *raw_region;
   int cumulative_cost;
   int parent;
   int offset;
@@ -35,7 +35,7 @@ typedef struct dp_item {
 
 dp_item dp_list[MAX_RAW_SIZE + 1];
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc != 3) {
     fprintf(stderr, "usage: packtilesest <input tileset> <output compressed file>\n");
@@ -45,7 +45,7 @@ int main(int argc, char** argv)
   int retVal = 0;
   do {
 
-    FILE* f = fopen(argv[1], "r");
+    FILE *f = fopen(argv[1], "r");
     if (!f) {
       retVal = -1;
       fprintf(stderr, "Could not open file '%s'\n", argv[1]);
@@ -120,7 +120,7 @@ int main(int argc, char** argv)
     // Report on compressed size
     printf("Compressed size is %d bytes\n", dp_list[raw_size].cumulative_cost);
 
-    dp_item* queue[MAX_RAW_SIZE + 1];
+    dp_item *queue[MAX_RAW_SIZE + 1];
     int queue_len = 0;
     int offset = raw_size;
     while (offset > 0) {
@@ -135,7 +135,7 @@ int main(int argc, char** argv)
 
     printf("File encoded using %d tokens\n", queue_len);
 
-    FILE* o = fopen(argv[2], "w");
+    FILE *o = fopen(argv[2], "w");
     if (!o) {
       retVal = -1;
       fprintf(stderr, "ERROR: Could not open output file '%s'\n", argv[2]);

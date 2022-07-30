@@ -58,14 +58,14 @@
 #define IDCODE_ARRAY_SIZE 20
 #define SEGMENT_LENGTH 256 /* sizes above 256bytes seem to get more bytes back in response than were requested */
 
-uint8_t* input_fileptr;
+uint8_t *input_fileptr;
 int input_filesize, found_cortex = -1, jtag_index = -1, dcount, idcode_count;
 int tracep; //= 1;
 
 static int match_any_idcode, trailing_len, first_time_idcode_read = 1, dc2trail, interface_id = 0;
-static USB_INFO* uinfo;
+static USB_INFO *uinfo;
 static uint32_t idcode_array[IDCODE_ARRAY_SIZE], idcode_len[IDCODE_ARRAY_SIZE];
-static uint8_t* rstatus = DITEM(
+static uint8_t *rstatus = DITEM(
     CONFIG_DUMMY, CONFIG_SYNC, CONFIG_TYPE2(0), CONFIG_TYPE1(CONFIG_OP_READ, CONFIG_REG_STAT, 1), SINT32(0));
 static int befbits, afterbits;
 
@@ -129,10 +129,10 @@ static int match_state(char req)
   return req == 'X' || !current_state || current_state == req || (current_state == 'S' && req == 'D')
       || (current_state == 'D' && req == 'S');
 }
-void write_tms_transition(char* tail)
+void write_tms_transition(char *tail)
 {
   ENTER();
-  char* p = tail + 2;
+  char *p = tail + 2;
   uint8_t temp[] = { TMSW, 0, 0 };
   int len = 0;
 
@@ -153,7 +153,7 @@ void ENTER_TMS_STATE(char required)
 {
   ENTER();
   char temp = current_state == 'D' ? 'S' : current_state;
-  static char* tail[] = { "PS10",                        /* Pause-DR -> Shift-DR */
+  static char *tail[] = { "PS10",                        /* Pause-DR -> Shift-DR */
     "EI10", /* Exit1/Exit2 -> Update -> Idle */ "RI0",   /* Reset -> Idle */
     "SI110", /* Shift-DR -> Update-DR -> Idle */ "SP10", /* Shift-IR -> Pause-IR */
     "SE1", /* Shift-IR -> Exit1-IR */ "SU11",            /* Shift-DR -> Update-DR */
@@ -162,7 +162,7 @@ void ENTER_TMS_STATE(char required)
     "PR11111", /* Pause -> Reset */ "IS1100",            /* Idle -> Shift-IR */
     "ED1100",                                            /* Exit1-IR ->  -> Shift-DR */
     NULL };
-  char** p = tail;
+  char **p = tail;
   while (*p) {
     if (temp == (*p)[0] && required == (*p)[1])
       write_tms_transition(*p);
@@ -219,14 +219,14 @@ void write_bit(int read, int bits, int data, char target_state)
     extrabit = (data << (7 - bits)) & 0x80;
   }
   if (target_state) {
-    uint8_t* cptr = buffer_current_ptr();
+    uint8_t *cptr = buffer_current_ptr();
     ENTER_TMS_STATE(target_state);
     cptr[0] |= read;     // this is a TMS instruction to shift state
     cptr[2] |= extrabit; // insert 1 bit of data here
   }
   EXIT();
 }
-static void write_req(int read, uint8_t* req, int opttail)
+static void write_req(int read, uint8_t *req, int opttail)
 {
   ENTER();
   write_bytes(read, 0, req + 1, req[0], SEND_SINGLE_FRAME, opttail, 0, 0);
@@ -246,7 +246,7 @@ static void write_fill(int read, int width, int tail)
 }
 
 void write_bytes(
-    uint8_t read, char target_state, uint8_t* ptrin, int size, int max_frame_size, int opttail, int swapbits, int exchar)
+    uint8_t read, char target_state, uint8_t *ptrin, int size, int max_frame_size, int opttail, int swapbits, int exchar)
 {
   ENTER();
   ENTER_TMS_STATE('S');
@@ -258,7 +258,7 @@ void write_bytes(
     if (rlen < max_frame_size && opttail > 0)
       tlen--; // last byte is actually loaded with DATAWBIT command
     write_item(DITEM(DATAW(read, tlen)));
-    uint8_t* cptr = buffer_current_ptr();
+    uint8_t *cptr = buffer_current_ptr();
     write_data(ptrin, tlen);
     if (swapbits)
       for (i = 0; i < tlen; i++)
@@ -289,7 +289,7 @@ void idle_to_shift_dr(int idindex)
   write_bit(0, idindex, 0xff, 0);
   EXIT();
 }
-static uint8_t* write_pattern(int idindex, uint8_t* req, int target_state)
+static uint8_t *write_pattern(int idindex, uint8_t *req, int target_state)
 {
   ENTER();
   LOGNOTE("Calling idle_to_shift_dr()");
@@ -301,7 +301,7 @@ static uint8_t* write_pattern(int idindex, uint8_t* req, int target_state)
   EXIT();
 }
 
-static void write_int32(uint8_t* data)
+static void write_int32(uint8_t *data)
 {
   ENTER();
   if (!data)
@@ -314,11 +314,11 @@ static void write_int32(uint8_t* data)
   EXIT();
 }
 
-static uint64_t read_data_int(uint8_t* bufp)
+static uint64_t read_data_int(uint8_t *bufp)
 {
   ENTER();
   uint64_t ret = 0;
-  uint8_t* backp = bufp + last_read_data_length;
+  uint8_t *backp = bufp + last_read_data_length;
   while (backp > bufp)
     ret = (ret << 8) | bitswap[*--backp]; // each byte is bitswapped
   return ret;
@@ -373,7 +373,7 @@ void read_idcode(int prereset)
   // the IDCODE command.  Does the FPGA default to IDCODE?
   // Yes: This seems to be the case, according to here:
   // https://forums.xilinx.com/t5/Spartan-Family-FPGAs-Archived/Spartan-3AN-200-JTAG-Idcode-debugging-on-a-new-board/td-p/131792
-  uint8_t* rdata = write_pattern(0, idcode_ppattern, 'I');
+  uint8_t *rdata = write_pattern(0, idcode_ppattern, 'I');
 
   LOGNOTE("Checkpoint post write-pattern");
 
@@ -507,7 +507,7 @@ void write_creg(int regname)
 }
 
 static void send_data_file(
-    int read, int extra_shift, uint8_t* pdata, int psize, uint8_t* pre, uint8_t* post, int opttail, int swapbits)
+    int read, int extra_shift, uint8_t *pdata, int psize, uint8_t *pre, uint8_t *post, int opttail, int swapbits)
 {
   ENTER();
   static uint8_t zerod[] = DITEM(0, 0, 0, 0, 0, 0, 0);
@@ -574,9 +574,9 @@ uint32_t fetch_result(int idindex, int command, int resp_len, int fd)
       write_item(DITEM(DATAR(size - 1), DATARBIT, 0x06));
     if (resp_len <= 0)
       write_above2((!idindex) * DREAD, idindex);
-    uint8_t* rdata = read_data();
-    uint8_t sdata[] = { SINT32(*(uint32_t*)rdata) };
-    ret = *(uint32_t*)sdata;
+    uint8_t *rdata = read_data();
+    uint8_t sdata[] = { SINT32(*(uint32_t *)rdata) };
+    ret = *(uint32_t *)sdata;
     for (j = 0; j < size; j++)
       rdata[j] = bitswap[rdata[j]];
     if (fd != -1) {
@@ -603,7 +603,7 @@ uint32_t fetch_result(int idindex, int command, int resp_len, int fd)
  * In ug470_7Series_Config.pdf, see "Accessing Configuration Registers
  * through the JTAG Interface" and Table 6-3.
  */
-static uint32_t readout_seq(int idindex, uint8_t* req, int resp_len, int fd)
+static uint32_t readout_seq(int idindex, uint8_t *req, int resp_len, int fd)
 {
   ENTER();
   write_dirreg(IRREG_CFG_IN, idindex);
@@ -650,7 +650,7 @@ static void readout_status0(void)
 static uint32_t read_config_reg(uint32_t data)
 {
   ENTER();
-  uint8_t* req = DITEM(CONFIG_SYNC, CONFIG_TYPE1(CONFIG_OP_NOP, 0, 0), CONFIG_TYPE1(CONFIG_OP_READ, data, 1),
+  uint8_t *req = DITEM(CONFIG_SYNC, CONFIG_TYPE1(CONFIG_OP_NOP, 0, 0), CONFIG_TYPE1(CONFIG_OP_READ, data, 1),
       CONFIG_TYPE1(CONFIG_OP_NOP, 0, 0), CONFIG_TYPE1(CONFIG_OP_NOP, 0, 0),
       CONFIG_TYPE1(CONFIG_OP_WRITE, CONFIG_REG_CMD, CONFIG_CMD_WCFG), CONFIG_CMD_DESYNC, CONFIG_TYPE1(CONFIG_OP_NOP, 0, 0));
   uint8_t constant4[] = { INT32(4) };
@@ -693,7 +693,7 @@ static void read_config_memory(int fd, uint32_t size)
 
 // finds last slash and sets it to 0
 // returns the position where the slash was or NULL if none was found
-char *trim_path_component(char* s, unsigned int num)
+char *trim_path_component(char *s, unsigned int num)
 {
   int len = strlen(s);
   int count = 0;
@@ -708,7 +708,7 @@ char *trim_path_component(char* s, unsigned int num)
   return NULL;
 }
 
-char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode)
+char *init_fpgajtag(const char *serialno, const char *serialport, uint32_t file_idcode)
 {
   ENTER();
   int i, j, bus, pnum_len, last_index = -1, last_match = -1;
@@ -718,7 +718,7 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
   char path[1024];
   char link[1024]; // possible problem: PATH_MAX is probably 4096 on UNIX systems
   char match[1024];
-  struct dirent* de = NULL;
+  struct dirent *de = NULL;
 #endif
 
   /*
@@ -733,10 +733,9 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
     pnum_len = libusb_get_port_numbers(uinfo[i].dev, pnum, 8);
 
     log_concat(NULL);
-    log_concat("#%d: %s (serial %s) [%d, [", i,
-            uinfo[i].iManufacturer, uinfo[i].iSerialNumber, bus);
+    log_concat("#%d: %s (serial %s) [%d, [", i, uinfo[i].iManufacturer, uinfo[i].iSerialNumber, bus);
     for (j = 0; j < pnum_len; j++)
-      log_concat("%d%s", pnum[j], j+1==pnum_len?"":",");
+      log_concat("%d%s", pnum[j], j + 1 == pnum_len ? "" : ",");
     log_concat("]]");
     log_info(NULL);
 
@@ -748,19 +747,22 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
 #ifndef WINDOWS
 #ifdef __linux__
     // find the usb device matching this bus:port
-    DIR* d = opendir("/sys/bus/usb-serial/devices");
+    DIR *d = opendir("/sys/bus/usb-serial/devices");
     if (d) {
       while ((de = readdir(d)) != NULL) {
-        if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+        if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, ".."))
+          continue;
 
         snprintf(path, 1024, "/sys/bus/usb-serial/devices/%s", de->d_name);
-        if (!realpath(path, link)) continue; // could not resolve
+        if (!realpath(path, link))
+          continue; // could not resolve
 
         if (pnum_len > 1)
           snprintf(match, 1024, "/%d-%d/%d-%d.%d", bus, pnum[0], bus, pnum[0], pnum[1]);
         else
           snprintf(match, 1024, "/%d-%d/%d-%d", bus, pnum[0], bus, pnum[0]);
-        if (!strstr(link, match)) continue; // does not match
+        if (!strstr(link, match))
+          continue; // does not match
 
         snprintf(serial_path, 1024, "/dev/%s", de->d_name);
 
@@ -771,7 +773,7 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
           break;
         }
 #endif
-        if (serialno && strcmp(serialno, (char*)uinfo[i].iSerialNumber)) {
+        if (serialno && strcmp(serialno, (char *)uinfo[i].iSerialNumber)) {
           log_info("  serial %s does not match, skipping", serialno);
           break;
         }
@@ -779,9 +781,9 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
         get_deviceid(i, interface_id); /*** Generic initialization of FTDI chip ***/
         fpgausb_close();
         log_concat(NULL);
-        log_concat("  got %d id code%s: ", idcode_count, idcode_count>1?"s":"");
-        for (j = 0; j < idcode_count; j++)     /*** look for device matching file idcode ***/
-          log_concat(j+1==idcode_count?"%08x":"%08x,", idcode_array[j]);
+        log_concat("  got %d id code%s: ", idcode_count, idcode_count > 1 ? "s" : "");
+        for (j = 0; j < idcode_count; j++) /*** look for device matching file idcode ***/
+          log_concat(j + 1 == idcode_count ? "%08x" : "%08x,", idcode_array[j]);
         log_debug(NULL);
         if (idcode_count == 16 && (idcode_array[0] == 0x0fffffff || idcode_array[0] == 0x0)) {
           log_info("  device seems to be disabled, please power on");
@@ -832,7 +834,7 @@ int min(int a, int b)
 }
 #endif
 
-int fpgajtag_main(char* bitstream)
+int fpgajtag_main(char *bitstream)
 {
   ENTER();
   uint32_t ret;
@@ -842,7 +844,7 @@ int fpgajtag_main(char* bitstream)
   logfile = stdout;
   opterr = 0;
 
-  const char* filename = bitstream;
+  const char *filename = bitstream;
 
   /*
    * Read input file
@@ -858,13 +860,13 @@ int fpgajtag_main(char* bitstream)
     int magic[2];
     memcpy(&magic, input_fileptr + 32, 8);
     if (magic[0] != 0x000000bb || magic[1] != 0x11220044) {
-      uint8_t* buffer = (uint8_t*)malloc(input_filesize);
+      uint8_t *buffer = (uint8_t *)malloc(input_filesize);
       int i;
       log_debug("mismatched magic: %08x.%08x expected %08x.%08x", magic[0], magic[1], 0x000000bb, 0x11220044);
       memcpy(buffer, input_fileptr, input_filesize);
       for (i = 0; i < input_filesize / 4; i++) {
-        int* bufl = (int*)buffer;
-        int* inputl = (int*)input_fileptr;
+        int *bufl = (int *)buffer;
+        int *inputl = (int *)input_fileptr;
         bufl[i] = ntohl(inputl[i]);
       }
       memcpy(&magic, buffer + 32, 8);
@@ -873,14 +875,13 @@ int fpgajtag_main(char* bitstream)
     }
 #ifndef WINDOWS
     int rc = setuid(0);
-    const char* filename = (mflag) ? "/lib/firmware/fpga.bin" : "/dev/xdevcfg";
+    const char *filename = (mflag) ? "/lib/firmware/fpga.bin" : "/dev/xdevcfg";
     if (rc != 0)
       log_debug("setuid status %d uid %d euid %d", rc, getuid(), geteuid());
 #endif
     int fd = open(filename, (mflag) ? (O_WRONLY | O_CREAT) : O_WRONLY);
     if (fd < 0) {
-      log_crit("[%s:%d] failed to open %s: fd=%d errno=%d %s", __FUNCTION__, __LINE__, filename, fd, errno,
-          strerror(errno));
+      log_crit("[%s:%d] failed to open %s: fd=%d errno=%d %s", __FUNCTION__, __LINE__, filename, fd, errno, strerror(errno));
       exit(-1);
     }
     while (input_filesize) {
@@ -898,8 +899,8 @@ int fpgajtag_main(char* bitstream)
       filename = "/sys/class/fpga_manager/fpga0/firmware";
       fd = open(filename, O_WRONLY);
       if (fd < 0) {
-        log_crit("[%s:%d] failed to open %s: fd=%d errno=%d %s", __FUNCTION__, __LINE__, filename, fd, errno,
-            strerror(errno));
+        log_crit(
+            "[%s:%d] failed to open %s: fd=%d errno=%d %s", __FUNCTION__, __LINE__, filename, fd, errno, strerror(errno));
         exit(-1);
       }
       filename = "fpga.bin";
@@ -949,7 +950,7 @@ int fpgajtag_main(char* bitstream)
    */
   marker_for_reset(0);
   ENTER_TMS_STATE('I');
-  uint8_t* rdata = write_pattern(0, idcode_vpattern, 'P');
+  uint8_t *rdata = write_pattern(0, idcode_vpattern, 'P');
   if (last_read_data_length != idcode_vresult[0] || memcmp(idcode_vresult + 1, rdata, idcode_vresult[0])) {
     memdump(idcode_vresult + 1, idcode_vresult[0], "IDCODE_VALIDATE: EXPECT");
     memdump(rdata, last_read_data_length, "IDCODE_VALIDATE: ACTUAL");

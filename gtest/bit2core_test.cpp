@@ -2,24 +2,24 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-extern int real_main(int argc, char** argv);
-extern int get_model_id(const char* m65targetname);
-extern char* find_fpga_part_from_m65targetname(const char* m65targetname);
+extern int real_main(int argc, char **argv);
+extern int get_model_id(const char *m65targetname);
+extern char *find_fpga_part_from_m65targetname(const char *m65targetname);
 
 // my tests
 namespace bit2core {
 
-int call_bit2core_with_args(char* m65targetname, char* bitfile, char* corfile)
+int call_bit2core_with_args(char *m65targetname, char *bitfile, char *corfile)
 {
-  char* argv[] = { "bit2core", m65targetname, bitfile, "core_name_field", "core_version_field", corfile, NULL };
+  char *argv[] = { "bit2core", m65targetname, bitfile, "core_name_field", "core_version_field", corfile, NULL };
   return real_main(6, argv);
 }
 
-void generate_dummy_bit_file(const char* name, const char* m65targetname)
+void generate_dummy_bit_file(const char *name, const char *m65targetname)
 {
-  char* fpga_part = find_fpga_part_from_m65targetname(m65targetname);
+  char *fpga_part = find_fpga_part_from_m65targetname(m65targetname);
 
-  FILE* f = fopen(name, "wb");
+  FILE *f = fopen(name, "wb");
   // write xilinx magic header
   fputc(0x00, f);
   fputc(0x09, f);
@@ -54,9 +54,9 @@ void generate_dummy_bit_file(const char* name, const char* m65targetname)
   fclose(f);
 }
 
-int extract_model_id_from_core_file(const char* name)
+int extract_model_id_from_core_file(const char *name)
 {
-  FILE* f = fopen(name, "rb");
+  FILE *f = fopen(name, "rb");
   fseek(f, 0x70, SEEK_SET);
   int ret = fgetc(f);
   fclose(f);

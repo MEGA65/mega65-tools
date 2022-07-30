@@ -58,7 +58,7 @@ int debug_load_memory = 0;
 
 extern unsigned char recent_bytes[4];
 
-int full_read=0;
+int full_read = 0;
 
 int osk_enable = 0;
 
@@ -71,22 +71,21 @@ int halt = 0;
 
 int usedk = 0;
 
-char* load_binary = NULL;
+char *load_binary = NULL;
 
-int viciv_mode_report(unsigned char* viciv_regs);
+int viciv_mode_report(unsigned char *viciv_regs);
 
-int fpgajtag_main(char* bitstream, char* serialport);
-char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode);
-int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity);
-void set_vcd_file(char* name);
+int fpgajtag_main(char *bitstream, char *serialport);
+char *init_fpgajtag(const char *serialno, const char *serialport, uint32_t file_idcode);
+int xilinx_boundaryscan(char *xdc, char *bsdl, char *sensitivity);
+void set_vcd_file(char *name);
 void do_exit(int retval);
 void get_video_state(void);
 
 void usage(void)
 {
   fprintf(stderr, "MEGA65 remote disk reading tool.\n");
-  fprintf(stderr,
-      "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>] [-f] out.d81\n");
+  fprintf(stderr, "usage: m65 [-l <serial port>] [-s <230400|2000000|4000000>] [-f] out.d81\n");
 
   fprintf(stderr, "  -f - Do full copy (instead of only copying sectors likely to contain data.\n"
                   "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n"
@@ -111,7 +110,7 @@ unsigned char hyppo_buffer[1024];
 int counter = 0;
 
 int show_audio_mixer = 0;
-char* set_mixer_args = NULL;
+char *set_mixer_args = NULL;
 int state = 99;
 unsigned int name_len, name_lo, name_hi, name_addr = -1;
 int do_go64 = 0;
@@ -120,21 +119,21 @@ int comma_eight_comma_one = 0;
 int ethernet_video = 0;
 int ethernet_cpulog = 0;
 int virtual_f011 = 0;
-char* d81file = NULL;
-char* filename = NULL;
-char* romfile = NULL;
-char* logfile = NULL;
-char* flashmenufile = NULL;
-char* charromfile = NULL;
-char* colourramfile = NULL;
-FILE* f = NULL;
-FILE* fd81 = NULL;
-char* search_path = ".";
-char* bitstream = NULL;
-char* vivado_bat = NULL;
-char* hyppo = NULL;
-char* fpga_serial = NULL;
-char* serial_port = NULL; // XXX do a better job auto-detecting this
+char *d81file = NULL;
+char *filename = NULL;
+char *romfile = NULL;
+char *logfile = NULL;
+char *flashmenufile = NULL;
+char *charromfile = NULL;
+char *colourramfile = NULL;
+FILE *f = NULL;
+FILE *fd81 = NULL;
+char *search_path = ".";
+char *bitstream = NULL;
+char *vivado_bat = NULL;
+char *hyppo = NULL;
+char *fpga_serial = NULL;
+char *serial_port = NULL; // XXX do a better job auto-detecting this
 char modeline_cmd[1024] = "";
 int break_point = -1;
 int jtag_only = 0;
@@ -153,7 +152,7 @@ int screen_line_step = 0;
 int screen_width = 0;
 unsigned char screen_line_buffer[256];
 
-char* type_text = NULL;
+char *type_text = NULL;
 int type_text_cr = 0;
 
 int no_cart = 0;
@@ -319,7 +318,7 @@ int virtual_f011_write(int device, int track, int sector, int side)
   return 0;
 }
 
-uint32_t uint32_from_buf(unsigned char* b, int ofs)
+uint32_t uint32_from_buf(unsigned char *b, int ofs)
 {
   uint32_t v = 0;
   v = b[ofs + 0];
@@ -736,15 +735,14 @@ void do_type_key(unsigned char key)
   usleep(20000);
 }
 
-
 char line[1024];
 int line_len = 0;
 
-void* run_boundary_scan(void* argp)
+void *run_boundary_scan(void *argp)
 {
   xilinx_boundaryscan(boundary_xdc[0] ? boundary_xdc : NULL, boundary_bsdl[0] ? boundary_bsdl : NULL,
       jtag_sensitivity[0] ? jtag_sensitivity : NULL);
-  return (void*)NULL;
+  return (void *)NULL;
 }
 
 #ifndef WINDOWS
@@ -765,7 +763,7 @@ void download_bitstream(void)
 
   char filename[8192];
   snprintf(filename, 8192, "%s/.netrc", getenv("HOME"));
-  FILE* nf = fopen(filename, "rb");
+  FILE *nf = fopen(filename, "rb");
   if (!nf) {
     fprintf(stderr, "WARNING: You don't have a .netrc file.  You probably want to set one up with something like this:\n"
                     "    machine  app.scryptos.com\n"
@@ -794,7 +792,7 @@ void download_bitstream(void)
       issue, tag);
   system(cmd);
 
-  FILE* f = fopen("/tmp/monitor_load.folder.txt", "rb");
+  FILE *f = fopen("/tmp/monitor_load.folder.txt", "rb");
   if (!f) {
     fprintf(stderr, "ERROR: Could not read WebDAV retrieved folder name from /tmp/monitor_load.folder.txt\n");
     exit(-2);
@@ -827,7 +825,7 @@ void download_hyppo(void)
 
   char filename[8192];
   snprintf(filename, 8192, "%s/.netrc", getenv("HOME"));
-  FILE* nf = fopen(filename, "rb");
+  FILE *nf = fopen(filename, "rb");
   if (!nf) {
     fprintf(stderr, "WARNING: You don't have a .netrc file.  You probably want to set one up with something like this:\n"
                     "    machine  app.scryptos.com\n"
@@ -856,7 +854,7 @@ void download_hyppo(void)
       issue, tag);
   system(cmd);
 
-  FILE* f = fopen("/tmp/monitor_load.folder.txt", "rb");
+  FILE *f = fopen("/tmp/monitor_load.folder.txt", "rb");
   if (!f) {
     fprintf(stderr, "ERROR: Could not read WebDAV retrieved folder name from /tmp/monitor_load.folder.txt\n");
     exit(-2);
@@ -879,14 +877,14 @@ void download_hyppo(void)
   hyppo = "/tmp/monitor_load.HICKUP.M65";
 }
 
-void load_bitstream(char* bitstream)
+void load_bitstream(char *bitstream)
 {
   if (vivado_bat != NULL) {
     /*  For Windows we just call Vivado to do the FPGA programming,
         while we are having horrible USB problems otherwise. */
     unsigned int fpga_id = 0x3631093;
 
-    FILE* f = fopen(bitstream, "r");
+    FILE *f = fopen(bitstream, "r");
     if (f) {
       unsigned char buff[8192];
       int len = fread(buff, 1, 8192, f);
@@ -907,12 +905,12 @@ void load_bitstream(char* bitstream)
     else
       log_warn("could not open bitstream file '%s'", bitstream);
 
-    char* part_name = "xc7a100t_0";
+    char *part_name = "xc7a100t_0";
     log_info("expecting FPGA Part ID %x", fpga_id);
     if (fpga_id == 0x3636093)
       part_name = "xc7a200t_0";
 
-    FILE* tclfile = fopen("temp.tcl", "w");
+    FILE *tclfile = fopen("temp.tcl", "w");
     if (!tclfile) {
       log_crit("Could not create temp.tcl");
       exit(-1);
@@ -973,9 +971,9 @@ void return_from_hypervisor_mode(void)
   slow_write_safe(fd, "t0\r", 3);
 }
 
-int check_file_access(char* file, char* purpose)
+int check_file_access(char *file, char *purpose)
 {
-  FILE* f = fopen(file, "rb");
+  FILE *f = fopen(file, "rb");
   if (!f) {
     fprintf(stderr, "ERROR: Cannot access %s file '%s'\n", purpose, file);
     exit(-1);
@@ -1027,15 +1025,15 @@ void handle_vf011_requests()
   }
 }
 
-extern const char* version_string;
+extern const char *version_string;
 
 unsigned char checkUSBPermissions()
 {
 #ifndef WINDOWS
-  libusb_device_handle* usbhandle = NULL;
-  struct libusb_context* usb_context;
-  libusb_device** device_list;
-  libusb_device* dev;
+  libusb_device_handle *usbhandle = NULL;
+  struct libusb_context *usb_context;
+  libusb_device **device_list;
+  libusb_device *dev;
   unsigned int i = 0;
 
   if (libusb_init(&usb_context) < 0 || libusb_get_device_list(usb_context, &device_list) < 0) {
@@ -1058,16 +1056,17 @@ unsigned char checkUSBPermissions()
 
 unsigned char read_a_sector(unsigned char track_number, unsigned char side, unsigned char sector)
 {
-  // Disable auto-seek, or we can't force seeking to track 0    
-  mega65_poke(0xffD3696,0x00);
+  // Disable auto-seek, or we can't force seeking to track 0
+  mega65_poke(0xffD3696, 0x00);
 
   // Floppy motor on, and select side
   mega65_poke(0xffD3080, 0x68);
-  if (side) mega65_poke(0xffD3080,0x60);
-  
+  if (side)
+    mega65_poke(0xffD3080, 0x60);
+
   // Map FDC sector buffer, not SD sector buffer
   mega65_poke(0xffD3689, mega65_peek(0xffD3689) & 0x7f);
-  
+
   // Disable matching on any sector, use real drive
   mega65_poke(0xffd36A1, 0x01);
 
@@ -1099,9 +1098,7 @@ unsigned char read_a_sector(unsigned char track_number, unsigned char side, unsi
   mega65_poke(0xffD3081, 0x40);
 
   // Wait for busy flag to clear
-  while (mega65_peek(0xffD3082) & 0x80) {
-   
-  }
+  while (mega65_peek(0xffD3082) & 0x80) { }
 
   if (mega65_peek(0xffD3082) & 0x18) {
     // Read failed
@@ -1161,8 +1158,7 @@ void goto_track0(void)
   }
 }
 
-
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   start_time = time(0);
 
@@ -1179,7 +1175,9 @@ int main(int argc, char** argv)
     case 'h':
     case '?':
       usage();
-    case 'f': full_read=1; break;
+    case 'f':
+      full_read = 1;
+      break;
       break;
     case 'l':
       serial_port = strdup(optarg);
@@ -1212,10 +1210,10 @@ int main(int argc, char** argv)
   if (!serial_port)
 #endif
   {
-    char* res;
+    char *res;
     log_info("scanning bitstream file '%s' for device ID", bitstream);
     unsigned int fpga_id = 0xffffffff;
-    FILE* f = fopen(bitstream, "rb");
+    FILE *f = fopen(bitstream, "rb");
     if (f) {
       unsigned char buff[8192];
       int len = fread(buff, 1, 8192, f);
@@ -1265,37 +1263,35 @@ int main(int argc, char** argv)
 
   // Seek to track 0, then to track 37
   goto_track0();
-  for(int i=0;i<35;i++) {
+  for (int i = 0; i < 35; i++) {
     mega65_poke(0xffD3081, 0x18);
     while (mega65_peek(0xffd3082) & 0x80)
       continue;
   }
-  
-  for(int track=38;track<41;track++) {
+
+  for (int track = 38; track < 41; track++) {
 
     // Step one track
     mega65_poke(0xffD3081, 0x18);
     while (mega65_peek(0xffd3082) & 0x80)
-      continue;    
+      continue;
 
     usleep(50000);
     log_note("current track is T:%02x, H:%02x", mega65_peek(0xffd36a3), mega65_peek(0xffd36a5));
-    
-    for(int side=0;side<2;side++) {
+
+    for (int side = 0; side < 2; side++) {
       // Allow a little bit of time for a sector to pass under the head,
-      // so that we can check the track and head, and step if we need      
-      
-      for(int sector=1;sector<=10;sector++) {
-	      log_note("reading T:%02x, S:%02x, H:%02x",
-		    track,sector,side);
-	      read_a_sector(track,side,sector);
+      // so that we can check the track and head, and step if we need
+
+      for (int sector = 1; sector <= 10; sector++) {
+        log_note("reading T:%02x, S:%02x, H:%02x", track, sector, side);
+        read_a_sector(track, side, sector);
       }
     }
   }
   // Floppy motor off
   mega65_poke(0xffD3080, 0x00);
 
-  
   start_cpu();
   do_exit(0);
 }

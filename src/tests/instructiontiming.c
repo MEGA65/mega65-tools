@@ -20,10 +20,10 @@
 #include <string.h>
 #include <stdint.h>
 
-#define POKE(a, v) *((uint8_t*)a) = (uint8_t)v
-#define PEEK(a) ((uint8_t)(*((uint8_t*)a)))
+#define POKE(a, v) *((uint8_t *)a) = (uint8_t)v
+#define PEEK(a) ((uint8_t)(*((uint8_t *)a)))
 
-char* instruction_descriptions[256] = { "BRK", "ORA ($nn,X)", "CLE", "SEE", "TSB $nn", "ORA $nn", "ASL $nn", "RMB0 $nn",
+char *instruction_descriptions[256] = { "BRK", "ORA ($nn,X)", "CLE", "SEE", "TSB $nn", "ORA $nn", "ASL $nn", "RMB0 $nn",
   "PHP", "ORA #$nn", "ASL A", "TSY", "TSB $nnnn", "ORA $nnnn", "ASL $nnnn", "BBR0 $nn,$rr", "BPL $rr", "ORA ($nn),Y",
   "ORA ($nn),Z", "BPL $rrrr", "TRB $nn", "ORA $nn,X", "ASL $nn,X", "RMB1 $nn", "CLC", "ORA $nnnn,Y", "INC", "INZ",
   "TRB $nnnn", "ORA $nnnn,X", "ASL $nnnn,X", "BBR1 $nn,$rr", "JSR $nnnn", "AND ($nn,X)", "JSR ($nnnn)", "JSR ($nnnn,X)",
@@ -86,7 +86,7 @@ unsigned short expected_cycles_6502[256] = {
 #define FREQ_BOULDERDASH 2
 #define FREQ_BITCOIN64 3
 #define FREQ_MAX 4
-char* freq_descriptions[FREQ_MAX] = { "FLAT      ", "C64 BASIC ", "BLDERDASH ", "BITCOIN64" };
+char *freq_descriptions[FREQ_MAX] = { "FLAT      ", "C64 BASIC ", "BLDERDASH ", "BITCOIN64" };
 unsigned char instruction_frequencies[FREQ_MAX][256] = {
   // FREQ_FLAT
   { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -147,11 +147,11 @@ unsigned char overhead = 0;
 // Where we build the instruction test routine
 unsigned short offset = 0;
 // unsigned char test_routine[256];
-unsigned char* test_routine = (unsigned char*)0xc000U;
+unsigned char *test_routine = (unsigned char *)0xc000U;
 
 unsigned char rts_lo_offset, rts_hi_offset;
 
-char* mode;
+char *mode;
 
 unsigned char legal_and_runnable_6502_opcode(unsigned char op)
 {
@@ -271,7 +271,7 @@ void update_selected_opcode(void)
     printf("                                     ");
 }
 
-unsigned char* freqs;
+unsigned char *freqs;
 void update_speed_estimates(void)
 {
   printf("\023\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"); // home cursor + 19x down

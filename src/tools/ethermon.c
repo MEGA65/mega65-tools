@@ -41,7 +41,7 @@
 #include <time.h>
 #include <pcap.h>
 
-char* match_string = NULL;
+char *match_string = NULL;
 int num_instructions = 999999999;
 
 int wait_for_break = 0;
@@ -75,7 +75,7 @@ int report_instruction_frequencies(void)
   return 0;
 }
 
-char* oplist[] = { "00   BRK\n", "01   ORA ($nn,X)\n", "02   CLE\n", "03   SEE\n", "04   TSB $nn\n", "05   ORA $nn\n",
+char *oplist[] = { "00   BRK\n", "01   ORA ($nn,X)\n", "02   CLE\n", "03   SEE\n", "04   TSB $nn\n", "05   ORA $nn\n",
   "06   ASL $nn\n", "07   RMB0 $nn\n", "08   PHP\n", "09   ORA #$nn\n", "0A   ASL A\n", "0B   TSY\n", "0C   TSB $nnnn\n",
   "0D   ORA $nnnn\n", "0E   ASL $nnnn\n", "0F   BBR0 $nn,$rr\n", "10   BPL $rr\n", "11   ORA ($nn),Y\n",
   "12   ORA ($nn),Z\n", "13   BPL $rrrr\n", "14   TRB $nn\n", "15   ORA $nn,X\n", "16   ASL $nn,X\n", "17   RMB1 $nn\n",
@@ -121,14 +121,14 @@ char* oplist[] = { "00   BRK\n", "01   ORA ($nn,X)\n", "02   CLE\n", "03   SEE\n
   "FF   BBS7 $nn,$rr\n", NULL };
 
 struct annotation {
-  char* text;
-  struct annotation* next;
+  char *text;
+  struct annotation *next;
 };
 
-struct annotation* annotations[0x10000] = { NULL };
+struct annotation *annotations[0x10000] = { NULL };
 
-char* opnames[256] = { NULL };
-char* modes[256] = { NULL };
+char *opnames[256] = { NULL };
+char *modes[256] = { NULL };
 
 int instruction_address = 0xFFFF;
 
@@ -139,9 +139,9 @@ int one_frame = 0;
 int one_frame_active = 0;
 
 int logged_instruction_count = 0;
-char* logged_instructions[16] = { NULL };
+char *logged_instructions[16] = { NULL };
 
-int decode_instruction(const unsigned char* b)
+int decode_instruction(const unsigned char *b)
 {
   char out[8192] = "";
   int out_len = 0;
@@ -297,7 +297,7 @@ int decode_instruction(const unsigned char* b)
     out_len += snprintf(&out[out_len], 8192 - out_len, " ");
     c++;
   }
-  struct annotation* a = annotations[load_address];
+  struct annotation *a = annotations[load_address];
   while (a) {
     out_len += snprintf(&out[out_len], 8192 - out_len, "%s\n", a->text);
     if (a->next)
@@ -345,7 +345,7 @@ int decode_instruction(const unsigned char* b)
   }
   if (!num_instructions) {
     // Log instructions if we are not currently displaying them
-    char* next_in_ring = logged_instructions[15];
+    char *next_in_ring = logged_instructions[15];
     for (int i = 15; i; i--)
       logged_instructions[i] = logged_instructions[i - 1];
     logged_instructions[0] = next_in_ring;
@@ -361,7 +361,7 @@ int decode_instruction(const unsigned char* b)
   return 0;
 }
 
-int decode_busaccess(const unsigned char* b)
+int decode_busaccess(const unsigned char *b)
 {
   int fastio_write = b[6] & 0x80;
   int fastio_read = b[6] & 0x40;
@@ -399,16 +399,16 @@ int decode_busaccess(const unsigned char* b)
 
 #define MAX_LINES 65536
 struct source_file {
-  char* name;
+  char *name;
   int line_count;
-  char* lines[MAX_LINES];
+  char *lines[MAX_LINES];
 };
 
 #define MAX_SOURCES 256
 struct source_file source_files[MAX_SOURCES];
 int source_file_count = 0;
 
-char* find_source_line(char* file, int line)
+char *find_source_line(char *file, int line)
 {
   int num;
   line--;
@@ -417,7 +417,7 @@ char* find_source_line(char* file, int line)
       break;
   }
   if (num == source_file_count) {
-    FILE* f = fopen(file, "r");
+    FILE *f = fopen(file, "r");
     if (!f)
       return NULL;
     char l[1024];
@@ -446,12 +446,12 @@ char* find_source_line(char* file, int line)
   return source_files[num].lines[line];
 }
 
-int record_address_annotation(int addr, char* source, int line)
+int record_address_annotation(int addr, char *source, int line)
 {
   if (addr < 0 || addr > 0xffff)
     return -1;
 
-  char* source_line = find_source_line(source, line);
+  char *source_line = find_source_line(source, line);
   char annotation[8192];
   int source_offset = 0;
   for (int i = 0; source[i]; i++)
@@ -467,16 +467,16 @@ int record_address_annotation(int addr, char* source, int line)
 
   //  printf("  %s\n",annotation);
 
-  struct annotation* a = calloc(sizeof(struct annotation), 1);
+  struct annotation *a = calloc(sizeof(struct annotation), 1);
   a->text = strdup(annotation);
   a->next = annotations[addr];
   annotations[addr] = a;
   return 0;
 }
 
-int read_annotation_file(char* an)
+int read_annotation_file(char *an)
 {
-  FILE* f = fopen(an, "r");
+  FILE *f = fopen(an, "r");
   if (!f) {
     fprintf(stderr, "Could not open '%s' for reading.\n", an);
     exit(-3);
@@ -515,15 +515,15 @@ int usage(void)
   exit(-3);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  char* dev;
+  char *dev;
   char errbuf[PCAP_ERRBUF_SIZE];
-  pcap_t* descr;
+  pcap_t *descr;
   //    struct bpf_program fp;        /* to hold compiled program */
   bpf_u_int32 pMask; /* subnet mask */
   bpf_u_int32 pNet;  /* ip address*/
-  pcap_if_t* alldevs;
+  pcap_if_t *alldevs;
 
   for (int i = 0; i < 0x10000; i++)
     annotations[i] = NULL;
@@ -622,7 +622,7 @@ int main(int argc, char** argv)
 
     struct pcap_pkthdr hdr;
     hdr.caplen = 0;
-    const unsigned char* packet = pcap_next(descr, &hdr);
+    const unsigned char *packet = pcap_next(descr, &hdr);
     if (packet) {
       if (hdr.caplen == 2132) {
         bit52set = 0;

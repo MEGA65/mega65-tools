@@ -35,25 +35,25 @@
 
 /* ----- convert.h ----- */
 
-HRESULT ConvertFileTimeToVariantTime(FILETIME* pft, DATE* pDate);
-HRESULT ConvertVariantTimeToFileTime(DATE date, FILETIME* pft);
+HRESULT ConvertFileTimeToVariantTime(FILETIME *pft, DATE *pDate);
+HRESULT ConvertVariantTimeToFileTime(DATE date, FILETIME *pft);
 
-HRESULT ConvertVariantTimeToSystemTime(DATE date, SYSTEMTIME* pSystemTime);
-HRESULT ConvertSystemTimeToVariantTime(SYSTEMTIME* pSystemTime, DATE* pDate);
+HRESULT ConvertVariantTimeToSystemTime(DATE date, SYSTEMTIME *pSystemTime);
+HRESULT ConvertSystemTimeToVariantTime(SYSTEMTIME *pSystemTime, DATE *pDate);
 
-HRESULT ConvertTimeTToVariantTime(time_t timeT, DATE* pDate);
-HRESULT ConvertVariantTimeToTimeT(DATE date, time_t* pTimeT);
+HRESULT ConvertTimeTToVariantTime(time_t timeT, DATE *pDate);
+HRESULT ConvertVariantTimeToTimeT(DATE date, time_t *pTimeT);
 
-HRESULT ConvertAnsiStrToBStr(LPCSTR szAnsiIn, BSTR* lpBstrOut);
-HRESULT ConvertBStrToAnsiStr(BSTR bstrIn, LPSTR* lpszOut);
+HRESULT ConvertAnsiStrToBStr(LPCSTR szAnsiIn, BSTR *lpBstrOut);
+HRESULT ConvertBStrToAnsiStr(BSTR bstrIn, LPSTR *lpszOut);
 
 /* ----- dh_create.c ----- */
 
-HRESULT dhCreateObjectEx(LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, COSERVERINFO* pServerInfo, void** ppv)
+HRESULT dhCreateObjectEx(LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, COSERVERINFO *pServerInfo, void **ppv)
 {
   CLSID clsid;
   HRESULT hr;
-  IClassFactory* pCf = NULL;
+  IClassFactory *pCf = NULL;
 
   DH_ENTER(L"CreateObjectEx");
 
@@ -66,7 +66,7 @@ HRESULT dhCreateObjectEx(LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, CO
     hr = CLSIDFromProgID(szProgId, &clsid);
 
   if (SUCCEEDED(hr))
-    hr = CoGetClassObject(&clsid, dwClsContext, pServerInfo, &IID_IClassFactory, (void**)&pCf);
+    hr = CoGetClassObject(&clsid, dwClsContext, pServerInfo, &IID_IClassFactory, (void **)&pCf);
   if (SUCCEEDED(hr))
     hr = pCf->lpVtbl->CreateInstance(pCf, NULL, riid, ppv);
 
@@ -77,7 +77,7 @@ HRESULT dhCreateObjectEx(LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, CO
 }
 
 HRESULT dhGetObjectEx(
-    LPCOLESTR szPathName, LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, LPVOID lpvReserved, void** ppv)
+    LPCOLESTR szPathName, LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, LPVOID lpvReserved, void **ppv)
 {
   HRESULT hr;
 
@@ -92,9 +92,9 @@ HRESULT dhGetObjectEx(
       hr = CoGetObject(szPathName, NULL, riid, ppv);
     }
     else {
-      IPersistFile* ppf = NULL;
+      IPersistFile *ppf = NULL;
 
-      hr = dhCreateObjectEx(szProgId, &IID_IPersistFile, dwClsContext, NULL, (void**)&ppf);
+      hr = dhCreateObjectEx(szProgId, &IID_IPersistFile, dwClsContext, NULL, (void **)&ppf);
 
       if (SUCCEEDED(hr))
         hr = ppf->lpVtbl->Load(ppf, szPathName, 0);
@@ -108,7 +108,7 @@ HRESULT dhGetObjectEx(
   else {
 
     CLSID clsid;
-    IUnknown* pUnk = NULL;
+    IUnknown *pUnk = NULL;
 
     if (L'{' == szProgId[0])
       hr = CLSIDFromString((LPOLESTR)szProgId, &clsid);
@@ -127,7 +127,7 @@ HRESULT dhGetObjectEx(
   return DH_EXIT(hr, szProgId);
 }
 
-HRESULT dhCreateObject(LPCOLESTR szProgId, LPCWSTR szMachine, IDispatch** ppDisp)
+HRESULT dhCreateObject(LPCOLESTR szProgId, LPCWSTR szMachine, IDispatch **ppDisp)
 {
   COSERVERINFO si = { 0 };
 
@@ -137,20 +137,20 @@ HRESULT dhCreateObject(LPCOLESTR szProgId, LPCWSTR szMachine, IDispatch** ppDisp
 
   return DH_EXIT(dhCreateObjectEx(szProgId, &IID_IDispatch,
                      szMachine ? CLSCTX_REMOTE_SERVER : CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER, szMachine ? &si : NULL,
-                     (void**)ppDisp),
+                     (void **)ppDisp),
       szProgId);
 }
 
-HRESULT dhGetObject(LPCOLESTR szPathName, LPCOLESTR szProgId, IDispatch** ppDisp)
+HRESULT dhGetObject(LPCOLESTR szPathName, LPCOLESTR szProgId, IDispatch **ppDisp)
 {
   DH_ENTER(L"GetObject");
 
   return DH_EXIT(
-      dhGetObjectEx(szPathName, szProgId, &IID_IDispatch, CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER, NULL, (void**)ppDisp),
+      dhGetObjectEx(szPathName, szProgId, &IID_IDispatch, CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER, NULL, (void **)ppDisp),
       szProgId);
 }
 
-HRESULT dhCallMethod(IDispatch* pDisp, LPCOLESTR szMember, ...)
+HRESULT dhCallMethod(IDispatch *pDisp, LPCOLESTR szMember, ...)
 {
   HRESULT hr;
   va_list marker;
@@ -166,7 +166,7 @@ HRESULT dhCallMethod(IDispatch* pDisp, LPCOLESTR szMember, ...)
   return DH_EXIT(hr, szMember);
 }
 
-HRESULT dhPutValue(IDispatch* pDisp, LPCOLESTR szMember, ...)
+HRESULT dhPutValue(IDispatch *pDisp, LPCOLESTR szMember, ...)
 {
   HRESULT hr;
   va_list marker;
@@ -182,7 +182,7 @@ HRESULT dhPutValue(IDispatch* pDisp, LPCOLESTR szMember, ...)
   return DH_EXIT(hr, szMember);
 }
 
-HRESULT dhPutRef(IDispatch* pDisp, LPCOLESTR szMember, ...)
+HRESULT dhPutRef(IDispatch *pDisp, LPCOLESTR szMember, ...)
 {
   HRESULT hr;
   va_list marker;
@@ -198,7 +198,7 @@ HRESULT dhPutRef(IDispatch* pDisp, LPCOLESTR szMember, ...)
   return DH_EXIT(hr, szMember);
 }
 
-HRESULT dhGetValue(LPCWSTR szIdentifier, void* pResult, IDispatch* pDisp, LPCOLESTR szMember, ...)
+HRESULT dhGetValue(LPCWSTR szIdentifier, void *pResult, IDispatch *pDisp, LPCOLESTR szMember, ...)
 {
   HRESULT hr;
   va_list marker;
@@ -214,7 +214,7 @@ HRESULT dhGetValue(LPCWSTR szIdentifier, void* pResult, IDispatch* pDisp, LPCOLE
   return DH_EXIT(hr, szMember);
 }
 
-HRESULT dhInvoke(int invokeType, VARTYPE returnType, VARIANT* pvResult, IDispatch* pDisp, LPCOLESTR szMember, ...)
+HRESULT dhInvoke(int invokeType, VARTYPE returnType, VARIANT *pvResult, IDispatch *pDisp, LPCOLESTR szMember, ...)
 {
   HRESULT hr;
   va_list marker;
@@ -234,7 +234,7 @@ HRESULT dhInvoke(int invokeType, VARTYPE returnType, VARIANT* pvResult, IDispatc
 
 BOOL dh_g_bIsUnicodeMode;
 
-HRESULT dhInvokeArray(int invokeType, VARIANT* pvResult, UINT cArgs, IDispatch* pDisp, LPCOLESTR szMember, VARIANT* pArgs)
+HRESULT dhInvokeArray(int invokeType, VARIANT *pvResult, UINT cArgs, IDispatch *pDisp, LPCOLESTR szMember, VARIANT *pArgs)
 {
   DISPPARAMS dp = { 0 };
   EXCEPINFO excep = { 0 };
@@ -248,7 +248,7 @@ HRESULT dhInvokeArray(int invokeType, VARIANT* pvResult, UINT cArgs, IDispatch* 
   if (!pDisp || !szMember || (cArgs != 0 && !pArgs))
     return DH_EXIT(E_INVALIDARG, szMember);
 
-  hr = pDisp->lpVtbl->GetIDsOfNames(pDisp, &IID_NULL, (LPOLESTR*)&szMember, 1, LOCALE_USER_DEFAULT, &dispID);
+  hr = pDisp->lpVtbl->GetIDsOfNames(pDisp, &IID_NULL, (LPOLESTR *)&szMember, 1, LOCALE_USER_DEFAULT, &dispID);
 
   if (FAILED(hr))
     return DH_EXITEX(hr, TRUE, szMember, szMember, NULL, 0);
@@ -270,28 +270,28 @@ HRESULT dhInvokeArray(int invokeType, VARIANT* pvResult, UINT cArgs, IDispatch* 
   return DH_EXITEX(hr, TRUE, szMember, szMember, &excep, uiArgErr);
 }
 
-HRESULT dhCallMethodV(IDispatch* pDisp, LPCOLESTR szMember, va_list* marker)
+HRESULT dhCallMethodV(IDispatch *pDisp, LPCOLESTR szMember, va_list *marker)
 {
   DH_ENTER(L"CallMethodV");
 
   return DH_EXIT(dhInvokeV(DISPATCH_METHOD, VT_EMPTY, NULL, pDisp, szMember, marker), szMember);
 }
 
-HRESULT dhPutValueV(IDispatch* pDisp, LPCOLESTR szMember, va_list* marker)
+HRESULT dhPutValueV(IDispatch *pDisp, LPCOLESTR szMember, va_list *marker)
 {
   DH_ENTER(L"PutValueV");
 
   return DH_EXIT(dhInvokeV(DISPATCH_PROPERTYPUT, VT_EMPTY, NULL, pDisp, szMember, marker), szMember);
 }
 
-HRESULT dhPutRefV(IDispatch* pDisp, LPCOLESTR szMember, va_list* marker)
+HRESULT dhPutRefV(IDispatch *pDisp, LPCOLESTR szMember, va_list *marker)
 {
   DH_ENTER(L"PutRefV");
 
   return DH_EXIT(dhInvokeV(DISPATCH_PROPERTYPUTREF, VT_EMPTY, NULL, pDisp, szMember, marker), szMember);
 }
 
-HRESULT dhGetValueV(LPCWSTR szIdentifier, void* pResult, IDispatch* pDisp, LPCOLESTR szMember, va_list* marker)
+HRESULT dhGetValueV(LPCWSTR szIdentifier, void *pResult, IDispatch *pDisp, LPCOLESTR szMember, va_list *marker)
 {
   VARIANT vtResult;
   VARTYPE returnType;
@@ -371,81 +371,81 @@ HRESULT dhGetValueV(LPCWSTR szIdentifier, void* pResult, IDispatch* pDisp, LPCOL
 
   switch (*szIdentifier) {
   case L'd':
-    *((LONG*)pResult) = V_I4(&vtResult);
+    *((LONG *)pResult) = V_I4(&vtResult);
     break;
 
   case L'u':
-    *((ULONG*)pResult) = V_UI4(&vtResult);
+    *((ULONG *)pResult) = V_UI4(&vtResult);
     break;
 
   case L'e':
-    *((DOUBLE*)pResult) = V_R8(&vtResult);
+    *((DOUBLE *)pResult) = V_R8(&vtResult);
     break;
 
   case L'b':
-    *((BOOL*)pResult) = V_BOOL(&vtResult);
+    *((BOOL *)pResult) = V_BOOL(&vtResult);
     break;
 
   case L'v':
-    *((VARIANT*)pResult) = vtResult;
+    *((VARIANT *)pResult) = vtResult;
     break;
 
   case L'B':
-    *((BSTR*)pResult) = V_BSTR(&vtResult);
+    *((BSTR *)pResult) = V_BSTR(&vtResult);
     break;
 
   case L'S':
-    *((LPWSTR*)pResult) = V_BSTR(&vtResult);
+    *((LPWSTR *)pResult) = V_BSTR(&vtResult);
     break;
 
   case L's':
-    hr = ConvertBStrToAnsiStr(V_BSTR(&vtResult), (LPSTR*)pResult);
+    hr = ConvertBStrToAnsiStr(V_BSTR(&vtResult), (LPSTR *)pResult);
     SysFreeString(V_BSTR(&vtResult));
     break;
 
   case L'T':
     if (dh_g_bIsUnicodeMode) {
-      *((LPWSTR*)pResult) = V_BSTR(&vtResult);
+      *((LPWSTR *)pResult) = V_BSTR(&vtResult);
     }
     else {
-      hr = ConvertBStrToAnsiStr(V_BSTR(&vtResult), (LPSTR*)pResult);
+      hr = ConvertBStrToAnsiStr(V_BSTR(&vtResult), (LPSTR *)pResult);
       SysFreeString(V_BSTR(&vtResult));
     }
     break;
 
   case L'o':
-    *((IDispatch**)pResult) = V_DISPATCH(&vtResult);
+    *((IDispatch **)pResult) = V_DISPATCH(&vtResult);
     if (V_DISPATCH(&vtResult) == NULL)
       hr = E_NOINTERFACE;
     break;
 
   case L'O':
-    *((IUnknown**)pResult) = V_UNKNOWN(&vtResult);
+    *((IUnknown **)pResult) = V_UNKNOWN(&vtResult);
     if (V_UNKNOWN(&vtResult) == NULL)
       hr = E_NOINTERFACE;
     break;
 
   case L't':
-    hr = ConvertVariantTimeToTimeT(V_DATE(&vtResult), (time_t*)pResult);
+    hr = ConvertVariantTimeToTimeT(V_DATE(&vtResult), (time_t *)pResult);
     break;
 
   case L'W':
-    hr = ConvertVariantTimeToSystemTime(V_DATE(&vtResult), (SYSTEMTIME*)pResult);
+    hr = ConvertVariantTimeToSystemTime(V_DATE(&vtResult), (SYSTEMTIME *)pResult);
     break;
 
   case L'f':
-    hr = ConvertVariantTimeToFileTime(V_DATE(&vtResult), (FILETIME*)pResult);
+    hr = ConvertVariantTimeToFileTime(V_DATE(&vtResult), (FILETIME *)pResult);
     break;
 
   case L'D':
-    *((DATE*)pResult) = V_DATE(&vtResult);
+    *((DATE *)pResult) = V_DATE(&vtResult);
     break;
 
   case L'p':
 #ifndef _WIN64
-    *((LPVOID*)pResult) = (LPVOID)V_I4(&vtResult);
+    *((LPVOID *)pResult) = (LPVOID)V_I4(&vtResult);
 #else
-    *((LPVOID*)pResult) = (LPVOID)V_I8(&vtResult);
+    *((LPVOID *)pResult) = (LPVOID)V_I8(&vtResult);
 #endif
     break;
   }
@@ -455,14 +455,14 @@ HRESULT dhGetValueV(LPCWSTR szIdentifier, void* pResult, IDispatch* pDisp, LPCOL
 
 /* ----- dh_invoke.c ----- */
 
-static HRESULT TraverseSubObjects(IDispatch** ppDisp, LPWSTR* lpszMember, va_list* marker);
-static HRESULT CreateArgumentArray(LPWSTR szTemp, VARIANT* pArgs, BOOL* pbFreeList, UINT* pcArgs, va_list* marker);
+static HRESULT TraverseSubObjects(IDispatch **ppDisp, LPWSTR *lpszMember, va_list *marker);
+static HRESULT CreateArgumentArray(LPWSTR szTemp, VARIANT *pArgs, BOOL *pbFreeList, UINT *pcArgs, va_list *marker);
 static HRESULT InternalInvokeV(
-    int invokeType, VARTYPE returnType, VARIANT* pvResult, IDispatch* pDisp, LPOLESTR szMember, va_list* marker);
-static HRESULT ExtractArgument(VARIANT* pvArg, WCHAR chIdentifier, BOOL* pbFreeArg, va_list* marker);
+    int invokeType, VARTYPE returnType, VARIANT *pvResult, IDispatch *pDisp, LPOLESTR szMember, va_list *marker);
+static HRESULT ExtractArgument(VARIANT *pvArg, WCHAR chIdentifier, BOOL *pbFreeArg, va_list *marker);
 
 HRESULT dhInvokeV(
-    int invokeType, VARTYPE returnType, VARIANT* pvResult, IDispatch* pDisp, LPCOLESTR szMember, va_list* marker)
+    int invokeType, VARTYPE returnType, VARIANT *pvResult, IDispatch *pDisp, LPCOLESTR szMember, va_list *marker)
 {
   WCHAR szCopy[DH_MAX_MEMBER];
   LPWSTR szTemp = szCopy;
@@ -492,7 +492,7 @@ HRESULT dhInvokeV(
   return DH_EXIT(hr, szMember);
 }
 
-static HRESULT TraverseSubObjects(IDispatch** ppDisp, LPWSTR* lpszMember, va_list* marker)
+static HRESULT TraverseSubObjects(IDispatch **ppDisp, LPWSTR *lpszMember, va_list *marker)
 {
   LPWSTR szSeperator, szTemp;
   VARIANT vtObject;
@@ -537,7 +537,7 @@ static HRESULT TraverseSubObjects(IDispatch** ppDisp, LPWSTR* lpszMember, va_lis
 }
 
 static HRESULT InternalInvokeV(
-    int invokeType, VARTYPE returnType, VARIANT* pvResult, IDispatch* pDisp, LPOLESTR szMember, va_list* marker)
+    int invokeType, VARTYPE returnType, VARIANT *pvResult, IDispatch *pDisp, LPOLESTR szMember, va_list *marker)
 {
   VARIANT vtArgs[DH_MAX_ARGS];
   BOOL bFreeList[DH_MAX_ARGS];
@@ -566,7 +566,7 @@ static HRESULT InternalInvokeV(
   return DH_EXIT(hr, szMember);
 }
 
-static HRESULT CreateArgumentArray(LPWSTR szMember, VARIANT* pArgs, BOOL* pbFreeList, UINT* pcArgs, va_list* marker)
+static HRESULT CreateArgumentArray(LPWSTR szMember, VARIANT *pArgs, BOOL *pbFreeList, UINT *pcArgs, va_list *marker)
 {
   HRESULT hr = NOERROR;
   INT iArg = DH_MAX_ARGS;
@@ -616,7 +616,7 @@ static HRESULT CreateArgumentArray(LPWSTR szMember, VARIANT* pArgs, BOOL* pbFree
   return DH_EXIT(hr, szMember);
 }
 
-static HRESULT ExtractArgument(VARIANT* pvArg, WCHAR chIdentifier, BOOL* pbFreeArg, va_list* marker)
+static HRESULT ExtractArgument(VARIANT *pvArg, WCHAR chIdentifier, BOOL *pbFreeArg, va_list *marker)
 {
   HRESULT hr = NOERROR;
 
@@ -647,7 +647,7 @@ static HRESULT ExtractArgument(VARIANT* pvArg, WCHAR chIdentifier, BOOL* pbFreeA
     break;
 
   case L'v':
-    *pvArg = *va_arg(*marker, VARIANT*);
+    *pvArg = *va_arg(*marker, VARIANT *);
     break;
 
   case L'm':
@@ -681,12 +681,12 @@ static HRESULT ExtractArgument(VARIANT* pvArg, WCHAR chIdentifier, BOOL* pbFreeA
 
   case L'o':
     V_VT(pvArg) = VT_DISPATCH;
-    V_DISPATCH(pvArg) = va_arg(*marker, IDispatch*);
+    V_DISPATCH(pvArg) = va_arg(*marker, IDispatch *);
     break;
 
   case L'O':
     V_VT(pvArg) = VT_UNKNOWN;
-    V_UNKNOWN(pvArg) = va_arg(*marker, IUnknown*);
+    V_UNKNOWN(pvArg) = va_arg(*marker, IUnknown *);
     break;
 
   case L'D':
@@ -701,12 +701,12 @@ static HRESULT ExtractArgument(VARIANT* pvArg, WCHAR chIdentifier, BOOL* pbFreeA
 
   case L'W':
     V_VT(pvArg) = VT_DATE;
-    hr = ConvertSystemTimeToVariantTime(va_arg(*marker, SYSTEMTIME*), &V_DATE(pvArg));
+    hr = ConvertSystemTimeToVariantTime(va_arg(*marker, SYSTEMTIME *), &V_DATE(pvArg));
     break;
 
   case L'f':
     V_VT(pvArg) = VT_DATE;
-    hr = ConvertFileTimeToVariantTime(va_arg(*marker, FILETIME*), &V_DATE(pvArg));
+    hr = ConvertFileTimeToVariantTime(va_arg(*marker, FILETIME *), &V_DATE(pvArg));
     break;
 
   case L'p':
@@ -730,12 +730,12 @@ static HRESULT ExtractArgument(VARIANT* pvArg, WCHAR chIdentifier, BOOL* pbFreeA
 
 /* ----- dh_enum.c ----- */
 
-HRESULT dhEnumBeginV(IEnumVARIANT** ppEnum, IDispatch* pDisp, LPCOLESTR szMember, va_list* marker)
+HRESULT dhEnumBeginV(IEnumVARIANT **ppEnum, IDispatch *pDisp, LPCOLESTR szMember, va_list *marker)
 {
   DISPPARAMS dp = { 0 };
   EXCEPINFO excep = { 0 };
   VARIANT vtResult;
-  IDispatch* pDispObj;
+  IDispatch *pDispObj;
   HRESULT hr;
 
   DH_ENTER(L"EnumBeginV");
@@ -762,9 +762,9 @@ HRESULT dhEnumBeginV(IEnumVARIANT** ppEnum, IDispatch* pDisp, LPCOLESTR szMember
     return DH_EXITEX(hr, TRUE, L"_NewEnum", szMember, &excep, 0);
 
   if (vtResult.vt == VT_DISPATCH)
-    hr = vtResult.pdispVal->lpVtbl->QueryInterface(vtResult.pdispVal, &IID_IEnumVARIANT, (void**)ppEnum);
+    hr = vtResult.pdispVal->lpVtbl->QueryInterface(vtResult.pdispVal, &IID_IEnumVARIANT, (void **)ppEnum);
   else if (vtResult.vt == VT_UNKNOWN)
-    hr = vtResult.punkVal->lpVtbl->QueryInterface(vtResult.punkVal, &IID_IEnumVARIANT, (void**)ppEnum);
+    hr = vtResult.punkVal->lpVtbl->QueryInterface(vtResult.punkVal, &IID_IEnumVARIANT, (void **)ppEnum);
   else
     hr = E_NOINTERFACE;
 
@@ -773,7 +773,7 @@ HRESULT dhEnumBeginV(IEnumVARIANT** ppEnum, IDispatch* pDisp, LPCOLESTR szMember
   return DH_EXIT(hr, szMember);
 }
 
-HRESULT dhEnumNextVariant(IEnumVARIANT* pEnum, VARIANT* pvResult)
+HRESULT dhEnumNextVariant(IEnumVARIANT *pEnum, VARIANT *pvResult)
 {
   DH_ENTER(L"EnumNextVariant");
 
@@ -783,7 +783,7 @@ HRESULT dhEnumNextVariant(IEnumVARIANT* pEnum, VARIANT* pvResult)
   return DH_EXIT(pEnum->lpVtbl->Next(pEnum, 1, pvResult, NULL), L"Enumerator");
 }
 
-HRESULT dhEnumNextObject(IEnumVARIANT* pEnum, IDispatch** ppDisp)
+HRESULT dhEnumNextObject(IEnumVARIANT *pEnum, IDispatch **ppDisp)
 {
   VARIANT vtResult;
   HRESULT hr;
@@ -811,7 +811,7 @@ HRESULT dhEnumNextObject(IEnumVARIANT* pEnum, IDispatch** ppDisp)
   return DH_EXIT(hr, L"Enumerator");
 }
 
-HRESULT dhEnumBegin(IEnumVARIANT** ppEnum, IDispatch* pDisp, LPCOLESTR szMember, ...)
+HRESULT dhEnumBegin(IEnumVARIANT **ppEnum, IDispatch *pDisp, LPCOLESTR szMember, ...)
 {
   HRESULT hr;
   va_list marker;
@@ -847,14 +847,14 @@ static const DATE VARIANT_TIMET_MAX = 50424.13480;
 static const time_t TIMET_VARIANT_OVERFLOW = 253402300800;
 #endif
 
-HRESULT ConvertFileTimeToVariantTime(FILETIME* pft, DATE* pDate)
+HRESULT ConvertFileTimeToVariantTime(FILETIME *pft, DATE *pDate)
 {
   ULONGLONG ftScalar;
 
   if (!pft || !pDate)
     return E_INVALIDARG;
 
-  ftScalar = *((ULONGLONG*)pft) + 500;
+  ftScalar = *((ULONGLONG *)pft) + 500;
 
   if (ftScalar >= FILE_TIME_VARIANT_OVERFLOW)
     return E_INVALIDARG;
@@ -865,7 +865,7 @@ HRESULT ConvertFileTimeToVariantTime(FILETIME* pft, DATE* pDate)
   return NOERROR;
 }
 
-HRESULT ConvertVariantTimeToFileTime(DATE date, FILETIME* pft)
+HRESULT ConvertVariantTimeToFileTime(DATE date, FILETIME *pft)
 {
   ULONGLONG ftScalar;
 
@@ -879,12 +879,12 @@ HRESULT ConvertVariantTimeToFileTime(DATE date, FILETIME* pft)
     return E_INVALIDARG;
   ftScalar = (ULONGLONG)((date * FILE_TIME_ONE_DAY) + FILE_TIME_VARIANT_DAY0);
 
-  *pft = *((FILETIME*)&ftScalar);
+  *pft = *((FILETIME *)&ftScalar);
 
   return NOERROR;
 }
 
-HRESULT ConvertVariantTimeToSystemTime(DATE date, SYSTEMTIME* pSystemTime)
+HRESULT ConvertVariantTimeToSystemTime(DATE date, SYSTEMTIME *pSystemTime)
 {
   HRESULT hr;
   FILETIME fileTime;
@@ -896,7 +896,7 @@ HRESULT ConvertVariantTimeToSystemTime(DATE date, SYSTEMTIME* pSystemTime)
   return (FileTimeToSystemTime(&fileTime, pSystemTime) ? NOERROR : HRESULT_FROM_WIN32(GetLastError()));
 }
 
-HRESULT ConvertSystemTimeToVariantTime(SYSTEMTIME* pSystemTime, DATE* pDate)
+HRESULT ConvertSystemTimeToVariantTime(SYSTEMTIME *pSystemTime, DATE *pDate)
 {
   FILETIME fileTime;
 
@@ -907,9 +907,9 @@ HRESULT ConvertSystemTimeToVariantTime(SYSTEMTIME* pSystemTime, DATE* pDate)
   return ConvertFileTimeToVariantTime(&fileTime, pDate);
 }
 
-HRESULT ConvertVariantTimeToTimeT(DATE date, time_t* pTimeT)
+HRESULT ConvertVariantTimeToTimeT(DATE date, time_t *pTimeT)
 {
-  struct tm* ptm;
+  struct tm *ptm;
 
   if (!pTimeT)
     return E_INVALIDARG;
@@ -930,7 +930,7 @@ HRESULT ConvertVariantTimeToTimeT(DATE date, time_t* pTimeT)
   return NOERROR;
 }
 
-HRESULT ConvertTimeTToVariantTime(time_t timeT, DATE* pDate)
+HRESULT ConvertTimeTToVariantTime(time_t timeT, DATE *pDate)
 {
   struct tm localtm, utctm, *ptm;
   time_t timeTLocal, timeTUtc;
@@ -963,7 +963,7 @@ HRESULT ConvertTimeTToVariantTime(time_t timeT, DATE* pDate)
   return NOERROR;
 }
 
-HRESULT ConvertAnsiStrToBStr(LPCSTR szAnsiIn, BSTR* lpBstrOut)
+HRESULT ConvertAnsiStrToBStr(LPCSTR szAnsiIn, BSTR *lpBstrOut)
 {
   DWORD dwSize;
 
@@ -990,7 +990,7 @@ HRESULT ConvertAnsiStrToBStr(LPCSTR szAnsiIn, BSTR* lpBstrOut)
   return NOERROR;
 }
 
-HRESULT ConvertBStrToAnsiStr(BSTR bstrIn, LPSTR* lpszOut)
+HRESULT ConvertBStrToAnsiStr(BSTR bstrIn, LPSTR *lpszOut)
 {
   DWORD dwSize;
 
@@ -1065,7 +1065,7 @@ void dhEnter(void)
   SetStackCount(GetStackCount() + 1);
 }
 
-HRESULT dhExitEx(HRESULT hr, BOOL bDispatchError, LPCWSTR szMember, LPCWSTR szCompleteMember, EXCEPINFO* pExcepInfo,
+HRESULT dhExitEx(HRESULT hr, BOOL bDispatchError, LPCWSTR szMember, LPCWSTR szCompleteMember, EXCEPINFO *pExcepInfo,
     UINT iArgError, LPCWSTR szFunctionName)
 {
   UINT nStackCount = GetStackCount();
@@ -1258,7 +1258,7 @@ HRESULT dhFormatExceptionA(PDH_EXCEPTION pException, LPSTR szBuffer, UINT cchBuf
   return NOERROR;
 }
 
-HRESULT dhGetLastException(PDH_EXCEPTION* ppException)
+HRESULT dhGetLastException(PDH_EXCEPTION *ppException)
 {
   if (!ppException)
     return E_INVALIDARG;

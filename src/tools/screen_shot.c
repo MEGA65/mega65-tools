@@ -27,9 +27,9 @@
 #define SCREEN_POSITION ((800 - 720) / 2)
 
 int monitor_sync(void);
-int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer);
+int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer);
 int fetch_ram_invalidate(void);
-int fetch_ram_cacheable(unsigned long address, unsigned int count, unsigned char* buffer);
+int fetch_ram_cacheable(unsigned long address, unsigned int count, unsigned char *buffer);
 int detect_mode(void);
 void progress_to_RTI(void);
 
@@ -82,8 +82,8 @@ unsigned char char_data[8192 * 8];
 
 unsigned char mega65_rgb(int colour, int rgb, unsigned char alt)
 {
-  return ((vic_regs[(alt?0x400:0x100) + (0x100 * rgb) + colour] & 0xf) << 4)
-       + ((vic_regs[(alt?0x400:0x100) + (0x100 * rgb) + colour] & 0xf0) >> 4);
+  return ((vic_regs[(alt ? 0x400 : 0x100) + (0x100 * rgb) + colour] & 0xf) << 4)
+       + ((vic_regs[(alt ? 0x400 : 0x100) + (0x100 * rgb) + colour] & 0xf0) >> 4);
 }
 
 png_structp png_ptr = NULL;
@@ -107,9 +107,9 @@ int set_pixel(int x, int y, int r, int g, int b)
   }
 
   //  log_debug("Setting pixel at %d,%d to #%02x%02x%02x",x,y,b,g,r);
-  ((unsigned char*)png_rows[y])[x * 3 + 0] = r;
-  ((unsigned char*)png_rows[y])[x * 3 + 1] = g;
-  ((unsigned char*)png_rows[y])[x * 3 + 2] = b;
+  ((unsigned char *)png_rows[y])[x * 3 + 0] = r;
+  ((unsigned char *)png_rows[y])[x * 3 + 1] = g;
+  ((unsigned char *)png_rows[y])[x * 3 + 2] = b;
 
   return 0;
 }
@@ -122,7 +122,7 @@ typedef struct {
   int bits_stored; /* the number of bits from the codepoint that fits in char */
 } utf_t;
 
-utf_t* utf[] = {
+utf_t *utf[] = {
   /*             mask        lead        beg      end       bits */
   [0] = &(utf_t) { 0b00111111, 0b10000000, 0, 0, 6 },
   [1] = &(utf_t) { 0b01111111, 0b00000000, 0000, 0177, 7 },
@@ -138,13 +138,13 @@ utf_t* utf[] = {
 int codepoint_len(const uint32_t cp); /* len of associated utf-8 char */
 int utf8_len(const char ch);          /* len of utf-8 encoded char */
 
-char* to_utf8(const uint32_t cp);
+char *to_utf8(const uint32_t cp);
 uint32_t to_cp(const char chr[4]);
 
 int codepoint_len(const uint32_t cp)
 {
   int len = 0;
-  for (utf_t** u = utf; *u; ++u) {
+  for (utf_t **u = utf; *u; ++u) {
     if ((cp >= (*u)->beg) && (cp <= (*u)->end)) {
       break;
     }
@@ -159,7 +159,7 @@ int codepoint_len(const uint32_t cp)
 int utf8_len(const char ch)
 {
   int len = 0;
-  for (utf_t** u = utf; *u; ++u) {
+  for (utf_t **u = utf; *u; ++u) {
     if ((ch & ~(*u)->mask) == (*u)->lead) {
       break;
     }
@@ -171,7 +171,7 @@ int utf8_len(const char ch)
   return len;
 }
 
-char* to_utf8(const uint32_t cp)
+char *to_utf8(const uint32_t cp)
 {
   static char ret[5];
   const int bytes = codepoint_len(cp);
@@ -292,10 +292,8 @@ int do_screen_shot_ascii(void)
 
 #ifndef WINDOWS
   // Display a thin border
-  printf("%c[48;2;%d;%d;%dm", 27,
-         mega65_rgb(border_colour, 0, 0),
-         mega65_rgb(border_colour, 1, 0),
-         mega65_rgb(border_colour, 2, 0));
+  printf("%c[48;2;%d;%d;%dm", 27, mega65_rgb(border_colour, 0, 0), mega65_rgb(border_colour, 1, 0),
+      mega65_rgb(border_colour, 2, 0));
   for (int x = 0; x < (1 + screen_width + 1); x++)
     printf(" ");
   printf("%c[0m\n", 27);
@@ -303,10 +301,8 @@ int do_screen_shot_ascii(void)
   for (int y = 0; y < screen_rows; y++) {
     //    dump_bytes(0,"row data",&screen_data[y*screen_line_step],screen_width*(1+sixteenbit_mode));
 
-    printf("%c[48;2;%d;%d;%dm ", 27,
-           mega65_rgb(border_colour, 0, 0),
-           mega65_rgb(border_colour, 1, 0),
-           mega65_rgb(border_colour, 2, 0));
+    printf("%c[48;2;%d;%d;%dm ", 27, mega65_rgb(border_colour, 0, 0), mega65_rgb(border_colour, 1, 0),
+        mega65_rgb(border_colour, 2, 0));
 
     for (int x = 0; x < screen_width; x++) {
 
@@ -366,14 +362,9 @@ int do_screen_shot_ascii(void)
         bg = foreground_colour;
         fg = char_background_colour;
       }
-      printf("%c[48;2;%d;%d;%dm%c[38;2;%d;%d;%dm", 27,
-             mega65_rgb(bg, 0, glyph_altpalette),
-             mega65_rgb(bg, 1, glyph_altpalette),
-             mega65_rgb(bg, 2, glyph_altpalette),
-             27,
-             mega65_rgb(fg, 0, glyph_altpalette),
-             mega65_rgb(fg, 1, glyph_altpalette),
-             mega65_rgb(fg, 2, glyph_altpalette));
+      printf("%c[48;2;%d;%d;%dm%c[38;2;%d;%d;%dm", 27, mega65_rgb(bg, 0, glyph_altpalette),
+          mega65_rgb(bg, 1, glyph_altpalette), mega65_rgb(bg, 2, glyph_altpalette), 27, mega65_rgb(fg, 0, glyph_altpalette),
+          mega65_rgb(fg, 1, glyph_altpalette), mega65_rgb(fg, 2, glyph_altpalette));
 
       // Xterm can't display arbitrary graphics, so just mark full-colour chars
       if (glyph_full_colour) {
@@ -385,18 +376,14 @@ int do_screen_shot_ascii(void)
         print_screencode(char_id & 0xff, upper_case);
     }
 
-    printf("%c[48;2;%d;%d;%dm ", 27,
-           mega65_rgb(border_colour, 0, 0),
-           mega65_rgb(border_colour, 1, 0),
-           mega65_rgb(border_colour, 2, 0));
+    printf("%c[48;2;%d;%d;%dm ", 27, mega65_rgb(border_colour, 0, 0), mega65_rgb(border_colour, 1, 0),
+        mega65_rgb(border_colour, 2, 0));
 
     // Set foreground and background colours back to normal at end of each line, before newline
     printf("%c[0m\n", 27);
   }
-  printf("%c[48;2;%d;%d;%dm", 27,
-         mega65_rgb(border_colour, 0, 0),
-         mega65_rgb(border_colour, 1, 0),
-         mega65_rgb(border_colour, 2, 0));
+  printf("%c[48;2;%d;%d;%dm", 27, mega65_rgb(border_colour, 0, 0), mega65_rgb(border_colour, 1, 0),
+      mega65_rgb(border_colour, 2, 0));
   for (int x = 0; x < (1 + screen_width + 1); x++)
     printf(" ");
   printf("%c[0m", 27);
@@ -416,23 +403,25 @@ void get_video_state(void)
   fetch_ram(0xffd3000, 0x0100, vic_regs);
   // log_debug("Got video regs, pal = $%02X", vic_regs[0x70]);
   unsigned char palreg = vic_regs[0x70];
-  unsigned char altpalsel = vic_regs[0x70]&0x3;
-  unsigned char btpalsel  = (vic_regs[0x70]&0x30)>>4;
-  unsigned char mapedpal  = vic_regs[0x70]>>6;
-  unsigned char mapbtpal  = (palreg & 0x3f) | (btpalsel<<6);
-  unsigned char mapaltpal = (palreg & 0x3f) | (altpalsel<<6);
-  // log_debug("palreg = $%02X, btpalsel = %d(%02X), altpalsel = %d(%02X)", palreg, btpalsel, mapbtpal, altpalsel, mapaltpal);
+  unsigned char altpalsel = vic_regs[0x70] & 0x3;
+  unsigned char btpalsel = (vic_regs[0x70] & 0x30) >> 4;
+  unsigned char mapedpal = vic_regs[0x70] >> 6;
+  unsigned char mapbtpal = (palreg & 0x3f) | (btpalsel << 6);
+  unsigned char mapaltpal = (palreg & 0x3f) | (altpalsel << 6);
+  // log_debug("palreg = $%02X, btpalsel = %d(%02X), altpalsel = %d(%02X)", palreg, btpalsel, mapbtpal, altpalsel,
+  // mapaltpal);
   if (mapedpal != btpalsel)
     push_ram(0xffd3070, 1, &mapbtpal);
-  fetch_ram(0xffd3100, 0x0300, vic_regs+0x100);
+  fetch_ram(0xffd3100, 0x0300, vic_regs + 0x100);
   if (btpalsel != altpalsel) {
     // also fetch ALTernate palette
     push_ram(0xffd3070, 1, &mapaltpal);
     fetch_ram_invalidate();
-    fetch_ram(0xffd3100, 0x0300, vic_regs+0x400);
-  } else
+    fetch_ram(0xffd3100, 0x0300, vic_regs + 0x400);
+  }
+  else
     // BTPAL == ALTPAL
-    memcpy(vic_regs+0x400, vic_regs+0x100, 0x300);
+    memcpy(vic_regs + 0x400, vic_regs + 0x100, 0x300);
   // restore MAPEDPAL if we switched it
   if (mapedpal != btpalsel || mapedpal != altpalsel)
     push_ram(0xffd3070, 1, &palreg);
@@ -508,15 +497,13 @@ void get_video_state(void)
   }
 
   if (screen_size > MAX_SCREEN_SIZE) {
-    log_crit("implausibly large screen size of %d bytes: %d rows, %d columns", screen_size, screen_line_step,
-        screen_rows);
+    log_crit("implausibly large screen size of %d bytes: %d rows, %d columns", screen_size, screen_line_step, screen_rows);
     exit(-1);
   }
 
-   log_debug("screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes",
-	   screen_address, screen_width, screen_rows, screen_size);
-   log_debug("  uppercase=%d, line_step= %d charset_address=$%x",
-     upper_case, screen_line_step, charset_address);
+  log_debug("screen is at $%07x, width= %d chars, height= %d rows, size=%d bytes", screen_address, screen_width, screen_rows,
+      screen_size);
+  log_debug("  uppercase=%d, line_step= %d charset_address=$%x", upper_case, screen_line_step, charset_address);
 
   log_debug("fetching screen data");
   fflush(stderr);
@@ -838,7 +825,7 @@ int do_screen_shot(char *userfilename)
   log_note("got ASCII screenshot");
   do_screen_shot_ascii();
 
-  FILE* f = NULL;
+  FILE *f = NULL;
   char filename[1024];
   if (userfilename != NULL)
     strncpy(filename, userfilename, 1023);
@@ -886,9 +873,9 @@ int do_screen_shot(char *userfilename)
     }
     // Set all pixels to border colour
     for (int x = 0; x < 720; x++) {
-      ((unsigned char*)png_rows[y])[x * 3 + 0] = mega65_rgb(border_colour, 0, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 1] = mega65_rgb(border_colour, 1, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 2] = mega65_rgb(border_colour, 2, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 0] = mega65_rgb(border_colour, 0, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 1] = mega65_rgb(border_colour, 1, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 2] = mega65_rgb(border_colour, 2, 0);
     }
   }
 
@@ -897,9 +884,9 @@ int do_screen_shot(char *userfilename)
   // Start by drawing the non-border area
   for (int y = top_border_y; y < bottom_border_y && (y < (is_pal_mode ? 576 : 480)); y++) {
     for (int x = left_border; x < right_border; x++) {
-      ((unsigned char*)png_rows[y])[x * 3 + 0] = mega65_rgb(background_colour, 0, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 1] = mega65_rgb(background_colour, 1, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 2] = mega65_rgb(background_colour, 2, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 0] = mega65_rgb(background_colour, 0, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 1] = mega65_rgb(background_colour, 1, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 2] = mega65_rgb(background_colour, 2, 0);
     }
   }
 
@@ -930,8 +917,8 @@ int do_screen_shot(char *userfilename)
     // #start_raster to #next_raster_interrupt
 
     while (next_raster_interrupt != start_raster) {
-      // log_debug("Current raster line is $%x, next raster interrupt at $%x", current_physical_raster, next_raster_interrupt);
-      // log_debug("Rendering from raster %d -- %d", last_raster, next_raster_interrupt);
+      // log_debug("Current raster line is $%x, next raster interrupt at $%x", current_physical_raster,
+      // next_raster_interrupt); log_debug("Rendering from raster %d -- %d", last_raster, next_raster_interrupt);
       if (last_raster < next_raster_interrupt) {
         min_y = last_raster;
         max_y = next_raster_interrupt;

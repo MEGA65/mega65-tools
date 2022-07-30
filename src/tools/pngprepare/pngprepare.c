@@ -21,7 +21,7 @@
 
 /* ============================================================= */
 
-char* vhdl_prefix = "library IEEE;\n"
+char *vhdl_prefix = "library IEEE;\n"
                     "use IEEE.STD_LOGIC_1164.ALL;\n"
                     "use ieee.numeric_std.all;\n"
                     "use work.debugtools.all;\n"
@@ -53,7 +53,7 @@ char* vhdl_prefix = "library IEEE;\n"
                     "signal ram : ram_t := (\n"
                     "\n";
 
-char* vhdl_suffix = ");\n"
+char *vhdl_suffix = ");\n"
                     "\n"
                     "begin\n"
                     "\n"
@@ -84,14 +84,14 @@ png_byte bit_depth;
 png_structp png_ptr;
 png_infop info_ptr;
 int number_of_passes;
-png_bytep* row_pointers;
+png_bytep *row_pointers;
 
-FILE* infile;
-FILE* outfile;
+FILE *infile;
+FILE *outfile;
 
 /* ============================================================= */
 
-void abort_(const char* s, ...)
+void abort_(const char *s, ...)
 {
   va_list args;
   va_start(args, s);
@@ -103,7 +103,7 @@ void abort_(const char* s, ...)
 
 /* ============================================================= */
 
-void read_png_file(char* file_name)
+void read_png_file(char *file_name)
 {
   unsigned char header[8]; // 8 is the maximum size that can be checked
 
@@ -151,9 +151,9 @@ void read_png_file(char* file_name)
   if (setjmp(png_jmpbuf(png_ptr)))
     abort_("[read_png_file] Error during read_image");
 
-  row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * height);
+  row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
   for (y = 0; y < height; y++)
-    row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png_ptr, info_ptr));
+    row_pointers[y] = (png_byte *)malloc(png_get_rowbytes(png_ptr, info_ptr));
 
   png_read_image(png_ptr, row_pointers);
 
@@ -207,7 +207,7 @@ unsigned char nyblswap(unsigned char in)
   return ((in & 0xf) << 4) + ((in & 0xf0) >> 4);
 }
 
-void process_file(int mode, char* outputfilename)
+void process_file(int mode, char *outputfilename)
 {
   int multiplier = -1;
   if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB)
@@ -259,9 +259,9 @@ void process_file(int mode, char* outputfilename)
     palette[15] = (struct rgb) { .r = 0xb8, .g = 0xb8, .b = 0xb8 };
 
     for (y = 0; y < height; y++) {
-      png_byte* row = row_pointers[y];
+      png_byte *row = row_pointers[y];
       for (x = 0; x < width; x++) {
-        png_byte* ptr = &(row[x * multiplier]);
+        png_byte *ptr = &(row[x * multiplier]);
         int r, g, b;
         if (ptr) {
           r = ptr[0];
@@ -371,12 +371,12 @@ void process_file(int mode, char* outputfilename)
         break;
       fprintf(stderr, "yheight=%d\n", height);
       for (y = 0; y < height; y++) {
-        png_byte* row = row_pointers[y];
+        png_byte *row = row_pointers[y];
         int byte = 0;
         int yy = y & 7;
 
         for (x = 0; x < width; x++) {
-          png_byte* ptr = &(row[x * multiplier]);
+          png_byte *ptr = &(row[x * multiplier]);
           int r = ptr[0], g = ptr[1], b = ptr[2]; //, a=ptr[3];
           if (multiplier == 1) {
             g = r;
@@ -532,9 +532,9 @@ void process_file(int mode, char* outputfilename)
         total++;
 
         for (yy = y; yy < y + 8; yy++) {
-          png_byte* row = row_pointers[yy];
+          png_byte *row = row_pointers[yy];
           for (xx = x; xx < x + 8; xx++) {
-            png_byte* ptr = &(row[xx * multiplier]);
+            png_byte *ptr = &(row[xx * multiplier]);
             int r, g, b;
             if (ptr && (yy < height) && (xx < width)) {
               r = ptr[0];
@@ -619,8 +619,8 @@ void process_file(int mode, char* outputfilename)
       for (x = 0; x < width; x++) {
         int i;
 
-        png_byte* row = row_pointers[y];
-        png_byte* ptr = &(row[x * multiplier]);
+        png_byte *row = row_pointers[y];
+        png_byte *ptr = &(row[x * multiplier]);
         int r = ptr[0], g = ptr[1], b = ptr[2]; // , a=ptr[3];
         if (multiplier == 1) {
           g = r;
@@ -691,8 +691,8 @@ void process_file(int mode, char* outputfilename)
           unsigned char p1, p2;
           int i;
 
-          png_byte* row = row_pointers[y];
-          png_byte* ptr = &(row[(xx + 0) * multiplier]);
+          png_byte *row = row_pointers[y];
+          png_byte *ptr = &(row[(xx + 0) * multiplier]);
           int r = ptr[0], g = ptr[1], b = ptr[2]; // , a=ptr[3];
           if (multiplier == 1) {
             g = r;
@@ -733,7 +733,7 @@ void process_file(int mode, char* outputfilename)
 
 /* ============================================================= */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc != 4) {
     fprintf(stderr, "Usage: program_name <logo|charrom|hires|sprite16> <file_in> <file_out>\n");

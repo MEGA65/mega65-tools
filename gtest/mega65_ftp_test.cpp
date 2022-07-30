@@ -3,21 +3,21 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-int parse_command(const char* str, const char* format, ...);
-int upload_file(char* name, char* dest_name);
-int rename_file_or_dir(char* name, char* dest_name);
-int delete_file_or_dir(char* name);
-int download_file(char* dest_name, char* local_name, int showClusters);
+int parse_command(const char *str, const char *format, ...);
+int upload_file(char *name, char *dest_name);
+int rename_file_or_dir(char *name, char *dest_name);
+int delete_file_or_dir(char *name);
+int download_file(char *dest_name, char *local_name, int showClusters);
 int open_file_system(void);
-int contains_file_or_dir(char* name);
-int is_fragmented(char* filename);
-int create_dir(char*);
-int show_directory(char* path);
-void change_dir(char* path);
-void put_tilde_number_in_shortname(char* short_name, int i);
-char* get_current_short_name(void);
+int contains_file_or_dir(char *name);
+int is_fragmented(char *filename);
+int create_dir(char *);
+int show_directory(char *path);
+void change_dir(char *path);
+void put_tilde_number_in_shortname(char *short_name, int i);
+char *get_current_short_name(void);
 void show_cluster(int cluster_num);
-char* find_long_name_in_curdir(char* filename);
+char *find_long_name_in_curdir(char *filename);
 
 extern int quietFlag;
 
@@ -40,10 +40,10 @@ void init_sdcard_data(void)
   // MBR
   // ===
   // - Describe the 1st (and only) partition
-  sdcard[0x1be] = 0x80;                                                              // active/bootable partition
-  sdcard[0x1c2] = 0x0b;                                                              // fat32 (chs)
-  *((unsigned int*)&sdcard[0x1c6]) = 0x01;                                           // first sector in partition
-  *((unsigned int*)&sdcard[0x1ca]) = PARTITION1_CLUSTER_COUNT * SECTORS_PER_CLUSTER; // sector count
+  sdcard[0x1be] = 0x80;                                                               // active/bootable partition
+  sdcard[0x1c2] = 0x0b;                                                               // fat32 (chs)
+  *((unsigned int *)&sdcard[0x1c6]) = 0x01;                                           // first sector in partition
+  *((unsigned int *)&sdcard[0x1ca]) = PARTITION1_CLUSTER_COUNT * SECTORS_PER_CLUSTER; // sector count
 
   // PARTITION1
   // ==========
@@ -55,9 +55,9 @@ void init_sdcard_data(void)
   sdcard[PARTITION1_START + 0x0e] = 0x01; // no# of reserved sectors (includes bootsector + fsinfo_sector)
   sdcard[PARTITION1_START + 0x10] = 0x02; // number of FATs (2)
   sdcard[PARTITION1_START + 0x0d] = 0x08; // sectors per cluster (8)
-  *((unsigned int*)&sdcard[PARTITION1_START + 0x20]) = PARTITION1_SIZE / SECTOR_SIZE; // total logical sectors
-  *((unsigned int*)&sdcard[PARTITION1_START + 0x24]) = SECTORS_PER_FAT;               // sectors per fat
-  *((unsigned int*)&sdcard[PARTITION1_START + 0x2c]) = 2;                             // Cluster no# of root-directory start
+  *((unsigned int *)&sdcard[PARTITION1_START + 0x20]) = PARTITION1_SIZE / SECTOR_SIZE; // total logical sectors
+  *((unsigned int *)&sdcard[PARTITION1_START + 0x24]) = SECTORS_PER_FAT;               // sectors per fat
+  *((unsigned int *)&sdcard[PARTITION1_START + 0x2c]) = 2;                             // Cluster no# of root-directory start
 
   // NOTE: For now, I'll ignore the fsinfo_sector, pretend it doesn't exist, and see if I get away with it
 
@@ -81,13 +81,13 @@ void init_sdcard_data(void)
     sdcard[offset + 0x0b] = 0x0f;
 
     // jump to next sector / fat table and repeat this data
-    offset += SECTOR_SIZE*SECTORS_PER_FAT;
+    offset += SECTOR_SIZE * SECTORS_PER_FAT;
   }
 
   // DIRECTORY ENTRIES
   // =================
   // volume label
-  offset = PARTITION1_START + (1 + SECTORS_PER_FAT*2) * SECTOR_SIZE;
+  offset = PARTITION1_START + (1 + SECTORS_PER_FAT * 2) * SECTOR_SIZE;
   sdcard[offset + 0x00] = 'M';
   sdcard[offset + 0x01] = 'E';
   sdcard[offset + 0x02] = 'G';
@@ -102,16 +102,16 @@ void init_sdcard_data(void)
   sdcard[offset + 0x0b] = 0x08; // file attribute (0x08 = volume label)
 }
 
-void dump_sdcard_to_file(char* fname)
+void dump_sdcard_to_file(char *fname)
 {
-  FILE* f = fopen(fname, "wb");
+  FILE *f = fopen(fname, "wb");
   for (int i = 0; i < SDSIZE; i++) {
     fputc(sdcard[i], f);
   }
   fclose(f);
 }
 
-int get_file_size(char* fname)
+int get_file_size(char *fname)
 {
   struct stat file_stats;
   stat(fname, &file_stats);
@@ -120,7 +120,7 @@ int get_file_size(char* fname)
 
 // my read/write sector mock functions
 // (I probably ought to put them in a separate file)
-int read_sector(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead)
+int read_sector(const unsigned int sector_number, unsigned char *buffer, int useCache, int readAhead)
 {
   if (sector_number >= SDSIZE / 512)
     return -1;
@@ -131,7 +131,7 @@ int read_sector(const unsigned int sector_number, unsigned char* buffer, int use
   return 0;
 }
 
-int write_sector(const unsigned int sector_number, unsigned char* buffer)
+int write_sector(const unsigned int sector_number, unsigned char *buffer)
 {
   if (sector_number >= SDSIZE / 512)
     return -1;
@@ -202,18 +202,18 @@ TEST(Mega65FtpTest, GetCommandExpectTwoParamGivenOne)
   ASSERT_STREQ("TEST.D81", strSrc);
 }
 
-void generate_dummy_file(const char* name, int size)
+void generate_dummy_file(const char *name, int size)
 {
-  FILE* f = fopen(name, "wb");
+  FILE *f = fopen(name, "wb");
   for (int i = 0; i < size; i++) {
     fputc(i % 256, f);
   }
   fclose(f);
 }
 
-void generate_dummy_file_embed_name(const char* name, int size)
+void generate_dummy_file_embed_name(const char *name, int size)
 {
-  FILE* f = fopen(name, "wb");
+  FILE *f = fopen(name, "wb");
   for (int i = 0; i < strlen(name); i++) {
     fputc(name[i], f);
   }
@@ -223,15 +223,15 @@ void generate_dummy_file_embed_name(const char* name, int size)
   fclose(f);
 }
 
-void delete_local_file(const char* name)
+void delete_local_file(const char *name)
 {
   remove(name);
 }
 
 class Mega65FtpTestFixture : public ::testing::Test {
   protected:
-  char* file4kb = "4kbtest.tmp";
-  char* file8kb = "8kbtest.tmp";
+  char *file4kb = "4kbtest.tmp";
+  char *file8kb = "8kbtest.tmp";
   bool suppressflag = 0;
 
   void SetUp() override
@@ -274,7 +274,6 @@ class Mega65FtpTestFixture : public ::testing::Test {
     return output;
   }
 
-
   void TearDown() override
   {
     ReleaseStdOut();
@@ -306,7 +305,7 @@ class Mega65FtpTestFixture : public ::testing::Test {
   }
 };
 
-void upload_dummy_file_with_embedded_name(char* newname, int size)
+void upload_dummy_file_with_embedded_name(char *newname, int size)
 {
   generate_dummy_file_embed_name(newname, size);
   upload_file(newname, newname);
@@ -317,7 +316,7 @@ void upload_127_dummy_files_with_embedded_name(void)
 {
   char newname[128];
   for (int k = 1; k <= 127; k++) {
-    sprintf(newname,"%d.TXT", k);
+    sprintf(newname, "%d.TXT", k);
     upload_dummy_file_with_embedded_name(newname, 256);
   }
 }
@@ -704,7 +703,7 @@ TEST_F(Mega65FtpTestFixture, UploadDifferentLFNWithExistingShortNameShouldUseDif
 
   upload_file("LongFileName.d81", "LongFileName.d81"); // This will be 'LONGFI~1.D81'
   // dump_sdcard_to_file("sdcard_before.bin");
-  upload_file("LongFishyFishy.d81", "LongFishyFishy.d81");   // This should be 'LONGFI~2.D81'
+  upload_file("LongFishyFishy.d81", "LongFishyFishy.d81"); // This should be 'LONGFI~2.D81'
   // dump_sdcard_to_file("sdcard_after.bin");
 
   ReleaseStdOut();
@@ -793,29 +792,20 @@ TEST_F(Mega65FtpTestFixture, AssessIfRenamingVfatDirectoryWorks)
 
 TEST_F(Mega65FtpTestFixture, AssessVariousVfatEdgeCases)
 {
-  char *params[][2] =
-  {
-      // lfn                      shortname
-      { "ViZ",                    "VIZ" },
-      { "viz.exe",                "VIZ.EXE" }, // TODO: lowercase 'viz.exe' shouldn't need an lfn, it should fiddle with upper/lowercase direntry bits
-      { "viZzyO.d81",             "VIZZYO.D81" },
-      { "viZzyO.d81234",          "VIZZYO~1.D81" },
-      { "viZ.executable",         "VIZ~1.EXE" },
-      { ".executable",            "EXECUT~1" },
-      { ".viz",                   "VIZ~1" },
-      { "vIzIbIlItY.exe",         "VIZIBI~1.EXE" },
-      { "vIzIbIlItY.executable",  "VIZIBI~2.EXE" },
-      { ".vIz.viz",               "VIZ~1.VIZ" },
-      { ".vIz.dIz.vIz",           "VIZDIZ~1.VIZ" },
-      { ".vizib.",                "VIZIB~1" },
-      { NULL, NULL }
+  char *params[][2] = {                         // lfn                      shortname
+    { "ViZ", "VIZ" }, { "viz.exe", "VIZ.EXE" }, // TODO: lowercase 'viz.exe' shouldn't need an lfn, it should fiddle with
+                                                // upper/lowercase direntry bits
+    { "viZzyO.d81", "VIZZYO.D81" }, { "viZzyO.d81234", "VIZZYO~1.D81" }, { "viZ.executable", "VIZ~1.EXE" },
+    { ".executable", "EXECUT~1" }, { ".viz", "VIZ~1" }, { "vIzIbIlItY.exe", "VIZIBI~1.EXE" },
+    { "vIzIbIlItY.executable", "VIZIBI~2.EXE" }, { ".vIz.viz", "VIZ~1.VIZ" }, { ".vIz.dIz.vIz", "VIZDIZ~1.VIZ" },
+    { ".vizib.", "VIZIB~1" }, { NULL, NULL }
   };
   init_sdcard_data();
 
   int i = 0;
   while (params[i][0] != NULL) {
-    char* lfn = params[i][0];
-    char* shortname = params[i][1];
+    char *lfn = params[i][0];
+    char *shortname = params[i][1];
     upload_dummy_file_with_embedded_name(lfn, 100);
 
     contains_file_or_dir(lfn);

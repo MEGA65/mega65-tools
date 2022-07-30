@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-volatile unsigned char* i2c_master = (unsigned char*)0xd6d0L;
+volatile unsigned char *i2c_master = (unsigned char *)0xd6d0L;
 
 unsigned char bus, addr, i;
 
@@ -249,11 +249,11 @@ void main(void)
 {
 #pragma optimize(push, off)
   // Enable MEGA65 IO
-  *(unsigned char*)0xD02fL = 0x47;
-  *(unsigned char*)0xD02fL = 0x53;
+  *(unsigned char *)0xD02fL = 0x47;
+  *(unsigned char *)0xD02fL = 0x53;
 
   // Fast CPU
-  *(unsigned char*)0 = 0x41;
+  *(unsigned char *)0 = 0x41;
 #pragma optimize(pop)
 
   printf("%c", 0x93);

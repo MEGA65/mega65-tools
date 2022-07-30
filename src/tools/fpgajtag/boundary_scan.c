@@ -15,36 +15,36 @@
 #include <strings.h>
 #include <time.h>
 
-char* strcasestr(const char* haystack, const char* needle);
+char *strcasestr(const char *haystack, const char *needle);
 
 unsigned long long gettime_ms(void);
 
 #include "m65common.h"
 
 #define MAX_PINS 4096
-char* pin_names[MAX_PINS];
-char* signal_names[MAX_PINS];
+char *pin_names[MAX_PINS];
+char *signal_names[MAX_PINS];
 int pin_count = 0;
 
 #define MAX_BOUNDARY_BITS 8192
-char* boundary_bit_type[MAX_BOUNDARY_BITS];
-char* boundary_bit_fullname[MAX_BOUNDARY_BITS];
-char* boundary_bit_pin[MAX_BOUNDARY_BITS];
+char *boundary_bit_type[MAX_BOUNDARY_BITS];
+char *boundary_bit_fullname[MAX_BOUNDARY_BITS];
+char *boundary_bit_pin[MAX_BOUNDARY_BITS];
 int boundary_bit_count = 0;
 char part_name[1024];
 
-FILE* vcd = NULL;
+FILE *vcd = NULL;
 
-void set_vcd_file(char* name)
+void set_vcd_file(char *name)
 {
   vcd = fopen(name, "w");
   if (!vcd)
     perror("Failed to open VCD file for writing");
 }
 
-int parse_xdc(char* xdc)
+int parse_xdc(char *xdc)
 {
-  FILE* f = fopen(xdc, "r");
+  FILE *f = fopen(xdc, "r");
   if (!f) {
     perror("Could not open XDC file for reading");
     exit(-1);
@@ -55,10 +55,10 @@ int parse_xdc(char* xdc)
   fgets(line, 1024, f);
   while (line[0]) {
     if (line[0] != '#') {
-      char* package_pin = strstr(line, "PACKAGE_PIN");
-      char* get_ports = strstr(line, "get_ports");
-      char* pin_name = NULL;
-      char* signal_name = NULL;
+      char *package_pin = strstr(line, "PACKAGE_PIN");
+      char *get_ports = strstr(line, "get_ports");
+      char *pin_name = NULL;
+      char *signal_name = NULL;
 
       if (package_pin) {
         pin_name = &package_pin[strlen("PACKAGE_PIN ")];
@@ -108,9 +108,9 @@ int parse_xdc(char* xdc)
   return 0;
 }
 
-int parse_bsdl(char* bsdl)
+int parse_bsdl(char *bsdl)
 {
-  FILE* f = fopen(bsdl, "r");
+  FILE *f = fopen(bsdl, "r");
   if (!f) {
     perror("Could not open BSDL file for reading");
     exit(-1);
@@ -132,7 +132,7 @@ int parse_bsdl(char* bsdl)
       if (bit_number >= 0 && bit_number < MAX_BOUNDARY_BITS) {
         boundary_bit_type[bit_number] = strdup(bit_type);
         boundary_bit_fullname[bit_number] = strdup(bit_name);
-        char* bit_pin = bit_name;
+        char *bit_pin = bit_name;
         for (int i = 0; bit_name[i]; i++)
           if (bit_name[i] == '_')
             bit_pin = &bit_name[i + 1];
@@ -164,7 +164,7 @@ int parse_bsdl(char* bsdl)
 
 static uint8_t boundary_ppattern[] = DITEM(BOUNDARY_PPAT);
 
-int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity)
+int xilinx_boundaryscan(char *xdc, char *bsdl, char *sensitivity)
 {
   ENTER();
 
@@ -188,7 +188,7 @@ int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity)
     fprintf(stderr, "WARNING: No BSDL file, so cannot decode boundary scan information.\n");
   }
 
-  char* bbit_names[MAX_BOUNDARY_BITS];
+  char *bbit_names[MAX_BOUNDARY_BITS];
   int bbit_ignore[MAX_BOUNDARY_BITS];
   int bbit_show[MAX_BOUNDARY_BITS];
   char bbit_vcdchar[MAX_BOUNDARY_BITS];
@@ -197,7 +197,7 @@ int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity)
 
   // Map JTAG bits to pins
   for (int i = 0; i < boundary_bit_count; i++) {
-    char* s = "<unknown>";
+    char *s = "<unknown>";
     if (boundary_bit_pin[i]) {
       for (int j = 0; j < pin_count; j++)
         if (!strcmp(pin_names[j], boundary_bit_pin[i]))
@@ -315,7 +315,7 @@ int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity)
     // the IDCODE command.  Does the FPGA default to IDCODE?
     // Yes: This seems to be the case, according to here:
     // https://forums.xilinx.com/t5/Spartan-Family-FPGAs-Archived/Spartan-3AN-200-JTAG-Idcode-debugging-on-a-new-board/td-p/131792
-    uint8_t* rdata = write_pattern(0, boundary_ppattern, 'I');
+    uint8_t *rdata = write_pattern(0, boundary_ppattern, 'I');
 
     unsigned long long now = gettime_us();
     unsigned long long time_delta = now - start_time;

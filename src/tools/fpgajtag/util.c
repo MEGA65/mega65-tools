@@ -79,7 +79,7 @@ static void openlogfile(void);
 int usb_bcddevice;
 uint8_t bitswap[256];
 int last_read_data_length;
-struct ftdi_context* global_ftdi;
+struct ftdi_context *global_ftdi;
 #if defined(USE_TRACING)
 int trace = 1;
 #else
@@ -93,14 +93,14 @@ int log_depth = 0;
 static int logging = 0;
 #endif
 #ifndef NO_LIBUSB
-static libusb_device_handle* usbhandle = NULL;
-static struct libusb_context* usb_context;
-static libusb_device** device_list;
+static libusb_device_handle *usbhandle = NULL;
+static struct libusb_context *usb_context;
+static libusb_device **device_list;
 #endif
 static USB_INFO usbinfo_array[MAX_USB_DEVICECOUNT];
 static int usbinfo_array_index;
 static uint8_t usbreadbuffer[USB_CHUNKSIZE];
-static uint8_t* usbreadbuffer_ptr = usbreadbuffer;
+static uint8_t *usbreadbuffer_ptr = usbreadbuffer;
 static int read_size[MAX_ITEM_LENGTH];
 static int read_size_ptr;
 
@@ -112,7 +112,7 @@ static void openlogfile(void)
     datafile_fd = creat("/tmp/xx.datafile2", 0666);
 }
 
-void memdump(const uint8_t* p, int len, char* title)
+void memdump(const uint8_t *p, int len, char *title)
 {
   int i;
 
@@ -132,14 +132,14 @@ void memdump(const uint8_t* p, int len, char* title)
 }
 
 #ifndef USE_LIBFTDI
-static int ftdi_write_data(struct ftdi_context* ftdi, const unsigned char* buf, int size)
+static int ftdi_write_data(struct ftdi_context *ftdi, const unsigned char *buf, int size)
 {
   int actual_length = -1;
   int ret = -1;
   if (logging)
     formatwrite(1, buf, size, "WRITE");
 #ifndef NO_LIBUSB
-  ret = libusb_bulk_transfer(usbhandle, ENDPOINT_IN, (unsigned char*)buf, size, &actual_length, USB_TIMEOUT);
+  ret = libusb_bulk_transfer(usbhandle, ENDPOINT_IN, (unsigned char *)buf, size, &actual_length, USB_TIMEOUT);
 #ifdef USE_LOGGING
   dump_bytes(log_depth + 2, __FUNCTION__, buf, size);
 #endif
@@ -156,7 +156,7 @@ static int ftdi_write_data(struct ftdi_context* ftdi, const unsigned char* buf, 
 #endif
   return actual_length;
 }
-static int ftdi_read_data(struct ftdi_context* ftdi, unsigned char* buf, int size)
+static int ftdi_read_data(struct ftdi_context *ftdi, unsigned char *buf, int size)
 {
   int actual_length = 1;
   int count = 0, ret = -1;
@@ -199,7 +199,7 @@ static int ftdi_read_data(struct ftdi_context* ftdi, unsigned char* buf, int siz
 /*
  * Write utility functions
  */
-void write_data(uint8_t* buf, int size)
+void write_data(uint8_t *buf, int size)
 {
   ENTER();
 #ifdef USE_LOGGING
@@ -212,7 +212,7 @@ void write_data(uint8_t* buf, int size)
   EXIT();
 }
 
-void write_item(uint8_t* buf)
+void write_item(uint8_t *buf)
 {
   ENTER();
   write_data(buf + 1, buf[0]);
@@ -223,12 +223,12 @@ int buffer_current_size(void)
 {
   return usbreadbuffer_ptr - usbreadbuffer;
 }
-uint8_t* buffer_current_ptr(void)
+uint8_t *buffer_current_ptr(void)
 {
   return usbreadbuffer_ptr;
 }
 
-void flush_write(uint8_t* req)
+void flush_write(uint8_t *req)
 {
   if (req)
     write_item(req);
@@ -239,7 +239,7 @@ void flush_write(uint8_t* req)
   ftdi_write_data(global_ftdi, usbreadbuffer, write_length);
   read_size_ptr = 0;
 
-  const uint8_t* p = usbreadbuffer;
+  const uint8_t *p = usbreadbuffer;
   while (write_length > 0) {
     int plen = 1;
     uint8_t ch = *p;
@@ -296,7 +296,7 @@ void flush_write(uint8_t* req)
 /*
  * Read utility functions
  */
-uint8_t* read_data(void)
+uint8_t *read_data(void)
 {
   static uint8_t last_read_data[10000];
   int i, j, expected_len = 0, extra_bytes = 0;
@@ -327,7 +327,7 @@ uint8_t* read_data(void)
     ftdi_read_data(global_ftdi, last_read_data, expected_len + extra_bytes);
   last_read_data_length = expected_len;
   if (expected_len) {
-    uint8_t* p = last_read_data;
+    uint8_t *p = last_read_data;
     int validbits = 0;
     for (i = 0; i < read_size_ptr; i++) {
       if (read_size[i] < 0) {
@@ -365,11 +365,11 @@ uint8_t* read_data(void)
 /*
  * USB interface
  */
-USB_INFO* fpgausb_init(void)
+USB_INFO *fpgausb_init(void)
 {
   int i = 0;
 #ifndef NO_LIBUSB
-  libusb_device* dev;
+  libusb_device *dev;
 #define UDESC(A)                                                                                                            \
   libusb_get_string_descriptor_ascii(                                                                                       \
       usbhandle, desc.A, usbinfo_array[usbinfo_array_index].A, sizeof(usbinfo_array[usbinfo_array_index].A))
@@ -390,8 +390,8 @@ USB_INFO* fpgausb_init(void)
       log_warn("failed to switch to USEDK backend: %s", libusb_strerror(res));
     }
 #else
-  //#warning No USBDK support in libusb
-  // this is not bad, so don't call it a warning
+    //#warning No USBDK support in libusb
+    // this is not bad, so don't call it a warning
     log_warn("using libusb without USBDK support");
 #endif
   }
@@ -410,10 +410,11 @@ USB_INFO* fpgausb_init(void)
       usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
       int open_result = libusb_open(dev, &usbhandle);
       if (open_result < 0) {
-        log_error("Could not open USB device[VID: %04X, PID: %04X]: Error code %d", desc.idVendor, desc.idProduct, open_result);
+        log_error(
+            "Could not open USB device[VID: %04X, PID: %04X]: Error code %d", desc.idVendor, desc.idProduct, open_result);
         log_error("  libusb says: %s", libusb_strerror(open_result));
-        continue; // keep looking for other devices E.g. my system has multiple FTDIs some for work (which will fail to open here)
-                  // so keep looking for another that might open (i.e., the proper MEGA65 JTAG one)
+        continue; // keep looking for other devices E.g. my system has multiple FTDIs some for work (which will fail to open
+                  // here) so keep looking for another that might open (i.e., the proper MEGA65 JTAG one)
       }
       else {
         log_debug("successfully opened USB device[VID: %04X, PID: %04X]", desc.idVendor, desc.idProduct);
@@ -456,7 +457,7 @@ void fpgausb_open(int device_index, int interface)
   static const char frac_code[8] = { 0, 3, 2, 4, 1, 5, 6, 7 };
   int best_divisor = 12000000 * 8 / baudrate;
   unsigned long encdiv = (best_divisor >> 3) | (frac_code[best_divisor & 0x7] << 14);
-  struct libusb_config_descriptor* config_descrip;
+  struct libusb_config_descriptor *config_descrip;
 
   ftdi_interface = interface;
   libusb_open(usbinfo_array[device_index].dev, &usbhandle);
@@ -585,7 +586,7 @@ void sync_ftdi(int val)
 void init_ftdi(int device_index, int interface)
 {
   static uint8_t illegal_command[] = { 0xaa, SEND_IMMEDIATE };
-  global_ftdi = (struct ftdi_context*)illegal_command;
+  global_ftdi = (struct ftdi_context *)illegal_command;
   int i;
 
   fpgausb_open(device_index, interface); /*** Open selected USB interface ***/
@@ -606,7 +607,7 @@ void init_ftdi(int device_index, int interface)
 /*
  * File support
  */
-uint32_t read_inputfile(const char* filename)
+uint32_t read_inputfile(const char *filename)
 {
   static uint8_t bitfile_header[] = { 0, 9, 0xf, 0xf0, 0xf, 0xf0, 0xf, 0xf0, 0xf, 0xf0, 0, 0, 1, 'a' };
   static uint8_t filebuf[BUFFER_MAX_LEN];
@@ -636,16 +637,16 @@ uint32_t read_inputfile(const char* filename)
   if (!memcmp(input_fileptr, elfmagic, sizeof(elfmagic))) {
     int found = 0;
     int entry;
-    ELF_HEADER* elfh = (ELF_HEADER*)input_fileptr;
+    ELF_HEADER *elfh = (ELF_HEADER *)input_fileptr;
 #define IS64() (elfh->h32.e_ident[4] == ELFCLASS64)
 #define HELF(A) (IS64() ? elfh->h64.A : elfh->h32.A)
 #define SELF(ENT, A) (IS64() ? sech->s64[ENT].A : sech->s32[ENT].A)
     log_debug("fpgajtag: elf input file, len %d class %d", input_filesize, elfh->h32.e_ident[4]);
     int shnum = HELF(e_shnum);
-    ELF_SECTION* sech = (ELF_SECTION*)&input_fileptr[HELF(e_shoff)];
-    uint8_t* stringTable = &input_fileptr[SELF(HELF(e_shstrndx), sh_offset)];
+    ELF_SECTION *sech = (ELF_SECTION *)&input_fileptr[HELF(e_shoff)];
+    uint8_t *stringTable = &input_fileptr[SELF(HELF(e_shstrndx), sh_offset)];
     for (entry = 0; entry < shnum; ++entry) {
-      char* name = (char*)&stringTable[SELF(entry, sh_name)];
+      char *name = (char *)&stringTable[SELF(entry, sh_name)];
       if (!strcmp(name, "fpgadata")) {
         input_fileptr = &input_fileptr[SELF(entry, sh_offset)];
         input_filesize = SELF(entry, sh_size);
@@ -679,7 +680,7 @@ uint32_t read_inputfile(const char* filename)
     input_fileptr = uncompressbuf;
   }
   if (!memcmp(bitfile_header, input_fileptr, sizeof(bitfile_header))) {
-    uint8_t* inputtemp = input_fileptr;
+    uint8_t *inputtemp = input_fileptr;
     input_fileptr += sizeof(bitfile_header) - 1;
     while (*input_fileptr++ < 'e') {
       int len = *input_fileptr++;

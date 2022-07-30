@@ -67,8 +67,8 @@ void graphics_mode(void)
   POKE(0xD05D, PEEK(0xD05D) & 0x7f);
 
   // Enable temperature compensation for internal RTC
-  lpoke(0xffd311d,lpeek(0xffd311d)|0xe0);
-  
+  lpoke(0xffd311d, lpeek(0xffd311d) | 0xe0);
+
   // Layout screen so that graphics data comes from $40000 -- $4FFFF
 
   i = 0x40000 / 0x40;
@@ -112,7 +112,7 @@ void plot_pixel(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 80;
   while (*msg) {
@@ -142,7 +142,7 @@ unsigned char eth_pass = 0;
 unsigned char iec_pass = 0, v, y;
 unsigned int x;
 unsigned char colours[10] = { 0, 2, 5, 6, 0, 11, 12, 15, 1, 0 };
-struct m65_tm tm,tm2;
+struct m65_tm tm, tm2;
 char msg[80];
 
 unsigned char sin_table[32] = {
@@ -287,72 +287,78 @@ unsigned char setup_hyperram(void)
   return 0;
 }
 
-unsigned char joy_test(unsigned char port,unsigned char maj, unsigned char min, unsigned char val,
-        char y, char *dir, char *shortdir)
+unsigned char joy_test(
+    unsigned char port, unsigned char maj, unsigned char min, unsigned char val, char y, char *dir, char *shortdir)
 {
-  unsigned char res=0;
-  
-  snprintf(msg, 80, "TEST Joystick Port %d: Push %s", port?1:2, dir);
+  unsigned char res = 0;
+
+  snprintf(msg, 80, "TEST Joystick Port %d: Push %s", port ? 1 : 2, dir);
   print_text(0, y, 7, msg);
-  snprintf(msg, 80, "joy %d-%s", port?1:2, shortdir);
+  snprintf(msg, 80, "joy %d-%s", port ? 1 : 2, shortdir);
   unit_test_set_current_name(msg);
 
   // Wait for joystick to go idle again
-  while((PEEK(0xDC00+port)&0x1f)!=0x1f) POKE(0xD020,PEEK(0xD020)+1);
+  while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f)
+    POKE(0xD020, PEEK(0xD020) + 1);
   // Allow for de-bounce
   usleep(50000);
 
-  while((PEEK(0xDC00+port)&0x1f)==0x1f) POKE(0xD020,PEEK(0xD020)+1);
-  if ((PEEK(0xDC00+port)&0x1f)!=val) {
-    unit_test_report(maj,min,TEST_FAIL); res=1;
-  } else {
-    unit_test_report(maj,min,TEST_PASS);
+  while ((PEEK(0xDC00 + port) & 0x1f) == 0x1f)
+    POKE(0xD020, PEEK(0xD020) + 1);
+  if ((PEEK(0xDC00 + port) & 0x1f) != val) {
+    unit_test_report(maj, min, TEST_FAIL);
+    res = 1;
+  }
+  else {
+    unit_test_report(maj, min, TEST_PASS);
   }
   // Wait for joystick to go idle again
-  while((PEEK(0xDC00+port)&0x1f)!=0x1f) POKE(0xD020,PEEK(0xD020)+1);
+  while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f)
+    POKE(0xD020, PEEK(0xD020) + 1);
   // Allow for de-bounce
   usleep(50000);
 
   return res;
 }
 
-unsigned char errs=0;
+unsigned char errs = 0;
 
-unsigned char rtc_bad=1;
-unsigned char frame_prev,frame_count,frame_num;
+unsigned char rtc_bad = 1;
+unsigned char frame_prev, frame_count, frame_num;
 
 void test_rtc(void)
 {
-    getrtc(&tm);
-    frame_prev=PEEK(0xD7FA);
-    frame_count=0;
-    rtc_bad=1;
-    unit_test_set_current_name("rtc ticks");
-    while(rtc_bad)
-    {
-      //      snprintf(msg,80,"%d frames, %d vs %d seconds.   ",frame_count,tm.tm_sec,tm2.tm_sec);
-      //      print_text(0, 13, 1, msg);
-      
-      frame_num=PEEK(0xD7FA);
-      if (frame_num!=frame_prev) frame_count+=(frame_num-frame_prev);
-      frame_prev=frame_num;
-      if (frame_count>75) {
-	rtc_bad=1;
-	break;
+  getrtc(&tm);
+  frame_prev = PEEK(0xD7FA);
+  frame_count = 0;
+  rtc_bad = 1;
+  unit_test_set_current_name("rtc ticks");
+  while (rtc_bad) {
+    //      snprintf(msg,80,"%d frames, %d vs %d seconds.   ",frame_count,tm.tm_sec,tm2.tm_sec);
+    //      print_text(0, 13, 1, msg);
+
+    frame_num = PEEK(0xD7FA);
+    if (frame_num != frame_prev)
+      frame_count += (frame_num - frame_prev);
+    frame_prev = frame_num;
+    if (frame_count > 75) {
+      rtc_bad = 1;
+      break;
+    }
+    getrtc(&tm2);
+    if (tm.tm_sec != tm2.tm_sec) {
+      // Reset frame counter on first tick
+      if (frame_count < 40) {
+        frame_count = 0;
+        tm = tm2;
       }
-      getrtc(&tm2);
-      if (tm.tm_sec != tm2.tm_sec) {
-	// Reset frame counter on first tick
-	if (frame_count<40) {
-	  frame_count=0;
-	  tm=tm2;
-	} else if (frame_count<65) {
-	  // 40--65 frames per tick = seems to be ticking right
-	  rtc_bad=0;
-	  break;
-	}
+      else if (frame_count < 65) {
+        // 40--65 frames per tick = seems to be ticking right
+        rtc_bad = 0;
+        break;
       }
     }
+  }
 }
 
 void main(void)
@@ -397,190 +403,198 @@ void main(void)
     }
   }
   activate_double_buffer();
-  
 
-    POKE(0xD020, 1);
-    unit_test_set_current_name("hyperram");
-    if (setup_hyperram()) {
-      print_text(0, 6, 2, "FAIL HyperRAM Probe");
-      unit_test_report(2, 1, TEST_FAIL);
-    }
-    else {
-      print_text(0, 5, 5, "PASS HyperRAM Probe");
-      unit_test_report(2, 1, TEST_PASS);
-    }
+  POKE(0xD020, 1);
+  unit_test_set_current_name("hyperram");
+  if (setup_hyperram()) {
+    print_text(0, 6, 2, "FAIL HyperRAM Probe");
+    unit_test_report(2, 1, TEST_FAIL);
+  }
+  else {
+    print_text(0, 5, 5, "PASS HyperRAM Probe");
+    unit_test_report(2, 1, TEST_PASS);
+  }
 
-    // Internal floppy connector
-    POKE(0xD020, 3);
-    if (PEEK(0xD6AA) != floppy_interval_first)
-      floppy_active = 1;
-    unit_test_set_current_name("floppy");
-    if (!floppy_active) {
-      print_text(0, 2, 2, "FAIL Floppy (is a disk inserted?)");
-      unit_test_report(3, 1, TEST_FAIL);
-    }
-    else {
-      print_text(0, 2, 5, "PASS Floppy                          ");
-      unit_test_report(3, 1, TEST_PASS);
-    }
+  // Internal floppy connector
+  POKE(0xD020, 3);
+  if (PEEK(0xD6AA) != floppy_interval_first)
+    floppy_active = 1;
+  unit_test_set_current_name("floppy");
+  if (!floppy_active) {
+    print_text(0, 2, 2, "FAIL Floppy (is a disk inserted?)");
+    unit_test_report(3, 1, TEST_FAIL);
+  }
+  else {
+    print_text(0, 2, 5, "PASS Floppy                          ");
+    unit_test_report(3, 1, TEST_PASS);
+  }
 
-    // Try toggling the IEC lines to make sure we can pull CLK and DATA low.
-    // (ATN can't be read.)
-    POKE(0xD020, 4);
-    POKE(0xDD00, 0xC3); // let the lines float high
-    v = PEEK(0xDD00);
+  // Try toggling the IEC lines to make sure we can pull CLK and DATA low.
+  // (ATN can't be read.)
+  POKE(0xD020, 4);
+  POKE(0xDD00, 0xC3); // let the lines float high
+  v = PEEK(0xDD00);
+  usleep(1000);
+  if ((v & 0xc0) == 0xc0) {
+    POKE(0xDD00, 0x13); // pull $40 low via $10
     usleep(1000);
-    if ((v & 0xc0) == 0xc0) {
-      POKE(0xDD00, 0x13); // pull $40 low via $10
+    if ((PEEK(0xDD00) & 0xc0) == 0x80) {
+      POKE(0xDD00, 0x23); // pull $80 low via $20
       usleep(1000);
-      if ((PEEK(0xDD00) & 0xc0) == 0x80) {
-        POKE(0xDD00, 0x23); // pull $80 low via $20
+      if ((PEEK(0xDD00) & 0xc0) == 0x40) {
+        POKE(0xDD00, 0x33); // pull $80 and $40 low via $30
         usleep(1000);
-        if ((PEEK(0xDD00) & 0xc0) == 0x40) {
-          POKE(0xDD00, 0x33); // pull $80 and $40 low via $30
-          usleep(1000);
-          unit_test_set_current_name("iec c+d both");
-          if ((PEEK(0xDD00) & 0xc0) == 0x00) {
-            iec_pass = 1;
-            unit_test_report(4, 1, TEST_PASS);
-          }
-          else {
-            print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK+DATA)");
-            unit_test_report(4, 1, TEST_FAIL);
-          }
-          unit_test_set_current_name("iec c+d clk");
-          unit_test_report(4, 2, TEST_PASS);
+        unit_test_set_current_name("iec c+d both");
+        if ((PEEK(0xDD00) & 0xc0) == 0x00) {
+          iec_pass = 1;
+          unit_test_report(4, 1, TEST_PASS);
         }
         else {
-          unit_test_set_current_name("iec c+d clk");
-          unit_test_report(4, 2, TEST_FAIL);
-          print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK)");
+          print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK+DATA)");
+          unit_test_report(4, 1, TEST_FAIL);
         }
-        unit_test_set_current_name("iec c+d data");
-        unit_test_report(4, 3, TEST_PASS);
+        unit_test_set_current_name("iec c+d clk");
+        unit_test_report(4, 2, TEST_PASS);
       }
       else {
-        unit_test_set_current_name("iec c+d data");
-        unit_test_report(4, 3, TEST_FAIL);
-        print_text(0, 3, 2, "FAIL IEC CLK+DATA (DATA)");
+        unit_test_set_current_name("iec c+d clk");
+        unit_test_report(4, 2, TEST_FAIL);
+        print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK)");
       }
-      unit_test_set_current_name("iec c+d float");
-      unit_test_report(4, 4, TEST_PASS);
+      unit_test_set_current_name("iec c+d data");
+      unit_test_report(4, 3, TEST_PASS);
     }
     else {
-      snprintf(msg, 80, "iec c+d fl-$%02x", v);
-      unit_test_report(4, 4, TEST_FAIL);
-      snprintf(msg, 80, "FAIL IEC CLK+DATA (float $%02x)", v);
-      print_text(0, 3, 2, msg);
+      unit_test_set_current_name("iec c+d data");
+      unit_test_report(4, 3, TEST_FAIL);
+      print_text(0, 3, 2, "FAIL IEC CLK+DATA (DATA)");
     }
-    unit_test_set_current_name("iec c+d all");
-    if (iec_pass) {
-      unit_test_report(4, 5, TEST_PASS);
-      print_text(0, 3, 5, "PASS IEC CLK+DATA                     ");
-    } else {
-      unit_test_report(4, 5, TEST_FAIL);
-    }
+    unit_test_set_current_name("iec c+d float");
+    unit_test_report(4, 4, TEST_PASS);
+  }
+  else {
+    snprintf(msg, 80, "iec c+d fl-$%02x", v);
+    unit_test_report(4, 4, TEST_FAIL);
+    snprintf(msg, 80, "FAIL IEC CLK+DATA (float $%02x)", v);
+    print_text(0, 3, 2, msg);
+  }
+  unit_test_set_current_name("iec c+d all");
+  if (iec_pass) {
+    unit_test_report(4, 5, TEST_PASS);
+    print_text(0, 3, 5, "PASS IEC CLK+DATA                     ");
+  }
+  else {
+    unit_test_report(4, 5, TEST_FAIL);
+  }
 
-    // Real-time clock
-    POKE(0xD020, 5);
+  // Real-time clock
+  POKE(0xD020, 5);
+  test_rtc();
+
+  if (rtc_bad == 0) {
+    unit_test_report(5, 1, TEST_PASS);
+    snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
+    print_text(0, 4, 5, msg);
+  }
+  else {
+
+    // But try to set it running if it isn't running
+    lpoke(0xffd7118, 0x41);
+    usleep(30000);
+    lpoke(0xffd7110, 0x01);
+    usleep(30000);
+    lpoke(0xffd7118, 0x01);
+
+    // Now wait a couple of seconds and try again
+    for (a = 0; a < 50; a++)
+      usleep(50000);
+
+    POKE(0xD020, 6);
     test_rtc();
-    
-    if (rtc_bad==0) {
+
+    getrtc(&tm);
+    if (rtc_bad == 0) {
       unit_test_report(5, 1, TEST_PASS);
       snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
       print_text(0, 4, 5, msg);
     }
     else {
-
-      // But try to set it running if it isn't running
-      lpoke(0xffd7118, 0x41);
-      usleep(30000);
-      lpoke(0xffd7110, 0x01);
-      usleep(30000);
-      lpoke(0xffd7118, 0x01);
-
-      // Now wait a couple of seconds and try again
-      for(a=0;a<50;a++) usleep(50000);
-
-      POKE(0xD020, 6);
-      test_rtc();
-      
-      getrtc(&tm);
-      if (rtc_bad==0) {
-        unit_test_report(5, 1, TEST_PASS);
-        snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
-        print_text(0, 4, 5, msg);
-      } else {
-        unit_test_report(5, 1, TEST_FAIL);
-        print_text(0, 4, 2, "FAIL RTC Not running             ");
-      }
+      unit_test_report(5, 1, TEST_FAIL);
+      print_text(0, 4, 2, "FAIL RTC Not running             ");
     }
+  }
 
-    // Play two different tones out of the left and right speakers alternately
-    POKE(0xD020, 2);
+  // Play two different tones out of the left and right speakers alternately
+  POKE(0xD020, 2);
 
-    unit_test_set_current_name("speaker left");
-    print_text(0, 6, 7, "TEST Left speaker (P=PASS,F=FAIL)");
-    play_sine(0, 2000);
-    play_sine(3, 1);
+  unit_test_set_current_name("speaker left");
+  print_text(0, 6, 7, "TEST Left speaker (P=PASS,F=FAIL)");
+  play_sine(0, 2000);
+  play_sine(3, 1);
 
-    while(PEEK(0xD610)) POKE(0xD610,0);
-    
-    while(!PEEK(0xD610)) POKE(0xD020,PEEK(0xD020+1));
-    switch (PEEK(0xD610)) {
-    case 0x50: case 0x70:
-      unit_test_report(6, 1, TEST_PASS);
-      print_text(0, 6, 5, "PASS Left speaker                ");
-      break;
-    default:
-      unit_test_report(6, 1, TEST_FAIL);      
-      print_text(0, 6, 2, "FAIL Left speaker                ");
-    }
-    POKE(0xD610,0);
-    
-    unit_test_set_current_name("speaker right");
-    print_text(0, 7, 7, "TEST Right speaker (P=PASS,F=FAIL)");
-    play_sine(0, 1);
-    play_sine(3, 3000);
-    while(!PEEK(0xD610)) POKE(0xD020,PEEK(0xD020+1));
-    switch (PEEK(0xD610)) {
-    case 0x50: case 0x70:
-      unit_test_report(6, 2, TEST_PASS);
-      print_text(0, 7, 5, "PASS Right speaker                ");
-      break;
-    default:
-      unit_test_report(6, 2, TEST_FAIL);      
-      print_text(0, 7, 2, "FAIL Right speaker                ");
-    }
-    POKE(0xD610,0);
+  while (PEEK(0xD610))
+    POKE(0xD610, 0);
 
-    // Turn off sound after
-    play_sine(0, 1);
-    play_sine(3, 1);
+  while (!PEEK(0xD610))
+    POKE(0xD020, PEEK(0xD020 + 1));
+  switch (PEEK(0xD610)) {
+  case 0x50:
+  case 0x70:
+    unit_test_report(6, 1, TEST_PASS);
+    print_text(0, 6, 5, "PASS Left speaker                ");
+    break;
+  default:
+    unit_test_report(6, 1, TEST_FAIL);
+    print_text(0, 6, 2, "FAIL Left speaker                ");
+  }
+  POKE(0xD610, 0);
 
-    errs+=joy_test(1,7,1,0x1b,8,"LEFT ","l");
-    errs+=joy_test(1,7,2,0x17,8,"RIGHT","r");
-    errs+=joy_test(1,7,3,0x1e,8,"UP   ","u");
-    errs+=joy_test(1,7,4,0x1d,8,"DOWN ","d");
-    errs+=joy_test(1,7,5,0x0f,8,"FIRE ","f");
-    
-    errs+=joy_test(0,8,1,0x1b,8,"LEFT ","l");
-    errs+=joy_test(0,8,2,0x17,8,"RIGHT","r");
-    errs+=joy_test(0,8,3,0x1e,8,"UP   ","u");
-    errs+=joy_test(0,8,4,0x1d,8,"DOWN ","d");
-    errs+=joy_test(0,8,5,0x0f,8,"FIRE ","f");
+  unit_test_set_current_name("speaker right");
+  print_text(0, 7, 7, "TEST Right speaker (P=PASS,F=FAIL)");
+  play_sine(0, 1);
+  play_sine(3, 3000);
+  while (!PEEK(0xD610))
+    POKE(0xD020, PEEK(0xD020 + 1));
+  switch (PEEK(0xD610)) {
+  case 0x50:
+  case 0x70:
+    unit_test_report(6, 2, TEST_PASS);
+    print_text(0, 7, 5, "PASS Right speaker                ");
+    break;
+  default:
+    unit_test_report(6, 2, TEST_FAIL);
+    print_text(0, 7, 2, "FAIL Right speaker                ");
+  }
+  POKE(0xD610, 0);
 
-    // XXX Test POT lines
-    
-    if (errs) {
-      snprintf(msg, 80, "FAIL Joysticks (%d errors)      ", errs);
-      print_text(0, 8, 2, msg);
-    } else {
-      snprintf(msg, 80, "PASS Joysticks                 ", errs);
-      print_text(0, 8, 5, msg);
-    }
+  // Turn off sound after
+  play_sine(0, 1);
+  play_sine(3, 1);
 
-    // Don't test ethernet, as we test it in ethtest.prg instead now
+  errs += joy_test(1, 7, 1, 0x1b, 8, "LEFT ", "l");
+  errs += joy_test(1, 7, 2, 0x17, 8, "RIGHT", "r");
+  errs += joy_test(1, 7, 3, 0x1e, 8, "UP   ", "u");
+  errs += joy_test(1, 7, 4, 0x1d, 8, "DOWN ", "d");
+  errs += joy_test(1, 7, 5, 0x0f, 8, "FIRE ", "f");
+
+  errs += joy_test(0, 8, 1, 0x1b, 8, "LEFT ", "l");
+  errs += joy_test(0, 8, 2, 0x17, 8, "RIGHT", "r");
+  errs += joy_test(0, 8, 3, 0x1e, 8, "UP   ", "u");
+  errs += joy_test(0, 8, 4, 0x1d, 8, "DOWN ", "d");
+  errs += joy_test(0, 8, 5, 0x0f, 8, "FIRE ", "f");
+
+  // XXX Test POT lines
+
+  if (errs) {
+    snprintf(msg, 80, "FAIL Joysticks (%d errors)      ", errs);
+    print_text(0, 8, 2, msg);
+  }
+  else {
+    snprintf(msg, 80, "PASS Joysticks                 ", errs);
+    print_text(0, 8, 5, msg);
+  }
+
+  // Don't test ethernet, as we test it in ethtest.prg instead now
 #if 0
     // Ethernet controller
     POKE(0xD020, 6);
@@ -595,12 +609,13 @@ void main(void)
 #endif
 
   unit_test_set_current_name("r3prodtest");
-  unit_test_report(10, 1, TEST_DONEALL);  
+  unit_test_report(10, 1, TEST_DONEALL);
 
-  print_text(0,17,1,"ALL TESTS COMPLETE");
-  
-  while(1) continue;
-  
+  print_text(0, 17, 1, "ALL TESTS COMPLETE");
+
+  while (1)
+    continue;
+
   //  gap_histogram();
   // read_all_sectors();
 }

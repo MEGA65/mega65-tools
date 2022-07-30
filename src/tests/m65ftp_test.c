@@ -20,7 +20,7 @@
 
 int create_file(int id, int size)
 {
-  FILE* f = fopen(FILE_NAME, "wb+");
+  FILE *f = fopen(FILE_NAME, "wb+");
   if (!f) {
     fprintf(stderr, "ERROR: Failed to write to file '%s'\n", FILE_NAME);
     exit(-1);
@@ -40,7 +40,7 @@ unsigned char buff[MAX_FILE_SIZE];
 int verify_file(int id, int size)
 {
   int errors = 0;
-  FILE* f = fopen(FILE_NAME, "rb+");
+  FILE *f = fopen(FILE_NAME, "rb+");
   if (!f) {
     fprintf(stderr, "ERROR: Failed to read from file '%s'\n", FILE_NAME);
     exit(-1);
@@ -79,7 +79,7 @@ int verify_file(int id, int size)
 
 #define FILE_SIZE (256.1 * 1024)
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
 
   char cmd[1024];
@@ -89,7 +89,7 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
-  char* ftp = argv[1];
+  char *ftp = argv[1];
 
   for (int i = 0; i < 256; i++) {
     int size = ((rand() % 5) + 1) * 1024 * 1024;

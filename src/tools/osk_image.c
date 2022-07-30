@@ -10,7 +10,7 @@ int image_number = 0;
 
 void write_image(int image_number);
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int x, y, r, g, b;
 
@@ -76,7 +76,7 @@ void write_image(int image_number)
 
   char filename[1024];
   snprintf(filename, 1024, "oskimage-%04d.png", image_number);
-  FILE* f = fopen(filename, "wb");
+  FILE *f = fopen(filename, "wb");
   if (!f)
     abort();
 

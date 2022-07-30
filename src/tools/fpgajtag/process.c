@@ -41,11 +41,11 @@ void process_command_list(void)
   static uint8_t tempbuf[BUFFER_MAX_LEN];
   static uint8_t tempbuf2[BUFFER_MAX_LEN];
   int i, mode = -1;
-  char* str = NULL;
+  char *str = NULL;
 
   while (*input_fileptr) {
-    uint8_t* bufp = tempbuf;
-    char* stro = NULL;
+    uint8_t *bufp = tempbuf;
+    char *stro = NULL;
     int len = 0;
     uint8_t ch = *input_fileptr;
     if (ch == '#' || ch == '\n' || ch == ' ' || ch == '\t' || ch == '\r') {
@@ -57,7 +57,7 @@ void process_command_list(void)
     }
     else {
       if (!str)
-        str = (char*)input_fileptr;
+        str = (char *)input_fileptr;
       input_fileptr++;
       continue;
     }
@@ -70,7 +70,7 @@ void process_command_list(void)
     }
     else {
       if (strlen(str) > 2 && !memcmp(str, "0x", 2)) {
-        stro = (char*)str + 2;
+        stro = (char *)str + 2;
         while (stro[0] && stro[1]) {
           uint8_t temp = TOHEX(stro[0]) << 4 | TOHEX(stro[1]);
           stro += 2;
@@ -78,7 +78,7 @@ void process_command_list(void)
         }
       }
       else { /* decimal */
-        *((int32_t*)bufp) = strtol(str, &stro, 10);
+        *((int32_t *)bufp) = strtol(str, &stro, 10);
         bufp += sizeof(int32_t);
       }
       len = bufp - tempbuf;
@@ -102,7 +102,7 @@ void process_command_list(void)
         if (found_cortex != -1)
           write_tms_transition("EE0101");
         ENTER_TMS_STATE('I');
-        uint8_t* rdata = read_data();
+        uint8_t *rdata = read_data();
         int i = 0;
         log_concat(NULL);
         while (i < len) {

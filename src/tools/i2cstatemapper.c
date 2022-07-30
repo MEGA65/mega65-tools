@@ -10,7 +10,7 @@ struct entry {
 
   int reg_offset;
 
-  char* desc;
+  char *desc;
 };
 
 struct entry e[] = {
@@ -58,7 +58,7 @@ struct entry e[] = {
   { -1, -1, -1, -1 }
 };
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int busy_count = 0;
 

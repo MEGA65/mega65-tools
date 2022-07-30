@@ -9,7 +9,7 @@
 //#define DEBUG_BITBASH(x) { printf("@%d:%02x",__LINE__,x); }
 #define DEBUG_BITBASH(x)
 
-char* select_bitstream_file(void);
+char *select_bitstream_file(void);
 void fetch_rdid(void);
 void flash_reset(void);
 

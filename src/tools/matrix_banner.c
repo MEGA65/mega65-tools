@@ -5,14 +5,14 @@
 // 5 rows of 50 chars
 unsigned char bannertext[50 * 5 + 1];
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if ((!argv[1]) || (!argv[2])) {
     fprintf(stderr, "Usage: %s <input file> <output file>\n", argv[0]);
     exit(-1);
   }
-  FILE* f = fopen(argv[1], "r");
-  FILE* o = fopen(argv[2], "w");
+  FILE *f = fopen(argv[1], "r");
+  FILE *o = fopen(argv[2], "w");
   if ((!f) || (!o)) {
     fprintf(stderr, "Could not open input and/or output files.\n");
     exit(-1);

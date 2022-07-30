@@ -146,7 +146,7 @@ void graphics_mode(void)
   POKE(0xD021, 0);
 }
 
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg);
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg);
 
 unsigned short pixel_addr;
 unsigned char pixel_temp;
@@ -167,7 +167,7 @@ void plot_pixel_direct(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 80;
   while (*msg) {
@@ -185,7 +185,7 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x + y * 80;
   while (*msg) {
@@ -214,7 +214,7 @@ int count;
 unsigned char buffer[512];
 
 // Use tape buffer for code snippets
-unsigned char* code_buf = (unsigned char*)0x340;
+unsigned char *code_buf = (unsigned char *)0x340;
 
 /* Setup our code snippet:
    SEI
@@ -343,15 +343,15 @@ void main(void)
   for (i = 0; tests[i].opcode; i++) {
     expected = tests[i].expected;
     // Setup input values
-    *(unsigned long*)0x380 = tests[i].val1;
-    *(unsigned long*)0x384 = tests[i].val2;
+    *(unsigned long *)0x380 = tests[i].val1;
+    *(unsigned long *)0x384 = tests[i].val2;
 
     code_buf[INSTRUCTION_OFFSET] = tests[i].opcode;
     __asm__("jsr $0340");
     if (tests[i].rmw)
-      result_q = *(unsigned long*)0x384;
+      result_q = *(unsigned long *)0x384;
     else
-      result_q = *(unsigned long*)0x388;
+      result_q = *(unsigned long *)0x388;
     if (result_q != expected) {
       snprintf(msg, 64, "FAIL:#%d:$%02X:%s", (int)i, (int)tests[i].opcode, tests[i].instruction);
       print_text(0, line_num++, 2, msg);

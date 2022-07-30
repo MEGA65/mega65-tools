@@ -9,8 +9,8 @@
 #include <string.h>
 #include <stdint.h>
 
-#define POKE(a, v) *((uint8_t*)a) = (uint8_t)v
-#define PEEK(a) ((uint8_t)(*((uint8_t*)a)))
+#define POKE(a, v) *((uint8_t *)a) = (uint8_t)v
+#define PEEK(a) ((uint8_t)(*((uint8_t *)a)))
 
 unsigned short i;
 

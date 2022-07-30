@@ -11,7 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc != 3) {
     fprintf(stderr, "usage: format_banner <outfile> <columns per line>\n");
@@ -27,7 +27,7 @@ int main(int argc, char** argv)
     exit(-2);
   }
 
-  FILE* f = fopen(argv[1], "w");
+  FILE *f = fopen(argv[1], "w");
   if (!f) {
     perror("fopen");
     fprintf(stderr, "Failed to open output file '%s' for writing.\n", argv[1]);

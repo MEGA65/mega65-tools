@@ -2,8 +2,8 @@
 #include <string.h>
 #include <stdint.h>
 
-#define POKE(a, v) *((uint8_t*)a) = (uint8_t)v
-#define PEEK(a) ((uint8_t)(*((uint8_t*)a)))
+#define POKE(a, v) *((uint8_t *)a) = (uint8_t)v
+#define PEEK(a) ((uint8_t)(*((uint8_t *)a)))
 
 unsigned short mdio_read_register(unsigned char addr, unsigned char reg)
 {
@@ -37,8 +37,8 @@ int main(void)
   POKE(0xd02f, 0x53);
   POKE(0, 65); // make sure we don't go too fast
 
-  POKE(0x286,0x01);
-  
+  POKE(0x286, 0x01);
+
   POKE(0xd6e0, 0x01);
 
   for (a = 0; a != 0x20; a++)
@@ -81,7 +81,8 @@ int main(void)
   TEST(1, vv, 0, "Supports ex-cap regs");
 
   for (x = 0x00; x < 0x20; x++) {
-    if (!(x&3)) printf("\n%02x:  ",x);
+    if (!(x & 3))
+      printf("\n%02x:  ", x);
     vv = mdio_read_register(a, x);
     printf("%04x ", vv);
   }
