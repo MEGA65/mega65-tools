@@ -611,6 +611,16 @@ int memory_save(const int start, const int end, const char *filename)
     log_note("saving BASIC memory $%04X-$%04X", memsave_start_addr, memsave_end_addr);
     is_basic = 1;
   }
+  else {
+    if (end < start) {
+      memsave_start_addr = end;
+      memsave_end_addr = start;
+    }
+    else {
+      memsave_start_addr = start;
+      memsave_end_addr = end;
+    }
+  }
 
   o = fopen(filename, "w");
   if (!o) {
@@ -625,6 +635,7 @@ int memory_save(const int start, const int end, const char *filename)
     fwrite(membuf, 2, 1, o);
   }
 
+  log_debug("memory_save: saving memory $%08x-%08x", memsave_start_addr, memsave_end_addr);
   cur_addr = memsave_start_addr;
   while (cur_addr < memsave_end_addr) {
     count = memsave_end_addr - cur_addr;
@@ -638,6 +649,8 @@ int memory_save(const int start, const int end, const char *filename)
 
   fclose(o);
   log_debug("memory_save: closed output file");
+
+  log_note("saved memory dump $%08x-$%08x to '%s'", memsave_start_addr, memsave_end_addr, filename);
 
   return 0;
 }
