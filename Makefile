@@ -125,6 +125,8 @@ TOOLS=$(TOOLSUNX) $(TOOLSWIN)
 SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
 
+.PHONY: all allunix tests tools utilities format clean cleangen
+
 all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
 
 allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(UTILITIES) $(TESTS)
@@ -648,7 +650,10 @@ $(BINDIR)/vncserver:	$(TOOLDIR)/vncserver.c
 	$(CC) $(COPT) -O3 -o $(BINDIR)/vncserver $(TOOLDIR)/vncserver.c -I/usr/local/include -lvncserver -lpthread
 
 format:
-	find . -type d \( -path ./cc65 -o -path ./cbmconvert \) -prune -false -o -iname '*.h' -o -iname '*.c' -o -iname '*.cpp' | xargs clang-format --style=file -i
+	submodules=""; for sm in `git submodule | awk '{ print "./" $$2 }'`; do \
+		submodules="$$submodules -o -path $$sm"; \
+	done; \
+	find . -type d \( $${submodules:3} \) -prune -false -o \( -iname '*.h' -o -iname '*.c' -o -iname '*.cpp' \) -print | xargs clang-format --style=file -i
 
 clean:
 	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg
