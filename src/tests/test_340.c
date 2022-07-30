@@ -131,8 +131,8 @@ void main(void)
   POKE(0xD031, 0x20);
 
   POKE(COLOR + 0, 0x18); // Enable GOTOX (bit 4) and rowmask (bit 3)
-  POKE(COLOR + 1,
-      0x0f); // First Rowmask: 00001111, i.e. top (bottom?) 4 character pixel lines should be masked (not displayed)
+  POKE(COLOR + 1, 0x0f); // First Rowmask: 00001111, i.e. top (bottom?)
+                         // 4 character pixel lines should be masked (not displayed)
   POKE(COLOR + 2, 0x00);
   POKE(COLOR + 3, 0x00);
 
@@ -155,8 +155,8 @@ void main(void)
   // simulate passing the test)
 
   // run our 2nd test with rowmask of $0f
-  POKE(COLOR + 1,
-      0xf0); // First Rowmask: 11110000, i.e. top (bottom?) 4 character pixel lines should be masked (not displayed)
+  POKE(COLOR + 1, 0xf0); // First Rowmask: 11110000, i.e. top (bottom?)
+                         // 4 character pixel lines should be masked (not displayed)
   testpixels();
   printf("Executed test 2 - result : %02d\n", errcount);
   if (errcount != 0)
