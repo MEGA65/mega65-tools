@@ -3,8 +3,6 @@ bin/etherload
 bin/giftotiles
 bin/m65
 bin/mega65_ftp
-bin/monitor_load
-bin/monitor_save
 bin/pngprepare
 bin/bit2core 
 bin/readdisk
@@ -27,6 +25,5 @@ src/tools/ftphelper.c
 *.list
 *.xz
 *.exe
-monitorload_dlls
 test.wxs
 cbmconvert

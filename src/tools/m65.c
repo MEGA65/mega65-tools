@@ -238,6 +238,8 @@ int bitstream_only = 0;
 uint32_t zap_addr;
 int zap = 0;
 int wait_for_bitstream = 0;
+int memsave_start = -1, memsave_end = -1;
+char *memsave_filename = NULL;
 
 int hypervisor_paused = 0;
 
@@ -423,6 +425,10 @@ void init_cmd_options(void)
                   "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
   CMD_OPTION("vtyperet",  1, 0,         'T', "-|text|file", "As virttype, but add a RETRUN at the end of the line.");
 
+  CMD_OPTION("memsave",   1, 0,         0x81, "[addr:addr;]filename", "saves memory range addr:addr (hex) to filename. "
+                  "If addr range is omitted, save current basic memory. "
+                  "Only BASIC save without addr range will add load addr in front of data!");
+
   CMD_OPTION("boundaryscan", 1, 0,      'J', "xdc,bsdl[,sens[,log]]",
                   "Do JTAG boundary scan of attached FPGA, using the provided <xdc> and <bsdl> files. "
                   "A <sens>itivity list can also be provided, to restrict the set of signals monitored. "
@@ -576,6 +582,64 @@ uint32_t uint32_from_buf(unsigned char *b, int ofs)
   v |= (b[ofs + 2] << 16);
   v |= (b[ofs + 3] << 24);
   return v;
+}
+
+int memory_save(const int start, const int end, const char *filename)
+{
+  int memsave_start_addr = -1;
+  int memsave_end_addr = -1;
+  int cur_addr, count;
+  unsigned char membuf[4096], is_basic=0;
+  FILE *o;
+
+  if (start == -1 && end == -1) {
+    log_debug("memory_save: no memory range given, detecting BASIC program");
+    if (saw_c64_mode) {
+      fetch_ram(0x2b, 4, membuf);
+      memsave_start_addr = membuf[0] + (membuf[1] << 8);
+      memsave_end_addr = membuf[2] + (membuf[3] << 8) - 1;
+    }
+    else {
+      fetch_ram(0x82, 2, membuf);
+      memsave_start_addr = 0x2001;
+      memsave_end_addr = membuf[0] + (membuf[1] << 8) - 1;
+    }
+    if (memsave_end_addr - memsave_start_addr < 3) {
+      log_note("BASIC memory is empty, nothing to save!");
+      return -1;
+    }
+    log_note("saving BASIC memory $%04X-$%04X", memsave_start_addr, memsave_end_addr);
+    is_basic = 1;
+  }
+
+  o = fopen(filename, "w");
+  if (!o) {
+    log_error("could not open memory save file '%s'", filename);
+    return -1;
+  }
+  log_debug("memory_save: opened '%s' for writing", filename);
+
+  if (is_basic) {
+    membuf[0] = memsave_start_addr & 0xff;
+    membuf[1] = (memsave_start_addr >> 8) & 0xff;
+    fwrite(membuf, 2, 1, o);
+  }
+
+  cur_addr = memsave_start_addr;
+  while (cur_addr < memsave_end_addr) {
+    count = memsave_end_addr - cur_addr;
+    if (count > 4096)
+      count = 4096;
+    log_debug("memory_save: fetching $%08x %d", cur_addr, count);
+    fetch_ram(cur_addr, count, membuf);
+    fwrite(membuf, count, 1, o);
+    cur_addr += count;
+  }
+
+  fclose(o);
+  log_debug("memory_save: closed output file");
+
+  return 0;
 }
 
 void show_hyppo_report(void)
@@ -2102,6 +2166,26 @@ int main(int argc, char **argv)
       }
       wait_for_bitstream = 1;
       break;
+    case 0x81: // memsave
+      {
+        char *next;
+        if (!optarg)
+          usage(-3, "failed to parse memsave address argument");
+        if (strchr(optarg, ':') && strchr(optarg, ',')) { // got both range and filename
+          if (sscanf(optarg, "%x:%x;", &memsave_start, &memsave_end) != 2)
+            usage(-3, "failed to parse memsave address argument");
+          next = strchr(optarg, ',') + 1;
+          memsave_filename = strdup(next);
+        }
+        else if (strchr(optarg, ','))
+          usage(-3, "failed to parse memsave argument (range without file?)");
+        else {
+          memsave_start = -1;
+          memsave_end = -1;
+          memsave_filename = strdup(optarg);
+        }
+      }
+      break;
     default: // can not happen?
       usage(-3, "Unknown option.");
     }
@@ -2225,6 +2309,15 @@ int main(int argc, char **argv)
   // fetch version information
   if (unit_test_mode)
     get_system_bitstream_version();
+
+  // let's save as soon as possible, because first
+  // loading an then saving makes no sense, right?
+  if (memsave_filename) {
+    log_info("detecting C64/C65 mode status");
+    detect_mode();
+    if (memory_save(memsave_start, memsave_end, memsave_filename))
+      do_exit(-1);
+  }
 
   if (debug_load_memory) {
     log_note("Testing load memory function.");

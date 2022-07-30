@@ -105,7 +105,6 @@ TOOLSUNX=	$(BINDIR)/etherload \
 		$(BINDIR)/m65 \
 		$(BINDIR)/readdisk \
 		$(BINDIR)/mega65_ftp \
-		$(BINDIR)/monitor_save \
 		$(BINDIR)/romdiff \
 		$(BINDIR)/pngprepare \
 		$(BINDIR)/giftotiles \
@@ -520,7 +519,7 @@ $(BINDIR)/readdisk:	$(TOOLDIR)/readdisk.c $(TOOLDIR)/m65common.c $(TOOLDIR)/scre
 
 
 
-$(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+$(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 	$(MAKE_VERSION)
 	$(CC) $(COPT) -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/m65 $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
@@ -632,9 +631,6 @@ $(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile
 $(BINDIR)/bit2mcs.exe:	$(TOOLDIR)/bit2mcs.c Makefile 
 	$(WINCC) $(WINCOPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
 
-$(BINDIR)/monitor_save:	$(TOOLDIR)/monitor_save.c Makefile
-	$(CC) $(COPT) -o $(BINDIR)/monitor_save $(TOOLDIR)/monitor_save.c
-
 #-----------------------------------------------------------------------------
 
 $(BINDIR)/ethermon:	$(TOOLDIR)/ethermon.c
@@ -659,4 +655,3 @@ clean:
 	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg
 
 cleangen:	clean
-
