@@ -597,12 +597,12 @@ int memory_save(const int start, const int end, const char *filename)
     if (saw_c64_mode) {
       fetch_ram(0x2b, 4, membuf);
       memsave_start_addr = membuf[0] + (membuf[1] << 8);
-      memsave_end_addr = membuf[2] + (membuf[3] << 8) - 1;
+      memsave_end_addr = membuf[2] + (membuf[3] << 8);
     }
     else {
       fetch_ram(0x82, 2, membuf);
       memsave_start_addr = 0x2001;
-      memsave_end_addr = membuf[0] + (membuf[1] << 8) - 1;
+      memsave_end_addr = membuf[0] + (membuf[1] << 8);
     }
     if (memsave_end_addr - memsave_start_addr < 3) {
       log_note("BASIC memory is empty, nothing to save!");
