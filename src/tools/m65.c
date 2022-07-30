@@ -589,7 +589,7 @@ int memory_save(const int start, const int end, const char *filename)
   int memsave_start_addr = -1;
   int memsave_end_addr = -1;
   int cur_addr, count;
-  unsigned char membuf[4096], is_basic=0;
+  unsigned char membuf[4096], is_basic = 0;
   FILE *o;
 
   if (start == -1 && end == -1) {
@@ -2180,25 +2180,24 @@ int main(int argc, char **argv)
       wait_for_bitstream = 1;
       break;
     case 0x81: // memsave
-      {
-        char *next;
-        if (!optarg)
+    {
+      char *next;
+      if (!optarg)
+        usage(-3, "failed to parse memsave address argument");
+      if (strchr(optarg, ':') && strchr(optarg, ',')) { // got both range and filename
+        if (sscanf(optarg, "%x:%x;", &memsave_start, &memsave_end) != 2)
           usage(-3, "failed to parse memsave address argument");
-        if (strchr(optarg, ':') && strchr(optarg, ',')) { // got both range and filename
-          if (sscanf(optarg, "%x:%x;", &memsave_start, &memsave_end) != 2)
-            usage(-3, "failed to parse memsave address argument");
-          next = strchr(optarg, ',') + 1;
-          memsave_filename = strdup(next);
-        }
-        else if (strchr(optarg, ','))
-          usage(-3, "failed to parse memsave argument (range without file?)");
-        else {
-          memsave_start = -1;
-          memsave_end = -1;
-          memsave_filename = strdup(optarg);
-        }
+        next = strchr(optarg, ',') + 1;
+        memsave_filename = strdup(next);
       }
-      break;
+      else if (strchr(optarg, ','))
+        usage(-3, "failed to parse memsave argument (range without file?)");
+      else {
+        memsave_start = -1;
+        memsave_end = -1;
+        memsave_filename = strdup(optarg);
+      }
+    } break;
     default: // can not happen?
       usage(-3, "Unknown option.");
     }

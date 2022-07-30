@@ -54,10 +54,10 @@ void cmdPrintValue(void);
 void cmdForwardDis(void);
 void cmdBackwardDis(void);
 void cmdMCopy(void);
-int doOneShotAssembly(char* strCommand);
-int  cmdGetCmdCount(void);
-char* cmdGetCmdName(int idx);
-int isValidMnemonic(char* str);
+int doOneShotAssembly(char *strCommand);
+int cmdGetCmdCount(void);
+char *cmdGetCmdName(int idx);
+int isValidMnemonic(char *str);
 
 #define BUFSIZE 4096
 
@@ -65,48 +65,43 @@ extern char outbuf[];
 extern char inbuf[];
 extern bool ctrlcflag;
 
-typedef struct
-{
-  char* name;
+typedef struct {
+  char *name;
   void (*func)(void);
-  char* params;
-  char* help;
+  char *params;
+  char *help;
 } type_command_details;
 
-typedef struct tse
-{
-  char* symbol;
+typedef struct tse {
+  char *symbol;
   int addr;   // integer value of symbol
-  char* sval; // string value of symbol
-  struct tse* next;
+  char *sval; // string value of symbol
+  struct tse *next;
 } type_symmap_entry;
 
-typedef struct tseg
-{
+typedef struct tseg {
   char name[64];
   int offset;
 } type_segment;
 
-typedef struct t_o
-{
+typedef struct t_o {
   char modulename[256];
   type_segment segments[32];
   int seg_cnt;
   int enabled;
-  struct t_o* next;
+  struct t_o *next;
 } type_offsets;
 
 typedef enum { TYPE_BYTE, TYPE_WORD, TYPE_DWORD, TYPE_STRING, TYPE_DUMP, TYPE_MDUMP } type_watch;
-extern char* type_names[];
+extern char *type_names[];
 
-typedef struct we
-{
+typedef struct we {
   type_watch type;
-  char* name;
-  char* param1;
-  struct we* next;
+  char *name;
+  char *param1;
+  struct we *next;
 } type_watch_entry;
 
 extern type_command_details command_details[];
-extern type_symmap_entry* lstSymMap;
-extern type_watch_entry* lstWatches;
+extern type_symmap_entry *lstSymMap;
+extern type_watch_entry *lstWatches;

@@ -1,11 +1,10 @@
 /* vim: set expandtab shiftwidth=2 tabstop=2: */
 
-extern char* instruction_lut[];
+extern char *instruction_lut[];
 
-typedef struct
-{
-  char* name;
-  int   val;
+typedef struct {
+  char *name;
+  int val;
 } type_opcode_mode;
 
 typedef enum {
