@@ -246,11 +246,8 @@ int hypervisor_paused = 0;
 int screen_shot = 0;
 char *screen_shot_file = NULL;
 int screen_rows_remaining = 0;
-extern unsigned int screen_address;
 int next_screen_address = 0;
 int screen_line_offset = 0;
-extern unsiggned int screen_line_step;
-extern unsigned int screen_width;
 unsigned char screen_line_buffer[256];
 
 char *type_text = NULL;
