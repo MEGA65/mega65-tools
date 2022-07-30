@@ -69,7 +69,7 @@ float quantise_gap(float gap)
 int q_gap(float gap)
 {
   //  printf("qgap=%f\n",gap);
-  int a = gap;
+  // int a = gap;
   int b = gap + 0.1;
   return b;
 }
@@ -625,7 +625,7 @@ int main(int argc, char **argv)
       // then use the one that had the most hits
       int best_count = 0;
       int best_int = 0;
-      int counts[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+      int counts[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
       for (int i = 0; i < 8; i++) {
         if (absf(v[i]) - ((int)absf(v[i])) < 0.02) {
           int bin = (int)absf(v[i]);
@@ -751,7 +751,6 @@ int main(int argc, char **argv)
         printf("%3d : %d\n", c, cs[c]);
     }
 
-    int skip = 1;
     unsigned int buckets[10][10][10];
     bzero(buckets, sizeof(unsigned int) * 10 * 10 * 10);
     unsigned int bc[10];
@@ -776,7 +775,7 @@ int main(int argc, char **argv)
       //	printf("\n");
     }
 
-    skip = 0;
+    // int skip = 0;
     for (int c = 0; c < 10; c++) {
       if (bc[c]) {
         printf("%d (%6d) : ", c, bc[c]);
@@ -836,9 +835,9 @@ int main(int argc, char **argv)
     if (arg < argc)
       fprintf(f, "$var wire 1 %c %s $end\n", '@' + arg, argv[arg]);
     else if (arg == argc)
-      fprintf(f, "$var wire 1 %c model $end\n", '@' + arg, argv[arg]);
+      fprintf(f, "$var wire 1 %c model $end\n", '@' + arg);
     else
-      fprintf(f, "$var wire 1 %c modelerr $end\n", '@' + arg, argv[arg]);
+      fprintf(f, "$var wire 1 %c modelerr $end\n", '@' + arg);
   }
 
   fprintf(f, "$upscope $end\n"
