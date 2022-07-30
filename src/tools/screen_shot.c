@@ -301,7 +301,6 @@ int do_screen_shot_ascii(void)
       //      int glyph_underline=0;
       int glyph_bold = 0;
       int glyph_reverse = 0;
-      unsigned char glyph_altpalette = glyph_bold && glyph_reverse;
       if (viciii_attribs && (!multicolour_mode)) {
         //	glyph_blink=colour_value&0x0010;
         glyph_reverse = colour_value & 0x0020;
@@ -310,6 +309,7 @@ int do_screen_shot_ascii(void)
         if (glyph_bold && !glyph_reverse)
           foreground_colour |= 0x10;
       }
+      unsigned char glyph_altpalette = glyph_bold && glyph_reverse;
       if (vic_regs[0x54] & 2)
         if (char_id < 0x100)
           glyph_full_colour = 1;
