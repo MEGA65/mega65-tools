@@ -162,7 +162,7 @@ void plot_pixel(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 80;
   while (*msg) {
@@ -180,7 +180,7 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x + y * 80;
   while (*msg) {
@@ -282,7 +282,7 @@ void audioxbar_setcoefficient(uint8_t n, uint8_t value)
   POKE(0xD6F5U, value);
 }
 
-char* note_name(unsigned short period)
+char *note_name(unsigned short period)
 {
   switch (period) {
   case 0:
@@ -393,7 +393,7 @@ char* note_name(unsigned short period)
   }
 }
 
-void format_note(unsigned char* n)
+void format_note(unsigned char *n)
 {
   snprintf(note_fmt, 9, "%s%X%02X%02X", note_name(((n[0] & 0xf) << 8) | n[1]), n[0] >> 4, n[2], n[3]);
 }
@@ -564,7 +564,7 @@ void play_sample(unsigned char channel, unsigned char instrument, unsigned short
 
 unsigned char last_instruments[4] = { 0, 0, 0, 0 };
 
-void play_note(unsigned char channel, unsigned char* note)
+void play_note(unsigned char channel, unsigned char *note)
 {
   unsigned char instrument;
   unsigned short period;

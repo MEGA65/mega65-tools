@@ -28,14 +28,14 @@ struct util_header {
 
 struct util_header header;
 
-int load_util(char* filename, int ar_offset)
+int load_util(char *filename, int ar_offset)
 {
   bzero(&header, sizeof(header));
 
   header.self_lo = ar_offset & 0xff;
   header.self_hi = (ar_offset >> 8) & 0xff;
 
-  FILE* f = fopen(filename, "r");
+  FILE *f = fopen(filename, "r");
   if (!f) {
     fprintf(stderr, "Could not read utility '%s'\n", filename);
     exit(-1);
@@ -57,7 +57,7 @@ int load_util(char* filename, int ar_offset)
   // Search utility for name string
   header.name[0] = 0;
   for (int i = 0; i < len; i++)
-    if (!strncmp("PROP.M65U.NAME=", (const char*)&util_body[i], 15)) {
+    if (!strncmp("PROP.M65U.NAME=", (const char *)&util_body[i], 15)) {
       // Found utility name
       header.name[0] = 0;
       for (int j = 0; j < 31; j++) {
@@ -95,7 +95,7 @@ int load_util(char* filename, int ar_offset)
     // No SYS nnnn found
     // Look for PROP.M65U.ADDR= string instead
     for (int i = 0; i < len; i++)
-      if (!strncmp("PROP.M65U.ADDR=", (const char*)&util_body[i], 15)) {
+      if (!strncmp("PROP.M65U.ADDR=", (const char *)&util_body[i], 15)) {
         int entry;
         char addr[7];
         addr[0] = 0;
@@ -127,7 +127,7 @@ int load_util(char* filename, int ar_offset)
   return 0;
 }
 
-int util_describe(struct util_header* h)
+int util_describe(struct util_header *h)
 {
   fprintf(stderr, "Preparing to pack utility '%s'\n", h->name);
   fprintf(stderr, "  Offset = $%02x%02x\n", h->self_hi, h->self_lo);
@@ -137,14 +137,14 @@ int util_describe(struct util_header* h)
   return 0;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc < 3) {
     fprintf(stderr, "usage: utilpacker <output.bin> <file.prg [...]>\n");
     exit(-1);
   }
 
-  FILE* o = fopen(argv[1], "w");
+  FILE *o = fopen(argv[1], "w");
   if (!o) {
     fprintf(stderr, "Could not open '%s' to write utility archive.\n", argv[1]);
     exit(-1);

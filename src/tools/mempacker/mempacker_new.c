@@ -10,7 +10,7 @@
 #include <string.h>
 #include <getopt.h>
 
-int load_block(char* arg, unsigned char* archive, int ar_size)
+int load_block(char *arg, unsigned char *archive, int ar_size)
 {
   char filename[1024];
   int addr;
@@ -19,7 +19,7 @@ int load_block(char* arg, unsigned char* archive, int ar_size)
     fprintf(stderr, "Could not parse '%s', should be filename@hexaddr\n", arg);
     exit(-1);
   }
-  FILE* f = fopen(filename, "r");
+  FILE *f = fopen(filename, "r");
   if (!f) {
     fprintf(stderr, "Could not read file '%s'\n", filename);
   }
@@ -43,13 +43,13 @@ int usage(void)
   exit(-1);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc < 3) {
     usage();
   }
 
-  char* outfile = NULL;
+  char *outfile = NULL;
 
   int bytes = 1024 * 1024 - 1;
   char name[1024] = "shadowram";
@@ -86,7 +86,7 @@ int main(int argc, char** argv)
     load_block(argv[i], archive, ar_size);
   }
 
-  FILE* o = fopen(outfile, "w");
+  FILE *o = fopen(outfile, "w");
   if (!o) {
     fprintf(stderr, "Could not open '%s' to write VHDL source file.\n", outfile);
     exit(-1);

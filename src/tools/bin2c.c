@@ -1,10 +1,10 @@
 #include <stdio.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  FILE* in = fopen(argv[1], "rb");
-  char* name = argv[2];
-  FILE* out = fopen(argv[3], "w");
+  FILE *in = fopen(argv[1], "rb");
+  char *name = argv[2];
+  FILE *out = fopen(argv[3], "w");
 
   unsigned char buffer[1024 * 1024];
 

@@ -27,9 +27,9 @@
 #define SCREEN_POSITION ((800 - 720) / 2)
 
 int monitor_sync(void);
-int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer);
+int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer);
 int fetch_ram_invalidate(void);
-int fetch_ram_cacheable(unsigned long address, unsigned int count, unsigned char* buffer);
+int fetch_ram_cacheable(unsigned long address, unsigned int count, unsigned char *buffer);
 int detect_mode(void);
 void progress_to_RTI(void);
 
@@ -107,9 +107,9 @@ int set_pixel(int x, int y, int r, int g, int b)
   }
 
   //  log_debug("Setting pixel at %d,%d to #%02x%02x%02x",x,y,b,g,r);
-  ((unsigned char*)png_rows[y])[x * 3 + 0] = r;
-  ((unsigned char*)png_rows[y])[x * 3 + 1] = g;
-  ((unsigned char*)png_rows[y])[x * 3 + 2] = b;
+  ((unsigned char *)png_rows[y])[x * 3 + 0] = r;
+  ((unsigned char *)png_rows[y])[x * 3 + 1] = g;
+  ((unsigned char *)png_rows[y])[x * 3 + 2] = b;
 
   return 0;
 }
@@ -122,7 +122,7 @@ typedef struct {
   int bits_stored; /* the number of bits from the codepoint that fits in char */
 } utf_t;
 
-utf_t* utf[] = {
+utf_t *utf[] = {
   /*             mask        lead        beg      end       bits */
   [0] = &(utf_t) { 0b00111111, 0b10000000, 0, 0, 6 },
   [1] = &(utf_t) { 0b01111111, 0b00000000, 0000, 0177, 7 },
@@ -138,13 +138,13 @@ utf_t* utf[] = {
 int codepoint_len(const uint32_t cp); /* len of associated utf-8 char */
 int utf8_len(const char ch);          /* len of utf-8 encoded char */
 
-char* to_utf8(const uint32_t cp);
+char *to_utf8(const uint32_t cp);
 uint32_t to_cp(const char chr[4]);
 
 int codepoint_len(const uint32_t cp)
 {
   int len = 0;
-  for (utf_t** u = utf; *u; ++u) {
+  for (utf_t **u = utf; *u; ++u) {
     if ((cp >= (*u)->beg) && (cp <= (*u)->end)) {
       break;
     }
@@ -159,7 +159,7 @@ int codepoint_len(const uint32_t cp)
 int utf8_len(const char ch)
 {
   int len = 0;
-  for (utf_t** u = utf; *u; ++u) {
+  for (utf_t **u = utf; *u; ++u) {
     if ((ch & ~(*u)->mask) == (*u)->lead) {
       break;
     }
@@ -171,7 +171,7 @@ int utf8_len(const char ch)
   return len;
 }
 
-char* to_utf8(const uint32_t cp)
+char *to_utf8(const uint32_t cp)
 {
   static char ret[5];
   const int bytes = codepoint_len(cp);
@@ -189,6 +189,28 @@ char* to_utf8(const uint32_t cp)
 
 void print_screencode(unsigned char c, int upper_case)
 {
+  // A nice reference for these mappings can be found here:
+  // https://style64.org/petscii/
+  static int map_screencode_to_utf8[][2] = {
+    { 0x40, 0x2501 }, // box drawings heavy horizontal
+    { 0x43, 0x2501 }, // box drawings heavy horizontal
+    { 0x60, 0xa0 },   // no-break space?
+    { 0x61, 0x258c }, // left half block
+    { 0x62, 0x2584 }, // lower half block
+    { 0x63, 0x2594 }, // upper one eigth block
+    { 0x64, 0x2581 }, // lower one eigth block
+    { 0x65, 0x258e }, // left one quarter block
+    { 0x66, 0x2592 }, // medium shade
+    { 0x67, 0x258a }, // left three quarter block (but it really should be right one quarter block)
+    { 0x68, 0x25db }, // no equivalant to lower half medium shade, so got an approximation
+    { 0x69, 0x25e4 }, // black upper left triangle
+    { 0x6a, 0x258a }, // left three quarter block (but it really should be right one quarter block)
+    { 0x6b, 0x2523 }, // box drawings heavy vertical and right
+    { 0x6c, 0x2597 }, // quadrant lower right
+    { 0x6d, 0x2517 }, // box drawings heavy up and right
+    { 0x6e, 0x2513 }, // box drawings heavy down and left
+    { 0x6f, 0x2582 }, // lower one quarter block
+    { -1, -1 } };
   int rev = 0;
   if (c & 0x80) {
     rev = 1;
@@ -208,75 +230,19 @@ void print_screencode(unsigned char c, int upper_case)
     printf("%c", c);
   else if ((c >= 0x40 && c <= 0x5f) && (!upper_case))
     printf("%c", c);
-
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x61)
-    printf("%s", to_utf8(0x258c));
-  else if (c == 0x62)
-    printf("%s", to_utf8(0x2584));
-  else if (c == 0x63)
-    printf("%s", to_utf8(0x2594));
-  else if (c == 0x64)
-    printf("%s", to_utf8(0x2581));
-  else if (c == 0x65)
-    printf("%s", to_utf8(0x258e));
-  else if (c == 0x66)
-    printf("%s", to_utf8(0x2592));
-  else if (c == 0x67)
-    printf("%s", to_utf8(0x258a));
-  else if (c == 0x68)
-    printf("%s", to_utf8(0x7f)); // No Unicode equivalent
-  else if (c == 0x69)
-    printf("%s", to_utf8(0x25e4));
-  else if (c == 0x6A)
-    printf("%s", to_utf8(0x258a));
-  else if (c == 0x6B)
-    printf("%s", to_utf8(0x2523));
-  else if (c == 0x6C)
-    printf("%s", to_utf8(0x2597));
-  else if (c == 0x6D)
-    printf("%s", to_utf8(0x2517));
-  else if (c == 0x6E)
-    printf("%s", to_utf8(0x2513));
-  else if (c == 0x6F)
-    printf("%s", to_utf8(0x2582));
-
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-  else if (c == 0x60)
-    printf("%s", to_utf8(0xA0));
-
-  else
-    printf("?");
+  else {
+    int k = 0;
+    while (map_screencode_to_utf8[k][0] != -1) {
+      if (c == map_screencode_to_utf8[k][0]) {
+        printf("%s", to_utf8(map_screencode_to_utf8[k][1]));
+        break;
+      }
+      k++;
+    }
+    if (map_screencode_to_utf8[k][0] == -1) {
+      printf("?");
+    }
+  }
 
   if (rev) {
     // Reverse off again
@@ -335,7 +301,6 @@ int do_screen_shot_ascii(void)
       //      int glyph_underline=0;
       int glyph_bold = 0;
       int glyph_reverse = 0;
-      unsigned char glyph_altpalette = glyph_bold && glyph_reverse;
       if (viciii_attribs && (!multicolour_mode)) {
         //	glyph_blink=colour_value&0x0010;
         glyph_reverse = colour_value & 0x0020;
@@ -344,6 +309,7 @@ int do_screen_shot_ascii(void)
         if (glyph_bold && !glyph_reverse)
           foreground_colour |= 0x10;
       }
+      unsigned char glyph_altpalette = glyph_bold && glyph_reverse;
       if (vic_regs[0x54] & 2)
         if (char_id < 0x100)
           glyph_full_colour = 1;
@@ -367,10 +333,8 @@ int do_screen_shot_ascii(void)
           mega65_rgb(fg, 1, glyph_altpalette), mega65_rgb(fg, 2, glyph_altpalette));
 
       // Xterm can't display arbitrary graphics, so just mark full-colour chars
-      if (glyph_full_colour) {
+      if (glyph_full_colour || glyph_4bit) {
         printf("?");
-        if (glyph_4bit)
-          printf("?");
       }
       else
         print_screencode(char_id & 0xff, upper_case);
@@ -825,7 +789,7 @@ int do_screen_shot(char* userfilename)
   log_note("got ASCII screenshot");
   do_screen_shot_ascii();
 
-  FILE* f = NULL;
+  FILE *f = NULL;
   char filename[1024];
   if (userfilename != NULL)
     strncpy(filename, userfilename, 1023);
@@ -873,9 +837,9 @@ int do_screen_shot(char* userfilename)
     }
     // Set all pixels to border colour
     for (int x = 0; x < 720; x++) {
-      ((unsigned char*)png_rows[y])[x * 3 + 0] = mega65_rgb(border_colour, 0, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 1] = mega65_rgb(border_colour, 1, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 2] = mega65_rgb(border_colour, 2, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 0] = mega65_rgb(border_colour, 0, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 1] = mega65_rgb(border_colour, 1, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 2] = mega65_rgb(border_colour, 2, 0);
     }
   }
 
@@ -884,9 +848,9 @@ int do_screen_shot(char* userfilename)
   // Start by drawing the non-border area
   for (int y = top_border_y; y < bottom_border_y && (y < (is_pal_mode ? 576 : 480)); y++) {
     for (int x = left_border; x < right_border; x++) {
-      ((unsigned char*)png_rows[y])[x * 3 + 0] = mega65_rgb(background_colour, 0, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 1] = mega65_rgb(background_colour, 1, 0);
-      ((unsigned char*)png_rows[y])[x * 3 + 2] = mega65_rgb(background_colour, 2, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 0] = mega65_rgb(background_colour, 0, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 1] = mega65_rgb(background_colour, 1, 0);
+      ((unsigned char *)png_rows[y])[x * 3 + 2] = mega65_rgb(background_colour, 2, 0);
     }
   }
 

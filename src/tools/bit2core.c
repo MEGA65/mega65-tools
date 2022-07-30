@@ -22,7 +22,7 @@
 #include "m65common.h"
 #include "dirtymock.h"
 
-extern const char* version_string;
+extern const char *version_string;
 
 #define MAX_MB 8
 #define BYTES_IN_MEGABYTE (1024 * 1024)
@@ -81,7 +81,7 @@ static m65target_to_model_id map_m65target_to_model_id[] = {
 
 static int m65target_to_model_id_count = sizeof(map_m65target_to_model_id) / sizeof(m65target_to_model_id);
 
-int get_model_id(const char* m65targetname)
+int get_model_id(const char *m65targetname)
 {
   for (int k = 0; k < m65target_to_model_id_count; k++) {
     if (strcmp(map_m65target_to_model_id[k].name, m65targetname) == 0) {
@@ -108,12 +108,12 @@ typedef union {
 } header_info;
 #pragma pack(pop)
 
-void split_out_and_print_m65target_names(m65target_info* m65target)
+void split_out_and_print_m65target_names(m65target_info *m65target)
 {
   char temp[MAX_M65_TARGET_NAME_LEN]; // strtok() will butcher the string, so make a copy of it
   strcpy(temp, m65target->name);
 
-  char* possible_m65target = strtok(temp, "|");
+  char *possible_m65target = strtok(temp, "|");
   do {
     fprintf(stderr, "  %-15s %s\n", possible_m65target, m65target->fpga_part);
   } while ((possible_m65target = strtok(NULL, "|")) != NULL);
@@ -144,20 +144,20 @@ void show_help(void)
   show_mega65_target_name_list();
 
   fprintf(stderr, "\n"
-      "The tool can optionally embed files after the core for quick excess or\n"
-      "SD-Card population. You can list multiple files or you can give a\n"
-      "filename prefixed with a @ to specify a special list file. In it you\n"
-      "can list the filenames of files to embed that reside in the *same* path\n"
-      "as the list file. WARNING: there is no duplicate protection!\n"
-      "\n");
+                  "The tool can optionally embed files after the core for quick excess or\n"
+                  "SD-Card population. You can list multiple files or you can give a\n"
+                  "filename prefixed with a @ to specify a special list file. In it you\n"
+                  "can list the filenames of files to embed that reside in the *same* path\n"
+                  "as the list file. WARNING: there is no duplicate protection!\n"
+                  "\n");
 }
 
-int is_match_on_m65targetname_string(const char* m65target, const char* m65targetstring)
+int is_match_on_m65targetname_string(const char *m65target, const char *m65targetstring)
 {
   char temp[MAX_M65_TARGET_NAME_LEN]; // strtok() will butcher the string, so make a copy of it
   strcpy(temp, m65targetstring);
 
-  char* possible_m65target = strtok(temp, "|");
+  char *possible_m65target = strtok(temp, "|");
   do {
     if (strcmp(m65target, possible_m65target) == 0)
       return 1;
@@ -166,7 +166,7 @@ int is_match_on_m65targetname_string(const char* m65target, const char* m65targe
   return 0;
 }
 
-m65target_info* find_m65targetinfo_from_m65targetname(const char* m65targetname)
+m65target_info *find_m65targetinfo_from_m65targetname(const char *m65targetname)
 {
   for (int idx = 0; idx < m65targetgroup_count; idx++) {
     if (is_match_on_m65targetname_string(m65targetname, m65targetgroups[idx].name)) {
@@ -183,7 +183,7 @@ m65target_info* find_m65targetinfo_from_m65targetname(const char* m65targetname)
   exit(-1);
 }
 
-m65target_info* find_m65targetinfo_from_fpga_part(char* fpga_part)
+m65target_info *find_m65targetinfo_from_fpga_part(char *fpga_part)
 {
   if (strncmp(fpga_part, "xc", 2) == 0)
     fpga_part += 2;
@@ -199,7 +199,7 @@ m65target_info* find_m65targetinfo_from_fpga_part(char* fpga_part)
   return NULL;
 }
 
-void show_warning_if_multiple_m65targets(m65target_info* m65target)
+void show_warning_if_multiple_m65targets(m65target_info *m65target)
 {
   if (strchr(m65target->name, '|') != NULL) {
     fprintf(stderr, "WARNING: Can-not distinguish between these multiple mega65 targets based on FPGA part.\n"
@@ -208,7 +208,7 @@ void show_warning_if_multiple_m65targets(m65target_info* m65target)
   }
 }
 
-void xilinx_error_exit(int fieldid, char* str, ...)
+void xilinx_error_exit(int fieldid, char *str, ...)
 {
   va_list args;
   va_start(args, str);
@@ -231,7 +231,7 @@ void assert_magic_char_equals(int fieldid, char expected, char actual)
 }
 
 // NOTE: set expected to 0x00 if you don't want to test actual value against expected
-int get_field_length(unsigned char** ptr, int* fieldid, short int expected)
+int get_field_length(unsigned char **ptr, int *fieldid, short int expected)
 {
   int fieldlength = ((int)**(ptr) << 8) + (int)*(*(ptr) + 1); // big-endian
   if (expected != 0x00)
@@ -241,10 +241,10 @@ int get_field_length(unsigned char** ptr, int* fieldid, short int expected)
   return fieldlength;
 }
 
-void check_magic_header_field(unsigned char** ptr, int* fieldid, unsigned char* expected)
+void check_magic_header_field(unsigned char **ptr, int *fieldid, unsigned char *expected)
 {
   int fieldlength = get_field_length(ptr, fieldid, 0x09);
-  unsigned char* actual = *ptr;
+  unsigned char *actual = *ptr;
   if (memcmp(expected, *ptr, fieldlength) != 0) {
     xilinx_error_exit(*fieldid,
         "Xilinx header - Field %d - has invalid magic header\n"
@@ -259,7 +259,7 @@ void check_magic_header_field(unsigned char** ptr, int* fieldid, unsigned char* 
   *fieldid = *fieldid + 1;
 }
 
-char check_magic_char(unsigned char** ptr, int* fieldid, char expected)
+char check_magic_char(unsigned char **ptr, int *fieldid, char expected)
 {
   get_field_length(ptr, fieldid, 0x01);
   unsigned char actual = **ptr;
@@ -269,7 +269,7 @@ char check_magic_char(unsigned char** ptr, int* fieldid, char expected)
   return actual;
 }
 
-char check_magic_char_field(unsigned char** ptr, int* fieldid, char expected)
+char check_magic_char_field(unsigned char **ptr, int *fieldid, char expected)
 {
   char actual = check_magic_char(ptr, fieldid, expected);
 
@@ -281,10 +281,10 @@ char check_magic_char_field(unsigned char** ptr, int* fieldid, char expected)
   return actual;
 }
 
-char* check_string_field(unsigned char** ptr, int* fieldid)
+char *check_string_field(unsigned char **ptr, int *fieldid)
 {
   int fieldlength = get_field_length(ptr, fieldid, 0x00);
-  char* actual = (char*)*ptr;
+  char *actual = (char *)*ptr;
   if ((*ptr)[fieldlength - 1] != 0)
     xilinx_error_exit(*fieldid, "failed to find null terminator in string");
   else
@@ -296,11 +296,11 @@ char* check_string_field(unsigned char** ptr, int* fieldid)
   return actual;
 }
 
-char* locate_fpga_part_id_in_bitstream(unsigned char* bitstream)
+char *locate_fpga_part_id_in_bitstream(unsigned char *bitstream)
 {
   // based on description of xilinx file format at:
   // - http://www.pldtool.com/pdf/fmt_xilinxbit.pdf
-  unsigned char* ptr = bitstream;
+  unsigned char *ptr = bitstream;
   int fieldid = 1;
 
   // xilinx magic header
@@ -319,16 +319,16 @@ char* locate_fpga_part_id_in_bitstream(unsigned char* bitstream)
   ptr++;
 
   // fpga part id
-  char* fpga_part_id = check_string_field(&ptr, &fieldid);
+  char *fpga_part_id = check_string_field(&ptr, &fieldid);
 
   return fpga_part_id;
 }
 
-int check_bitstream_header_has_suitable_fpga_part_for_m65target(m65target_info* m65target, unsigned char* bitstream)
+int check_bitstream_header_has_suitable_fpga_part_for_m65target(m65target_info *m65target, unsigned char *bitstream)
 {
-  char* fpga_part = locate_fpga_part_id_in_bitstream(bitstream);
+  char *fpga_part = locate_fpga_part_id_in_bitstream(bitstream);
 
-  m65target_info* discovered_m65target = find_m65targetinfo_from_fpga_part(fpga_part);
+  m65target_info *discovered_m65target = find_m65targetinfo_from_fpga_part(fpga_part);
 
   if (discovered_m65target == NULL)
     return 0;
@@ -340,9 +340,9 @@ int check_bitstream_header_has_suitable_fpga_part_for_m65target(m65target_info* 
   return 1;
 }
 
-int read_bitstream_file(const char* filename)
+int read_bitstream_file(const char *filename)
 {
-  FILE* bf = fopen(filename, "rb");
+  FILE *bf = fopen(filename, "rb");
   if (!bf) {
     fprintf(stderr, "ERROR: Could not read bitstream file '%s'\n", filename);
     exit(-3);
@@ -356,7 +356,7 @@ int read_bitstream_file(const char* filename)
   return bit_size;
 }
 
-int check_bitstream_file(m65target_info* m65target, int bit_size)
+int check_bitstream_file(m65target_info *m65target, int bit_size)
 {
   if (bit_size < 1024) // NOTE: Why exactly 1024 bytes? Why not just the same as BITSTREAM_HEADER_SIZE (120 bytes?)
   {
@@ -379,35 +379,33 @@ int check_bitstream_file(m65target_info* m65target, int bit_size)
   return 0;
 }
 
-void write_core_file(int core_len, unsigned char *core_file,char *core_filename)
+void write_core_file(int core_len, unsigned char *core_file, char *core_filename)
 {
-  FILE* of = fopen(core_filename, "wb");
+  FILE *of = fopen(core_filename, "wb");
   if (!of) {
     fprintf(stderr, "ERROR: Could not create core file '%s'\n", core_filename);
     exit(-3);
   }
-  if (fwrite(core_file, core_len, 1, of)!=1) {
-    fprintf(stderr,"ERROR: Could not write all data to '%s'\n",core_filename);
+  if (fwrite(core_file, core_len, 1, of) != 1) {
+    fprintf(stderr, "ERROR: Could not write all data to '%s'\n", core_filename);
     exit(-1);
   }
-  
+
   fclose(of);
 
   fprintf(stderr, "Core file written: \"%s\"\n", core_filename);
   return;
 }
 
-void build_core_file(const int bit_size,
-		     int *core_len, unsigned char *core_file,
-		     const char* core_name, const char* core_version, const char* m65target_name,
-    const char* core_filename)
+void build_core_file(const int bit_size, int *core_len, unsigned char *core_file, const char *core_name,
+    const char *core_version, const char *m65target_name, const char *core_filename)
 {
 
   // Write core file name and version
   header_info header_block;
 
-  memset(core_file,0,8192*1024);
-  
+  memset(core_file, 0, 8192 * 1024);
+
   memset(header_block.data, 0, CORE_HEADER_SIZE);
 
   for (int i = 0; i < 16; i++)
@@ -418,57 +416,61 @@ void build_core_file(const int bit_size,
   strcpy(header_block.m65_target, m65target_name);
   header_block.model_id = get_model_id(m65target_name);
 
-  bcopy(header_block.data,core_file,CORE_HEADER_SIZE); *core_len=CORE_HEADER_SIZE;
-  if (bit_size+(*core_len)>=8192*1024) {
-    fprintf(stderr,"ERROR: Bitstream + header > 8MB\n");
+  bcopy(header_block.data, core_file, CORE_HEADER_SIZE);
+  *core_len = CORE_HEADER_SIZE;
+  if (bit_size + (*core_len) >= 8192 * 1024) {
+    fprintf(stderr, "ERROR: Bitstream + header > 8MB\n");
     exit(-1);
   }
-  bcopy(bitstream_data,&core_file[*core_len],bit_size); *core_len+=bit_size;
+  bcopy(bitstream_data, &core_file[*core_len], bit_size);
+  *core_len += bit_size;
 }
 
 unsigned long htoc64l(unsigned long v)
 {
   unsigned char c[4];
 
-  c[0]=(v>>0)&0xff;
-  c[1]=(v>>8)&0xff;
-  c[2]=(v>>16)&0xff;
-  c[3]=(v>>24)&0xff;
+  c[0] = (v >> 0) & 0xff;
+  c[1] = (v >> 8) & 0xff;
+  c[2] = (v >> 16) & 0xff;
+  c[3] = (v >> 24) & 0xff;
   return *(unsigned long *)c;
-}  
+}
 
 unsigned long c64tohl(unsigned long v)
 {
-  unsigned char *c=(unsigned char *)&v;
-  unsigned long o=0;
-  o=(c[0]<<0)+(c[1]<<8)+(c[2]<<16)+(c[3]<<24);
+  unsigned char *c = (unsigned char *)&v;
+  unsigned long o = 0;
+  o = (c[0] << 0) + (c[1] << 8) + (c[2] << 16) + (c[3] << 24);
   return o;
 }
 
-unsigned char file_data[1024*1024];
-unsigned int last_file_offset=0;
-int banner_present=0;
-void embed_file(int *core_len,unsigned char *core_file,char *filename)
+unsigned char file_data[1024 * 1024];
+unsigned int last_file_offset = 0;
+int banner_present = 0;
+void embed_file(int *core_len, unsigned char *core_file, char *filename)
 {
-  header_info *header_block=(header_info *)core_file;
+  header_info *header_block = (header_info *)core_file;
   if (!header_block->embed_file_offset) {
-    fprintf(stderr,"INFO: Embedding first file. Setting embed_file_offset to current COR file length.\n");
-    header_block->embed_file_offset=htoc64l(*core_len);
-    last_file_offset=*core_len;
+    fprintf(stderr, "INFO: Embedding first file. Setting embed_file_offset to current COR file length.\n");
+    header_block->embed_file_offset = htoc64l(*core_len);
+    last_file_offset = *core_len;
   }
 
-  char *basename=strrchr(filename, '/');
+  char *basename = strrchr(filename, '/');
   if (basename == NULL) {
     // no slash in filename
     basename = filename;
-  } else
+  }
+  else
     // skip slash
     basename += 1;
   if (strlen(basename) > 31) {
-	  fprintf(stderr,"ERROR: Base name of '%s' too long. Must be <32 chars.\n",filename);
+    fprintf(stderr, "ERROR: Base name of '%s' too long. Must be <32 chars.\n", filename);
     exit(-1);
-  } else if (strlen(basename) == 0) {
-    fprintf(stderr,"ERROR: Cannot embed directory '%s'.\n", filename);
+  }
+  else if (strlen(basename) == 0) {
+    fprintf(stderr, "ERROR: Cannot embed directory '%s'.\n", filename);
     exit(-1);
   }
 
@@ -478,62 +480,63 @@ void embed_file(int *core_len,unsigned char *core_file,char *filename)
      32 bytes = filename
   */
 
-  FILE *f=fopen(filename,"rb");
+  FILE *f = fopen(filename, "rb");
   if (!f) {
-    fprintf(stderr,"ERROR: Could not read file '%s'\n",filename);
+    fprintf(stderr, "ERROR: Could not read file '%s'\n", filename);
     exit(-1);
   }
-  int file_len=fread(file_data, 1, 1024*1024, f);
+  int file_len = fread(file_data, 1, 1024 * 1024, f);
   fclose(f);
 
-  fprintf(stderr,"INFO: Writing file '%s' at offset $%06x, len=%d\n",basename,last_file_offset,file_len);
-  
+  fprintf(stderr, "INFO: Writing file '%s' at offset $%06x, len=%d\n", basename, last_file_offset, file_len);
+
   // XXX - And banner file if present gets put in the last 32KB of the slot so that a future update to HYPPO can
   // read it there instantly on boot.
-  if (!strcmp(basename,"BANNER.M65")) {
-    if (file_len>32*1024) {
-      fprintf(stderr,"ERROR: BANNER.M65 file must be <= 32KB\n");
+  if (!strcmp(basename, "BANNER.M65")) {
+    if (file_len > 32 * 1024) {
+      fprintf(stderr, "ERROR: BANNER.M65 file must be <= 32KB\n");
       exit(-1);
     }
-    fprintf(stderr,"INFO: Embedding banner file in last 32KB of slot.\n");
-    header_block->banner_present=1;
-    banner_present=1;
-    bcopy(file_data,&core_file[(8192-32)*1024],file_len);
+    fprintf(stderr, "INFO: Embedding banner file in last 32KB of slot.\n");
+    header_block->banner_present = 1;
+    banner_present = 1;
+    bcopy(file_data, &core_file[(8192 - 32) * 1024], file_len);
   }
 
   // Write embedded file
-  unsigned int this_offset=last_file_offset;
-  unsigned int next_offset=this_offset+4+4+32+file_len;  
+  unsigned int this_offset = last_file_offset;
+  unsigned int next_offset = this_offset + 4 + 4 + 32 + file_len;
 
-  if (next_offset>=8192*1024-4) {
-    fprintf(stderr,"ERROR: COR files must be less than 8MB\n");
+  if (next_offset >= 8192 * 1024 - 4) {
+    fprintf(stderr, "ERROR: COR files must be less than 8MB\n");
     exit(-1);
   }
-  
-  core_file[this_offset+0]=next_offset>>0;
-  core_file[this_offset+1]=next_offset>>8;
-  core_file[this_offset+2]=next_offset>>16;
-  core_file[this_offset+3]=next_offset>>24;
 
-  core_file[this_offset+4]=file_len>>0;
-  core_file[this_offset+5]=file_len>>8;
-  core_file[this_offset+6]=file_len>>16;
-  core_file[this_offset+7]=file_len>>24;
+  core_file[this_offset + 0] = next_offset >> 0;
+  core_file[this_offset + 1] = next_offset >> 8;
+  core_file[this_offset + 2] = next_offset >> 16;
+  core_file[this_offset + 3] = next_offset >> 24;
 
-  bcopy(basename,&core_file[this_offset+4+4],32);
+  core_file[this_offset + 4] = file_len >> 0;
+  core_file[this_offset + 5] = file_len >> 8;
+  core_file[this_offset + 6] = file_len >> 16;
+  core_file[this_offset + 7] = file_len >> 24;
 
-  bcopy(file_data,&core_file[this_offset+4+4+32],file_len);
-  
+  bcopy(basename, &core_file[this_offset + 4 + 4], 32);
+
+  bcopy(file_data, &core_file[this_offset + 4 + 4 + 32], file_len);
+
   header_block->embed_file_count++;
 
-  last_file_offset=next_offset;
-  *core_len=last_file_offset;
-  
+  last_file_offset = next_offset;
+  *core_len = last_file_offset;
+
   return;
 }
 
-void embed_file_list(int *core_len,unsigned char *core_file,char *filename) {
-  char *filepath = NULL, *seek=NULL, *next=NULL;
+void embed_file_list(int *core_len, unsigned char *core_file, char *filename)
+{
+  char *filepath = NULL, *seek = NULL, *next = NULL;
   FILE *listfile = NULL;
   char file_data[2048], embedfile[1024];
   int file_len;
@@ -544,13 +547,14 @@ void embed_file_list(int *core_len,unsigned char *core_file,char *filename) {
     // no path, set to empty string
     seek = filepath;
     *filepath = 0;
-  } else
+  }
+  else
     // set last path sep +1 to 0
-    *(seek+1) = 0;
+    *(seek + 1) = 0;
 
   listfile = fopen(filename, "rb");
   if (!listfile) {
-    fprintf(stderr,"ERROR: Could not open list file '%s'\n", filename);
+    fprintf(stderr, "ERROR: Could not open list file '%s'\n", filename);
     exit(-1);
   }
   file_len = fread(file_data, 1, 2048, listfile);
@@ -560,8 +564,8 @@ void embed_file_list(int *core_len,unsigned char *core_file,char *filename) {
   do {
     next = strchr(seek, '\n');
     if (next != NULL) {
-      if (*(next-1) == '\r') // check if there is a \r to strip (deft has windows)
-        *(next-1) = 0;
+      if (*(next - 1) == '\r') // check if there is a \r to strip (deft has windows)
+        *(next - 1) = 0;
       else
         *next = 0;
     }
@@ -577,25 +581,25 @@ void embed_file_list(int *core_len,unsigned char *core_file,char *filename) {
   free(filepath);
 }
 
-char* find_fpga_part_from_m65targetname(const char* m65targetname)
+char *find_fpga_part_from_m65targetname(const char *m65targetname)
 {
-  m65target_info* m65target = find_m65targetinfo_from_m65targetname(m65targetname);
+  m65target_info *m65target = find_m65targetinfo_from_m65targetname(m65targetname);
   return m65target->fpga_part;
 }
 
-unsigned char core_file[8192*1024];
-int core_len=0;
+unsigned char core_file[8192 * 1024];
+int core_len = 0;
 
-int DIRTYMOCK(main)(int argc, char** argv)
+int DIRTYMOCK(main)(int argc, char **argv)
 {
   int err;
-  
+
   if (argc < 6) {
     show_help();
     exit(-1);
   }
 
-  m65target_info* m65target = find_m65targetinfo_from_m65targetname(ARG_M65TARGETNAME);
+  m65target_info *m65target = find_m65targetinfo_from_m65targetname(ARG_M65TARGETNAME);
 
   int bit_size = read_bitstream_file(ARG_BITSTREAMPATH);
 
@@ -604,25 +608,26 @@ int DIRTYMOCK(main)(int argc, char** argv)
     return err;
 
   build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH);
-  for(int i=6;i<argc;i++) {
+  for (int i = 6; i < argc; i++) {
     //    fprintf(stderr,"Embedding file '%s'\n",argv[i]);
     if (argv[i][0] == '@')
-      embed_file_list(&core_len,core_file,argv[i]+1);
+      embed_file_list(&core_len, core_file, argv[i] + 1);
     else
-      embed_file(&core_len,core_file,argv[i]);
+      embed_file(&core_len, core_file, argv[i]);
   }
 
   if (banner_present) {
-    if (core_len>=(8192-32)*1024-4) {
-      fprintf(stderr,"ERROR: Insufficient room to place BANNER.M65 at end of slot.\n");
+    if (core_len >= (8192 - 32) * 1024 - 4) {
+      fprintf(stderr, "ERROR: Insufficient room to place BANNER.M65 at end of slot.\n");
       exit(-1);
     }
-    core_len=8192*1024;
-  } else
+    core_len = 8192 * 1024;
+  }
+  else
     // Leave 4 extra zero bytes at end for end of embedded file chain
-    core_len+=4;
-  
-  write_core_file(core_len,core_file,ARG_COREPATH);
-  
+    core_len += 4;
+
+  write_core_file(core_len, core_file, ARG_COREPATH);
+
   return 0;
 }

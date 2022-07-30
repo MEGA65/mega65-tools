@@ -103,7 +103,7 @@ void graphics_mode(void)
   POKE(0xD021, 0);
 }
 
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg);
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg);
 
 unsigned short pixel_addr;
 unsigned char pixel_temp;
@@ -124,7 +124,7 @@ void plot_pixel_direct(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 80;
   while (*msg) {
@@ -142,7 +142,7 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x + y * 80;
   while (*msg) {

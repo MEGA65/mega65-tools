@@ -1,6 +1,6 @@
 #include <stdio.h>
-#define POKE(X, Y) (*(unsigned char*)(X)) = Y
-#define PEEK(X) (*(unsigned char*)(X))
+#define POKE(X, Y) (*(unsigned char *)(X)) = Y
+#define PEEK(X) (*(unsigned char *)(X))
 void m65_io_enable(void);
 
 struct dmagic_dmalist {
@@ -210,7 +210,7 @@ void main(void)
   printf("%c", 0x93);
 
   for (t = 0; t < 40; t++)
-    ((unsigned char*)0x658)[t] = '-';
+    ((unsigned char *)0x658)[t] = '-';
 
   while (1) {
     // 0xffd7026 is the base address for all bytes read from the RTC

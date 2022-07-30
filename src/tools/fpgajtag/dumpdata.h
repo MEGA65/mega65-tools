@@ -21,7 +21,7 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-static void memdumpfile(const unsigned char* p, int len, const char* title)
+static void memdumpfile(const unsigned char *p, int len, const char *title)
 {
   int i;
 
@@ -40,11 +40,11 @@ static void memdumpfile(const unsigned char* p, int len, const char* title)
   fprintf(logfile, "\n");
 }
 static int started = 0;
-static void formatwrite(int submit, const unsigned char* p, int len, const char* title)
+static void formatwrite(int submit, const unsigned char *p, int len, const char *title)
 {
   static unsigned char bitswap[256];
   static int once = 1;
-  static const char* header = "    ";
+  static const char *header = "    ";
   static char header_data[200];
   if (logall)
     header = "WRITE";
@@ -53,7 +53,7 @@ static void formatwrite(int submit, const unsigned char* p, int len, const char*
   openlogfile();
 
   while (len > 0) {
-    const unsigned char* pstart = p;
+    const unsigned char *pstart = p;
     int plen = 1;
     unsigned char ch = *p;
     switch (ch) {
@@ -104,7 +104,7 @@ static void formatwrite(int submit, const unsigned char* p, int len, const char*
         for (i = 0; once && i < sizeof(bitswap); i++)
           bitswap[i] = ((i & 1) << 7) | ((i & 2) << 5) | ((i & 4) << 3) | ((i & 8) << 1) | ((i & 0x10) >> 1)
                      | ((i & 0x20) >> 3) | ((i & 0x40) >> 5) | ((i & 0x80) >> 7);
-        unsigned char* pbuf = (unsigned char*)malloc(tlen);
+        unsigned char *pbuf = (unsigned char *)malloc(tlen);
         for (i = 0; i < tlen; i++)
           pbuf[i] = bitswap[p[i]];
         write(datafile_fd, pbuf, tlen);

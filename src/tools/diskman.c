@@ -9,9 +9,9 @@ void write_tso_byte(int track, int sector, int offset, int val)
   data[(track - 1) * (256 * 40) + sector * 256 + offset] = val;
 }
 
-void write_tso_str(int track, int sector, int offset, char* str, int maxlen)
+void write_tso_str(int track, int sector, int offset, char *str, int maxlen)
 {
-  char* pstr = str;
+  char *pstr = str;
   for (int k = 0; k < maxlen; k++) {
     int val = 0xa0; // assume padding byte
     if (*pstr != '\0') {
@@ -22,7 +22,7 @@ void write_tso_str(int track, int sector, int offset, char* str, int maxlen)
   }
 }
 
-void write_header(char* disk_name, char* disk_id)
+void write_header(char *disk_name, char *disk_id)
 {
   write_tso_byte(40, 0, 0x00, 40); // write T/S location of first directory sector
   write_tso_byte(40, 0, 0x01, 3);
@@ -70,7 +70,7 @@ void write_header(char* disk_name, char* disk_id)
 #define FTYPE_CBM 5
 #define FTYPE_CLOSEDFLAG 0x80
 
-void write_direntry(char* prgname, int firsttrack, int firstsector, int sectorcnt)
+void write_direntry(char *prgname, int firsttrack, int firstsector, int sectorcnt)
 {
   write_tso_byte(40, 3, 0x00, 0x00); // write T/S location of next dir-entry sector (0x00 and 0xff for last sector)
   write_tso_byte(40, 3, 0x01, 0xff);
@@ -85,10 +85,10 @@ void write_direntry(char* prgname, int firsttrack, int firstsector, int sectorcn
   write_tso_byte(40, 3, 0x1F, sectorcnt >> 8);
 }
 
-void get_nice_prgname(char* dest, char* src)
+void get_nice_prgname(char *dest, char *src)
 {
-  char* pdest = dest;
-  char* psrc = src;
+  char *pdest = dest;
+  char *psrc = src;
   while (*psrc != '.' && *psrc != '\0') {
     *pdest = toupper(*psrc);
     pdest++;
@@ -97,7 +97,7 @@ void get_nice_prgname(char* dest, char* src)
   *pdest = '\0';
 }
 
-void get_nice_d81name(char* dest, char* src)
+void get_nice_d81name(char *dest, char *src)
 {
   get_nice_prgname(dest, src);
 
@@ -109,14 +109,14 @@ int calc_offset(int track, int sector, int offset)
   return (track - 1) * (256 * 40) + sector * 256 + offset;
 }
 
-void mark_sector_used(char* bamentry, int sector)
+void mark_sector_used(char *bamentry, int sector)
 {
   int offs = sector >> 3;
   int bitloc = sector & 0x0f;
   bamentry[1 + offs] &= ~bitloc;
 }
 
-int calc_sectors_free(char* bamentry)
+int calc_sectors_free(char *bamentry)
 {
   int cnt = 0;
   for (int k = 1; k < 6; k++) {
@@ -138,7 +138,7 @@ void update_bam(int track, int sector)
     offs = calc_offset(40, 2, 0x10) + (track - 41) * 0x06; // 6 bytes per track BAM entry
 
   // first bam sector is at t/s = 40/1, 2nd bam is at t/s = 40/2
-  char* bamentry = &data[offs];
+  char *bamentry = &data[offs];
 
   mark_sector_used(bamentry, sector);
   bamentry[0x00] = calc_sectors_free(bamentry); // number of free sectors on the track
@@ -146,23 +146,23 @@ void update_bam(int track, int sector)
 
 void update_tsptr(int track, int sector, int t, int s)
 {
-  char* dest = &data[(track - 1) * (256 * 40) + sector * 256];
+  char *dest = &data[(track - 1) * (256 * 40) + sector * 256];
   dest[0] = t;
   dest[1] = s;
 }
 
-static void write_sector(int track, int sector, char* chunk)
+static void write_sector(int track, int sector, char *chunk)
 {
-  char* dest = &data[(track - 1) * (256 * 40) + sector * 256];
+  char *dest = &data[(track - 1) * (256 * 40) + sector * 256];
   memcpy(dest, chunk, 256);
 
   // update bam?
   update_bam(track, sector);
 }
 
-int check_file_access(char* file)
+int check_file_access(char *file)
 {
-  FILE* f = fopen(file, "rb");
+  FILE *f = fopen(file, "rb");
   if (!f)
     return -1;
   fclose(f);
@@ -170,10 +170,10 @@ int check_file_access(char* file)
   return 0;
 }
 
-void add_prg(char* fname)
+void add_prg(char *fname)
 {
   // load the prg
-  FILE* f = fopen(fname, "rb");
+  FILE *f = fopen(fname, "rb");
   char prgname[256];
   get_nice_prgname(prgname, fname);
   char chunk[256] = { 0 };
@@ -210,14 +210,14 @@ void add_prg(char* fname)
   fclose(f);
 }
 
-void save_d81(char* fname)
+void save_d81(char *fname)
 {
-  FILE* f = fopen(fname, "wb");
+  FILE *f = fopen(fname, "wb");
   fwrite(data, 1, 819200, f);
   fclose(f);
 }
 
-char* create_d81_for_prg(char* prgfname)
+char *create_d81_for_prg(char *prgfname)
 {
   static char d81name[256];
 

@@ -41,7 +41,7 @@ int y;
 static const int bpp = 4;
 static int maxx = 800, maxy = 600;
 
-static void initBuffer(unsigned char* buffer)
+static void initBuffer(unsigned char *buffer)
 {
   bzero(buffer, maxx * maxy);
 }
@@ -60,7 +60,7 @@ static void clientgone(rfbClientPtr cl)
 
 static enum rfbNewClientAction newclient(rfbClientPtr cl)
 {
-  cl->clientData = (void*)calloc(sizeof(ClientData), 1);
+  cl->clientData = (void *)calloc(sizeof(ClientData), 1);
   cl->clientGoneHook = clientgone;
   return RFB_CLIENT_ACCEPT;
 }
@@ -373,7 +373,7 @@ int updateFrameBuffer(rfbScreenInfoPtr screen)
 
 int connect_to_port(int port)
 {
-  struct hostent* hostent;
+  struct hostent *hostent;
   hostent = gethostbyname("127.0.0.1");
   if (!hostent) {
     return -1;
@@ -382,7 +382,7 @@ int connect_to_port(int port)
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
-  addr.sin_addr = *((struct in_addr*)hostent->h_addr);
+  addr.sin_addr = *((struct in_addr *)hostent->h_addr);
   bzero(&(addr.sin_zero), 8);
 
   int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -391,7 +391,7 @@ int connect_to_port(int port)
     return -1;
   }
 
-  if (connect(sock, (struct sockaddr*)&addr, sizeof(struct sockaddr)) == -1) {
+  if (connect(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr)) == -1) {
     perror("connect() to port failed");
     close(sock);
     return -1;
@@ -414,7 +414,7 @@ int sendScanCode(int scan_code)
   return 0;
 }
 
-int slow_write(int fd, char* d, int l)
+int slow_write(int fd, char *d, int l)
 {
   // UART is at 230400bps, but reading commands has no FIFO, and echos
   // characters back, meaning we need a 1 char gap between successive
@@ -451,22 +451,22 @@ int create_listen_socket(int port)
     return -1;
 
   int on = 1;
-  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*)&on, sizeof(on)) == -1) {
+  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof(on)) == -1) {
     close(sock);
     return -1;
   }
-  if (ioctl(sock, FIONBIO, (char*)&on) == -1) {
+  if (ioctl(sock, FIONBIO, (char *)&on) == -1) {
     close(sock);
     return -1;
   }
 
   /* Bind it to the next port we want to try. */
   struct sockaddr_in address;
-  bzero((char*)&address, sizeof(address));
+  bzero((char *)&address, sizeof(address));
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = INADDR_ANY;
   address.sin_port = htons(port);
-  if (bind(sock, (struct sockaddr*)&address, sizeof(address)) == -1) {
+  if (bind(sock, (struct sockaddr *)&address, sizeof(address)) == -1) {
     close(sock);
     return -1;
   }
@@ -491,7 +491,7 @@ int accept_incoming(int sock)
   return -1;
 }
 
-int read_from_socket(int sock, unsigned char* buffer, int* count, int buffer_size, int timeout)
+int read_from_socket(int sock, unsigned char *buffer, int *count, int buffer_size, int timeout)
 {
   fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, NULL) | O_NONBLOCK);
 
@@ -555,7 +555,7 @@ int checkSerialActivity()
   for (i = 0; i < client_count; i++)
     if (fds[1 + i].revents & POLLIN) {
       int c = read(clients[i], buffer, 1024);
-      slow_write(serialfd, (char*)buffer, c);
+      slow_write(serialfd, (char *)buffer, c);
       if (c < 1) {
         close(clients[i]);
         clients[i] = clients[--client_count];
@@ -568,14 +568,14 @@ int checkSerialActivity()
 
 pthread_t serialThread;
 
-void* serial_handler(void* arg)
+void *serial_handler(void *arg)
 {
   printf("Monitoring serial port.\n");
   while (1)
     checkSerialActivity();
 }
 
-int openSerialPort(char* port)
+int openSerialPort(char *port)
 {
   serialfd = open(port, O_RDWR);
   if (serialfd == -1) {
@@ -616,10 +616,10 @@ int setPixel(rfbScreenInfoPtr screen, int x, int y, uint32_t v)
 {
   //  printf("(%d,%d) = %08x\n",x,y,v);
   if (y >= 0 && y < maxy && x >= 0 && x < maxx) {
-    ((unsigned char*)screen->frameBuffer)[(y * maxx * 4) + x * 4 + 3] = 0;
-    ((unsigned char*)screen->frameBuffer)[(y * maxx * 4) + x * 4 + 2] = v & 0xff;
-    ((unsigned char*)screen->frameBuffer)[(y * maxx * 4) + x * 4 + 1] = (v >> 8) & 0xff;
-    ((unsigned char*)screen->frameBuffer)[(y * maxx * 4) + x * 4 + 0] = (v >> 16) & 0xff;
+    ((unsigned char *)screen->frameBuffer)[(y * maxx * 4) + x * 4 + 3] = 0;
+    ((unsigned char *)screen->frameBuffer)[(y * maxx * 4) + x * 4 + 2] = v & 0xff;
+    ((unsigned char *)screen->frameBuffer)[(y * maxx * 4) + x * 4 + 1] = (v >> 8) & 0xff;
+    ((unsigned char *)screen->frameBuffer)[(y * maxx * 4) + x * 4 + 0] = (v >> 16) & 0xff;
   }
   return 0;
 }
@@ -627,7 +627,7 @@ int setPixel(rfbScreenInfoPtr screen, int x, int y, uint32_t v)
 int setRaster(rfbScreenInfoPtr screen, int y, uint32_t v)
 {
   if (y >= 0 && y < maxy) {
-    unsigned char* raster = &((unsigned char*)screen->frameBuffer)[y * maxx * 4];
+    unsigned char *raster = &((unsigned char *)screen->frameBuffer)[y * maxx * 4];
     raster[3] = 0;
     raster[2] = v & 0xff;
     raster[1] = (v >> 8) & 0xff;
@@ -637,7 +637,7 @@ int setRaster(rfbScreenInfoPtr screen, int y, uint32_t v)
   return 0;
 }
 
-int dump_bytes(char* msg, unsigned char* bytes, int length)
+int dump_bytes(char *msg, unsigned char *bytes, int length)
 {
   fprintf(stdout, "%s:\n", msg);
   for (int i = 0; i < length; i += 16) {
@@ -650,7 +650,7 @@ int dump_bytes(char* msg, unsigned char* bytes, int length)
   return 0;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int do_dummy = 0;
   int debug = 0; // x806; //0x21b;
@@ -664,14 +664,14 @@ int main(int argc, char** argv)
   if (!rfbScreen)
     return 0;
   rfbScreen->desktopName = "MEGA65 Remote Display";
-  rfbScreen->frameBuffer = (char*)malloc(maxx * maxy * bpp);
+  rfbScreen->frameBuffer = (char *)malloc(maxx * maxy * bpp);
   rfbScreen->alwaysShared = TRUE;
   rfbScreen->kbdAddEvent = dokey;
   rfbScreen->newClientHook = newclient;
   rfbScreen->httpDir = "../webclients";
   rfbScreen->httpEnableProxyConnect = TRUE;
 
-  initBuffer((unsigned char*)rfbScreen->frameBuffer);
+  initBuffer((unsigned char *)rfbScreen->frameBuffer);
 
   /* initialize the server */
   rfbInitServer(rfbScreen);
@@ -705,7 +705,7 @@ int main(int argc, char** argv)
 
     if (do_dummy) {
       // Feed dummy data (from simulation) to test
-      FILE* f = fopen("dummy.dat", "r");
+      FILE *f = fopen("dummy.dat", "r");
       if (f) {
         char line[1024];
         len = 0x56;

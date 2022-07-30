@@ -135,7 +135,7 @@ void plot_pixel(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 80;
   while (*msg) {
@@ -153,7 +153,7 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
-void print_text80x40(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80x40(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x + y * 80;
   while (*msg) {
@@ -603,7 +603,7 @@ unsigned char read_a_sector(unsigned char track_number, unsigned char side, unsi
   POKE(0xD084, track_number);
   POKE(0xD085, sector);
   POKE(0x0403, sector);
-  POKE(0xD086, side?1:0);
+  POKE(0xD086, side ? 1 : 0);
 
   // Issue read command
   POKE(0xD081, 0x01); // but first reset buffers
@@ -613,15 +613,18 @@ unsigned char read_a_sector(unsigned char track_number, unsigned char side, unsi
   i = 0xe000;
   while (PEEK(0xD082) & 0x80) {
     // Read sector data non-buffered while we wait for comparison
-    if (PEEK(0xD082)&0x40) { POKE(0xE000+i,PEEK(0xD087)); i++; i&=0x1fff; }
-    POKE(0x0400,PEEK(0xD6A3));
-    POKE(0x0401,PEEK(0xD6A4));    
-    POKE(0x0402,PEEK(0xD6A5));
+    if (PEEK(0xD082) & 0x40) {
+      POKE(0xE000 + i, PEEK(0xD087));
+      i++;
+      i &= 0x1fff;
+    }
+    POKE(0x0400, PEEK(0xD6A3));
+    POKE(0x0401, PEEK(0xD6A4));
+    POKE(0x0402, PEEK(0xD6A5));
 
-    POKE(0x0428,PEEK(0x428)+1);
-    if (PEEK(0xD6A4)&0x80) 
-      POKE(0xD020,PEEK(0xD020)+1);
-
+    POKE(0x0428, PEEK(0x428) + 1);
+    if (PEEK(0xD6A4) & 0x80)
+      POKE(0xD020, PEEK(0xD020) + 1);
   }
 
   if (PEEK(0xD082) & 0x18) {
@@ -992,119 +995,121 @@ void main(void)
         unsigned char sector_num, errors, best = 0;
         side = 0;
 
-      for(track_num=60;track_num<85;track_num++) {
-	
-	// 36 + no gaps works on track 79 without errors = 26 sectors per track
-	unsigned char bit_interval=40; // Standard HD 3.5" floppy is 500Kbit/second = 1mhz MFM rate (2 clocks per MFM bit)
-	unsigned char sector_count=50;
-	unsigned char with_gaps=0;
-	unsigned char sector_num,errors,best=0;
-	side=0;
+        for (track_num = 60; track_num < 85; track_num++) {
 
-	printf(" T%d: ",track_num);
+          // 36 + no gaps works on track 79 without errors = 26 sectors per track
+          unsigned char bit_interval = 40; // Standard HD 3.5" floppy is 500Kbit/second = 1mhz MFM rate (2 clocks per MFM
+                                           // bit)
+          unsigned char sector_count = 50;
+          unsigned char with_gaps = 0;
+          unsigned char sector_num, errors, best = 0;
+          side = 0;
 
-	for(bit_interval=0x19;bit_interval<=0x24;bit_interval++) {
+          printf(" T%d: ", track_num);
 
-	  // RLL2,7 encoding, don't set track rate based on TIB
-	  POKE(0xD6AE,0x01);
-	  
-	  // Floppy 0 motor on
-	  POKE(0xD080, 0x68);	  
+          for (bit_interval = 0x19; bit_interval <= 0x24; bit_interval++) {
 
-	  // Seek to track 0
-	  while (!(PEEK(0xD082) & 1)) {
-	    POKE(0xD081, 0x10);
-	    usleep(6000);
-	  }
-	  
-	  // Seek to the desired track
-	  for(i=0;i<track_num;i++) {
-	    POKE(0xD081,0x18);
-	    while(PEEK(0xD082)&0x80) continue;
-	  }        
-	  	
-	  // Disable auto-tracking
-	  POKE(0xD696,0x00);  // also disable auto-seek on new address
-	  
-	  // Map FDC sector buffer, not SD sector buffer
-	  POKE(0xD689, PEEK(0xD689) & 0x7f);
-	  
-	  // Disable matching on any sector, use real drive
-	  POKE(0xD6A1, 0x01);
-	  
-	  // Select the specified side
-	  POKE(0xD086, 1-side); // Side flag is inverted
-	  
-	  //	  printf("Pre-erasing track.\n");
-	  
-	  // Wipe the track
-	  // Write no data with no clock
-	  POKE(0xD087,0x00);
-	  POKE(0xD088,0x00);
-	  
-	  // Erase the track at standard HD data rate
-	  POKE(0xD6A2,40);
-	  
-	  // Begin unbuffered write
-	  POKE(0xD081,0xA1);  
-	  
-	  // Write absolutely nothing on the whole track
-	  for(i=0;i<30000;i++) {
-	    while(!(PEEK(0xD082)&0x40)) {
-	      if (!(PEEK(0xD082)&0x80)) break;
-	      if (PEEK(0xD082)<0x40) {
-		a++;
-	      }
-	      continue;
-	    }
-	    POKE(0xD087,0x00);
-	    POKE(0xD088,0x00);
-	  }
+            // RLL2,7 encoding, don't set track rate based on TIB
+            POKE(0xD6AE, 0x01);
 
-	  // Disable auto-setting data rate while we are formatting
-	  POKE(0xD6AE,PEEK(0xD6AE)&0xDF);
-	  
-	  POKE(0xD6A2,bit_interval);
+            // Floppy 0 motor on
+            POKE(0xD080, 0x68);
 
-	  // Setup write precomp
-	  POKE(0xD6A3,0x05);
-	  POKE(0xD6A4,0x05);
-	  POKE(0xD6A5,0xfc);
+            // Seek to track 0
+            while (!(PEEK(0xD082) & 1)) {
+              POKE(0xD081, 0x10);
+              usleep(6000);
+            }
 
-	  
-	  format_single_track_side(sector_count,with_gaps);
+            // Seek to the desired track
+            for (i = 0; i < track_num; i++) {
+              POKE(0xD081, 0x18);
+              while (PEEK(0xD082) & 0x80)
+                continue;
+            }
 
-	  // RLL2,7 encoding, and re-enable auto data rate
-	  POKE(0xD6AE,0xF1);
-	  
-	  //	  printf("<%d>",bit_interval);
+            // Disable auto-tracking
+            POKE(0xD696, 0x00); // also disable auto-seek on new address
 
-	  sector_count=with_gaps?sectors_by_rate_with_gaps[bit_interval]
-	    :sectors_by_rate_no_gaps[bit_interval];
-	  printf("\nReading back %d sectors @%d\n",sector_count,bit_interval);
-	  errors=0; 
-	  for(sector_num=1;sector_num<=sector_count;sector_num++) {
-	    if (read_a_sector(track_num,side,sector_num))
-	      {
-		printf("[%d]",sector_num-1);
-		if ((sector_num-1)>best) best=sector_num-1;
-		break;
-	      }
-	    else { printf("%d",sector_num%10); }
-	  }
+            // Map FDC sector buffer, not SD sector buffer
+            POKE(0xD689, PEEK(0xD689) & 0x7f);
 
-	  if (sector_num>sector_count) {
-	    printf("[%d]",sector_num);
-	    break;
-	  }
-	  	  
-	}
-	//	printf("\n");
-	//	printf("%d",best);
+            // Disable matching on any sector, use real drive
+            POKE(0xD6A1, 0x01);
+
+            // Select the specified side
+            POKE(0xD086, 1 - side); // Side flag is inverted
+
+            //	  printf("Pre-erasing track.\n");
+
+            // Wipe the track
+            // Write no data with no clock
+            POKE(0xD087, 0x00);
+            POKE(0xD088, 0x00);
+
+            // Erase the track at standard HD data rate
+            POKE(0xD6A2, 40);
+
+            // Begin unbuffered write
+            POKE(0xD081, 0xA1);
+
+            // Write absolutely nothing on the whole track
+            for (i = 0; i < 30000; i++) {
+              while (!(PEEK(0xD082) & 0x40)) {
+                if (!(PEEK(0xD082) & 0x80))
+                  break;
+                if (PEEK(0xD082) < 0x40) {
+                  a++;
+                }
+                continue;
+              }
+              POKE(0xD087, 0x00);
+              POKE(0xD088, 0x00);
+            }
+
+            // Disable auto-setting data rate while we are formatting
+            POKE(0xD6AE, PEEK(0xD6AE) & 0xDF);
+
+            POKE(0xD6A2, bit_interval);
+
+            // Setup write precomp
+            POKE(0xD6A3, 0x05);
+            POKE(0xD6A4, 0x05);
+            POKE(0xD6A5, 0xfc);
+
+            format_single_track_side(sector_count, with_gaps);
+
+            // RLL2,7 encoding, and re-enable auto data rate
+            POKE(0xD6AE, 0xF1);
+
+            //	  printf("<%d>",bit_interval);
+
+            sector_count = with_gaps ? sectors_by_rate_with_gaps[bit_interval] : sectors_by_rate_no_gaps[bit_interval];
+            printf("\nReading back %d sectors @%d\n", sector_count, bit_interval);
+            errors = 0;
+            for (sector_num = 1; sector_num <= sector_count; sector_num++) {
+              if (read_a_sector(track_num, side, sector_num)) {
+                printf("[%d]", sector_num - 1);
+                if ((sector_num - 1) > best)
+                  best = sector_num - 1;
+                break;
+              }
+              else {
+                printf("%d", sector_num % 10);
+              }
+            }
+
+            if (sector_num > sector_count) {
+              printf("[%d]", sector_num);
+              break;
+            }
+          }
+          //	printf("\n");
+          //	printf("%d",best);
+        }
       }
-    }
 
-    while (1)
-      continue;
+      while (1)
+        continue;
+    }
   }
-}

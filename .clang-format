@@ -12,3 +12,4 @@ PenaltyBreakAssignment: 100
 PenaltyBreakComment: 100
 AlignOperands: AlignAfterOperator
 AllowShortFunctionsOnASingleLine: None
+PointerAlignment: Right

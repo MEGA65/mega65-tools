@@ -106,10 +106,10 @@ void target_megaphone(void)
   // Sprite 0 on
   lpoke(0xFFD3015L, 0x01);
   // Sprite data at $03c0
-  *(unsigned char*)2040 = 0x3c0 / 0x40;
+  *(unsigned char *)2040 = 0x3c0 / 0x40;
 
   for (n = 0; n < 64; n++)
-    *(unsigned char*)(0x3c0 + n) = sprite_data[n];
+    *(unsigned char *)(0x3c0 + n) = sprite_data[n];
 
   // Disable OSK
   lpoke(0xFFD3615L, 0x7F);
@@ -464,10 +464,10 @@ void main(void)
   // Sprite 0 on
   lpoke(0xFFD3015L, 0x01);
   // Sprite data at $03c0
-  *(unsigned char*)2040 = 0x3c0 / 0x40;
+  *(unsigned char *)2040 = 0x3c0 / 0x40;
 
   for (n = 0; n < 64; n++)
-    *(unsigned char*)(0x3c0 + n) = sprite_data[n];
+    *(unsigned char *)(0x3c0 + n) = sprite_data[n];
 
   // Disable OSK
   lpoke(0xFFD3615L, 0x7F);

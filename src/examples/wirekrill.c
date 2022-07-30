@@ -11,7 +11,7 @@ struct m65_tm tm;
 #include <pcap/pcap.h>
 #include <stdlib.h>
 
-pcap_t* p = NULL;
+pcap_t *p = NULL;
 
 #define POKE(X, Y)
 // Make PEEK(0xD6E1) always indicate that a packet is always ready to be received
@@ -23,15 +23,15 @@ void lcopy(long src, long dst, int count)
     // Read next packet from pcap file
     struct pcap_pkthdr h;
 
-    char* packet = pcap_next(p, &h);
+    char *packet = pcap_next(p, &h);
     if (!packet)
       exit(0);
-    ((char*)dst)[0] = h.len;
-    ((char*)dst)[1] = h.len >> 8;
-    bcopy(packet, (void*)dst + 2, count - 1);
+    ((char *)dst)[0] = h.len;
+    ((char *)dst)[1] = h.len >> 8;
+    bcopy(packet, (void *)dst + 2, count - 1);
   }
   else {
-    bcopy((void*)src, (void*)dst, count);
+    bcopy((void *)src, (void *)dst, count);
   }
 }
 
@@ -170,7 +170,7 @@ void plot_pixel(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 80;
   while (*msg) {
@@ -188,7 +188,7 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x + y * 80;
   while (*msg) {
@@ -208,7 +208,7 @@ void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* 
 
 // this should print the decimal version of an arbitrary number of bytes
 // probably already something in c stdlib or this repo but i couldnt find anything
-int to_decimal(unsigned char* src, int bytes)
+int to_decimal(unsigned char *src, int bytes)
 {
   int out = 0;
   int i;
@@ -227,7 +227,7 @@ void clear_text80(void)
 {
 }
 
-void println_text80(unsigned char colour, char* msg)
+void println_text80(unsigned char colour, char *msg)
 {
   fprintf(stdout, "%s\n", msg);
 }
@@ -247,7 +247,7 @@ void clear_text80(void)
   text_row = 0;
 }
 
-void println_text80(unsigned char colour, char* msg)
+void println_text80(unsigned char colour, char *msg)
 {
   if (text_row == 49) {
     lcopy(0xc000 + 80, 0xc000, 4000 - 80);
@@ -274,7 +274,7 @@ unsigned short mdio0 = 0, mdio1 = 0, last_mdio0 = 0, last_mdio1 = 0, frame_count
 unsigned char phy, last_frame_num = 0, show_hex = 0, last_d6ef = 0;
 
 #ifdef NATIVE_TEST
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc != 2) {
     fprintf(stderr, "usage: wirekrill <file.pcap>\n");

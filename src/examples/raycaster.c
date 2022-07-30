@@ -162,7 +162,7 @@ unsigned long temp;
 char msg[80 + 1];
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 160;
   while (*msg) {
@@ -180,7 +180,7 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
-void show_notice(char* m)
+void show_notice(char *m)
 {
 #if 0
   d++; d&=3;
@@ -215,7 +215,7 @@ void vertical_line(unsigned short x, unsigned short start, unsigned short end, u
   plot_pixel(x, 0, 1);
 }
 
-int main(int /*argc*/, char* /*argv*/[])
+int main(int /*argc*/, char * /*argv*/[])
 {
   asm("sei");
 

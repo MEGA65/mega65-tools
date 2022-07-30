@@ -84,7 +84,7 @@ enum {
 #define IRREG_JSTART 0x0c
 #define IRREG_ISC_NOOP 0x14
 #define IRREG_SAMPLE 0x01
-#define IRREG_BYPASS 0x3f // even on PCIE, this has an extra bit
+#define IRREG_BYPASS 0x3f          // even on PCIE, this has an extra bit
 #define IRREG_BYPASS_EXTEND 0xffff // even on PCIE, this has an extra bit
 
 /* Status values */
@@ -173,7 +173,7 @@ enum {
 #define IRREGA_ABORT 0xf8 /* 35 bit register */
 #define IRREGA_DPACC 0xfa /* Debug Port access, 35 bit register */
 #define IRREGA_APACC 0xfb /* Access Port access, 35 bit register */
-#define AP_CSW 0 /* MEM-AP registers */
+#define AP_CSW 0          /* MEM-AP registers */
 #define AP_TAR 2
 #define AP_DRW 6
 #define IRREGA_IDCODE 0xfe /* 32 bit register */
@@ -205,11 +205,11 @@ enum {
 //   DDI0406B_arm_architecture_reference_manual_errata_markup_10_0.pdf (but no table!!)
 #define DEBUG_REGISTER_BASE 0x80090000
 
-#define DBGDIDR 0x000 /* ARMARM, C10.2.1: Debug ID */
-#define DBGPRSR 0x314 /* ARMARM, C10.3.5: Device Power-down and Reset Status */
-#define DBGITR 0x084 /* ARMARM, C10.4.3: Instruction Transfer */
+#define DBGDIDR 0x000    /* ARMARM, C10.2.1: Debug ID */
+#define DBGPRSR 0x314    /* ARMARM, C10.3.5: Device Power-down and Reset Status */
+#define DBGITR 0x084     /* ARMARM, C10.4.3: Instruction Transfer */
 #define DBGDSCRext 0x088 /* ARMARM, C10.3.1: Debug Status and Control */
-#define DBGPCSR 0x028 /* ARMARM, C10.3.6: Program Counter Sampling */
+#define DBGPCSR 0x028    /* ARMARM, C10.3.6: Program Counter Sampling */
 
 /*
  * Zynq constants
@@ -236,9 +236,9 @@ void write_creg(int regname);
 void cortex_bypass(int cortex_nowait);
 void process_command_list(void);
 void write_bit(int read, int bits, int data, char target_state);
-void write_bytes(uint8_t read_param, char target_state, uint8_t* ptrin, int size, int max_frame_size, int opttail,
+void write_bytes(uint8_t read_param, char target_state, uint8_t *ptrin, int size, int max_frame_size, int opttail,
     int swapbits, int default_ext);
-void write_tms_transition(char* tail);
+void write_tms_transition(char *tail);
 void ENTER_TMS_STATE(char required);
 void access_mdm(int version, int pre, int amatch);
 uint32_t fetch_result(int idindex, int command, int resp_len, int fd);

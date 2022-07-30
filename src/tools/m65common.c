@@ -129,7 +129,7 @@ PORT_TYPE fd = { WINPORT_TYPE_INVALID, INVALID_HANDLE_VALUE, INVALID_SOCKET };
 PORT_TYPE fd = -1;
 #endif
 
-int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* file, const int line)
+int do_slow_write(PORT_TYPE fd, char *d, int l, const char *func, const char *file, const int line)
 {
   // UART is at 2Mbps, but we need to allow enough time for a whole line of
   // writing. 100 chars x 0.5usec = 500usec. So 1ms between chars should be ok.
@@ -154,7 +154,7 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
       else
         do_usleep(2000 * SLOW_FACTOR);
     }
-    int w = do_serial_port_write(fd, (unsigned char*)&d[i], 1, func, file, line);
+    int w = do_serial_port_write(fd, (unsigned char *)&d[i], 1, func, file, line);
     while (w < 1) {
       if (no_rxbuff) {
         if (serial_speed == 4000000)
@@ -162,24 +162,24 @@ int do_slow_write(PORT_TYPE fd, char* d, int l, const char* func, const char* fi
         else
           do_usleep(1000 * SLOW_FACTOR);
       }
-      w = do_serial_port_write(fd, (unsigned char*)&d[i], 1, func, file, line);
+      w = do_serial_port_write(fd, (unsigned char *)&d[i], 1, func, file, line);
     }
   }
   return 0;
 }
 
-void do_write(PORT_TYPE localfd, char* str)
+void do_write(PORT_TYPE localfd, char *str)
 {
   int len = strlen(str);
-  do_serial_port_write(localfd, (uint8_t*)str, len, NULL, NULL, 0);
+  do_serial_port_write(localfd, (uint8_t *)str, len, NULL, NULL, 0);
 }
 
-int do_read(PORT_TYPE localfd, char* str, int max)
+int do_read(PORT_TYPE localfd, char *str, int max)
 {
-  return do_serial_port_read(localfd, (uint8_t*)str, max, NULL, NULL, 0);
+  return do_serial_port_read(localfd, (uint8_t *)str, max, NULL, NULL, 0);
 }
 
-int do_slow_write_safe(PORT_TYPE fd, char* d, int l, const char* func, const char* file, int line)
+int do_slow_write_safe(PORT_TYPE fd, char *d, int l, const char *func, const char *file, int line)
 {
   // There is a bug at the time of writing that causes problems
   // with the CPU's correct operation if various monitor commands
@@ -232,7 +232,7 @@ int pending_vf011_sector = 0;
 int pending_vf011_side = 0;
 unsigned char recent_bytes[4] = { 0, 0, 0, 0 };
 
-void check_for_vf011_jobs(unsigned char* read_buff, int b)
+void check_for_vf011_jobs(unsigned char *read_buff, int b)
 {
   // Check for Virtual F011 requests coming through
   for (int i = 3; i < b; i++) {
@@ -274,20 +274,20 @@ void wait_for_prompt(void)
     if (b > 0)
       offset += b;
 
-    if (strstr((char*)read_buff, "!\r\n")) {
+    if (strstr((char *)read_buff, "!\r\n")) {
       // Watch or break point triggered.
       // There is a bug in the MEGA65 where it sometimes reports
       // this repeatedly. It is worked around by simply sending a newline.
       printf("WARNING: Break or watchpoint trigger seen.\n");
-      serialport_write(fd, (uint8_t*)"\r", 1);
+      serialport_write(fd, (uint8_t *)"\r", 1);
     }
-    if (strstr((char*)read_buff, ".")) {
+    if (strstr((char *)read_buff, ".")) {
       break;
     }
   }
 }
 
-void wait_for_string(char* s)
+void wait_for_string(char *s)
 {
   unsigned char read_buff[8192];
   int b = 1;
@@ -305,7 +305,7 @@ void wait_for_string(char* s)
     if (b > 0)
       offset += b;
 
-    if (strstr((char*)read_buff, s)) {
+    if (strstr((char *)read_buff, s)) {
       break;
     }
   }
@@ -358,14 +358,14 @@ void purge_and_check_for_vf011_jobs(int stopP)
         recent[2] = read_buff[i];
         if (stopP) {
           //	  dump_bytes(0,"recent looking for t1\r",recent,3);
-          if (strstr((char*)recent, "t1\r")) {
+          if (strstr((char *)recent, "t1\r")) {
             cpu_stopped = 1;
             return;
           }
         }
         else {
           //	  dump_bytes(0,"recent looking for t0\r",recent,3);
-          if (strstr((char*)recent, "t0\r")) {
+          if (strstr((char *)recent, "t0\r")) {
             cpu_stopped = 0;
             return;
           }
@@ -443,11 +443,11 @@ int start_cpu(void)
   return 0;
 }
 
-int load_file(char* filename, int load_addr, int patchHyppo)
+int load_file(char *filename, int load_addr, int patchHyppo)
 {
   char cmd[1024];
 
-  FILE* f = fopen(filename, "rb");
+  FILE *f = fopen(filename, "rb");
   if (!f) {
     log_crit("could not open file '%s'", filename);
     exit(-2);
@@ -511,7 +511,7 @@ int load_file(char* filename, int load_addr, int patchHyppo)
     //    printf("  command ='%s'\n  b=%d\n",cmd,b);
     slow_write(fd, cmd, strlen(cmd));
     int n = b;
-    unsigned char* p = buf;
+    unsigned char *p = buf;
     while (n > 0) {
       int w = serialport_write(fd, p, n);
       if (w > 0) {
@@ -565,13 +565,13 @@ int restart_hyppo(void)
   return 0;
 }
 
-void print_spaces(FILE* f, int col)
+void print_spaces(FILE *f, int col)
 {
   for (int i = 0; i < col; i++)
     fprintf(f, " ");
 }
 
-int dump_bytes(int col, char* msg, unsigned char* bytes, int length)
+int dump_bytes(int col, char *msg, unsigned char *bytes, int length)
 {
   print_spaces(stderr, col);
   fprintf(stderr, "%s:\n", msg);
@@ -593,7 +593,7 @@ int dump_bytes(int col, char* msg, unsigned char* bytes, int length)
   return 0;
 }
 
-int stuff_keybuffer(char* s)
+int stuff_keybuffer(char *s)
 {
   int buffer_addr = 0x277;
   int buffer_len_addr = 0xc6;
@@ -623,7 +623,7 @@ int stuff_keybuffer(char* s)
 int read_and_print(PORT_TYPE fd)
 {
   char buff[8192];
-  int r = serialport_read(fd, (unsigned char*)buff, 8192);
+  int r = serialport_read(fd, (unsigned char *)buff, 8192);
   buff[r] = 0;
   printf("%s\n", buff);
   return 0;
@@ -646,7 +646,7 @@ int rxbuff_detect(void)
   // If we have RX buffering, both commands will execute.
   // If not, then only the first one will execute
   log_info("checking if MEGA65 has RX buffer");
-  serialport_write(fd, (unsigned char*)"\025m0\rm1\r", 7);
+  serialport_write(fd, (unsigned char *)"\025m0\rm1\r", 7);
   do_usleep(20000); // Give plenty of time for things to settle
   int b = 1;
   while (b > 0) {
@@ -654,7 +654,7 @@ int rxbuff_detect(void)
     if (b >= 0)
       read_buff[b] = 0;
     //    dump_bytes(0,"bytes from serial port",read_buff,b);
-    if ((strstr((char*)read_buff, ":00000000:")) && (strstr((char*)read_buff, ":00000001:"))) {
+    if ((strstr((char *)read_buff, ":00000000:")) && (strstr((char *)read_buff, ":00000001:"))) {
       no_rxbuff = 0;
       log_info("RX buffer detected. Latency will be reduced.");
       break;
@@ -734,7 +734,7 @@ int monitor_sync(void)
         char zeroes[256];
         bzero(zeroes, 256);
         for (int i = 0; i < 256; i++)
-          serialport_write(fd, (unsigned char*)zeroes, 256);
+          serialport_write(fd, (unsigned char *)zeroes, 256);
 
         slow_write_safe(fd, cmd, strlen(cmd));
 
@@ -785,7 +785,7 @@ int get_pc(void)
     b = 8191;
   buff[b] = 0;
   //  if (b>0) dump_bytes(2,"PC read input",buff,b);
-  char* s = strstr((char*)buff, "\n,");
+  char *s = strstr((char *)buff, "\n,");
   if (s)
     return strtoll(&s[6], NULL, 16);
   else
@@ -813,7 +813,7 @@ int in_hypervisor(void)
     b = 8191;
   buff[b] = 0;
   //  if (b>0) dump_bytes(2,"H read input",buff,b);
-  char* s = strstr((char*)buff, " H ");
+  char *s = strstr((char *)buff, " H ");
   if (s)
     return 1;
   else
@@ -847,7 +847,7 @@ int breakpoint_wait(void)
   // Now read until we see the requested PC
   log_info("waiting for breakpoint at $%04X to trigger", breakpoint_pc);
   while (1) {
-    int b = serialport_read(fd, (unsigned char*)read_buff, 8192);
+    int b = serialport_read(fd, (unsigned char *)read_buff, 8192);
 
     // Poll for PC value, as sometimes breakpoint doesn't always auto-present it
     if (time(0) != start) {
@@ -875,7 +875,7 @@ int breakpoint_wait(void)
   }
 }
 
-int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
+int push_ram(unsigned long address, unsigned int count, unsigned char *buffer)
 {
   //  fprintf(stderr,"Pushing %d bytes to RAM @ $%07lx\n",count,address);
 
@@ -915,7 +915,7 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
       if (xemu_flag)
         do_usleep(50000 * SLOW_FACTOR);
       int n = b;
-      unsigned char* p = &buffer[offset];
+      unsigned char *p = &buffer[offset];
       while (n > 0) {
         int w = serialport_write(fd, p, n);
         if (w > 0) {
@@ -938,7 +938,30 @@ int push_ram(unsigned long address, unsigned int count, unsigned char* buffer)
   return 0;
 }
 
-int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
+char parse_byte(const unsigned char *source, unsigned char *target)
+{
+  unsigned char val = 0;
+  if (source[0] >= '0' && source[0] <= '9')
+    val = ((source[0] - 48) << 4);
+  else if (source[0] >= 'A' && source[0] <= 'F')
+    val = ((source[0] - 55) << 4);
+  else if (source[0] >= 'a' && source[0] <= 'f')
+    val = ((source[0] - 87) << 4);
+  else
+    return -1;
+  if (source[1] >= '0' && source[1] <= '9')
+    val |= (source[1] - 48);
+  else if (source[1] >= 'A' && source[1] <= 'F')
+    val |= (source[1] - 55);
+  else if (source[1] >= 'a' && source[1] <= 'f')
+    val |= (source[1] - 87);
+  else
+    return -1;
+  *target = val;
+  return 0;
+}
+
+int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer)
 {
   /* Fetch a block of RAM into the provided buffer.
      This greatly simplifies many tasks.
@@ -946,10 +969,10 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
 
   unsigned long addr = address;
   unsigned long end_addr;
-  char cmd[8192];
+  char cmd[80], *found;
   unsigned char read_buff[8192];
   char next_addr_str[8192];
-  int ofs = 0;
+  int ofs = 0, s_offset;
 
   //  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
 
@@ -959,19 +982,18 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
     if ((last_rx < time(0)) || (addr == end_addr)) {
       //	printf("no response for 1 sec: Requesting more.\n");
       if ((address + count - addr) < 17) {
-        snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
+        snprintf(cmd, 79, "m%X\r", (unsigned int)addr);
         end_addr = addr + 0x10;
       }
       else {
-        snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
+        snprintf(cmd, 79, "M%X\r", (unsigned int)addr);
         end_addr = addr + 0x100;
       }
       //	printf("Sending '%s'\n",cmd);
       slow_write_safe(fd, cmd, strlen(cmd));
       last_rx = time(0);
     }
-    snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
-    int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
+    int b = serialport_read(fd, &read_buff[ofs], 8191 - ofs);
     if (b <= 0)
       b = 0;
     //            else
@@ -981,37 +1003,39 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char* buffer)
     //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
     read_buff[ofs + b] = 0;
     ofs += b;
-    char* s = strstr((char*)read_buff, next_addr_str);
-    if (s && (strlen(s) >= 42)) {
-      char b = s[42];
-      s[42] = 0;
-      // log_debug("found data for $%08x: %s", (unsigned int)addr, s);
-      s[42] = b;
+    snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
+    found = strstr((char *)read_buff, next_addr_str);
+    if (found && (strlen(found) >= 43)) {
+      /* debug
+      char b = s[43];
+      s[43] = 0;
+      log_debug("found data for $%08x: %s", (unsigned int)addr, s);
+      s[43] = b;
+      */
       for (int i = 0; i < 16; i++) {
 
         // Don't write more bytes than requested
         if ((addr - address + i) >= count)
           break;
 
-        char hex[3];
-        hex[0] = s[1 + 10 + i * 2 + 0];
-        hex[1] = s[1 + 10 + i * 2 + 1];
-        hex[2] = 0;
-        buffer[addr - address + i] = strtol(hex, NULL, 16);
+        if (parse_byte((unsigned char *)&found[11 + i * 2], &buffer[addr - address + i])) {
+          log_debug("fetch_ram: error parsing %s", found);
+        }
       }
       addr += 16;
 
       // Shuffle buffer down
-      int s_offset = (long long)s - (long long)read_buff + 42;
+      s_offset = (long long)found - (long long)read_buff + 43;
       bcopy(&read_buff[s_offset], &read_buff[0], 8192 - (ofs - s_offset));
       ofs -= s_offset;
     }
   }
   if (addr >= (address + count)) {
-    //    fprintf(stderr,"Memory read complete at $%lx\n",addr);
+    // log_debug("fetch_ram: read complete at $%08lx\n", addr);
     return 0;
   }
   else {
+    // TODO: better return -1 and let caller decide?
     log_crit("could not read requested memory region.");
     exit(-1);
   }
@@ -1027,7 +1051,7 @@ int fetch_ram_invalidate(void)
   return 0;
 }
 
-int fetch_ram_cacheable(unsigned long address, unsigned int count, unsigned char* buffer)
+int fetch_ram_cacheable(unsigned long address, unsigned int count, unsigned char *buffer)
 {
   if (!ram_cache_initialised) {
     ram_cache_initialised = 1;
@@ -1080,7 +1104,7 @@ int detect_mode(void)
   fetch_ram(0x20010, 16, mem_buff);
   if (mem_buff[0] == 'V' || mem_buff[0] == 'O') {
     mem_buff[9] = 0;
-    int date_code = atoi((const char*)&mem_buff[1]);
+    int date_code = atoi((const char *)&mem_buff[1]);
     if (date_code > 2000000) {
       log_debug("detected OpenROM version %d\n", date_code);
       saw_openrom = 1;
@@ -1199,7 +1223,7 @@ int last_read_count = 0;
 
 #ifdef WINDOWS
 
-void print_error(const char* context)
+void print_error(const char *context)
 {
   DWORD error_code = GetLastError();
   char buffer[256];
@@ -1213,7 +1237,7 @@ void print_error(const char* context)
 
 // Opens the specified serial port, configures its timeouts, and sets its
 // baud rate.  Returns a handle on success, or INVALID_HANDLE_VALUE on failure.
-HANDLE open_serial_port(const char* device, uint32_t baud_rate)
+HANDLE open_serial_port(const char *device, uint32_t baud_rate)
 {
   // COM10+ need to have \\.\ added to the front
   // (see
@@ -1296,7 +1320,7 @@ HANDLE open_serial_port(const char* device, uint32_t baud_rate)
   return port;
 }
 
-int win_serial_port_write(HANDLE port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+int win_serial_port_write(HANDLE port, uint8_t *buffer, size_t size, const char *func, const char *file, const int line)
 {
   DWORD offset = 0;
   DWORD written;
@@ -1328,14 +1352,14 @@ int win_serial_port_write(HANDLE port, uint8_t* buffer, size_t size, const char*
   return size;
 }
 
-int win_tcp_write(SOCKET sock, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+int win_tcp_write(SOCKET sock, uint8_t *buffer, size_t size, const char *func, const char *file, const int line)
 {
   if (debug_serial) {
     fprintf(stderr, "%s:%d:%s(): ", file, line, func);
     dump_bytes(0, "tcp write (windows)", buffer, size);
   }
 
-  int iResult = send(sock, (char*)buffer, size, 0);
+  int iResult = send(sock, (char *)buffer, size, 0);
   if (iResult == SOCKET_ERROR) {
     printf("send failed with error: %d\n", WSAGetLastError());
     closesocket(sock);
@@ -1347,7 +1371,7 @@ int win_tcp_write(SOCKET sock, uint8_t* buffer, size_t size, const char* func, c
 }
 
 // Writes bytes to the serial port, returning 0 on success and -1 on failure.
-int do_serial_port_write(WINPORT port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+int do_serial_port_write(WINPORT port, uint8_t *buffer, size_t size, const char *func, const char *file, const int line)
 {
   if (port.type == WINPORT_TYPE_FILE)
     return win_serial_port_write(port.fdfile, buffer, size, func, file, line);
@@ -1361,7 +1385,7 @@ int do_serial_port_write(WINPORT port, uint8_t* buffer, size_t size, const char*
 // timeout or other error.
 // Returns the number of bytes successfully read into the buffer, or -1 if
 // there was an error reading.
-SSIZE_T win_serial_port_read(HANDLE port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+SSIZE_T win_serial_port_read(HANDLE port, uint8_t *buffer, size_t size, const char *func, const char *file, const int line)
 {
   DWORD received = 0;
   //  printf("Calling ReadFile(%I64d)\n",size);
@@ -1381,7 +1405,7 @@ SSIZE_T win_serial_port_read(HANDLE port, uint8_t* buffer, size_t size, const ch
   return received;
 }
 
-SSIZE_T win_tcp_read(SOCKET sock, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+SSIZE_T win_tcp_read(SOCKET sock, uint8_t *buffer, size_t size, const char *func, const char *file, const int line)
 {
   // check if any bytes available yet, if not, exit early
   unsigned long l;
@@ -1389,7 +1413,7 @@ SSIZE_T win_tcp_read(SOCKET sock, uint8_t* buffer, size_t size, const char* func
   if (l == 0)
     return 0;
 
-  int iResult = recv(sock, (char*)buffer, size, 0);
+  int iResult = recv(sock, (char *)buffer, size, 0);
   if (iResult == 0 && size != 0) {
     printf("recv: Connection closed.\n");
     exit(1);
@@ -1410,7 +1434,7 @@ SSIZE_T win_tcp_read(SOCKET sock, uint8_t* buffer, size_t size, const char* func
   return count;
 }
 
-SSIZE_T do_serial_port_read(WINPORT port, uint8_t* buffer, size_t size, const char* func, const char* file, const int line)
+SSIZE_T do_serial_port_read(WINPORT port, uint8_t *buffer, size_t size, const char *func, const char *file, const int line)
 {
   if (port.type == WINPORT_TYPE_FILE)
     return win_serial_port_read(port.fdfile, buffer, size, func, file, line);
@@ -1425,7 +1449,7 @@ void close_serial_port(void)
 }
 
 #else
-int do_serial_port_write(int fd, uint8_t* buffer, size_t size, const char* function, const char* file, const int line)
+int do_serial_port_write(int fd, uint8_t *buffer, size_t size, const char *function, const char *file, const int line)
 {
 
 #ifdef __APPLE__
@@ -1572,10 +1596,10 @@ void close_serial_port(void)
         Get ip from domain name
  */
 
-int hostname_to_ip(char* hostname, char* ip)
+int hostname_to_ip(char *hostname, char *ip)
 {
-  struct hostent* he;
-  struct in_addr** addr_list;
+  struct hostent *he;
+  struct in_addr **addr_list;
   int i;
 
   if ((he = gethostbyname(hostname)) == NULL) {
@@ -1586,7 +1610,7 @@ int hostname_to_ip(char* hostname, char* ip)
     return 1;
   }
 
-  addr_list = (struct in_addr**)he->h_addr_list;
+  addr_list = (struct in_addr **)he->h_addr_list;
 
   for (i = 0; addr_list[i] != NULL; i++) {
     // Return the first one;
@@ -1598,7 +1622,7 @@ int hostname_to_ip(char* hostname, char* ip)
 }
 
 #ifdef WINDOWS
-PORT_TYPE open_tcp_port(char* portname)
+PORT_TYPE open_tcp_port(char *portname)
 {
   PORT_TYPE localfd = { WINPORT_TYPE_INVALID, 0 };
   char hostname[128] = "localhost";
@@ -1670,7 +1694,7 @@ void close_tcp_port(PORT_TYPE localfd)
 }
 
 #else // linux/mac-osx
-PORT_TYPE open_tcp_port(char* portname)
+PORT_TYPE open_tcp_port(char *portname)
 {
   int localfd;
   char hostname[128] = "localhost";
@@ -1700,7 +1724,7 @@ PORT_TYPE open_tcp_port(char* portname)
   sock_st.sin_family = AF_INET;
   sock_st.sin_port = htons(port);
 
-  if (connect(localfd, (struct sockaddr*)&sock_st, sizeof(sock_st)) < 0) {
+  if (connect(localfd, (struct sockaddr *)&sock_st, sizeof(sock_st)) < 0) {
     log_error("failed to connect to socket %s:%d: %s\n", hostname, port, strerror(errno));
     close(localfd);
     exit(1);
@@ -1715,7 +1739,7 @@ void close_tcp_port(PORT_TYPE localfd)
 }
 
 // provide an implementation of stricmp for linux/mac
-int stricmp(const char* a, const char* b)
+int stricmp(const char *a, const char *b)
 {
   int ca, cb;
   do {
@@ -1742,7 +1766,7 @@ void close_communication_port(void)
     close_serial_port();
 }
 
-void open_the_serial_port(char* serial_port)
+void open_the_serial_port(char *serial_port)
 {
   if (serial_port == NULL) {
     log_crit("serial port not set, aborting");
@@ -1777,14 +1801,14 @@ void open_the_serial_port(char* serial_port)
   set_serial_speed(fd, serial_speed);
 
   // Also try to reduce serial port latency
-  char* last_part = serial_port;
+  char *last_part = serial_port;
   for (int i = 0; serial_port[i]; i++)
     if (serial_port[i] == '/')
       last_part = &serial_port[i + 1];
 
   char latency_file[1024];
   snprintf(latency_file, 1024, "/sys/bus/usb-serial/devices/%s/latency_timer", last_part);
-  FILE* f = fopen(latency_file, "r");
+  FILE *f = fopen(latency_file, "r");
   if (f) {
     char line[1024];
     fread(line, 1024, 1, f);

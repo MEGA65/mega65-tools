@@ -96,7 +96,7 @@ void graphics_clear_screen(void)
 unsigned char char_code;
 
 unsigned short char_addr;
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   char_addr = 0xE000 + x + y * 80 * 2;
   while (*msg) {

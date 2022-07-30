@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-void error(char* fmt, ...)
+void error(char *fmt, ...)
 {
   va_list ap;
 
@@ -16,14 +16,14 @@ void error(char* fmt, ...)
 }
 
 #ifdef INCLUDE_BIT2MCS
-int bit2mcs(int argc, char* argv[])
+int bit2mcs(int argc, char *argv[])
 #else
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 #endif
 {
   unsigned int loadAddr = 0;
-  FILE* infile;
-  FILE* outfile;
+  FILE *infile;
+  FILE *outfile;
   int numBytes, i;
   int c;
   unsigned char lineData[16];

@@ -24,9 +24,9 @@ char filename[64] = "luftraus.crt";
 
 // From:
 // https://retrocomputing.stackexchange.com/questions/8253/how-to-read-disk-files-using-cbm-specific-functions-in-cc65-with-proper-error-ch
-unsigned char kernel_getin(void* ptr, unsigned short size)
+unsigned char kernel_getin(void *ptr, unsigned short size)
 {
-  unsigned char* data = (unsigned char*)ptr;
+  unsigned char *data = (unsigned char *)ptr;
   unsigned short i;
   unsigned char st = 0;
 

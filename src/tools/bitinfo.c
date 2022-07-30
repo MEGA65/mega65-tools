@@ -12,14 +12,14 @@ unsigned int swap_bytes(unsigned int v, int swapP)
   return (v >> 24) | (((v >> 16) & 0xff) << 8) | (((v >> 8) & 0xff) << 16) | ((v & 0xff) << 24);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc < 2) {
     fprintf(stderr, "usage: bitinfo <bitstream file>\n");
     exit(-1);
   }
 
-  FILE* f = fopen(argv[1], "r");
+  FILE *f = fopen(argv[1], "r");
   if (!f) {
     fprintf(stderr, "Could not read bitstream file '%s'\n", argv[1]);
     perror("fopen");

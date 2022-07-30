@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   unsigned long long setting = 0;
   float factors[1 << 14];

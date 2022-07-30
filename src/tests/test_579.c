@@ -105,7 +105,7 @@ void graphics_mode(void)
   POKE(0xD021, 0);
 }
 
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg);
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg);
 
 unsigned short pixel_addr;
 unsigned char pixel_temp;
@@ -126,7 +126,7 @@ void plot_pixel_direct(unsigned short x, unsigned char y, unsigned char colour)
 }
 
 unsigned char char_code;
-void print_text(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x * 2 + y * 80;
   while (*msg) {
@@ -144,7 +144,7 @@ void print_text(unsigned char x, unsigned char y, unsigned char colour, char* ms
   }
 }
 
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   pixel_addr = 0xC000 + x + y * 80;
   while (*msg) {
@@ -426,7 +426,7 @@ unsigned char led[12];
 unsigned char red, green, blue;
 unsigned char frame_num;
 
-void read_pixel(short x, short y, unsigned char* red, unsigned char* green, unsigned char* blue)
+void read_pixel(short x, short y, unsigned char *red, unsigned char *green, unsigned char *blue)
 {
   // Select (128,128) as pixel to read back
   POKE(0xD07D, x);
@@ -485,19 +485,19 @@ void main(void)
 
   // Create a tiled sprite
   // (Follows description from issue #579)
-  POKE(0xD015,0x01); // Sprite enable
-  POKE(0xD06B,0x01); // FC sprite
-  POKE(0xD055,0x01); // variable height
-  POKE(0xd04d,0xf0); // Enable horizontal tiling
-  POKE(0xD056,23);  // height of variable height sprites
+  POKE(0xD015, 0x01); // Sprite enable
+  POKE(0xD06B, 0x01); // FC sprite
+  POKE(0xD055, 0x01); // variable height
+  POKE(0xd04d, 0xf0); // Enable horizontal tiling
+  POKE(0xD056, 23);   // height of variable height sprites
   // Position the sprite
-  POKE(0xd000,0x50);
-  POKE(0xd001,0xa0);
+  POKE(0xd000, 0x50);
+  POKE(0xd001, 0xa0);
 
   // Note the sprite data is insufficient for the whole 200 px high, but that's ok.
   POKE(0x7F8, 0x340 / 0x40); // Sprite data in casette buffer
-  lfill(0x0340, 0x00, 0xc0);  // solid sprite in black
-  POKE(0xd027,0x0f); // make colour 0xf transparent
+  lfill(0x0340, 0x00, 0xc0); // solid sprite in black
+  POKE(0xd027, 0x0f);        // make colour 0xf transparent
 
   // black background so that we can see the effect, which it turns out is <1
   // physical pixel wide -- which is quite strange.  Presumably the sprites
@@ -510,7 +510,7 @@ void main(void)
   read_pixel(0x2d3, 0x150, &red, &green, &blue);
   snprintf(msg, 64, "Sprite Pixel @ (724,192)=#%02x%02x%02x", red, green, blue);
   print_text(0, 2, 14, msg);
-  
+
   // Check chargen RH edge pixel (should be sprite pixel still)
   read_pixel(0x2d5, 0x150, &red, &green, &blue);
   snprintf(msg, 64, "Sprite RH Pixel @ (725,192)=#%02x%02x%02x", red, green, blue);
@@ -520,7 +520,7 @@ void main(void)
   read_pixel(0x2d5, 0x150, &red, &green, &blue);
   snprintf(msg, 64, "Border Pixel @ (726,192)=#%02x%02x%02x", red, green, blue);
   print_text(0, 4, 14, msg);
-  
+
   if (red == 0x50 && green == 0x50 && blue == 0x50)
     unit_test_report(ISSUE_NUM, sub++, TEST_PASS);
   else
@@ -531,7 +531,7 @@ void main(void)
 
   // Hide cross-hairs so problem can be seen if happening
   read_pixel(0, 0, &red, &green, &blue);
-  
+
   // Report completion of tests
   unit_test_report(ISSUE_NUM, sub++, TEST_DONEALL);
 }

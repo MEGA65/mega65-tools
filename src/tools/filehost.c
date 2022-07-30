@@ -18,7 +18,7 @@ int check_char(char actual_c, char expected_c)
   return 1;
 }
 
-int check_char_startflag(char actual_c, char expected_c, int* startflag)
+int check_char_startflag(char actual_c, char expected_c, int *startflag)
 {
   if (!*startflag) {
     check_char(actual_c, expected_c);
@@ -38,17 +38,17 @@ typedef struct file_info {
 } tfile_info;
 
 typedef struct list_item {
-  struct list_item* prev;
-  struct list_item* next;
-  void* cur;
+  struct list_item *prev;
+  struct list_item *next;
+  void *cur;
 } tlist_item;
 
 tlist_item *lst_finfos = NULL;
 
-void clean_copy(char* dest, char* src)
+void clean_copy(char *dest, char *src)
 {
-  char* sptr = src;
-  char* dptr = dest;
+  char *sptr = src;
+  char *dptr = dest;
 
   while (*sptr != '\0') {
     if (*sptr == '\\') {
@@ -65,13 +65,11 @@ void clean_copy(char* dest, char* src)
 
 void cleanup(char *str)
 {
-  while (*str != 0)
-  {
+  while (*str != 0) {
     if (*str == '\\') {
       char *s = str;
-      while (*s != '\0')
-      {
-        *s = *(s+1);
+      while (*s != '\0') {
+        *s = *(s + 1);
         s++;
       }
     }
@@ -83,7 +81,7 @@ void cleanup(char *str)
 
 // #define DEBUG
 
-void assess_key_val(tfile_info* finfo, char* key, char* val)
+void assess_key_val(tfile_info *finfo, char *key, char *val)
 {
 #ifdef DEBUG
   printf("key: %s, val: %s\n", key, val);
@@ -105,7 +103,7 @@ void assess_key_val(tfile_info* finfo, char* key, char* val)
   }
 }
 
-int read_in_key_or_value_string(tfile_info* finfo, char prevc, char c, int* iskey, int* quotestart)
+int read_in_key_or_value_string(tfile_info *finfo, char prevc, char c, int *iskey, int *quotestart)
 {
   static char tmp[4096];
   static int tmplen = 0;
@@ -135,29 +133,28 @@ int read_in_key_or_value_string(tfile_info* finfo, char prevc, char c, int* iske
   return 0;
 }
 
-void add_to_list(tfile_info* finfo)
+void add_to_list(tfile_info *finfo)
 {
   // make first item in list?
-  if (lst_finfos == NULL)
-  {
+  if (lst_finfos == NULL) {
     lst_finfos = malloc(sizeof(tlist_item));
     memset(lst_finfos, 0, sizeof(tlist_item));
   }
 
-  tlist_item* itm = lst_finfos;
+  tlist_item *itm = lst_finfos;
 
   // scan to end of list
   while (itm->cur != NULL) {
     if (sort_date_flag) {
       // compare date of currently iterated item against new item
-      if (strcmp(finfo->published, ((tfile_info*)itm->cur)->published) <= 0) {
-        tlist_item* newitem = malloc(sizeof(tlist_item));
+      if (strcmp(finfo->published, ((tfile_info *)itm->cur)->published) <= 0) {
+        tlist_item *newitem = malloc(sizeof(tlist_item));
 
         newitem->next = itm;
         newitem->prev = itm->prev;
 
         if (itm->prev)
-          ((tlist_item*)itm->prev)->next = newitem;
+          ((tlist_item *)itm->prev)->next = newitem;
         else
           lst_finfos = newitem; //  push into the first item in the list
 
@@ -171,7 +168,7 @@ void add_to_list(tfile_info* finfo)
       itm = itm->next;
     }
     else {
-      tlist_item* newitem = malloc(sizeof(tlist_item));
+      tlist_item *newitem = malloc(sizeof(tlist_item));
       memset(newitem, 0, sizeof(tlist_item));
       newitem->prev = itm;
       itm->next = newitem;
@@ -184,7 +181,7 @@ void add_to_list(tfile_info* finfo)
   memcpy(itm->cur, finfo, sizeof(tfile_info));
 }
 
-int read_rows(char* str, int strcnt)
+int read_rows(char *str, int strcnt)
 {
   static int squarebrackstart = 0;
   static int curlbrackstart = 0;
@@ -246,7 +243,7 @@ int read_rows(char* str, int strcnt)
       }
     }
 
-    if (c == '"' && str[k-1] != '\\' && check_char_startflag(c, '"', &quotestart))
+    if (c == '"' && str[k - 1] != '\\' && check_char_startflag(c, '"', &quotestart))
       continue;
 
     if (read_in_key_or_value_string(&finfo, prevc, c, &iskey, &quotestart)) { }
@@ -257,27 +254,28 @@ int read_rows(char* str, int strcnt)
 }
 
 // borrow this from mega65_ftp.c for now...
-int is_match(char* line, char* pattern, int case_sensitive);
+int is_match(char *line, char *pattern, int case_sensitive);
 
-void print_items(char* searchterm)
+void print_items(char *searchterm)
 {
   int cnt = 1;
-  tlist_item* itm = lst_finfos;
+  tlist_item *itm = lst_finfos;
   while (itm != NULL) {
-    tfile_info* pfinfo = (tfile_info*)itm->cur;
-    if (!searchterm || (searchterm && strlen(searchterm) == 0) || is_match(pfinfo->title, searchterm, 0) || is_match(pfinfo->filename, searchterm, 0)
-        || is_match(pfinfo->author, searchterm, 0)) {
-      printf("%d: %s - \"%s\" - author: %s - published: %s\n", cnt, pfinfo->title, pfinfo->filename, pfinfo->author, pfinfo->published);
+    tfile_info *pfinfo = (tfile_info *)itm->cur;
+    if (!searchterm || (searchterm && strlen(searchterm) == 0) || is_match(pfinfo->title, searchterm, 0)
+        || is_match(pfinfo->filename, searchterm, 0) || is_match(pfinfo->author, searchterm, 0)) {
+      printf("%d: %s - \"%s\" - author: %s - published: %s\n", cnt, pfinfo->title, pfinfo->filename, pfinfo->author,
+          pfinfo->published);
     }
 
-    itm = (tlist_item*)itm->next;
+    itm = (tlist_item *)itm->next;
     cnt++;
   }
 }
 
 char cookies[256] = "";
 
-void log_in_and_get_cookie(char* username, char* password)
+void log_in_and_get_cookie(char *username, char *password)
 {
   char str[4096];
   char data[4096];
@@ -302,10 +300,10 @@ void log_in_and_get_cookie(char* username, char* password)
     total += count;
   }
 
-  char* ptr = strtok(data, "\n");
+  char *ptr = strtok(data, "\n");
   cookies[0] = 0;
   int ckptr = 0;
-  char* cookie_field = "Set-Cookie:";
+  char *cookie_field = "Set-Cookie:";
   do {
     if (strncmp(ptr, cookie_field, strlen(cookie_field)) == 0) {
       ptr += strlen(cookie_field);
@@ -327,12 +325,12 @@ void log_in_and_get_cookie(char* username, char* password)
 
 void clear_list(void)
 {
-  tlist_item* itm = lst_finfos;
+  tlist_item *itm = lst_finfos;
   while (itm != NULL) {
     if (itm->cur)
       free(itm->cur); // delete the file-info
 
-    tlist_item* tmp = (tlist_item*)itm->next;
+    tlist_item *tmp = (tlist_item *)itm->next;
 
     free(itm);
 
@@ -342,7 +340,7 @@ void clear_list(void)
   lst_finfos = NULL;
 }
 
-void read_filehost_struct(char* searchterm)
+void read_filehost_struct(char *searchterm)
 {
   char str[4096];
 
@@ -379,7 +377,7 @@ void read_filehost_struct(char* searchterm)
 
 int check_file_start(char c)
 {
-  static char* term = "\r\n\r\n";
+  static char *term = "\r\n\r\n";
   static int termidx = 0;
 
   if (c == term[termidx]) {
@@ -395,9 +393,9 @@ int check_file_start(char c)
   return 0;
 }
 
-void check_content_length(char c, int* content_length)
+void check_content_length(char c, int *content_length)
 {
-  static char* term = "Content-Length: ";
+  static char *term = "Content-Length: ";
   static int termmatch = 0;
   static int termidx = 0;
   static char value[128] = "";
@@ -432,10 +430,10 @@ void check_content_length(char c, int* content_length)
   }
 }
 
-void strupper(char* dest, char* src)
+void strupper(char *dest, char *src)
 {
-  char* psrc = src;
-  char* pdest = dest;
+  char *psrc = src;
+  char *pdest = dest;
   while (*psrc != '\0') {
     *pdest = toupper(*psrc);
     psrc++;
@@ -444,20 +442,20 @@ void strupper(char* dest, char* src)
   *pdest = '\0';
 }
 
-char* download_file_from_filehost(int fileidx)
+char *download_file_from_filehost(int fileidx)
 {
-  char* path;
+  char *path;
   static char fname[256];
-  char* retfname = NULL;
+  char *retfname = NULL;
 
   fname[0] = '\0';
 
-  tlist_item* ptr = lst_finfos;
+  tlist_item *ptr = lst_finfos;
   int cnt = 1;
   while (ptr != NULL) {
     if (fileidx == cnt)
       break;
-    ptr = (tlist_item*)ptr->next;
+    ptr = (tlist_item *)ptr->next;
     cnt++;
   }
 
@@ -466,7 +464,7 @@ char* download_file_from_filehost(int fileidx)
     return NULL;
   }
 
-  tfile_info* pfi = (tfile_info*)ptr->cur;
+  tfile_info *pfi = (tfile_info *)ptr->cur;
 
   path = pfi->location;
   strupper(fname, pfi->filename);
@@ -484,7 +482,7 @@ char* download_file_from_filehost(int fileidx)
   int count = 0, total = 0;
   int content_length = 0;
   int file_started = 0;
-  FILE* f = NULL;
+  FILE *f = NULL;
   while (content_length == 0 || total != content_length) {
     count = do_read(fd, str, 4096);
     if (count == 0) {

@@ -7,19 +7,19 @@
 char line_history[MAX_LINES][1024];
 int line_numbers[MAX_LINES];
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc < 3) {
     fprintf(stderr, "usage: vhdl-path-finder <signal> <vhdl file(s) ...>\n");
     exit(-1);
   }
 
-  char* target = argv[1];
+  char *target = argv[1];
 
   for (int i = 2; i < argc; i++) {
     int line_count = 0;
     int n = 0;
-    FILE* f = fopen(argv[i], "rb");
+    FILE *f = fopen(argv[i], "rb");
     if (!f)
       continue;
     char line[1024];
@@ -41,8 +41,8 @@ int main(int argc, char** argv)
         }
       }
       else if (strstr(line, "if ")) {
-        char* s = strstr(line, "if ");
-        char* comment = strstr(line, "--");
+        char *s = strstr(line, "if ");
+        char *comment = strstr(line, "--");
         if ((!comment) || (comment > s)) {
           if (line_count < MAX_LINES) {
             line_numbers[line_count] = n;

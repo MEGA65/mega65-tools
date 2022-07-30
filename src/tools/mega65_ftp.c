@@ -52,7 +52,7 @@
 #define TRUE 1
 #define FALSE 0
 
-#define DE_ATTRIB_DIR  0x10
+#define DE_ATTRIB_DIR 0x10
 #define DE_ATTRIB_FILE 0x20
 
 #define BYTES_PER_MB 1048576
@@ -69,30 +69,30 @@ struct m65dirent {
   unsigned short d_namlen;       /* Length of name in d_name. */
   unsigned char d_attr;          /* FAT file attributes */
   unsigned d_type;               /* Object type (digested attributes) */
-  struct tm d_time;               /* Creation time? */
+  struct tm d_time;              /* Creation time? */
   char d_name[FILENAME_MAX];     /* File name. */
   char d_longname[FILENAME_MAX]; /* Long file name. */
   // extra debug fields for info on dir entries
   long de_cluster;
   long de_sector;
   int de_sector_offset;
-  unsigned char de_raw[32];       /* preserve dirent_raw info for debugging purposes */
+  unsigned char de_raw[32]; /* preserve dirent_raw info for debugging purposes */
 };
 
-void assemble_time_from_raw(unsigned char* buffer, struct m65dirent* de)
+void assemble_time_from_raw(unsigned char *buffer, struct m65dirent *de)
 {
   memset(&de->d_time, 0, sizeof(struct tm));
 
   de->d_time.tm_sec = (buffer[0xe] & 0x1f) << 1;
   de->d_time.tm_min = (buffer[0xe] >> 5) & 0x07;
 
-  de->d_time.tm_min |= ((buffer[0xf] & 0x7)  << 3);
+  de->d_time.tm_min |= ((buffer[0xf] & 0x7) << 3);
   de->d_time.tm_hour = buffer[0xf] >> 3;
 
   de->d_time.tm_mday = buffer[0x10] & 0x1f;
   de->d_time.tm_mon = ((buffer[0x10] >> 5) & 0x7);
 
-  de->d_time.tm_mon |= ( (buffer[0x11] & 0x1) << 3);
+  de->d_time.tm_mon |= ((buffer[0x11] & 0x1) << 3);
   de->d_time.tm_mon -= 1;
   de->d_time.tm_year = (buffer[0x11] >> 1) + 80;
 }
@@ -116,9 +116,9 @@ char current_dir[1024] = "/";
 #endif
 
 int open_file_system(void);
-int download_slot(int sllot, char* dest_name);
-int download_file(char* dest_name, char* local_name, int showClusters);
-int download_flashslot(int slot_number, char* dest_name);
+int download_slot(int sllot, char *dest_name);
+int download_file(char *dest_name, char *local_name, int showClusters);
+int download_flashslot(int slot_number, char *dest_name);
 void show_clustermap(void);
 void show_cluster(int cluster_num);
 void dump_sectors(void);
@@ -127,49 +127,50 @@ void show_secinfo(void);
 void show_mbrinfo(void);
 void show_vbrinfo(void);
 void poke_sector(void);
-void parse_pokes(char* cmd);
-void perform_filehost_read(char* searchterm);
-void perform_filehost_get(int num, char* destname);
+void parse_pokes(char *cmd);
+void perform_filehost_read(char *searchterm);
+void perform_filehost_get(int num, char *destname);
 void perform_filehost_flash(int fhnum, int slotnum);
-void perform_flash(char* fname, int slotnum);
+void perform_flash(char *fname, int slotnum);
 void list_all_roms(void);
-int show_directory(char* path);
-void show_local_directory(char* searchpattern);
-void change_local_dir(char* path);
-void change_dir(char* path);
+int show_directory(char *path);
+void show_local_directory(char *searchpattern);
+void change_local_dir(char *path);
+void change_dir(char *path);
 void show_local_pwd(void);
-int delete_file_or_dir(char* name);
-int rename_file_or_dir(char* name, char* dest_name);
-int upload_file(char* name, char* dest_name);
+int delete_file_or_dir(char *name);
+int rename_file_or_dir(char *name, char *dest_name);
+int upload_file(char *name, char *dest_name);
 int sdhc_check(void);
 void request_remotesd_version(void);
 void request_quit(void);
-void mount_file(char* filename);
+void mount_file(char *filename);
 #define CACHE_NO 0
 #define CACHE_YES 1
-int read_flash(const unsigned int sector_number, unsigned char* buffer);
-int read_sector(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead);
-int write_sector(const unsigned int sector_number, unsigned char* buffer);
+int read_flash(const unsigned int sector_number, unsigned char *buffer);
+int read_sector(const unsigned int sector_number, unsigned char *buffer, int useCache, int readAhead);
+int write_sector(const unsigned int sector_number, unsigned char *buffer);
 int load_helper(void);
-int stuff_keybuffer(char* s);
-int create_dir(char*);
-int fat_opendir(char*, int show_errmsg);
-int fat_readdir(struct m65dirent*, int extend_dir_flag);
+int stuff_keybuffer(char *s);
+int create_dir(char *);
+int fat_opendir(char *, int show_errmsg);
+int fat_readdir(struct m65dirent *, int extend_dir_flag);
 BOOL safe_open_dir(void);
-BOOL find_file_in_curdir(char* filename, struct m65dirent* de);
-BOOL create_directory_entry_for_item(char* filename, char* short_name, unsigned char lfn_csum, BOOL needs_long_name, int attrib);
+BOOL find_file_in_curdir(char *filename, struct m65dirent *de);
+BOOL create_directory_entry_for_item(
+    char *filename, char *short_name, unsigned char lfn_csum, BOOL needs_long_name, int attrib);
 unsigned int calc_first_cluster_of_file(void);
 unsigned int calc_size_of_file(void);
-BOOL is_d81_file(char* filename);
-void wrap_upload(char* fname);
-char* get_file_extension(char* filename);
+BOOL is_d81_file(char *filename);
+void wrap_upload(char *fname);
+char *get_file_extension(char *filename);
 int extend_dir_cluster_chain(void);
 BOOL find_contiguous_free_direntries(int direntries_needed);
-int normalise_long_name(char* long_name, char* short_name, char* dir_name);
+int normalise_long_name(char *long_name, char *short_name, char *dir_name);
 void write_file_size_into_direntry(unsigned int size);
 void write_cluster_number_into_direntry(int a_cluster);
-int calculate_needed_direntries_for_vfat(char* filename);
-unsigned char lfn_checksum(const unsigned char* pFCBName);
+int calculate_needed_direntries_for_vfat(char *filename);
+unsigned char lfn_checksum(const unsigned char *pFCBName);
 int get_cluster_count(char *filename);
 void wipe_direntries_of_current_file_or_dir(void);
 
@@ -201,11 +202,11 @@ int mode_report = 0;
 int serial_port_set = 0;
 char serial_port[1024] = "/dev/ttyUSB1";
 char device_name[1024] = "";
-char* bitstream = NULL;
-char* username = NULL;
-char* password = NULL;
+char *bitstream = NULL;
+char *username = NULL;
+char *password = NULL;
 
-unsigned char* sd_read_buffer = NULL;
+unsigned char *sd_read_buffer = NULL;
 int sd_read_offset = 0;
 
 int file_system_found = 0;
@@ -218,11 +219,12 @@ unsigned int first_cluster = 0;
 unsigned int fsinfo_sector = 0;
 unsigned int reserved_sectors = 0;
 unsigned int fat1_sector = 0, fat2_sector = 0;
-unsigned int first_cluster_sector;  // Slightly confusing name, as the first cluster is actually cluster #2
-                                    // Even more confusing is that this value is relative to the start of the partition (partition_start)
-                                    // I.e. to calculate the absolute sector of cluster#2 = partition_start + first_cluster_sector
+unsigned int first_cluster_sector; // Slightly confusing name, as the first cluster is actually cluster #2
+                                   // Even more confusing is that this value is relative to the start of the partition
+                                   // (partition_start) I.e. to calculate the absolute sector of cluster#2 = partition_start
+                                   // + first_cluster_sector
 
-int nosys = 0;  // a flag to ignore system partition
+int nosys = 0; // a flag to ignore system partition
 unsigned int syspart_start = 0;
 unsigned int syspart_size = 0;
 unsigned int syspart_freeze_area = 0;
@@ -264,13 +266,14 @@ int sd_status_fresh = 0;
 unsigned char sd_status[16];
 int quietFlag = 0;
 
-extern const char* version_string;
+extern const char *version_string;
 
 void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr, "version: %s\n\n", version_string);
-  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  [-b bitstream] [[-c command] ...]\n");
+  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  "
+                  "[-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx\n");
@@ -287,9 +290,9 @@ void usage(void)
 
 int queued_command_count = 0;
 #define MAX_QUEUED_COMMANDS 64
-char* queued_commands[MAX_QUEUED_COMMANDS];
+char *queued_commands[MAX_QUEUED_COMMANDS];
 
-int queue_command(char* c)
+int queue_command(char *c)
 {
   if (queued_command_count < MAX_QUEUED_COMMANDS)
     queued_commands[queued_command_count++] = c;
@@ -309,10 +312,10 @@ int show_sector(unsigned int sector_num)
   return 0;
 }
 
-int parse_string_param(char** src, char* dest)
+int parse_string_param(char **src, char *dest)
 {
   int cnt = 0;
-  char* srcptr = *src;
+  char *srcptr = *src;
   char endchar = ' ';
   if (*srcptr == '\"') {
     endchar = '\"';
@@ -340,11 +343,11 @@ int parse_string_param(char** src, char* dest)
   return RET_FOUND;
 }
 
-int parse_int_param(char** src, int* dest)
+int parse_int_param(char **src, int *dest)
 {
   int cnt = 0;
   char str[128];
-  char* srcptr = *src;
+  char *srcptr = *src;
 
   while (*srcptr != ' ' && *srcptr != '\0') {
     if (*srcptr < '0' && *srcptr > '9')
@@ -364,9 +367,9 @@ int parse_int_param(char** src, int* dest)
   return RET_FOUND;
 }
 
-int skip_whitespace(char** orig)
+int skip_whitespace(char **orig)
 {
-  char* ptrstr = *orig;
+  char *ptrstr = *orig;
 
   // skip any spaces in str
   while (*ptrstr == ' ' || *ptrstr == '\t') {
@@ -379,7 +382,7 @@ int skip_whitespace(char** orig)
   return 1;
 }
 
-int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, int* pcnt)
+int parse_format_specifier(char **pptrformat, char **pptrstr, va_list *pargs, int *pcnt)
 {
   int found;
   if (**pptrformat == '%') {
@@ -387,7 +390,7 @@ int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, in
     if (**pptrformat == 's') {
       if (!skip_whitespace(pptrstr))
         return RET_FAIL;
-      found = parse_string_param(pptrstr, va_arg(*pargs, char*));
+      found = parse_string_param(pptrstr, va_arg(*pargs, char *));
       if (found)
         (*pcnt)++;
       else
@@ -396,7 +399,7 @@ int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, in
     else if (**pptrformat == 'd') {
       if (!skip_whitespace(pptrstr))
         return 0;
-      found = parse_int_param(pptrstr, va_arg(*pargs, int*));
+      found = parse_int_param(pptrstr, va_arg(*pargs, int *));
       if (found)
         (*pcnt)++;
       else
@@ -411,7 +414,7 @@ int parse_format_specifier(char** pptrformat, char** pptrstr, va_list* pargs, in
   return RET_NOT_FOUND;
 }
 
-int parse_non_whitespace(char** pptrformat, char** pptrstr)
+int parse_non_whitespace(char **pptrformat, char **pptrstr)
 {
   if (**pptrformat != ' ') {
     if (!skip_whitespace(pptrstr))
@@ -425,14 +428,14 @@ int parse_non_whitespace(char** pptrformat, char** pptrstr)
   return 1;
 }
 
-int parse_command(const char* str, const char* format, ...)
+int parse_command(const char *str, const char *format, ...)
 {
   va_list args;
   va_start(args, format);
 
   // scan through str looking for '%' tokens
-  char* ptrstr = (char*)str;
-  char* ptrformat = (char*)format;
+  char *ptrstr = (char *)str;
+  char *ptrformat = (char *)format;
   int cnt = 0;
 
   while (*ptrformat != '\0') {
@@ -451,7 +454,7 @@ int parse_command(const char* str, const char* format, ...)
   return cnt;
 }
 
-int execute_command(char* cmd)
+int execute_command(char *cmd)
 {
   int cluster_num = 0;
   unsigned int sector_num;
@@ -519,7 +522,7 @@ int execute_command(char* cmd)
     show_local_directory(NULL);
   }
   else if (parse_command(cmd, "put %s", src) == 1) {
-    char* dest = src;
+    char *dest = src;
     // Set destination name to last element of source name, if no destination name provided
     for (int i = 0; src[i]; i++)
       if (src[i] == '/')
@@ -573,7 +576,7 @@ int execute_command(char* cmd)
     show_vbrinfo();
   }
   else if (strncmp(cmd, "poke ", 5) == 0) {
-    parse_pokes(cmd+5);
+    parse_pokes(cmd + 5);
   }
   else if (sscanf(cmd, "fhget %d %s", &fhnum, src) == 2) {
     perform_filehost_get(fhnum, src);
@@ -645,7 +648,7 @@ int execute_command(char* cmd)
 extern int debug_serial;
 
 #ifdef WINDOWS
-char* getpass(char* prompt)
+char *getpass(char *prompt)
 {
   printf("%s", prompt);
   static char password[128];
@@ -654,26 +657,25 @@ char* getpass(char* prompt)
 
   for (;;) {
     int c = _getch();
-    switch (c)
-    {
-      case '\r':
-      case '\n':
-      case EOF:
-        _putch('\n');
-        break;
-      case 8: // backspace
-        if (idx > 0) {
-          idx--;
-          password[idx] = '\0';
-          _putch(8);
-        }
-        continue;
-      default:
-        _putch('*'); //mask
-        password[idx] = c;
-        idx++;
+    switch (c) {
+    case '\r':
+    case '\n':
+    case EOF:
+      _putch('\n');
+      break;
+    case 8: // backspace
+      if (idx > 0) {
+        idx--;
         password[idx] = '\0';
-        continue;
+        _putch(8);
+      }
+      continue;
+    default:
+      _putch('*'); // mask
+      password[idx] = c;
+      idx++;
+      password[idx] = '\0';
+      continue;
     }
     break;
   }
@@ -681,7 +683,7 @@ char* getpass(char* prompt)
 }
 #endif
 
-int DIRTYMOCK(main)(int argc, char** argv)
+int DIRTYMOCK(main)(int argc, char **argv)
 {
 #ifdef WINDOWS
   // working around mingw64-stdout line buffering issue with advice suggested here:
@@ -832,7 +834,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
       }
     }
 #else
-    char* cmd = NULL;
+    char *cmd = NULL;
     using_history();
     int ret = snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
     if (ret < 0)
@@ -938,7 +940,7 @@ int load_helper(void)
       request_remotesd_version();
       sleep(1);
       char buffer[8193];
-      int bytes = serialport_read(fd, (unsigned char*)buffer, 8192);
+      int bytes = serialport_read(fd, (unsigned char *)buffer, 8192);
       buffer[8192] = 0;
       if (bytes >= (int)strlen("MEGA65FT1.0")) {
         for (int i = 0; i < bytes - strlen("MEGA65FT1.0"); i++) {
@@ -999,8 +1001,8 @@ uint8_t q_rle_count = 0, q_raw_count = 0, q_rle_enable = 0;
 void queue_data_decode(uint8_t v)
 {
   if (0)
-    log_debug("decoding $%02x, rle_count=%d, raw_count=%d, data_byte_count=$%04x",
-        v, q_rle_count, q_raw_count, data_byte_count);
+    log_debug(
+        "decoding $%02x, rle_count=%d, raw_count=%d, data_byte_count=$%04x", v, q_rle_count, q_raw_count, data_byte_count);
   if (q_rle_count) {
     //    fprintf(stderr,"$%02x x byte $%02x\n",q_rle_count,v);
     data_byte_count -= q_rle_count;
@@ -1041,7 +1043,7 @@ void queue_data_decode_raw(uint8_t v)
     data_byte_count--;
 }
 
-void queue_add_job(uint8_t* j, int len)
+void queue_add_job(uint8_t *j, int len)
 {
   bcopy(j, &queue_cmds[queue_addr - 0xc001], len);
   queue_jobs++;
@@ -1082,21 +1084,21 @@ void job_process_results(void)
         recent[30] = buff[i];
         recent[31] = 0;
         // fprintf(stderr,"i=%d, b=%d, recent[30-10]='%s'\n",i,b,&recent[30-10]);
-        if (!strncmp((char*)&recent[30 - 10], "FTBATCHDONE", 11)) {
+        if (!strncmp((char *)&recent[30 - 10], "FTBATCHDONE", 11)) {
           long long endtime = gettime_us();
           if (debug_rx)
             printf("%lld: Saw end of batch job after %lld usec\n", endtime - start_usec, endtime - now);
           //	  dump_bytes(0,"read data",queue_read_data,queue_read_len);
           return;
         }
-        if (!strncmp((char*)recent, "FTJOBDONE:", 10)) {
-          int jn = atoi((char*)&recent[10]);
+        if (!strncmp((char *)recent, "FTJOBDONE:", 10)) {
+          int jn = atoi((char *)&recent[10]);
           if (debug_rx)
             printf("Saw job #%d completion.\n", jn);
         }
         int j_addr, n;
         uint32_t transfer_size;
-        int fn = sscanf((char*)recent, "FTJOBDATA:%x:%x:%n", &j_addr, &transfer_size, &n);
+        int fn = sscanf((char *)recent, "FTJOBDATA:%x:%x:%n", &j_addr, &transfer_size, &n);
         if (fn == 2) {
           if (debug_rx)
             printf("Spotted job data: Reading $%x bytes of RLE data, offset %d,"
@@ -1115,7 +1117,7 @@ void job_process_results(void)
         }
         // NOTE: the tricky '%n' specifier at the end.
         // It's the count of the number of characters of the format string already processed by the function
-        fn = sscanf((char*)recent, "FTJOBDATR:%x:%x:%n", &j_addr, &transfer_size, &n);
+        fn = sscanf((char *)recent, "FTJOBDATR:%x:%x:%n", &j_addr, &transfer_size, &n);
         if (fn == 2) {
           if (debug_rx)
             // note that we're hoping that recent[n] and onwards contain the bytes immediately *after* 'FTJOBDATR:%x:%x:'
@@ -1207,7 +1209,7 @@ int execute_write_queue(void)
   return retVal;
 }
 
-void queue_write_sector(uint32_t sector_number, uint8_t* buffer)
+void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
 {
   // Merge writes to same sector
   for (int i = 0; i < write_sector_count; i++) {
@@ -1265,7 +1267,7 @@ void queue_read_sectors(uint32_t sector_number, uint16_t sector_count)
 void queue_read_flash(uint32_t flash_address, uint16_t sector_count)
 {
   uint8_t job[7];
-  job[0] = 0x0f; 
+  job[0] = 0x0f;
   job[1] = sector_count >> 0;
   job[2] = sector_count >> 8;
   job[3] = flash_address >> 0;
@@ -1275,7 +1277,6 @@ void queue_read_flash(uint32_t flash_address, uint16_t sector_count)
   //  printf("queue reading %d sectors, beginning with sector $%08x\n",sector_count,sector_number);
   queue_add_job(job, 7);
 }
-
 
 void queue_read_mem(uint32_t mega65_address, uint32_t len)
 {
@@ -1294,7 +1295,7 @@ void queue_read_mem(uint32_t mega65_address, uint32_t len)
 }
 
 // XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
-int read_flash(const unsigned int flash_address, unsigned char* buffer)
+int read_flash(const unsigned int flash_address, unsigned char *buffer)
 {
   int retVal = 0;
   do {
@@ -1304,8 +1305,7 @@ int read_flash(const unsigned int flash_address, unsigned char* buffer)
     queue_read_flash(flash_address, batch_read_size);
     queue_execute();
 
-    bcopy(queue_read_data, buffer, 64*512);
-    
+    bcopy(queue_read_data, buffer, 64 * 512);
 
   } while (0);
   if (retVal)
@@ -1313,7 +1313,7 @@ int read_flash(const unsigned int flash_address, unsigned char* buffer)
   return retVal;
 }
 
-int read_sector_from_device(const unsigned int sector_number, unsigned char* buffer)
+int read_sector_from_device(const unsigned int sector_number, unsigned char *buffer)
 {
   fseeko(fsdcard, sector_number * 512LL, SEEK_SET);
   fread(buffer, 512, 1, fsdcard);
@@ -1321,9 +1321,8 @@ int read_sector_from_device(const unsigned int sector_number, unsigned char* buf
   return 0;
 }
 
-
 // XXX - DO NOT USE A BUFFER THAT IS ON THE STACK OR BAD BAD THINGS WILL HAPPEN
-int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buffer, int useCache, int readAhead)
+int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char *buffer, int useCache, int readAhead)
 {
   int retVal = 0;
   if (direct_sdcard_device)
@@ -1393,7 +1392,7 @@ int DIRTYMOCK(read_sector)(const unsigned int sector_number, unsigned char* buff
 
 unsigned char verify[512];
 
-int write_sector_to_device(const unsigned int sector_number, unsigned char* buffer)
+int write_sector_to_device(const unsigned int sector_number, unsigned char *buffer)
 {
   fseeko(fsdcard, sector_number * 512LL, SEEK_SET);
   fwrite(buffer, 512, 1, fsdcard);
@@ -1401,7 +1400,7 @@ int write_sector_to_device(const unsigned int sector_number, unsigned char* buff
   return 0;
 }
 
-int DIRTYMOCK(write_sector)(const unsigned int sector_number, unsigned char* buffer)
+int DIRTYMOCK(write_sector)(const unsigned int sector_number, unsigned char *buffer)
 {
   if (direct_sdcard_device)
     return write_sector_to_device(sector_number, buffer);
@@ -1454,7 +1453,7 @@ int open_file_system(void)
     }
 
     for (int i = 0; i < 4; i++) {
-      unsigned char* part_ent = &mbr[0x1be + (i * 0x10)];
+      unsigned char *part_ent = &mbr[0x1be + (i * 0x10)];
       // dump_bytes(0,"partent",part_ent,16);
       if (part_ent[4] == 0x0c || part_ent[4] == 0x0b) {
         partition_start = part_ent[8] + (part_ent[9] << 8) + (part_ent[10] << 16) + (part_ent[11] << 24);
@@ -1477,7 +1476,7 @@ int open_file_system(void)
         retVal = -1;
         break;
       }
-      if (strncmp("MEGA65SYS00", (char*)&syspart_sector0[0], 10)) {
+      if (strncmp("MEGA65SYS00", (char *)&syspart_sector0[0], 10)) {
         log_error("MEGA65 System Partition is missing MEGA65SYS00 marker");
         dump_bytes(0, "SYSPART Sector 0", syspart_sector0, 512);
         retVal = -1;
@@ -1584,7 +1583,7 @@ unsigned int get_next_cluster(int cluster)
   return retVal;
 }
 
-BOOL name_match(struct m65dirent* de, char* name)
+BOOL name_match(struct m65dirent *de, char *name)
 {
   return !strcasecmp(de->d_name, name) || !strcasecmp(de->d_longname, name);
 }
@@ -1602,7 +1601,7 @@ int vfat_dir_sector = 0;
 int vfat_dir_sector_in_cluster = 0;
 int vfat_dir_sector_offset = 0;
 
-int fat_opendir(char* path, int show_errmsg)
+int fat_opendir(char *path, int show_errmsg)
 {
   int retVal = 0;
   do {
@@ -1744,14 +1743,14 @@ void debug_vfatchunk(void)
   printf("\n");
 }
 
-void copy_to_dnamechunk_from_offset(char* dnamechunk, int offset, int numuc2chars)
+void copy_to_dnamechunk_from_offset(char *dnamechunk, int offset, int numuc2chars)
 {
   for (int k = 0; k < numuc2chars; k++) {
     dnamechunk[k] = dir_sector_buffer[dir_sector_offset + offset + k * 2];
   }
 }
 
-void copy_vfat_chars_into_dname(char* dname, int seqnumber)
+void copy_vfat_chars_into_dname(char *dname, int seqnumber)
 {
   // increment char-pointer to the seqnumber string chunk we'll copy across
   dname = dname + 13 * (seqnumber - 1);
@@ -1762,7 +1761,7 @@ void copy_vfat_chars_into_dname(char* dname, int seqnumber)
   copy_to_dnamechunk_from_offset(dname, 0x1C, 2);
 }
 
-void extract_out_dos8_3name(char* d_name)
+void extract_out_dos8_3name(char *d_name)
 {
   int namelen = 0;
   int nt_flags = dir_sector_buffer[dir_sector_offset + 0x0C];
@@ -1800,7 +1799,7 @@ void extract_out_dos8_3name(char* d_name)
   }
 }
 
-int fat_readdir(struct m65dirent* d, int extend_dir_flag)
+int fat_readdir(struct m65dirent *d, int extend_dir_flag)
 {
   int retVal = 0;
   int deletedEntry = 0;
@@ -2213,13 +2212,13 @@ unsigned int find_contiguous_clusters(unsigned int total_clusters)
 }
 
 typedef struct _llist {
-  void* item;
-  struct _llist* next;
+  void *item;
+  struct _llist *next;
 } llist;
 
-void llist_free(llist* lstitem)
+void llist_free(llist *lstitem)
 {
-  llist* next;
+  llist *next;
   while (lstitem != NULL) {
     free(lstitem->item);
     next = lstitem->next;
@@ -2228,26 +2227,26 @@ void llist_free(llist* lstitem)
   }
 }
 
-llist* llist_new(void)
+llist *llist_new(void)
 {
-  llist* lst = (llist*)malloc(sizeof(llist));
+  llist *lst = (llist *)malloc(sizeof(llist));
   memset(lst, 0, sizeof(llist));
   return lst;
 }
 
-void llist_add(llist* lst, void* item, int compare(void*, void*))
+void llist_add(llist *lst, void *item, int compare(void *, void *))
 {
   if (lst->item == NULL) {
     lst->item = item;
     return;
   }
 
-  llist* prev = NULL;
+  llist *prev = NULL;
 
   while (lst != NULL) {
     // we found a home for it?
     if (compare(lst->item, item) > 0) {
-      llist* mvlst = llist_new();
+      llist *mvlst = llist_new();
       mvlst->item = lst->item;
       mvlst->next = lst->next;
 
@@ -2259,15 +2258,15 @@ void llist_add(llist* lst, void* item, int compare(void*, void*))
     lst = lst->next;
   }
   // couldn't insert before, so add to end
-  llist* lstnew = llist_new();
+  llist *lstnew = llist_new();
   lstnew->item = item;
   prev->next = lstnew;
 }
 
-int compare_dirents(void* s, void* d)
+int compare_dirents(void *s, void *d)
 {
-  struct m65dirent* src = (struct m65dirent*)s;
-  struct m65dirent* dest = (struct m65dirent*)d;
+  struct m65dirent *src = (struct m65dirent *)s;
+  struct m65dirent *dest = (struct m65dirent *)d;
   // both dirs?
   if ((dest->d_attr & 0x10) && (src->d_attr & 0x10)) {
     // compare filenames
@@ -2284,7 +2283,7 @@ int compare_dirents(void* s, void* d)
     return stricmp(src->d_name, dest->d_name);
 }
 
-int read_direntries(llist* lst, char* path)
+int read_direntries(llist *lst, char *path)
 {
   struct m65dirent de;
 
@@ -2295,7 +2294,7 @@ int read_direntries(llist* lst, char* path)
   while (!fat_readdir(&de, FALSE)) {
     if (!de.d_name[0])
       continue;
-    struct m65dirent* denew = (struct m65dirent*)malloc(sizeof(struct m65dirent));
+    struct m65dirent *denew = (struct m65dirent *)malloc(sizeof(struct m65dirent));
     memcpy(denew, &de, sizeof(struct m65dirent));
     llist_add(lst, denew, compare_dirents);
   }
@@ -2303,10 +2302,10 @@ int read_direntries(llist* lst, char* path)
   return 1;
 }
 
-int contains_dir(llist* lst, char* path)
+int contains_dir(llist *lst, char *path)
 {
   while (lst != NULL && lst->item != NULL) {
-    struct m65dirent* itm = (struct m65dirent*)lst->item;
+    struct m65dirent *itm = (struct m65dirent *)lst->item;
     if (itm->d_attr & 0x10 && strcmp(itm->d_name, path) == 0)
       return 1;
 
@@ -2329,7 +2328,7 @@ int compare_char(char a, char b, int case_sensitive)
 // Initial effort borrowed from Robert James Mieta's snippet in this thread:
 // - https://stackoverflow.com/questions/23457305/compare-strings-with-wildcard
 // Needed a bit of refinement to get the wildcards working for me though.
-int is_match(char* line, char* pattern, int case_sensitive)
+int is_match(char *line, char *pattern, int case_sensitive)
 {
   int wildcard = 0;
 
@@ -2367,10 +2366,10 @@ int is_match(char* line, char* pattern, int case_sensitive)
   }
 }
 
-void show_local_directory(char* searchpattern)
+void show_local_directory(char *searchpattern)
 {
-  DIR* d;
-  struct dirent* dir;
+  DIR *d;
+  struct dirent *dir;
 
   // list directories first
   d = opendir(".");
@@ -2415,13 +2414,13 @@ void show_local_pwd(void)
   }
 }
 
-void change_local_dir(char* path)
+void change_local_dir(char *path)
 {
   if (chdir(path))
     printf("ERROR: Failed to change directory (%s)!\n", path);
 }
 
-void change_dir(char* path)
+void change_dir(char *path)
 {
   if (path[0] == '/') {
     // absolute path
@@ -2484,7 +2483,7 @@ void change_dir(char* path)
   }
 }
 
-int read_remote_dirents(llist* lst_dirents, char* path, char** psearchterm)
+int read_remote_dirents(llist *lst_dirents, char *path, char **psearchterm)
 {
   if (!file_system_found)
     open_file_system();
@@ -2519,7 +2518,7 @@ int read_remote_dirents(llist* lst_dirents, char* path, char** psearchterm)
   return TRUE;
 }
 
-char* get_datetime_str(struct tm* tm)
+char *get_datetime_str(struct tm *tm)
 {
   static char s[20]; /* strlen("2009-08-10 18:17:54") + 1 */
   strftime(s, 20, "%Y-%m-%d %H:%M:%S", tm);
@@ -2527,7 +2526,7 @@ char* get_datetime_str(struct tm* tm)
   return s;
 }
 
-int show_directory(char* path)
+int show_directory(char *path)
 {
   int dir_count = 0;
   int file_count = 0;
@@ -2535,8 +2534,8 @@ int show_directory(char* path)
   if (!path || strlen(path) == 0)
     path = current_dir;
 
-  llist* lst_dirents = llist_new();
-  char* searchterm = NULL;
+  llist *lst_dirents = llist_new();
+  char *searchterm = NULL;
 
   int retVal = 0;
 
@@ -2546,9 +2545,9 @@ int show_directory(char* path)
       break;
     }
 
-    llist* cur = lst_dirents;
+    llist *cur = lst_dirents;
     while (cur != NULL && cur->item != NULL) {
-      struct m65dirent* itm = (struct m65dirent*)cur->item;
+      struct m65dirent *itm = (struct m65dirent *)cur->item;
 
       if (searchterm && !is_match(itm->d_name, searchterm, TRUE) && !is_match(itm->d_longname, searchterm, TRUE)) {
         cur = cur->next;
@@ -2561,12 +2560,14 @@ int show_directory(char* path)
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
         file_count++;
-        printf("%12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
+        printf("%12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
+            itm->d_longname);
       }
       if (dirent_raw == 1) {
         dump_bytes(0, "dirent raw", itm->de_raw, 32);
         printf("type: $%02X, cluster=%ld ($%08lX), sector=%ld, sec_offset=$%04X\n"
-               "  data_cluster=%ld ($%08lX)\n", itm->d_type, itm->de_cluster, itm->de_cluster, itm->de_sector, itm->de_sector_offset, itm->d_ino, itm->d_ino);
+               "  data_cluster=%ld ($%08lX)\n",
+            itm->d_type, itm->de_cluster, itm->de_cluster, itm->de_sector, itm->de_sector_offset, itm->d_ino, itm->d_ino);
         // show dirent_raw and parse info here
       }
       cur = cur->next;
@@ -2625,7 +2626,8 @@ void show_clustermap(void)
     int clustermap_val = read_int32_from_offset_in_buffer(clustermap_offset);
     clustermap_val &= 0x0fffffff; // map out flags in top 4 bits
 
-    int next_clustermap_sector = partition_start + first_cluster_sector + (clustermap_val - first_cluster) * sectors_per_cluster;
+    int next_clustermap_sector = partition_start + first_cluster_sector
+                               + (clustermap_val - first_cluster) * sectors_per_cluster;
     printf("%d:  %d  ($%08X)  (sector=%d)\n", clustermap_idx, clustermap_val, clustermap_val, next_clustermap_sector);
   }
 }
@@ -2644,7 +2646,7 @@ void show_cluster(int cluster_num)
 
 void dump_sectors(void)
 {
-  FILE* fsave = fopen(secdump_file, "wb");
+  FILE *fsave = fopen(secdump_file, "wb");
   for (int sector = secdump_start; sector < (secdump_start + secdump_count); sector++) {
     read_sector(sector, dir_sector_buffer, CACHE_YES, 0);
     fwrite(dir_sector_buffer, 1, 512, fsave);
@@ -2660,7 +2662,7 @@ void restore_sectors(void)
   stat(secrestore_file, &st);
   int secrestore_count = st.st_size / 512;
 
-  FILE* fload = fopen(secrestore_file, "rb");
+  FILE *fload = fopen(secrestore_file, "rb");
   for (int sector = secrestore_start; sector < (secrestore_start + secrestore_count); sector++) {
     fread(dir_sector_buffer, 1, 512, fload);
     write_sector(sector, dir_sector_buffer);
@@ -2671,7 +2673,7 @@ void restore_sectors(void)
   printf("\rLoaded file \"%s\" at starting-sector %d.\n", secrestore_file, secrestore_start);
 }
 
-int parse_value(char* strval)
+int parse_value(char *strval)
 {
   int retval = 0;
 
@@ -2693,9 +2695,9 @@ void poke_sector(void)
   write_sector(poke_secnum, dir_sector_buffer);
 }
 
-void parse_pokes(char* cmd)
+void parse_pokes(char *cmd)
 {
-  char* tok = strtok(cmd, " ");
+  char *tok = strtok(cmd, " ");
 
   if (tok == NULL) {
     printf("ERROR: invalid arguments: Sector number not found\n");
@@ -2725,10 +2727,9 @@ void parse_pokes(char* cmd)
   execute_write_queue();
 }
 
-
-int endswith(char* fname, char* ext)
+int endswith(char *fname, char *ext)
 {
-  char* actual_ext = strrchr(fname, '.');
+  char *actual_ext = strrchr(fname, '.');
   if (!ext)
     return 0;
 
@@ -2738,7 +2739,7 @@ int endswith(char* fname, char* ext)
   return 0;
 }
 
-void perform_filehost_read(char* searchterm)
+void perform_filehost_read(char *searchterm)
 {
   if (username != NULL) {
     log_in_and_get_cookie(username, password);
@@ -2747,7 +2748,7 @@ void perform_filehost_read(char* searchterm)
   read_filehost_struct(searchterm);
 }
 
-int get_first_sector_of_file(char* name)
+int get_first_sector_of_file(char *name)
 {
   struct m65dirent de;
 
@@ -2766,8 +2767,8 @@ int get_first_sector_of_file(char* name)
 
 void list_all_roms(void)
 {
-  llist* lst_dirents = llist_new();
-  char* searchterm = "MEGA6*.ROM";
+  llist *lst_dirents = llist_new();
+  char *searchterm = "MEGA6*.ROM";
 
   do {
     if (!file_system_found)
@@ -2780,9 +2781,9 @@ void list_all_roms(void)
     if (!read_direntries(lst_dirents, "/"))
       break;
 
-    llist* cur = lst_dirents;
+    llist *cur = lst_dirents;
     while (cur != NULL) {
-      struct m65dirent* itm = (struct m65dirent*)cur->item;
+      struct m65dirent *itm = (struct m65dirent *)cur->item;
 
       if (searchterm && !is_match(itm->d_name, searchterm, 1)) {
         cur = cur->next;
@@ -2803,12 +2804,12 @@ void list_all_roms(void)
 
       // closed-rom?
       if (show_buf[0x16] == 'V') {
-        strncpy(version, (char*)show_buf + 0x16, 7);
+        strncpy(version, (char *)show_buf + 0x16, 7);
         version[7] = '\0';
       }
       // open-rom
       else if (show_buf[0x10] == 'O' || show_buf[0x10] == 'V') {
-        strncpy(version, (char*)show_buf + 0x10, 9);
+        strncpy(version, (char *)show_buf + 0x10, 9);
         version[9] = '\0';
       }
 
@@ -2821,10 +2822,11 @@ void list_all_roms(void)
   llist_free(lst_dirents);
 }
 
-void wrap_upload(char* fname)
+void wrap_upload(char *fname)
 {
-  char* d81name;
-  if (!(d81name = create_d81_for_prg(fname))) return;
+  char *d81name;
+  if (!(d81name = create_d81_for_prg(fname)))
+    return;
   strcpy(fname, d81name);
 
   if (fname) {
@@ -2835,12 +2837,12 @@ void wrap_upload(char* fname)
   }
 }
 
-void perform_filehost_get(int num, char* destname)
+void perform_filehost_get(int num, char *destname)
 {
-  char* fname = download_file_from_filehost(num);
+  char *fname = download_file_from_filehost(num);
 
   if (endswith(fname, ".prg") || endswith(fname, ".PRG")) {
-    char* d81name = create_d81_for_prg(fname);
+    char *d81name = create_d81_for_prg(fname);
     strcpy(fname, d81name);
   }
 
@@ -2863,7 +2865,7 @@ void perform_filehost_get(int num, char* destname)
 //   used on the m65 and pc side.
 typedef struct {
   int model_id;
-  char* name;
+  char *name;
   int slot_size; // in MB
   int slot_count;
   char fpga_part[16];
@@ -2886,7 +2888,7 @@ models_type models[] = {
 };
 // clang-format on
 
-models_type* get_model(uint8_t model_id)
+models_type *get_model(uint8_t model_id)
 {
   uint8_t k;
   uint8_t l = sizeof(models) / sizeof(models_type);
@@ -2900,9 +2902,9 @@ models_type* get_model(uint8_t model_id)
   return &models[l - 1]; // the last item is '? unknown ?'
 }
 
-int get_model_id_from_core_file(char* corefile)
+int get_model_id_from_core_file(char *corefile)
 {
-  FILE* f = fopen(corefile, "rb");
+  FILE *f = fopen(corefile, "rb");
 
   unsigned char buffer[512];
   bzero(buffer, 512);
@@ -2916,7 +2918,7 @@ int get_model_id_from_core_file(char* corefile)
   return 0;
 }
 
-int check_model_id_field(char* corefile)
+int check_model_id_field(char *corefile)
 {
   uint8_t hardware_model_id = mega65_peek(0xFFD3629);
   uint8_t core_model_id;
@@ -2951,7 +2953,7 @@ int check_model_id_field(char* corefile)
   return 0;
 }
 
-void write_tcl_script(models_type* mdl)
+void write_tcl_script(models_type *mdl)
 {
   char fpga[128];
   char qspi[128];
@@ -2962,7 +2964,7 @@ void write_tcl_script(models_type* mdl)
   sprintf(hwcfg, "[ get_property PROGRAM.HW_CFGMEM %s]", fpga);
   sprintf(hwcfgtype, "[ get_property PROGRAM.HW_CFGMEM_TYPE %s]", fpga);
 
-  FILE* f = fopen("write-flash.tcl", "wt");
+  FILE *f = fopen("write-flash.tcl", "wt");
   fprintf(f, "open_hw\n");
   fprintf(f, "connect_hw_server\n");
   fprintf(f, "open_hw_target\n");
@@ -2993,7 +2995,7 @@ void write_tcl_script(models_type* mdl)
   fclose(f);
 }
 
-int bit2mcs(int argc, char* argv[]);
+int bit2mcs(int argc, char *argv[]);
 
 BOOL initial_flashing_checks(void)
 {
@@ -3006,7 +3008,7 @@ BOOL initial_flashing_checks(void)
   // Query m65-hardware to learn what the m65model type is
   // Based on model-type, assess if slotnum is valid
   uint8_t hardware_model_id = mega65_peek(0xFFD3629);
-  models_type* mdl = get_model(hardware_model_id);
+  models_type *mdl = get_model(hardware_model_id);
   if (slotnum >= mdl->slot_count) {
     printf("- Valid slots on your hardware range from 0 to %d.\n", mdl->slot_count - 1);
     return FALSE;
@@ -3015,10 +3017,10 @@ BOOL initial_flashing_checks(void)
   return TRUE;
 }
 
-void flash_core_to_slot(char* fname, int slotnum)
+void flash_core_to_slot(char *fname, int slotnum)
 {
   uint8_t hardware_model_id = mega65_peek(0xFFD3629);
-  models_type* mdl = get_model(hardware_model_id);
+  models_type *mdl = get_model(hardware_model_id);
 
   // Assure this is a .cor file
   if (stricmp(get_file_extension(fname), ".cor") != 0) {
@@ -3034,7 +3036,7 @@ void flash_core_to_slot(char* fname, int slotnum)
   char offset[16];
   sprintf(offset, "%08X", slotnum * mdl->slot_size * BYTES_PER_MB);
   printf("Creating 'out.mcs' at offset: %s...\n", offset);
-  char* argv[4] = { "progname", fname, "out.mcs", offset };
+  char *argv[4] = { "progname", fname, "out.mcs", offset };
   bit2mcs(4, argv);
 
   printf("Creating 'write-flash.tcl'...\n");
@@ -3067,7 +3069,7 @@ void flash_core_to_slot(char* fname, int slotnum)
   exit(0);
 }
 
-void perform_flash(char* fname, int slotnum)
+void perform_flash(char *fname, int slotnum)
 {
   if (!initial_flashing_checks())
     return;
@@ -3081,10 +3083,9 @@ void perform_filehost_flash(int fhnum, int slotnum)
     return;
 
   // grab the file from the filehost
-  char* fname = download_file_from_filehost(fhnum);
+  char *fname = download_file_from_filehost(fhnum);
 
   flash_core_to_slot(fname, slotnum);
-
 }
 
 void show_secinfo(void)
@@ -3124,26 +3125,26 @@ void show_vbrinfo(void)
   printf("  {\n");
   printf("    DOS 2.0 BPB\n");
   printf("    {\n");
-  printf("      Bytes per logical sector = %d\n", *(unsigned short*)&sector[0x0B]);
+  printf("      Bytes per logical sector = %d\n", *(unsigned short *)&sector[0x0B]);
   printf("      Logical sectors per cluster = %d\n", sector[0x0D]);
-  printf("      Count of reserved logical sectors before 1st FAT = %d\n", *(unsigned short*)&sector[0x0E]);
+  printf("      Count of reserved logical sectors before 1st FAT = %d\n", *(unsigned short *)&sector[0x0E]);
   printf("      Number of FATs = %d\n", sector[0x10]);
-  printf("      Max no# of FAT12/16 root dir entries = %d\n", *(unsigned short*)&sector[0x11]);
-  printf("      Total logical sector (0 for FAT32) = %d\n", *(unsigned short*)&sector[0x13]);
+  printf("      Max no# of FAT12/16 root dir entries = %d\n", *(unsigned short *)&sector[0x11]);
+  printf("      Total logical sector (0 for FAT32) = %d\n", *(unsigned short *)&sector[0x13]);
   printf("      Media Descriptor = 0x%02X\n", sector[0x15]);
-  printf("      Logical sectors per FAT (0 for FAT32) = %d\n", *(unsigned short*)&sector[0x16]);
+  printf("      Logical sectors per FAT (0 for FAT32) = %d\n", *(unsigned short *)&sector[0x16]);
   printf("    }\n");
-  printf("    Physical sectors per track (for INT 13h CHS geometry) = %d\n", *(unsigned short*)&sector[0x18]);
-  printf("    Number of heads (for disks with INT 13h CHS geometry) = %d\n", *(unsigned short*)&sector[0x1A]);
-  printf("    Count of hidden sectors preceding the partition of this FAT volume = %d\n", *(unsigned int*)&sector[0x1C]);
-  printf("    Total logical sectors (if greater than 65535) = %d\n", *(unsigned int*)&sector[0x20]);
+  printf("    Physical sectors per track (for INT 13h CHS geometry) = %d\n", *(unsigned short *)&sector[0x18]);
+  printf("    Number of heads (for disks with INT 13h CHS geometry) = %d\n", *(unsigned short *)&sector[0x1A]);
+  printf("    Count of hidden sectors preceding the partition of this FAT volume = %d\n", *(unsigned int *)&sector[0x1C]);
+  printf("    Total logical sectors (if greater than 65535) = %d\n", *(unsigned int *)&sector[0x20]);
   printf("  }\n");
-  printf("  Logical sectors per FAT = %d\n", *(unsigned int*)&sector[0x24]);
+  printf("  Logical sectors per FAT = %d\n", *(unsigned int *)&sector[0x24]);
   printf("  Drive description / mirroring flags = 0x%02X 0x%02X\n", sector[0x28], sector[0x29]);
   printf("  Version = 0x%02X 0x%02X\n", sector[0x2A], sector[0x2B]);
-  printf("  Cluster number of root directory start = %d\n", *(unsigned int*)&sector[0x2C]);
-  printf("  Logical sector number of FS Information Sector = %d\n", *(unsigned short*)&sector[0x30]);
-  printf("  First logical sector number of copy of 3 FAT boot sectors = %d\n", *(unsigned short*)&sector[0x32]);
+  printf("  Cluster number of root directory start = %d\n", *(unsigned int *)&sector[0x2C]);
+  printf("  Logical sector number of FS Information Sector = %d\n", *(unsigned short *)&sector[0x30]);
+  printf("  First logical sector number of copy of 3 FAT boot sectors = %d\n", *(unsigned short *)&sector[0x32]);
   printf("  Cf. 0x024 for FAT12/FAT16 (Physical Drive Number) = 0x%02X\n", sector[0x40]);
   printf("  Cf. 0x025 for FAT12/FAT16 (Used for various purposes; see FAT12/FAT16) = 0x%02X\n", sector[0x41]);
   printf("  Cf. 0x026 for FAT12/FAT16 (Extended boot signature, 0x29) = 0x%02X\n", sector[0x42]);
@@ -3188,8 +3189,8 @@ void show_mbrinfo(void)
     h = sector[pt_ofs + 0x06] & 0x3F;
     s = sector[pt_ofs + 0x05];
     printf("- Last sector chs: cylinder = %d, head = %d, sector = %d\n", c, h, s);
-    printf("- First sector LBA: %d (sector position)\n", *(unsigned int*)&sector[pt_ofs + 0x08]);
-    printf("- Number of sectors: %d\n", *(unsigned int*)&sector[pt_ofs + 0x0C]);
+    printf("- First sector LBA: %d (sector position)\n", *(unsigned int *)&sector[pt_ofs + 0x08]);
+    printf("- Number of sectors: %d\n", *(unsigned int *)&sector[pt_ofs + 0x0C]);
 
     part_cnt++;
     printf("\n");
@@ -3206,7 +3207,7 @@ unsigned int get_first_cluster_of_file(void)
        | (dir_sector_buffer[dir_sector_offset + 0x14] << 16) | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
 }
 
-int delete_single_file(char* name)
+int delete_single_file(char *name)
 {
   struct m65dirent de;
 
@@ -3257,10 +3258,10 @@ int delete_single_file(char* name)
   return 0;
 }
 
-int delete_file_or_dir(char* name)
+int delete_file_or_dir(char *name)
 {
-  llist* lst_dirents = llist_new();
-  char* searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
+  llist *lst_dirents = llist_new();
+  char *searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
 
   // if no wildcards in name, then just delete a single file
   if (!strstr(name, "*"))
@@ -3281,10 +3282,10 @@ int delete_file_or_dir(char* name)
     return FALSE;
   }
 
-  llist* cur = lst_dirents;
+  llist *cur = lst_dirents;
 
   while (cur != NULL) {
-    struct m65dirent* itm = (struct m65dirent*)cur->item;
+    struct m65dirent *itm = (struct m65dirent *)cur->item;
 
     if (!is_match(itm->d_name, name, 0) && !is_match(itm->d_longname, name, 0)) {
       cur = cur->next;
@@ -3314,7 +3315,7 @@ int delete_file_or_dir(char* name)
 // -1 = problems opening file-system
 // 0 = doesn't exist
 // 1 = exists
-int contains_file_or_dir(char* name)
+int contains_file_or_dir(char *name)
 {
   struct m65dirent de;
 
@@ -3347,7 +3348,8 @@ void wipe_direntries_of_current_file_or_dir(void)
     dir_cluster = vfat_dir_cluster;
     dir_sector = vfat_dir_sector;
     dir_sector_in_cluster = vfat_dir_sector_in_cluster;
-    dir_sector_offset = vfat_dir_sector_offset - 32; // the -32 is needed due to advance_to_next_entry() call doing a +32 initially
+    dir_sector_offset = vfat_dir_sector_offset
+                      - 32; // the -32 is needed due to advance_to_next_entry() call doing a +32 initially
 
     read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
 
@@ -3370,7 +3372,7 @@ void wipe_direntries_of_current_file_or_dir(void)
   execute_write_queue();
 }
 
-int rename_file_or_dir(char* name, char* dest_name)
+int rename_file_or_dir(char *name, char *dest_name)
 {
   int retVal = 0;
   do {
@@ -3397,7 +3399,7 @@ int rename_file_or_dir(char* name, char* dest_name)
     int attrib = dir_sector_buffer[dir_sector_offset + 0x0b];
 
     // Calculate checksum of 8.3 name
-    unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
+    unsigned char lfn_csum = lfn_checksum((unsigned char *)short_name);
 
     unsigned int first_cluster_of_file = calc_first_cluster_of_file();
     unsigned int size = calc_size_of_file();
@@ -3431,14 +3433,14 @@ int rename_file_or_dir(char* name, char* dest_name)
 
 // #ifdef USE_LFN
 
-BOOL is_long_name_needed(char* long_name, char* short_name)
+BOOL is_long_name_needed(char *long_name, char *short_name)
 {
   int needs_long_name = FALSE;
   int dot_count = 0;
   int base_len = 0;
   int ext_len = 0;
 
-  char* lastdot = strrchr(long_name, '.');
+  char *lastdot = strrchr(long_name, '.');
 
   for (int i = 0; long_name[i]; i++) {
     if (long_name[i] == '.') {
@@ -3493,7 +3495,7 @@ int num_digits(int i)
   return count;
 }
 
-void put_tilde_number_in_shortname(char* short_name, int i)
+void put_tilde_number_in_shortname(char *short_name, int i)
 {
   int length_of_number = num_digits(i);
   int ofs = 7;
@@ -3514,7 +3516,7 @@ void put_tilde_number_in_shortname(char* short_name, int i)
   // printf("  considering short-name '%s'...\n", short_name);
 }
 
-BOOL is_tilde_needed(char* longname)
+BOOL is_tilde_needed(char *longname)
 {
   int basename_len = strlen(longname);
   int suffix_len = 0;
@@ -3523,21 +3525,20 @@ BOOL is_tilde_needed(char* longname)
   if (longname[0] == '.')
     return TRUE;
 
-  char* pdot = strrchr(longname, '.');
-
+  char *pdot = strrchr(longname, '.');
 
   if (pdot) {
     basename_len = (int)(pdot - longname);
     suffix_len = strlen(pdot) - 1;
   }
 
-  if (basename_len <= 8 && suffix_len <=3)
+  if (basename_len <= 8 && suffix_len <= 3)
     return FALSE;
 
   return TRUE;
 }
 
-void get_dotted_shortname(char* short_name_with_dot, char* short_name)
+void get_dotted_shortname(char *short_name_with_dot, char *short_name)
 {
   int i = 0;
   for (i = 0; i < 8; i++) {
@@ -3569,7 +3570,7 @@ void get_dotted_shortname(char* short_name_with_dot, char* short_name)
 }
 
 // returns: 0 = doesn't need long name, 1 = needs long name
-int normalise_long_name(char* long_name, char* short_name, char* dir_name)
+int normalise_long_name(char *long_name, char *short_name, char *dir_name)
 {
   struct m65dirent de;
   int needs_long_name = 0;
@@ -3592,7 +3593,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
   if (needs_long_name && is_tilde_needed(long_name)) {
     // Put ~X suffix on base name.
     // XXX Needs to be unique in the sub-directory
-    for (int i = 1; ; i++) {  // endless loop till we find an available short-name
+    for (int i = 1;; i++) { // endless loop till we find an available short-name
       put_tilde_number_in_shortname(short_name, i);
 
       get_dotted_shortname(short_name_with_dot, short_name);
@@ -3611,7 +3612,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
   }
 
   if (needs_long_name && !is_tilde_needed(long_name)) {
-      get_dotted_shortname(short_name_with_dot, short_name);
+    get_dotted_shortname(short_name_with_dot, short_name);
   }
 
   if (needs_long_name)
@@ -3620,7 +3621,7 @@ int normalise_long_name(char* long_name, char* short_name, char* dir_name)
   return needs_long_name;
 }
 
-unsigned char lfn_checksum(const unsigned char* pFCBName)
+unsigned char lfn_checksum(const unsigned char *pFCBName)
 {
   int i;
   unsigned char sum = 0;
@@ -3666,13 +3667,12 @@ int extend_dir_cluster_chain(void)
   dir_sector_offset = -32;
   dir_sector_in_cluster = 0;
 
-
   read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
 
   return TRUE;
 }
 
-int calculate_needed_direntries_for_vfat(char* filename)
+int calculate_needed_direntries_for_vfat(char *filename)
 {
   int length = strlen(filename);
 
@@ -3702,7 +3702,7 @@ void write_file_size_into_direntry(unsigned int size)
   dir_sector_buffer[dir_sector_offset + 0x1F] = (size >> 24) & 0xff;
 }
 
-BOOL create_direntry_with_attrib(char* dest_name, int attrib)
+BOOL create_direntry_with_attrib(char *dest_name, int attrib)
 {
   char short_name[8 + 3 + 1];
 
@@ -3714,7 +3714,7 @@ BOOL create_direntry_with_attrib(char* dest_name, int attrib)
   BOOL needs_long_name = normalise_long_name(dest_name, short_name, current_dir);
 
   // Calculate checksum of 8.3 name
-  unsigned char lfn_csum = lfn_checksum((unsigned char*)short_name);
+  unsigned char lfn_csum = lfn_checksum((unsigned char *)short_name);
 
   int direntries_needed = 1;
   if (needs_long_name)
@@ -3733,7 +3733,7 @@ BOOL create_direntry_with_attrib(char* dest_name, int attrib)
   return TRUE;
 }
 
-int upload_single_file(char* name, char* dest_name)
+int upload_single_file(char *name, char *dest_name)
 {
   struct m65dirent de;
   int retVal = 0;
@@ -3824,7 +3824,7 @@ int upload_single_file(char* name, char* dest_name)
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
     unsigned int sector_number;
-    FILE* f = fopen(name, "rb");
+    FILE *f = fopen(name, "rb");
 
     if (!f) {
       printf("ERROR: Could not open file '%s' for reading.\n", name);
@@ -3909,10 +3909,10 @@ int upload_single_file(char* name, char* dest_name)
   return retVal;
 }
 
-int upload_file(char* name, char* dest_name)
+int upload_file(char *name, char *dest_name)
 {
-  DIR* d;
-  struct dirent* dir;
+  DIR *d;
+  struct dirent *dir;
 
   // if no wildcards in name, then just upload a single file
   if (!strstr(name, "*"))
@@ -3939,22 +3939,22 @@ int upload_file(char* name, char* dest_name)
   return 0;
 }
 
-void assemble_time_into_raw_at_offset(unsigned char* buffer, int offs, struct tm* tm)
+void assemble_time_into_raw_at_offset(unsigned char *buffer, int offs, struct tm *tm)
 {
   buffer[0x00 + offs] = (tm->tm_sec >> 1) & 0x1F; // 2 second resolution
   buffer[0x00 + offs] |= (tm->tm_min & 0x7) << 5;
 
-  buffer[0x00 + offs+1] = (tm->tm_min >> 3) & 0x7;
-  buffer[0x00 + offs+1] |= (tm->tm_hour) << 3;
+  buffer[0x00 + offs + 1] = (tm->tm_min >> 3) & 0x7;
+  buffer[0x00 + offs + 1] |= (tm->tm_hour) << 3;
 
-  buffer[0x00 + offs+2] = tm->tm_mday & 0x1f;
-  buffer[0x00 + offs+2] |= ((tm->tm_mon + 1) & 0x7) << 5;
+  buffer[0x00 + offs + 2] = tm->tm_mday & 0x1f;
+  buffer[0x00 + offs + 2] |= ((tm->tm_mon + 1) & 0x7) << 5;
 
-  buffer[0x00 + offs+3] = ((tm->tm_mon + 1) >> 3) & 0x1;
-  buffer[0x00 + offs+3] |= (tm->tm_year - 80) << 1;
+  buffer[0x00 + offs + 3] = ((tm->tm_mon + 1) >> 3) & 0x1;
+  buffer[0x00 + offs + 3] |= (tm->tm_year - 80) << 1;
 }
 
-void assemble_time_into_raw(unsigned char* buffer, struct tm* tm)
+void assemble_time_into_raw(unsigned char *buffer, struct tm *tm)
 {
   // create time+date
   assemble_time_into_raw_at_offset(buffer, 0x0e, tm);
@@ -3964,7 +3964,7 @@ void assemble_time_into_raw(unsigned char* buffer, struct tm* tm)
 }
 
 // Must be a single path segment.  Creating sub-directories requires multiple chdir/cd + mkdir calls
-int create_dir(char* dest_name)
+int create_dir(char *dest_name)
 {
   int parent_cluster = 2;
   int retVal = 0;
@@ -4085,12 +4085,12 @@ int create_dir(char* dest_name)
         // Build . and .. directory entries in first sector of directory
 
         time_t t = time(0);
-        struct tm* tm = localtime(&t);
+        struct tm *tm = localtime(&t);
 
         for (int i = 0; i < 11; i++)
           buffer[0x00 + i] = ' ';
         buffer[0x00 + 0] = '.';
-        buffer[0x00 + 0xb] = 0x10;                     // directory
+        buffer[0x00 + 0xb] = 0x10; // directory
 
         assemble_time_into_raw(&buffer[0x00], tm);
 
@@ -4103,7 +4103,7 @@ int create_dir(char* dest_name)
           buffer[0x20 + i] = ' ';
         buffer[0x20 + 0] = '.';
         buffer[0x20 + 1] = '.';
-        buffer[0x20 + 0xb] = 0x10;                     // directory
+        buffer[0x20 + 0xb] = 0x10; // directory
 
         assemble_time_into_raw(&buffer[0x20], tm);
 
@@ -4160,7 +4160,7 @@ int create_dir(char* dest_name)
 
 unsigned char download_buffer[512];
 
-int download_slot(int slot_number, char* dest_name)
+int download_slot(int slot_number, char *dest_name)
 {
   int retVal = 0;
   do {
@@ -4177,7 +4177,7 @@ int download_slot(int slot_number, char* dest_name)
       break;
     }
 
-    FILE* f = fopen(dest_name, "wb");
+    FILE *f = fopen(dest_name, "wb");
     if (!f) {
       printf("ERROR: Could not open file '%s' for writing\n", dest_name);
       retVal = -1;
@@ -4208,7 +4208,7 @@ int download_slot(int slot_number, char* dest_name)
   return retVal;
 }
 
-int download_flashslot(int slot_number, char* dest_name)
+int download_flashslot(int slot_number, char *dest_name)
 {
   int retVal = 0;
   do {
@@ -4219,7 +4219,7 @@ int download_flashslot(int slot_number, char* dest_name)
       break;
     }
 
-    FILE* f = fopen(dest_name, "wb");
+    FILE *f = fopen(dest_name, "wb");
     if (!f) {
       printf("ERROR: Could not open file '%s' for writing\n", dest_name);
       retVal = -1;
@@ -4227,15 +4227,15 @@ int download_flashslot(int slot_number, char* dest_name)
     }
     printf("Saving flash slot %d into '%s'\n", slot_number, dest_name);
 
-    for (int i = 0; i < 8192*1024; i+=512*64) {
-      unsigned char sector[512*64];
-      if (read_flash(slot_number*8192*1024+i, sector)) {
+    for (int i = 0; i < 8192 * 1024; i += 512 * 64) {
+      unsigned char sector[512 * 64];
+      if (read_flash(slot_number * 8192 * 1024 + i, sector)) {
         printf("ERROR: Could not read sector %d/%d of freeze slot %d (absolute sector %d)\n", i, syspart_slot_size,
-            slot_number, slot_number*8192*1024+i);
+            slot_number, slot_number * 8192 * 1024 + i);
         retVal = -1;
         break;
       }
-      fwrite(sector, 512*64, 1, f);
+      fwrite(sector, 512 * 64, 1, f);
       printf(".");
       fflush(stdout);
     }
@@ -4246,7 +4246,6 @@ int download_flashslot(int slot_number, char* dest_name)
 
   return retVal;
 }
-
 
 BOOL safe_open_dir(void)
 {
@@ -4266,7 +4265,7 @@ BOOL safe_open_dir(void)
   return TRUE;
 }
 
-BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
+BOOL find_file_in_curdir(char *filename, struct m65dirent *de)
 {
   if (!safe_open_dir())
     return FALSE;
@@ -4283,7 +4282,7 @@ BOOL find_file_in_curdir(char* filename, struct m65dirent* de)
   return FALSE;
 }
 
-char* find_long_name_in_curdir(char* filename)
+char *find_long_name_in_curdir(char *filename)
 {
   static struct m65dirent de;
   if (!safe_open_dir())
@@ -4297,7 +4296,7 @@ char* find_long_name_in_curdir(char* filename)
   return NULL;
 }
 
-char* get_current_short_name(void)
+char *get_current_short_name(void)
 {
   static struct m65dirent de;
   dir_sector_offset -= 32;
@@ -4317,7 +4316,7 @@ unsigned int calc_size_of_file(void)
        | (dir_sector_buffer[dir_sector_offset + 0x1E] << 16) | (dir_sector_buffer[dir_sector_offset + 0x1F] << 24);
 }
 
-BOOL create_directory_entry_for_shortname(char* short_name, int attrib)
+BOOL create_directory_entry_for_shortname(char *short_name, int attrib)
 {
   // Create directory entry, and write sector back to SD card
   unsigned char dir[32];
@@ -4332,7 +4331,7 @@ BOOL create_directory_entry_for_shortname(char* short_name, int attrib)
 
   // Store create time and date
   time_t t = time(0);
-  struct tm* tm = localtime(&t);
+  struct tm *tm = localtime(&t);
   assemble_time_into_raw(dir, tm);
 
   //	  dump_bytes(0,"New directory entry",dir,32);
@@ -4401,7 +4400,8 @@ BOOL find_contiguous_free_direntries(int direntries_needed)
     dir_cluster = start_dir_cluster;
     dir_sector = start_dir_sector;
     dir_sector_in_cluster = start_dir_sector_in_cluster;
-    dir_sector_offset = start_dir_sector_offset - 32; // the -32 is needed due to advance_to_next_entry() call doing a +32 initially
+    dir_sector_offset = start_dir_sector_offset
+                      - 32; // the -32 is needed due to advance_to_next_entry() call doing a +32 initially
 
     read_sector(partition_start + dir_sector, dir_sector_buffer, CACHE_YES, 0);
 
@@ -4411,8 +4411,7 @@ BOOL find_contiguous_free_direntries(int direntries_needed)
   return FALSE;
 }
 
-
-void copy_from_dnamechunk_to_offset(char* dnamechunk, unsigned char* dir, int offset, int numuc2chars)
+void copy_from_dnamechunk_to_offset(char *dnamechunk, unsigned char *dir, int offset, int numuc2chars)
 {
   for (int k = 0; k < numuc2chars; k++) {
     if (dnamechunk == NULL) {
@@ -4424,15 +4423,14 @@ void copy_from_dnamechunk_to_offset(char* dnamechunk, unsigned char* dir, int of
       dir[offset + k * 2 + 1] = 0;
       dnamechunk = NULL;
     }
-    else
-    {
+    else {
       dir[offset + k * 2] = (unsigned char)dnamechunk[k];
       dir[offset + k * 2 + 1] = 0;
     }
   }
 }
 
-void copy_vfat_chars_into_direntry(char* dname, unsigned char* dir, int seqnumber)
+void copy_vfat_chars_into_direntry(char *dname, unsigned char *dir, int seqnumber)
 {
   // increment char-pointer to the seqnumber string chunk we'll copy across
   dname = dname + 13 * (seqnumber - 1);
@@ -4452,7 +4450,7 @@ void copy_vfat_chars_into_direntry(char* dname, unsigned char* dir, int seqnumbe
   copy_from_dnamechunk_to_offset(dname, dir, 0x1C, 2);
 }
 
-BOOL write_vfat_direntry_chunk(int vfat_seq_id, char* filename, unsigned char lfn_csum)
+BOOL write_vfat_direntry_chunk(int vfat_seq_id, char *filename, unsigned char lfn_csum)
 {
   unsigned char dir[32];
   bzero(dir, 32);
@@ -4477,7 +4475,8 @@ BOOL write_vfat_direntry_chunk(int vfat_seq_id, char* filename, unsigned char lf
   return TRUE;
 }
 
-BOOL create_directory_entry_for_item(char* dest_name, char* short_name, unsigned char lfn_csum, BOOL needs_long_name, int attrib)
+BOOL create_directory_entry_for_item(
+    char *dest_name, char *short_name, unsigned char lfn_csum, BOOL needs_long_name, int attrib)
 {
   struct m65dirent de;
 
@@ -4485,9 +4484,10 @@ BOOL create_directory_entry_for_item(char* dest_name, char* short_name, unsigned
   if (needs_long_name) {
     int vfat_seq_id = calculate_needed_direntries_for_vfat(dest_name);
 
-    for ( ; vfat_seq_id > 0 ; vfat_seq_id--) {
+    for (; vfat_seq_id > 0; vfat_seq_id--) {
       if (!read_next_direntry_and_assure_is_free(&de)) {
-        printf("ERROR: direntry at sector=%ld, offset=$%04X is not free (but we thought it should have been)\n", de.de_sector, de.de_sector_offset);
+        printf("ERROR: direntry at sector=%ld, offset=$%04X is not free (but we thought it should have been)\n",
+            de.de_sector, de.de_sector_offset);
         return FALSE;
       }
 
@@ -4509,11 +4509,11 @@ BOOL create_directory_entry_for_item(char* dest_name, char* short_name, unsigned
   return TRUE;
 }
 
-char* get_file_extension(char* filename)
+char *get_file_extension(char *filename)
 {
   int i = strlen(filename) - 1;
   do {
-    char* c = filename + i;
+    char *c = filename + i;
     if (*c == '.')
       return c;
     i--;
@@ -4522,9 +4522,9 @@ char* get_file_extension(char* filename)
   return NULL;
 }
 
-BOOL is_d81_file(char* filename)
+BOOL is_d81_file(char *filename)
 {
-  char* ext = get_file_extension(filename);
+  char *ext = get_file_extension(filename);
 
   if (!strcmp(ext, ".d81") || !strcmp(ext, ".D81"))
     return TRUE;
@@ -4532,7 +4532,7 @@ BOOL is_d81_file(char* filename)
   return FALSE;
 }
 
-int is_fragmented(char* filename)
+int is_fragmented(char *filename)
 {
   int fragmented_flag = 0;
 
@@ -4558,7 +4558,7 @@ int is_fragmented(char* filename)
   return fragmented_flag;
 }
 
-int queue_mount_file(char* filename)
+int queue_mount_file(char *filename)
 {
   uint8_t job[66]; // for now, I made a max filename size of 64 bytes
                    // (1 byte for job-id, 1 byte for null-terminator)
@@ -4571,7 +4571,7 @@ int queue_mount_file(char* filename)
   }
 
   job[0] = 0x12;
-  strcpy((char*)(job + 1), filename);
+  strcpy((char *)(job + 1), filename);
   len++;
   job[len] = 0; // add null-terminator at end
   len++;
@@ -4580,7 +4580,7 @@ int queue_mount_file(char* filename)
   return TRUE;
 }
 
-void petscify_text(char* text)
+void petscify_text(char *text)
 {
   for (int k = 0; k < strlen(text); k++) {
     char c = text[k] & 0xdf;
@@ -4609,7 +4609,7 @@ void request_quit(void)
   poke(0xc000, 0x01);
 }
 
-void mount_file(char* filename)
+void mount_file(char *filename)
 {
   if (!safe_open_dir())
     return;
@@ -4641,21 +4641,19 @@ int get_cluster_count(char *filename)
   }
   int file_cluster = de.d_ino;
   int count = 0;
-  do
-  {
+  do {
     count++;
     file_cluster = chained_cluster(file_cluster);
-  } while(file_cluster > 0 && file_cluster < FAT32_MIN_END_OF_CLUSTER_MARKER);
+  } while (file_cluster > 0 && file_cluster < FAT32_MIN_END_OF_CLUSTER_MARKER);
 
-  if(file_cluster < 0)
-  {
+  if (file_cluster < 0) {
     return -1;
   }
 
   return count;
 }
 
-int download_single_file(char* dest_name, char* local_name, int showClusters)
+int download_single_file(char *dest_name, char *local_name, int showClusters)
 {
   struct m65dirent de;
   int retVal = 0;
@@ -4678,7 +4676,7 @@ int download_single_file(char* dest_name, char* local_name, int showClusters)
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
     unsigned int sector_number;
-    FILE* f = NULL;
+    FILE *f = NULL;
 
     if (!showClusters) {
       f = fopen(local_name, "wb");
@@ -4756,11 +4754,11 @@ int download_single_file(char* dest_name, char* local_name, int showClusters)
 
     int next_cluster = chained_cluster(file_cluster);
     if (!quietFlag)
-      printf("Next cluster = $%x\n",next_cluster);
-    while(next_cluster<0xffffff0) {
+      printf("Next cluster = $%x\n", next_cluster);
+    while (next_cluster < 0xffffff0) {
       next_cluster = chained_cluster(next_cluster);
       if (!quietFlag)
-        printf("Next cluster = $%x\n",next_cluster);
+        printf("Next cluster = $%x\n", next_cluster);
     }
 
     if (time(0) == upload_start)
@@ -4770,8 +4768,8 @@ int download_single_file(char* dest_name, char* local_name, int showClusters)
           (long long)time(0) - upload_start, de.d_filelen * 1.0 / 1024 / (time(0) - upload_start));
     }
     else {
-    if (!quietFlag)
-      printf("\n");
+      if (!quietFlag)
+        printf("\n");
     }
 
   } while (0);
@@ -4779,10 +4777,10 @@ int download_single_file(char* dest_name, char* local_name, int showClusters)
   return retVal;
 }
 
-int download_file(char* name, char* local_name, int showClusters)
+int download_file(char *name, char *local_name, int showClusters)
 {
-  llist* lst_dirents = llist_new();
-  char* searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
+  llist *lst_dirents = llist_new();
+  char *searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
 
   // don't bother with wildcards if a unique local name has been specified (assume that this is just for a single file)
   if (strcmp(name, local_name))
@@ -4797,10 +4795,10 @@ int download_file(char* name, char* local_name, int showClusters)
     return FALSE;
   }
 
-  llist* cur = lst_dirents;
+  llist *cur = lst_dirents;
 
   while (cur != NULL) {
-    struct m65dirent* itm = (struct m65dirent*)cur->item;
+    struct m65dirent *itm = (struct m65dirent *)cur->item;
 
     if (!is_match(itm->d_name, name, 1) && !is_match(itm->d_longname, name, 1)) {
       cur = cur->next;

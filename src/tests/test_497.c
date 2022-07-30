@@ -34,34 +34,122 @@ loop:
    PLA
    RTS
  */
-unsigned char code_snippet[64] = {
-  0xa3, 0x08, 0xa9, 0x50, 0x48, 0xdb, 0xa9, 0x51, 0x48, 0xdb,
-  0xa0, 0x0f, 0xe2, 0x03, 0x82, 0x01, 0x88, 0x10, 0xf9, 0x68,
-  0x68, 0x68, 0x68, 0x60
-};
+unsigned char code_snippet[64] = { 0xa3, 0x08, 0xa9, 0x50, 0x48, 0xdb, 0xa9, 0x51, 0x48, 0xdb, 0xa0, 0x0f, 0xe2, 0x03, 0x82,
+  0x01, 0x88, 0x10, 0xf9, 0x68, 0x68, 0x68, 0x68, 0x60 };
 
 unsigned char data_source[32] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
-    0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x11,
+  0x22,
+  0x33,
+  0x44,
+  0x55,
+  0x66,
+  0x77,
+  0x88,
+  0x99,
+  0xaa,
+  0xbb,
+  0xcc,
+  0xdd,
+  0xee,
+  0xff,
+  0x1f,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
 };
 
 unsigned char data_target[32] = {
-    0xff, 0x55, 0xaa, 0x5f, 0xaf, 0xf5, 0xa5, 0xfa, 0xff, 0x55, 0xaa, 0x5f, 0xaf, 0xf5, 0xa5, 0xfa, 
-    0xff, 0x55, 0xaa, 0x5f, 0xaf, 0xf5, 0xa5, 0xfa, 0xff, 0x55, 0xaa, 0x5f, 0xaf, 0xf5, 0xa5, 0xfa, 
+  0xff,
+  0x55,
+  0xaa,
+  0x5f,
+  0xaf,
+  0xf5,
+  0xa5,
+  0xfa,
+  0xff,
+  0x55,
+  0xaa,
+  0x5f,
+  0xaf,
+  0xf5,
+  0xa5,
+  0xfa,
+  0xff,
+  0x55,
+  0xaa,
+  0x5f,
+  0xaf,
+  0xf5,
+  0xa5,
+  0xfa,
+  0xff,
+  0x55,
+  0xaa,
+  0x5f,
+  0xaf,
+  0xf5,
+  0xa5,
+  0xfa,
 };
 
 unsigned char data_expect[32] = {
-    0xff, 0x55, 0xaa, 0x5f, 0xaf, 0xf5, 0xa5, 0xfa, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
-    0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x1f, 0xff, 0x55, 0xaa, 0x5f, 0xaf, 0xf5, 0xa5, 0xfa,
+  0xff,
+  0x55,
+  0xaa,
+  0x5f,
+  0xaf,
+  0xf5,
+  0xa5,
+  0xfa,
+  0x11,
+  0x22,
+  0x33,
+  0x44,
+  0x55,
+  0x66,
+  0x77,
+  0x88,
+  0x99,
+  0xaa,
+  0xbb,
+  0xcc,
+  0xdd,
+  0xee,
+  0xff,
+  0x1f,
+  0xff,
+  0x55,
+  0xaa,
+  0x5f,
+  0xaf,
+  0xf5,
+  0xa5,
+  0xfa,
 };
 
-unsigned short line=0, total=0, total_failed=0;
-unsigned char msg[81]="";
+unsigned short line = 0, total = 0, total_failed = 0;
+unsigned char msg[81] = "";
 
 // save vic state for restoring later...
 unsigned char state[13];
 
-void init_mega65(void) {
+void init_mega65(void)
+{
   // Fast CPU, M65 IO
   POKE(0, 65);
   POKE(0xD02F, 0x47);
@@ -112,7 +200,7 @@ void h640_text_mode(void)
   POKE(0xD062, 0x00);
 
   lfill(0xc000, 0x20, 2000);
-  
+
   // Clear colour RAM
   lfill(0xff80000L, 0x0E, 2000);
 
@@ -124,7 +212,8 @@ void h640_text_mode(void)
   POKE(0xD021, 0x0b);
 }
 
-void restore_graphics(void) {
+void restore_graphics(void)
+{
   // restore saved state
   POKE(0xD05D, state[10]);
   POKE(0xD018, state[0]);
@@ -141,12 +230,13 @@ void restore_graphics(void) {
   POKE(0xD021, state[12]);
 }
 
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
   unsigned char char_code;
-  unsigned short pixel_addr = 0xC000 + x + y*80;
+  unsigned short pixel_addr = 0xC000 + x + y * 80;
 
-  if (y > 24) return; // don't print beyond screen
+  if (y > 24)
+    return; // don't print beyond screen
 
   while (*msg) {
     char_code = *msg;
@@ -163,14 +253,16 @@ void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* 
   }
 }
 
-unsigned char keybuffer(unsigned char wait) {
+unsigned char keybuffer(unsigned char wait)
+{
   unsigned char key = 0;
   // clear keyboard buffer
   while (PEEK(0xD610))
     POKE(0xD610, 0);
 
   if (wait) {
-    while ((key = PEEK(0xD610)) == 0);
+    while ((key = PEEK(0xD610)) == 0)
+      ;
     POKE(0xD610, 0);
   }
 
@@ -179,9 +271,9 @@ unsigned char keybuffer(unsigned char wait) {
 
 void main(void)
 {
-  unsigned char m, failed=0;
-  unsigned char concmsg[81]="";
-  unsigned char *code_buf   = (unsigned char *)0x340;
+  unsigned char m, failed = 0;
+  unsigned char concmsg[81] = "";
+  unsigned char *code_buf = (unsigned char *)0x340;
   unsigned char *test_area1 = (unsigned char *)0x5000;
   unsigned char *test_area2 = (unsigned char *)0x5100;
 
@@ -207,17 +299,18 @@ void main(void)
 
   print_text80(0, line++, 1, "Test 1 $5108 -> $5008, count 16:");
   // compare area2 to expected result
-  for (m=0; m<32; m++) {
+  for (m = 0; m < 32; m++) {
     snprintf(concmsg, 5, "%02x", test_area2[m]);
-    print_text80(4 + (m%16)*3, line + (m/16)*2, test_area2[m]==data_expect[m]?5:2, concmsg);
+    print_text80(4 + (m % 16) * 3, line + (m / 16) * 2, test_area2[m] == data_expect[m] ? 5 : 2, concmsg);
     snprintf(concmsg, 5, "%02x", (unsigned char)data_expect[m]);
-    print_text80(4 + (m%16)*3, line + (m/16)*2 + 1, test_area2[m]==data_expect[m]?15:2, concmsg);
-    if (test_area2[m]!=data_expect[m]) failed++;
+    print_text80(4 + (m % 16) * 3, line + (m / 16) * 2 + 1, test_area2[m] == data_expect[m] ? 15 : 2, concmsg);
+    if (test_area2[m] != data_expect[m])
+      failed++;
   }
   line += 4;
 
-  print_text80(0, line++, failed>0?2:5, failed>0?"Test 1 failed :(":"Test 1 passed!");
-  unit_test_report(ISSUE_NUM, 1, failed>0?TEST_FAIL:TEST_PASS);
+  print_text80(0, line++, failed > 0 ? 2 : 5, failed > 0 ? "Test 1 failed :(" : "Test 1 passed!");
+  unit_test_report(ISSUE_NUM, 1, failed > 0 ? TEST_FAIL : TEST_PASS);
 
   // test 2: page crossing
   test_area1 = (unsigned char *)0x50f0;
@@ -231,22 +324,23 @@ void main(void)
 
   print_text80(0, line++, 1, "Test 2 $51f8 -> $50f8, count 16 (page crossing):");
   // compare area2 to expected result
-  for (m=0; m<32; m++) {
+  for (m = 0; m < 32; m++) {
     snprintf(concmsg, 5, "%02x", test_area2[m]);
-    print_text80(4 + (m%16)*3, line + (m/16)*2, test_area2[m]==data_expect[m]?5:2, concmsg);
+    print_text80(4 + (m % 16) * 3, line + (m / 16) * 2, test_area2[m] == data_expect[m] ? 5 : 2, concmsg);
     snprintf(concmsg, 5, "%02x", (unsigned char)data_expect[m]);
-    print_text80(4 + (m%16)*3, line + (m/16)*2 + 1, test_area2[m]==data_expect[m]?15:2, concmsg);
-    if (test_area2[m]!=data_expect[m]) failed++;
+    print_text80(4 + (m % 16) * 3, line + (m / 16) * 2 + 1, test_area2[m] == data_expect[m] ? 15 : 2, concmsg);
+    if (test_area2[m] != data_expect[m])
+      failed++;
   }
   line += 4;
 
-  print_text80(0, line++, failed>0?2:5, failed>0?"Test 2 failed :(":"Test 2 passed!");
-  unit_test_report(ISSUE_NUM, 2, failed>0?TEST_FAIL:TEST_PASS);
+  print_text80(0, line++, failed > 0 ? 2 : 5, failed > 0 ? "Test 2 failed :(" : "Test 2 passed!");
+  unit_test_report(ISSUE_NUM, 2, failed > 0 ? TEST_FAIL : TEST_PASS);
 
   unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);
 
   snprintf(msg, 80, "($nn,SP),Y Test Finished #%03d                                                  ", ISSUE_NUM);
-  print_text80(0, (line<24)?line:24, 7, msg);
+  print_text80(0, (line < 24) ? line : 24, 7, msg);
 
   keybuffer(1);
   restore_graphics();

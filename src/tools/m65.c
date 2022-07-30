@@ -101,9 +101,9 @@ int halt = 0;
 
 int usedk = 0;
 
-char* load_binary = NULL;
+char *load_binary = NULL;
 
-int viciv_mode_report(unsigned char* viciv_regs);
+int viciv_mode_report(unsigned char *viciv_regs);
 
 int fpgajtag_main(char* bitstream);
 char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode);
@@ -206,7 +206,7 @@ unsigned char hyppo_buffer[1024];
 int counter = 0;
 
 int show_audio_mixer = 0;
-char* set_mixer_args = NULL;
+char *set_mixer_args = NULL;
 int state = 99;
 unsigned int name_len, name_lo, name_hi, name_addr = -1;
 int do_go64 = 0;
@@ -215,22 +215,22 @@ int comma_eight_comma_one = 0;
 int ethernet_video = 0;
 int ethernet_cpulog = 0;
 int virtual_f011 = 0;
-char* d81file = NULL;
-char* filename = NULL;
-char* romfile = NULL;
-char* logfile = NULL;
-char* unittest_logfile = NULL;
-char* flashmenufile = NULL;
-char* charromfile = NULL;
-char* colourramfile = NULL;
-FILE* f = NULL;
-FILE* fd81 = NULL;
-char* search_path = ".";
-char* bitstream = NULL;
-char* vivado_bat = NULL;
-char* hyppo = NULL;
-char* fpga_serial = NULL;
-char* serial_port = NULL;
+char *d81file = NULL;
+char *filename = NULL;
+char *romfile = NULL;
+char *logfile = NULL;
+char *unittest_logfile = NULL;
+char *flashmenufile = NULL;
+char *charromfile = NULL;
+char *colourramfile = NULL;
+FILE *f = NULL;
+FILE *fd81 = NULL;
+char *search_path = ".";
+char *bitstream = NULL;
+char *vivado_bat = NULL;
+char *hyppo = NULL;
+char *fpga_serial = NULL;
+char *serial_port = NULL;
 char modeline_cmd[1024] = "";
 int break_point = -1;
 int jtag_only = 0;
@@ -238,11 +238,13 @@ int bitstream_only = 0;
 uint32_t zap_addr;
 int zap = 0;
 int wait_for_bitstream = 0;
+int memsave_start = -1, memsave_end = -1;
+char *memsave_filename = NULL;
 
 int hypervisor_paused = 0;
 
 int screen_shot = 0;
-char* screen_shot_file = NULL;
+char *screen_shot_file = NULL;
 int screen_rows_remaining = 0;
 extern unsigned int screen_address;
 int next_screen_address = 0;
@@ -251,7 +253,7 @@ extern unsiggned int screen_line_step;
 extern unsigned int screen_width;
 unsigned char screen_line_buffer[256];
 
-char* type_text = NULL;
+char *type_text = NULL;
 int type_text_cr = 0;
 
 int no_cart = 0;
@@ -434,6 +436,7 @@ void init_cmd_options(void)
   CMD_OPTION("ethcpulog", 0, 0, 'L', "", "Enable streaming of CPU instruction log via ethernet.");
   CMD_OPTION("phoneosk", 0, 0, 'o', "", "Enable on-screen keyboard (MEGAphone).");
   CMD_OPTION("debugloadmem", 0, &debug_load_memory, 1, "", "DEBUG - test load memory function.");
+  // clang-format on
 }
 
 int virtual_f011_read(int device, int track, int sector, int side)
@@ -570,7 +573,7 @@ int virtual_f011_write(int device, int track, int sector, int side)
   return 0;
 }
 
-uint32_t uint32_from_buf(unsigned char* b, int ofs)
+uint32_t uint32_from_buf(unsigned char *b, int ofs)
 {
   uint32_t v = 0;
   v = b[ofs + 0];
@@ -578,6 +581,77 @@ uint32_t uint32_from_buf(unsigned char* b, int ofs)
   v |= (b[ofs + 2] << 16);
   v |= (b[ofs + 3] << 24);
   return v;
+}
+
+int memory_save(const int start, const int end, const char *filename)
+{
+  int memsave_start_addr = -1;
+  int memsave_end_addr = -1;
+  int cur_addr, count;
+  unsigned char membuf[4096], is_basic=0;
+  FILE *o;
+
+  if (start == -1 && end == -1) {
+    log_debug("memory_save: no memory range given, detecting BASIC program");
+    if (saw_c64_mode) {
+      fetch_ram(0x2b, 4, membuf);
+      memsave_start_addr = membuf[0] + (membuf[1] << 8);
+      memsave_end_addr = membuf[2] + (membuf[3] << 8);
+    }
+    else {
+      fetch_ram(0x82, 2, membuf);
+      memsave_start_addr = 0x2001;
+      memsave_end_addr = membuf[0] + (membuf[1] << 8);
+    }
+    if (memsave_end_addr - memsave_start_addr < 3) {
+      log_note("BASIC memory is empty, nothing to save!");
+      return -1;
+    }
+    log_note("saving BASIC memory $%04X-$%04X", memsave_start_addr, memsave_end_addr);
+    is_basic = 1;
+  }
+  else {
+    if (end < start) {
+      memsave_start_addr = end;
+      memsave_end_addr = start;
+    }
+    else {
+      memsave_start_addr = start;
+      memsave_end_addr = end;
+    }
+  }
+
+  o = fopen(filename, "w");
+  if (!o) {
+    log_error("could not open memory save file '%s'", filename);
+    return -1;
+  }
+  log_debug("memory_save: opened '%s' for writing", filename);
+
+  if (is_basic) {
+    membuf[0] = memsave_start_addr & 0xff;
+    membuf[1] = (memsave_start_addr >> 8) & 0xff;
+    fwrite(membuf, 2, 1, o);
+  }
+
+  log_debug("memory_save: saving memory $%08x-%08x", memsave_start_addr, memsave_end_addr);
+  cur_addr = memsave_start_addr;
+  while (cur_addr < memsave_end_addr) {
+    count = memsave_end_addr - cur_addr;
+    if (count > 4096)
+      count = 4096;
+    log_debug("memory_save: fetching $%08x %d", cur_addr, count);
+    fetch_ram(cur_addr, count, membuf);
+    fwrite(membuf, count, 1, o);
+    cur_addr += count;
+  }
+
+  fclose(o);
+  log_debug("memory_save: closed output file");
+
+  log_note("saved memory dump $%08x-$%08x to '%s'", memsave_start_addr, memsave_end_addr, filename);
+
+  return 0;
 }
 
 void show_hyppo_report(void)
@@ -1106,7 +1180,7 @@ void do_type_key(unsigned char key)
   usleep(20000);
 }
 
-void do_type_text(char* type_text)
+void do_type_text(char *type_text)
 {
   log_note("typing text via virtual keyboard...");
 
@@ -1347,11 +1421,11 @@ void do_type_text(char* type_text)
 char line[1024];
 int line_len = 0;
 
-void* run_boundary_scan(void* argp)
+void *run_boundary_scan(void *argp)
 {
   xilinx_boundaryscan(boundary_xdc[0] ? boundary_xdc : NULL, boundary_bsdl[0] ? boundary_bsdl : NULL,
       jtag_sensitivity[0] ? jtag_sensitivity : NULL);
-  return (void*)NULL;
+  return (void *)NULL;
 }
 
 #ifndef WINDOWS
@@ -1372,7 +1446,7 @@ void download_bitstream(void)
 
   char filename[8192];
   snprintf(filename, 8192, "%s/.netrc", getenv("HOME"));
-  FILE* nf = fopen(filename, "rb");
+  FILE *nf = fopen(filename, "rb");
   if (!nf) {
     fprintf(stderr, "WARNING: You don't have a .netrc file.  You probably want to set one up with something like this:\n"
                     "    machine  app.scryptos.com\n"
@@ -1401,7 +1475,7 @@ void download_bitstream(void)
       issue, tag);
   system(cmd);
 
-  FILE* f = fopen("/tmp/monitor_load.folder.txt", "rb");
+  FILE *f = fopen("/tmp/monitor_load.folder.txt", "rb");
   if (!f) {
     fprintf(stderr, "ERROR: Could not read WebDAV retrieved folder name from /tmp/monitor_load.folder.txt\n");
     exit(-2);
@@ -1434,7 +1508,7 @@ void download_hyppo(void)
 
   char filename[8192];
   snprintf(filename, 8192, "%s/.netrc", getenv("HOME"));
-  FILE* nf = fopen(filename, "rb");
+  FILE *nf = fopen(filename, "rb");
   if (!nf) {
     fprintf(stderr, "WARNING: You don't have a .netrc file.  You probably want to set one up with something like this:\n"
                     "    machine  app.scryptos.com\n"
@@ -1463,7 +1537,7 @@ void download_hyppo(void)
       issue, tag);
   system(cmd);
 
-  FILE* f = fopen("/tmp/monitor_load.folder.txt", "rb");
+  FILE *f = fopen("/tmp/monitor_load.folder.txt", "rb");
   if (!f) {
     fprintf(stderr, "ERROR: Could not read WebDAV retrieved folder name from /tmp/monitor_load.folder.txt\n");
     exit(-2);
@@ -1486,14 +1560,14 @@ void download_hyppo(void)
   hyppo = "/tmp/monitor_load.HICKUP.M65";
 }
 
-void load_bitstream(char* bitstream)
+void load_bitstream(char *bitstream)
 {
   if (vivado_bat != NULL) {
     /*  For Windows we just call Vivado to do the FPGA programming,
         while we are having horrible USB problems otherwise. */
     unsigned int fpga_id = 0x3631093;
 
-    FILE* f = fopen(bitstream, "r");
+    FILE *f = fopen(bitstream, "r");
     if (f) {
       unsigned char buff[8192];
       int len = fread(buff, 1, 8192, f);
@@ -1514,12 +1588,12 @@ void load_bitstream(char* bitstream)
     else
       log_warn("could not open bitstream file '%s'", bitstream);
 
-    char* part_name = "xc7a100t_0";
+    char *part_name = "xc7a100t_0";
     log_info("expecting FPGA Part ID %x", fpga_id);
     if (fpga_id == 0x3636093)
       part_name = "xc7a200t_0";
 
-    FILE* tclfile = fopen("temp.tcl", "w");
+    FILE *tclfile = fopen("temp.tcl", "w");
     if (!tclfile) {
       log_crit("Could not create temp.tcl");
       exit(-1);
@@ -1574,9 +1648,9 @@ void return_from_hypervisor_mode(void)
   slow_write_safe(fd, "t0\r", 3);
 }
 
-int check_file_access(char* file, char* purpose)
+int check_file_access(char *file, char *purpose)
 {
-  FILE* f = fopen(file, "rb");
+  FILE *f = fopen(file, "rb");
   if (!f) {
     log_crit("cannot access %s file '%s'", purpose, file);
     exit(-1);
@@ -1631,14 +1705,14 @@ void handle_vf011_requests()
   }
 }
 
-char* test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", "C#$06", "C#$07", "C#$08", "C#$09", "C#$0A",
+char *test_states[16] = { "START", " SKIP", " PASS", " FAIL", "ERROR", "C#$05", "C#$06", "C#$07", "C#$08", "C#$09", "C#$0A",
   "C#$0B", "C#$0C", "  LOG", " NAME", " DONE" };
 
 char msgbuf[160], *endp;
 char testname[160], testlog[160];
 unsigned char inbuf[8192];
 unsigned int failcount, test_last_issue, test_last_sub;
-FILE* logPtr;
+FILE *logPtr;
 
 void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char state, char* msg)
 {
@@ -1832,10 +1906,10 @@ void enterTestMode()
 unsigned char checkUSBPermissions()
 {
 #ifndef WINDOWS
-  libusb_device_handle* usbhandle = NULL;
-  struct libusb_context* usb_context;
-  libusb_device** device_list;
-  libusb_device* dev;
+  libusb_device_handle *usbhandle = NULL;
+  struct libusb_context *usb_context;
+  libusb_device **device_list;
+  libusb_device *dev;
   unsigned int i = 0;
 
   if (libusb_init(&usb_context) < 0 || libusb_get_device_list(usb_context, &device_list) < 0) {
@@ -1858,7 +1932,7 @@ unsigned char checkUSBPermissions()
   return 1;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int opt_index;
   start_time = time(0);
@@ -2070,6 +2144,26 @@ int main(int argc, char** argv)
       }
       wait_for_bitstream = 1;
       break;
+    case 0x81: // memsave
+      {
+        char *next;
+        if (!optarg)
+          usage(-3, "failed to parse memsave address argument");
+        if (strchr(optarg, ':') && strchr(optarg, ',')) { // got both range and filename
+          if (sscanf(optarg, "%x:%x;", &memsave_start, &memsave_end) != 2)
+            usage(-3, "failed to parse memsave address argument");
+          next = strchr(optarg, ',') + 1;
+          memsave_filename = strdup(next);
+        }
+        else if (strchr(optarg, ','))
+          usage(-3, "failed to parse memsave argument (range without file?)");
+        else {
+          memsave_start = -1;
+          memsave_end = -1;
+          memsave_filename = strdup(optarg);
+        }
+      }
+      break;
     default: // can not happen?
       usage(-3, "Unknown option.");
     }
@@ -2099,7 +2193,7 @@ int main(int argc, char** argv)
     unsigned int fpga_id = 0xffffffff, found = 0; // wildcard match for the last valid device
     if (bitstream) {
       log_info("Scanning bitstream file '%s' for device ID", bitstream);
-      FILE* f = fopen(bitstream, "rb");
+      FILE *f = fopen(bitstream, "rb");
       if (f) {
         unsigned char buff[8192];
         int len = fread(buff, 1, 8192, f);
@@ -2131,7 +2225,7 @@ int main(int argc, char** argv)
                "sudo tee /etc/udev/rules.d/40-xilinx.rules");
       log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
     }
-    char* res = init_fpgajtag(fpga_serial, serial_port, fpga_id);
+    char *res = init_fpgajtag(fpga_serial, serial_port, fpga_id);
     if (res == NULL) {
       log_crit("no valid serial port not found, aborting");
       exit(1);
@@ -2193,6 +2287,15 @@ int main(int argc, char** argv)
   // fetch version information
   if (unit_test_mode)
     get_system_bitstream_version();
+
+  // let's save as soon as possible, because first
+  // loading an then saving makes no sense, right?
+  if (memsave_filename) {
+    log_info("detecting C64/C65 mode status");
+    detect_mode();
+    if (memory_save(memsave_start, memsave_end, memsave_filename))
+      do_exit(-1);
+  }
 
   if (debug_load_memory) {
     log_note("Testing load memory function.");
@@ -2285,11 +2388,11 @@ int main(int argc, char** argv)
       unsigned char hyppo_data[0x4000];
       fetch_ram(0xFFF8000, 0x4000, hyppo_data);
 #ifdef WINDOWS
-      char* temp_name = "HYPPOEXT.M65";
+      char *temp_name = "HYPPOEXT.M65";
 #else
-      char* temp_name = "/tmp/HYPPOEXT.M65";
+      char *temp_name = "/tmp/HYPPOEXT.M65";
 #endif
-      FILE* f = fopen(temp_name, "wb");
+      FILE *f = fopen(temp_name, "wb");
       if (!f) {
         log_crit("could not create temporary HYPPO file.");
         exit(-1);
@@ -2721,7 +2824,7 @@ int main(int argc, char** argv)
         filename_addr = mega65_peek(0xbb) + mega65_peek(0xbc) * 256 + mega65_peek(0xbe) * 65536;
       }
       char requested_name[256];
-      fetch_ram(filename_addr, filename_len, (unsigned char*)requested_name);
+      fetch_ram(filename_addr, filename_len, (unsigned char *)requested_name);
       requested_name[filename_len] = 0;
       log_info("requested file is '%s' (len=%d)", requested_name, filename_len);
       // If we caught the boot load request, then feed the DLOAD command again
@@ -2741,7 +2844,7 @@ int main(int argc, char** argv)
 
     int is_sid_tune = 0;
 
-    FILE* f = fopen(filename, "rb");
+    FILE *f = fopen(filename, "rb");
     if (f == NULL) {
       log_crit("could not find file '%s'", filename);
       exit(-1);
@@ -2763,9 +2866,9 @@ int main(int argc, char** argv)
         unsigned int play_addr = (sid_header[0x0c - 0x02] << 8) + sid_header[0x0d - 0x02];
         //	unsigned int play_speed=sid_header[0x12-0x02];
 
-        char* name = (char*)&sid_header[0x16 - 0x02];
-        char* author = (char*)&sid_header[0x36 - 0x02];
-        char* released = (char*)&sid_header[0x56 - 0x02];
+        char *name = (char *)&sid_header[0x16 - 0x02];
+        char *author = (char *)&sid_header[0x36 - 0x02];
+        char *released = (char *)&sid_header[0x56 - 0x02];
 
         log_info("SID tune '%s' by '%s' (%s)", name, author, released);
 
@@ -2809,7 +2912,7 @@ int main(int argc, char** argv)
             player_screen[i] &= 0x1f;
         }
 
-        push_ram(0x0400, 1000, (unsigned char*)player_screen);
+        push_ram(0x0400, 1000, (unsigned char *)player_screen);
 
         // Patch load address
         load_addr = (sid_header[0x7d - 0x02] << 8) + sid_header[0x7c - 0x02];

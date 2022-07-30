@@ -25,34 +25,34 @@
 extern "C" {
 #endif
 
-HRESULT dhCreateObject(LPCOLESTR szProgId, LPCWSTR szMachine, IDispatch** ppDisp);
-HRESULT dhGetObject(LPCOLESTR szFile, LPCOLESTR szProgId, IDispatch** ppDisp);
+HRESULT dhCreateObject(LPCOLESTR szProgId, LPCWSTR szMachine, IDispatch **ppDisp);
+HRESULT dhGetObject(LPCOLESTR szFile, LPCOLESTR szProgId, IDispatch **ppDisp);
 
-HRESULT dhCreateObjectEx(LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, COSERVERINFO* pServerInfo, void** ppv);
-HRESULT dhGetObjectEx(LPCOLESTR szFile, LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, LPVOID lpvReserved, void** ppv);
+HRESULT dhCreateObjectEx(LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, COSERVERINFO *pServerInfo, void **ppv);
+HRESULT dhGetObjectEx(LPCOLESTR szFile, LPCOLESTR szProgId, REFIID riid, DWORD dwClsContext, LPVOID lpvReserved, void **ppv);
 
-HRESULT dhCallMethod(IDispatch* pDisp, LPCOLESTR szMember, ...);
-HRESULT dhPutValue(IDispatch* pDisp, LPCOLESTR szMember, ...);
-HRESULT dhPutRef(IDispatch* pDisp, LPCOLESTR szMember, ...);
-HRESULT dhGetValue(LPCWSTR szIdentifier, void* pResult, IDispatch* pDisp, LPCOLESTR szMember, ...);
+HRESULT dhCallMethod(IDispatch *pDisp, LPCOLESTR szMember, ...);
+HRESULT dhPutValue(IDispatch *pDisp, LPCOLESTR szMember, ...);
+HRESULT dhPutRef(IDispatch *pDisp, LPCOLESTR szMember, ...);
+HRESULT dhGetValue(LPCWSTR szIdentifier, void *pResult, IDispatch *pDisp, LPCOLESTR szMember, ...);
 
-HRESULT dhInvoke(int invokeType, VARTYPE returnType, VARIANT* pvResult, IDispatch* pDisp, LPCOLESTR szMember, ...);
-HRESULT dhInvokeArray(int invokeType, VARIANT* pvResult, UINT cArgs, IDispatch* pDisp, LPCOLESTR szMember, VARIANT* pArgs);
+HRESULT dhInvoke(int invokeType, VARTYPE returnType, VARIANT *pvResult, IDispatch *pDisp, LPCOLESTR szMember, ...);
+HRESULT dhInvokeArray(int invokeType, VARIANT *pvResult, UINT cArgs, IDispatch *pDisp, LPCOLESTR szMember, VARIANT *pArgs);
 
-HRESULT dhCallMethodV(IDispatch* pDisp, LPCOLESTR szMember, va_list* marker);
-HRESULT dhPutValueV(IDispatch* pDisp, LPCOLESTR szMember, va_list* marker);
-HRESULT dhPutRefV(IDispatch* pDisp, LPCOLESTR szMember, va_list* marker);
-HRESULT dhGetValueV(LPCWSTR szIdentifier, void* pResult, IDispatch* pDisp, LPCOLESTR szMember, va_list* marker);
+HRESULT dhCallMethodV(IDispatch *pDisp, LPCOLESTR szMember, va_list *marker);
+HRESULT dhPutValueV(IDispatch *pDisp, LPCOLESTR szMember, va_list *marker);
+HRESULT dhPutRefV(IDispatch *pDisp, LPCOLESTR szMember, va_list *marker);
+HRESULT dhGetValueV(LPCWSTR szIdentifier, void *pResult, IDispatch *pDisp, LPCOLESTR szMember, va_list *marker);
 HRESULT dhInvokeV(
-    int invokeType, VARTYPE returnType, VARIANT* pvResult, IDispatch* pDisp, LPCOLESTR szMember, va_list* marker);
+    int invokeType, VARTYPE returnType, VARIANT *pvResult, IDispatch *pDisp, LPCOLESTR szMember, va_list *marker);
 
-HRESULT dhAutoWrap(int invokeType, VARIANT* pvResult, IDispatch* pDisp, LPCOLESTR szMember, UINT cArgs, ...);
-HRESULT dhParseProperties(IDispatch* pDisp, LPCWSTR szProperties, UINT* lpcPropsSet);
+HRESULT dhAutoWrap(int invokeType, VARIANT *pvResult, IDispatch *pDisp, LPCOLESTR szMember, UINT cArgs, ...);
+HRESULT dhParseProperties(IDispatch *pDisp, LPCWSTR szProperties, UINT *lpcPropsSet);
 
-HRESULT dhEnumBegin(IEnumVARIANT** ppEnum, IDispatch* pDisp, LPCOLESTR szMember, ...);
-HRESULT dhEnumBeginV(IEnumVARIANT** ppEnum, IDispatch* pDisp, LPCOLESTR szMember, va_list* marker);
-HRESULT dhEnumNextObject(IEnumVARIANT* pEnum, IDispatch** ppDisp);
-HRESULT dhEnumNextVariant(IEnumVARIANT* pEnum, VARIANT* pvResult);
+HRESULT dhEnumBegin(IEnumVARIANT **ppEnum, IDispatch *pDisp, LPCOLESTR szMember, ...);
+HRESULT dhEnumBeginV(IEnumVARIANT **ppEnum, IDispatch *pDisp, LPCOLESTR szMember, va_list *marker);
+HRESULT dhEnumNextObject(IEnumVARIANT *pEnum, IDispatch **ppDisp);
+HRESULT dhEnumNextVariant(IEnumVARIANT *pEnum, VARIANT *pvResult);
 
 HRESULT dhInitializeImp(BOOL bInitializeCOM, BOOL bUnicode);
 void dhUninitialize(BOOL bUninitializeCOM);
@@ -67,7 +67,7 @@ void dhUninitialize(BOOL bUninitializeCOM);
 #endif
 
 #define AutoWrap dhAutoWrap
-#define DISPATCH_OBJ(objName) IDispatch* objName = NULL
+#define DISPATCH_OBJ(objName) IDispatch *objName = NULL
 #define dhFreeString(string) SysFreeString((BSTR)string)
 
 #ifndef SAFE_RELEASE
@@ -143,35 +143,35 @@ void dhUninitialize(BOOL bUninitializeCOM);
 
 #define FOR_EACH0(objName, pDisp, szMember)                                                                                 \
   {                                                                                                                         \
-    IEnumVARIANT* xx_pEnum_xx = NULL;                                                                                       \
+    IEnumVARIANT *xx_pEnum_xx = NULL;                                                                                       \
     DISPATCH_OBJ(objName);                                                                                                  \
     if (SUCCEEDED(dhEnumBegin(&xx_pEnum_xx, pDisp, szMember))) {                                                            \
       while (dhEnumNextObject(xx_pEnum_xx, &objName) == NOERROR) {
 
 #define FOR_EACH1(objName, pDisp, szMember, arg1)                                                                           \
   {                                                                                                                         \
-    IEnumVARIANT* xx_pEnum_xx = NULL;                                                                                       \
+    IEnumVARIANT *xx_pEnum_xx = NULL;                                                                                       \
     DISPATCH_OBJ(objName);                                                                                                  \
     if (SUCCEEDED(dhEnumBegin(&xx_pEnum_xx, pDisp, szMember, arg1))) {                                                      \
       while (dhEnumNextObject(xx_pEnum_xx, &objName) == NOERROR) {
 
 #define FOR_EACH2(objName, pDisp, szMember, arg1, arg2)                                                                     \
   {                                                                                                                         \
-    IEnumVARIANT* xx_pEnum_xx = NULL;                                                                                       \
+    IEnumVARIANT *xx_pEnum_xx = NULL;                                                                                       \
     DISPATCH_OBJ(objName);                                                                                                  \
     if (SUCCEEDED(dhEnumBegin(&xx_pEnum_xx, pDisp, szMember, arg1, arg2))) {                                                \
       while (dhEnumNextObject(xx_pEnum_xx, &objName) == NOERROR) {
 
 #define FOR_EACH3(objName, pDisp, szMember, arg1, arg2, arg3)                                                               \
   {                                                                                                                         \
-    IEnumVARIANT* xx_pEnum_xx = NULL;                                                                                       \
+    IEnumVARIANT *xx_pEnum_xx = NULL;                                                                                       \
     DISPATCH_OBJ(objName);                                                                                                  \
     if (SUCCEEDED(dhEnumBegin(&xx_pEnum_xx, pDisp, szMember, arg1, arg2, arg3))) {                                          \
       while (dhEnumNextObject(xx_pEnum_xx, &objName) == NOERROR) {
 
 #define FOR_EACH4(objName, pDisp, szMember, arg1, arg2, arg3, arg4)                                                         \
   {                                                                                                                         \
-    IEnumVARIANT* xx_pEnum_xx = NULL;                                                                                       \
+    IEnumVARIANT *xx_pEnum_xx = NULL;                                                                                       \
     DISPATCH_OBJ(objName);                                                                                                  \
     if (SUCCEEDED(dhEnumBegin(&xx_pEnum_xx, pDisp, szMember, arg1, arg2, arg3, arg4))) {                                    \
       while (dhEnumNextObject(xx_pEnum_xx, &objName) == NOERROR) {
@@ -243,7 +243,7 @@ HRESULT dhGetExceptionOptions(PDH_EXCEPTION_OPTIONS pExceptionOptions);
 /* Functions to show an exception, format an exception into a string
  * and get a copy of the last exception */
 HRESULT dhShowException(PDH_EXCEPTION pException);
-HRESULT dhGetLastException(PDH_EXCEPTION* pException);
+HRESULT dhGetLastException(PDH_EXCEPTION *pException);
 HRESULT dhFormatExceptionW(PDH_EXCEPTION pException, LPWSTR szBuffer, UINT cchBufferSize, BOOL bFixedFont);
 HRESULT dhFormatExceptionA(PDH_EXCEPTION pException, LPSTR szBuffer, UINT cchBufferSize, BOOL bFixedFont);
 
@@ -256,7 +256,7 @@ HRESULT dhFormatExceptionA(PDH_EXCEPTION pException, LPSTR szBuffer, UINT cchBuf
 #ifdef DISPHELPER_INTERNAL_BUILD
 
 void dhEnter(void);
-HRESULT dhExitEx(HRESULT hr, BOOL bDispatchError, LPCWSTR szMember, LPCWSTR szCompleteMember, EXCEPINFO* pExcepInfo,
+HRESULT dhExitEx(HRESULT hr, BOOL bDispatchError, LPCWSTR szMember, LPCWSTR szCompleteMember, EXCEPINFO *pExcepInfo,
     UINT iArgError, LPCWSTR szFunctionName);
 void dhCleanupThreadException(void);
 
@@ -280,9 +280,9 @@ void dhCleanupThreadException(void);
 #ifdef DISPHELPER_INTERNAL_BUILD
 #define DH_ENTER(szFunctionName)
 #define DH_EXITEX(hr, bDispatchError, szMember, szCompleteMember, pExcepInfo, iArgError)                                    \
-  (((hr == DISP_E_EXCEPTION && pExcepInfo) ? (SysFreeString(((EXCEPINFO*)(pExcepInfo))->bstrSource),                        \
-        SysFreeString(((EXCEPINFO*)(pExcepInfo))->bstrDescription),                                                         \
-        SysFreeString(((EXCEPINFO*)(pExcepInfo))->bstrHelpFile), 0)                                                         \
+  (((hr == DISP_E_EXCEPTION && pExcepInfo) ? (SysFreeString(((EXCEPINFO *)(pExcepInfo))->bstrSource),                       \
+        SysFreeString(((EXCEPINFO *)(pExcepInfo))->bstrDescription),                                                        \
+        SysFreeString(((EXCEPINFO *)(pExcepInfo))->bstrHelpFile), 0)                                                        \
                                            : (0)),                                                                          \
       hr)
 #define DH_EXIT(hr, szCompleteMember) (hr)
@@ -380,14 +380,14 @@ template <class T> class CDhComPtr {
   {
   }
 
-  CDhComPtr(T* pInterface) throw()
+  CDhComPtr(T *pInterface) throw()
       : m_pInterface(pInterface)
   {
     if (m_pInterface)
       m_pInterface->AddRef();
   }
 
-  CDhComPtr(const CDhComPtr& original) throw()
+  CDhComPtr(const CDhComPtr &original) throw()
       : m_pInterface(original.m_pInterface)
   {
     if (m_pInterface)
@@ -407,35 +407,35 @@ template <class T> class CDhComPtr {
     }
   }
 
-  T* Detach() throw()
+  T *Detach() throw()
   {
-    T* temp = m_pInterface;
+    T *temp = m_pInterface;
     m_pInterface = NULL;
     return temp;
   }
 
-  inline operator T*() const throw()
+  inline operator T *() const throw()
   {
     return m_pInterface;
   }
 
-  T** operator&() throw()
+  T **operator&() throw()
   {
     Dispose();
     return &m_pInterface;
   }
 
-  T* operator->() const throw(HRESULT)
+  T *operator->() const throw(HRESULT)
   {
     if (!m_pInterface)
       throw E_POINTER;
     return m_pInterface;
   }
 
-  CDhComPtr& operator=(T* pInterface) throw()
+  CDhComPtr &operator=(T *pInterface) throw()
   {
     if (m_pInterface != pInterface) {
-      T* pOldInterface = m_pInterface;
+      T *pOldInterface = m_pInterface;
       m_pInterface = pInterface;
       if (m_pInterface)
         m_pInterface->AddRef();
@@ -446,20 +446,20 @@ template <class T> class CDhComPtr {
     return *this;
   }
 
-  CDhComPtr& operator=(const int null) throw(HRESULT)
+  CDhComPtr &operator=(const int null) throw(HRESULT)
   {
     if (null != 0)
       throw(E_POINTER);
-    return operator=((T*)NULL);
+    return operator=((T *)NULL);
   }
 
-  CDhComPtr& operator=(const CDhComPtr& rhs) throw()
+  CDhComPtr &operator=(const CDhComPtr &rhs) throw()
   {
     return operator=(rhs.m_pInterface);
   }
 
   private:
-  T* m_pInterface;
+  T *m_pInterface;
 };
 
 typedef CDhComPtr<IDispatch> CDispPtr;
@@ -483,7 +483,7 @@ template <class T> class CDhStringTemplate {
   {
   }
 
-  CDhStringTemplate(const CDhStringTemplate& original) throw()
+  CDhStringTemplate(const CDhStringTemplate &original) throw()
   {
     Copy(original.m_strptr);
   }
@@ -506,33 +506,33 @@ template <class T> class CDhStringTemplate {
     m_strptr = NULL;
   }
 
-  T* Detach() throw()
+  T *Detach() throw()
   {
-    T* temp = m_strptr;
+    T *temp = m_strptr;
     m_strptr = NULL;
     return temp;
   }
 
-  T** operator&() throw()
+  T **operator&() throw()
   {
     Dispose();
     return &m_strptr;
   }
 
-  inline operator T*() const throw()
+  inline operator T *() const throw()
   {
     return m_strptr;
   }
 
-  inline T& operator[](int nIndex) const throw()
+  inline T &operator[](int nIndex) const throw()
   {
     return m_strptr[nIndex];
   }
 
-  CDhStringTemplate& operator=(const CDhStringTemplate& rhs)
+  CDhStringTemplate &operator=(const CDhStringTemplate &rhs)
   {
     if (m_strptr != rhs.m_strptr) {
-      T* temp = m_strptr;
+      T *temp = m_strptr;
       Copy(rhs.m_strptr);
       dhFreeString(temp);
     }
@@ -540,7 +540,7 @@ template <class T> class CDhStringTemplate {
     return *this;
   }
 
-  CDhStringTemplate& operator=(const int null) throw(HRESULT)
+  CDhStringTemplate &operator=(const int null) throw(HRESULT)
   {
     if (null != 0)
       throw(E_POINTER);
@@ -549,20 +549,20 @@ template <class T> class CDhStringTemplate {
   }
 
   private:
-  void Copy(const T* rhs)
+  void Copy(const T *rhs)
   {
     if (rhs == NULL) {
       m_strptr = NULL;
     }
     else if (sizeof(T) == sizeof(CHAR)) {
-      m_strptr = (T*)SysAllocStringByteLen((LPCSTR)rhs, SysStringByteLen((BSTR)rhs));
+      m_strptr = (T *)SysAllocStringByteLen((LPCSTR)rhs, SysStringByteLen((BSTR)rhs));
     }
     else {
-      m_strptr = (T*)SysAllocStringLen((OLECHAR*)rhs, SysStringLen((BSTR)rhs));
+      m_strptr = (T *)SysAllocStringLen((OLECHAR *)rhs, SysStringLen((BSTR)rhs));
     }
   }
 
-  T* m_strptr;
+  T *m_strptr;
 };
 
 typedef CDhStringTemplate<CHAR> CDhStringA;    /* Ansi string - LPSTR */
@@ -571,14 +571,14 @@ typedef CDhStringTemplate<OLECHAR> CDhStringB; /* Unicode bstring - BSTR */
 typedef CDhStringTemplate<TCHAR> CDhStringT;   /* T string - LPTSTR */
 typedef CDhStringTemplate<TCHAR> CDhString;    /* T string - LPTSTR */
 
-inline std::ostream& operator<<(std::ostream& os, const CDhStringA& s)
+inline std::ostream &operator<<(std::ostream &os, const CDhStringA &s)
 {
-  return os << (s ? s : (char*)"(null)");
+  return os << (s ? s : (char *)"(null)");
 }
 
-inline std::wostream& operator<<(std::wostream& os, const CDhStringW& s)
+inline std::wostream &operator<<(std::wostream &os, const CDhStringW &s)
 {
-  return os << (s ? s : (wchar_t*)L"(null)");
+  return os << (s ? s : (wchar_t *)L"(null)");
 }
 
 /* ===================================================================== */

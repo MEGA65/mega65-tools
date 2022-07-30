@@ -3,7 +3,7 @@
 
   In the manual all bp-ind-z-idx addressed Q opcodes should ignore Z.
   In VHDL this is only true for STQ.
-  
+
   While it can make sense that certain Q opcodes that do not operate on
   the virtual Q register could use Z, at least the opcodes:
   ADQ, ANDQ, CMPQ, EORQ, ORQ, SBCQ
@@ -34,60 +34,59 @@ struct test {
   unsigned char flag_val;
 };
 
-struct test tests[]=
-  {
-    // to test: LDQ, ADCQ, ANDQ, CMPQ, EORQ, ORQ, SBCQ, STQ
-    // LDQ - check if right value is loaded
-    // 001 - load via 16b pointer value with offset of 2
-    {0, 0xb2, 0x00, "ldq ($nn),z", 0x02345678, 0x12345678, 0xffffffff, 0xffff1234, 0x00, 0x00},
-    // 002 - load via 32b pointer value with ofsset of 2
-    {0, 0xb2, 0x01, "ldq [$nn],z", 0x02345678, 0x12345678, 0xffffffff, 0xffff1234, 0x00, 0x00},
+struct test tests[] = {
+  // to test: LDQ, ADCQ, ANDQ, CMPQ, EORQ, ORQ, SBCQ, STQ
+  // LDQ - check if right value is loaded
+  // 001 - load via 16b pointer value with offset of 2
+  { 0, 0xb2, 0x00, "ldq ($nn),z", 0x02345678, 0x12345678, 0xffffffff, 0xffff1234, 0x00, 0x00 },
+  // 002 - load via 32b pointer value with ofsset of 2
+  { 0, 0xb2, 0x01, "ldq [$nn],z", 0x02345678, 0x12345678, 0xffffffff, 0xffff1234, 0x00, 0x00 },
 
-    // 003 - 02345678 ANDQ ($nn) aa5555aa = 02145428
-    {0, 0x32, 0x00, "andq ($nn)", 0x02345678, 0xaa5555aa, 0x00000000, 0x02145428, 0x00, 0x00},
-    // 004 - 02345678 ANDQ ($nn) aa5555aa = 02145428
-    {0, 0x32, 0x01, "andq [$nn]", 0x02345678, 0xaa5555aa, 0x00000000, 0x02145428, 0x00, 0x00},
+  // 003 - 02345678 ANDQ ($nn) aa5555aa = 02145428
+  { 0, 0x32, 0x00, "andq ($nn)", 0x02345678, 0xaa5555aa, 0x00000000, 0x02145428, 0x00, 0x00 },
+  // 004 - 02345678 ANDQ ($nn) aa5555aa = 02145428
+  { 0, 0x32, 0x01, "andq [$nn]", 0x02345678, 0xaa5555aa, 0x00000000, 0x02145428, 0x00, 0x00 },
 
-    // 005 - 02345678 ORQ ($nn) aa55aa55 = aa7557fa
-    {0, 0x12, 0x00, "orq ($nn)",  0x02345678, 0xaa5555aa, 0xffffffff, 0xaa7557fa, 0x00, 0x00},
-    // 006 - 02345678 ORQ ($nn) aa55aa55 = aa7557fa
-    {0, 0x12, 0x01, "orq [$nn]",  0x02345678, 0xaa5555aa, 0xffffffff, 0xaa7557fa, 0x00, 0x00},
+  // 005 - 02345678 ORQ ($nn) aa55aa55 = aa7557fa
+  { 0, 0x12, 0x00, "orq ($nn)", 0x02345678, 0xaa5555aa, 0xffffffff, 0xaa7557fa, 0x00, 0x00 },
+  // 006 - 02345678 ORQ ($nn) aa55aa55 = aa7557fa
+  { 0, 0x12, 0x01, "orq [$nn]", 0x02345678, 0xaa5555aa, 0xffffffff, 0xaa7557fa, 0x00, 0x00 },
 
-    // 007 - 02345678 EORQ ($nn) aa55aa55 = a86103d2
-    {0, 0x52, 0x00, "eorq ($nn)", 0x02345678, 0xaa5555aa, 0xffffffff, 0xa86103d2, 0x00, 0x00},
-    // 008 - 02345678 EORQ ($nn) aa55aa55 = a86103d2
-    {0, 0x52, 0x01, "eorq [$nn]", 0x02345678, 0xaa5555aa, 0xffffffff, 0xa86103d2, 0x00, 0x00},
+  // 007 - 02345678 EORQ ($nn) aa55aa55 = a86103d2
+  { 0, 0x52, 0x00, "eorq ($nn)", 0x02345678, 0xaa5555aa, 0xffffffff, 0xa86103d2, 0x00, 0x00 },
+  // 008 - 02345678 EORQ ($nn) aa55aa55 = a86103d2
+  { 0, 0x52, 0x01, "eorq [$nn]", 0x02345678, 0xaa5555aa, 0xffffffff, 0xa86103d2, 0x00, 0x00 },
 
-    // 009 - 02345678 ADCQ ($nn) 12345678 = 1468acf0
-    {0, 0x72, 0x00, "adcq ($nn)", 0x02345678, 0x12345678, 0x87654321, 0x1468acf0, 0x00, 0x00},
-    // 010 - 02345678 ADCQ ($nn) 12345678 = 1468acf0
-    {0, 0x72, 0x01, "adcq [$nn]", 0x02345678, 0x12345678, 0x87654321, 0x1468acf0, 0x00, 0x00},
+  // 009 - 02345678 ADCQ ($nn) 12345678 = 1468acf0
+  { 0, 0x72, 0x00, "adcq ($nn)", 0x02345678, 0x12345678, 0x87654321, 0x1468acf0, 0x00, 0x00 },
+  // 010 - 02345678 ADCQ ($nn) 12345678 = 1468acf0
+  { 0, 0x72, 0x01, "adcq [$nn]", 0x02345678, 0x12345678, 0x87654321, 0x1468acf0, 0x00, 0x00 },
 
-    // 011 - 02345678 SBCQ ($nn) 01234567 = 01111111
-    {0, 0xf2, 0x02, "sbcq ($nn)", 0x02345678, 0x01234567, 0x22222222, 0x01111111, 0x00, 0x00},
-    // 012 - 02345678 SBCQ ($nn) 01234567 = 01111111
-    {0, 0xf2, 0x03, "sbcq [$nn]", 0x02345678, 0x01234567, 0x22222222, 0x01111111, 0x00, 0x00},
+  // 011 - 02345678 SBCQ ($nn) 01234567 = 01111111
+  { 0, 0xf2, 0x02, "sbcq ($nn)", 0x02345678, 0x01234567, 0x22222222, 0x01111111, 0x00, 0x00 },
+  // 012 - 02345678 SBCQ ($nn) 01234567 = 01111111
+  { 0, 0xf2, 0x03, "sbcq [$nn]", 0x02345678, 0x01234567, 0x22222222, 0x01111111, 0x00, 0x00 },
 
-    // 013 - 02345678 CMPQ ($nn) 02345678 => Q unchanged, Flags -N+ZC
-    {0, 0xd2, 0x00, "cmpq ($nn)", 0x02345678, 0x02345678, 0xdddddddd, 0x02345678, 0x83, 0x03},
-    // 014 - 02345678 CMPQ ($nn) 02345678 => Q unchanged, Flags -N+ZC
-    {0, 0xd2, 0x01, "cmpq [$nn]", 0x02345678, 0x02345678, 0xdddddddd, 0x02345678, 0x83, 0x03},
+  // 013 - 02345678 CMPQ ($nn) 02345678 => Q unchanged, Flags -N+ZC
+  { 0, 0xd2, 0x00, "cmpq ($nn)", 0x02345678, 0x02345678, 0xdddddddd, 0x02345678, 0x83, 0x03 },
+  // 014 - 02345678 CMPQ ($nn) 02345678 => Q unchanged, Flags -N+ZC
+  { 0, 0xd2, 0x01, "cmpq [$nn]", 0x02345678, 0x02345678, 0xdddddddd, 0x02345678, 0x83, 0x03 },
 
-    // 013 - 02345678 STQ ($nn)
-    {1, 0x92, 0x00, "stq ($nn)", 0x02345678, 0xdddddddd, 0xdddddddd, 0x02345678, 0x00, 0x00},
-    // 014 - 02345678 STQ ($nn)
-    {1, 0x92, 0x01, "stq [$nn]", 0x02345678, 0xdddddddd, 0xdddddddd, 0x02345678, 0x00, 0x00},
+  // 013 - 02345678 STQ ($nn)
+  { 1, 0x92, 0x00, "stq ($nn)", 0x02345678, 0xdddddddd, 0xdddddddd, 0x02345678, 0x00, 0x00 },
+  // 014 - 02345678 STQ ($nn)
+  { 1, 0x92, 0x01, "stq [$nn]", 0x02345678, 0xdddddddd, 0xdddddddd, 0x02345678, 0x00, 0x00 },
 
-    {0, 0x00, 0x00, "end", 0, 0, 0, 0 ,0}
-  };
+  { 0, 0x00, 0x00, "end", 0, 0, 0, 0, 0 }
+};
 
 unsigned char sub = 0;
 char msg[80];
 unsigned short i, line = 0;
-unsigned char concmsg[81] = "", flagstr[11]="", failstr[3]="";
+unsigned char concmsg[81] = "", flagstr[11] = "", failstr[3] = "";
 
 // Use tape buffer for code snippets
-unsigned char* code_buf = (unsigned char*)0x340;
+unsigned char *code_buf = (unsigned char *)0x340;
 
 /* Setup our code snippet:
  * 0340-037f - test code
@@ -132,12 +131,9 @@ unsigned char* code_buf = (unsigned char*)0x340;
    STA $0390
    RTS
  */
-unsigned char code_snippet[40] = {
-    0x78, 0xd8, 0xa9, 0xfa, 0xa2, 0x5f, 0xa0, 0xaf, 0xa3, 0x00,
-    0xb8, 0x42, 0x42, 0xb2, 0xc4, 0x38, 0x18, 0x42, 0x42, 0xb2,
-    0xc8, 0x08, 0x8d, 0x8c, 0x03, 0x8e, 0x8d, 0x03, 0x8c, 0x8e,
-    0x03, 0x9c, 0x8f, 0x03, 0x68, 0x8d, 0x90, 0x03, 0x60, 0x00
-};
+unsigned char code_snippet[40] = { 0x78, 0xd8, 0xa9, 0xfa, 0xa2, 0x5f, 0xa0, 0xaf, 0xa3, 0x00, 0xb8, 0x42, 0x42, 0xb2, 0xc4,
+  0x38, 0x18, 0x42, 0x42, 0xb2, 0xc8, 0x08, 0x8d, 0x8c, 0x03, 0x8e, 0x8d, 0x03, 0x8c, 0x8e, 0x03, 0x9c, 0x8f, 0x03, 0x68,
+  0x8d, 0x90, 0x03, 0x60, 0x00 };
 #define INST_OFFSET 15
 
 unsigned long load_addr;
@@ -150,7 +146,8 @@ unsigned int reslo, reshi;
 unsigned char char_code;
 unsigned short pixel_addr;
 
-void init_mega65(void) {
+void init_mega65(void)
+{
   // Fast CPU, M65 IO
   POKE(0, 65);
   POKE(0xD02F, 0x47);
@@ -203,7 +200,7 @@ void h640_text_mode(void)
   POKE(0xD062, 0x00);
 
   lfill(0xc000, 0x20, 2000);
-  
+
   // Clear colour RAM
   lfill(0xff80000L, 0x0E, 2000);
   // Disable hot registers
@@ -214,7 +211,8 @@ void h640_text_mode(void)
   POKE(0xD021, 0x0b);
 }
 
-void restore_graphics(void) {
+void restore_graphics(void)
+{
   // restore saved state
   POKE(0xD05D, state[10]);
   POKE(0xD018, state[0]);
@@ -231,9 +229,9 @@ void restore_graphics(void) {
   POKE(0xD021, state[12]);
 }
 
-void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* msg)
+void print_text80(unsigned char x, unsigned char y, unsigned char colour, char *msg)
 {
-  pixel_addr = 0xC000 + x + y*80;
+  pixel_addr = 0xC000 + x + y * 80;
   while (*msg) {
     char_code = *msg;
     if (*msg >= 0xc0 && *msg <= 0xe0)
@@ -249,14 +247,16 @@ void print_text80(unsigned char x, unsigned char y, unsigned char colour, char* 
   }
 }
 
-unsigned char keybuffer(unsigned char wait) {
+unsigned char keybuffer(unsigned char wait)
+{
   unsigned char key = 0;
   // clear keyboard buffer
   while (PEEK(0xD610))
     POKE(0xD610, 0);
 
   if (wait) {
-    while ((key = PEEK(0xD610)) == 0);
+    while ((key = PEEK(0xD610)) == 0)
+      ;
     POKE(0xD610, 0);
   }
 
@@ -265,41 +265,41 @@ unsigned char keybuffer(unsigned char wait) {
 
 void format_flags(unsigned char flags)
 {
-    flagstr[0] = '[';
-    if (flags & 0x80)
-        flagstr[1] = 'n';
-    else
-        flagstr[1] = '.';
-    if (flags & 0x40)
-        flagstr[2] = 'v';
-    else
-        flagstr[2] = '.';
-    if (flags & 0x20)
-        flagstr[3] = 'e';
-    else
-        flagstr[3] = '.';
-    if (flags & 0x10)
-        flagstr[4] = 'b';
-    else
-        flagstr[4] = '.';
-    if (flags & 0x08)
-        flagstr[5] = 'd';
-    else
-        flagstr[5] = '.';
-    if (flags & 0x04)
-        flagstr[6] = 'i';
-    else
-        flagstr[6] = '.';
-    if (flags & 0x02)
-        flagstr[7] = 'z';
-    else
-        flagstr[7] = '.';
-    if (flags & 0x01)
-        flagstr[8] = 'c';
-    else
-        flagstr[8] = '.';
-    flagstr[9] = ']';
-    flagstr[10] = 0x0;
+  flagstr[0] = '[';
+  if (flags & 0x80)
+    flagstr[1] = 'n';
+  else
+    flagstr[1] = '.';
+  if (flags & 0x40)
+    flagstr[2] = 'v';
+  else
+    flagstr[2] = '.';
+  if (flags & 0x20)
+    flagstr[3] = 'e';
+  else
+    flagstr[3] = '.';
+  if (flags & 0x10)
+    flagstr[4] = 'b';
+  else
+    flagstr[4] = '.';
+  if (flags & 0x08)
+    flagstr[5] = 'd';
+  else
+    flagstr[5] = '.';
+  if (flags & 0x04)
+    flagstr[6] = 'i';
+  else
+    flagstr[6] = '.';
+  if (flags & 0x02)
+    flagstr[7] = 'z';
+  else
+    flagstr[7] = '.';
+  if (flags & 0x01)
+    flagstr[8] = 'c';
+  else
+    flagstr[8] = '.';
+  flagstr[9] = ']';
+  flagstr[10] = 0x0;
 }
 
 void main(void)
@@ -317,89 +317,96 @@ void main(void)
 
   // Pre-install code snippet
   lcopy((long)code_snippet, (long)code_buf, 40);
-  
+
   // setup zero page pointers
-  *(unsigned long*)0xc4 = 0x00000380;
-  *(unsigned long*)0xc8 = 0x00000384;
+  *(unsigned long *)0xc4 = 0x00000380;
+  *(unsigned long *)0xc8 = 0x00000384;
 
   // Run each test
   for (i = 0; tests[i].opcode1; i++) {
     // Setup input values
-    *(unsigned long*)0x380 = tests[i].val1;
-    *(unsigned long*)0x384 = tests[i].val2;
-    *(unsigned long*)0x388 = tests[i].val3;
-    *(unsigned long*)0x38c = 0xb1eb1bbe;
+    *(unsigned long *)0x380 = tests[i].val1;
+    *(unsigned long *)0x384 = tests[i].val2;
+    *(unsigned long *)0x388 = tests[i].val3;
+    *(unsigned long *)0x38c = 0xb1eb1bbe;
 
     // change code
 
-    if (tests[i].opcode2==0) {
+    if (tests[i].opcode2 == 0) {
       // 16 bit prefix sec, clc, 2x neg
-      code_buf[INST_OFFSET]   = 0x38;
-      code_buf[INST_OFFSET+1] = 0x18;
-      code_buf[INST_OFFSET+2] = 0x42;
-      code_buf[INST_OFFSET+3] = 0x42;
-    } else if (tests[i].opcode2==1) {
-      // 32 bit prefix clc, 2x neg, eom
-      code_buf[INST_OFFSET]   = 0x18;
-      code_buf[INST_OFFSET+1] = 0x42;
-      code_buf[INST_OFFSET+2] = 0x42;
-      code_buf[INST_OFFSET+3] = 0xea;
-    } else if (tests[i].opcode2==2) {
-      // 16 bit prefix clc, sec, 2x neg
-      code_buf[INST_OFFSET]   = 0x18;
-      code_buf[INST_OFFSET+1] = 0x38;
-      code_buf[INST_OFFSET+2] = 0x42;
-      code_buf[INST_OFFSET+3] = 0x42;
-    } else if (tests[i].opcode2==3) {
-      // 32 bit prefix sec, 2x neg, eom
-      code_buf[INST_OFFSET]   = 0x38;
-      code_buf[INST_OFFSET+1] = 0x42;
-      code_buf[INST_OFFSET+2] = 0x42;
-      code_buf[INST_OFFSET+3] = 0xea;
+      code_buf[INST_OFFSET] = 0x38;
+      code_buf[INST_OFFSET + 1] = 0x18;
+      code_buf[INST_OFFSET + 2] = 0x42;
+      code_buf[INST_OFFSET + 3] = 0x42;
     }
-    code_buf[INST_OFFSET+4] = tests[i].opcode1;
+    else if (tests[i].opcode2 == 1) {
+      // 32 bit prefix clc, 2x neg, eom
+      code_buf[INST_OFFSET] = 0x18;
+      code_buf[INST_OFFSET + 1] = 0x42;
+      code_buf[INST_OFFSET + 2] = 0x42;
+      code_buf[INST_OFFSET + 3] = 0xea;
+    }
+    else if (tests[i].opcode2 == 2) {
+      // 16 bit prefix clc, sec, 2x neg
+      code_buf[INST_OFFSET] = 0x18;
+      code_buf[INST_OFFSET + 1] = 0x38;
+      code_buf[INST_OFFSET + 2] = 0x42;
+      code_buf[INST_OFFSET + 3] = 0x42;
+    }
+    else if (tests[i].opcode2 == 3) {
+      // 32 bit prefix sec, 2x neg, eom
+      code_buf[INST_OFFSET] = 0x38;
+      code_buf[INST_OFFSET + 1] = 0x42;
+      code_buf[INST_OFFSET + 2] = 0x42;
+      code_buf[INST_OFFSET + 3] = 0xea;
+    }
+    code_buf[INST_OFFSET + 4] = tests[i].opcode1;
 
     __asm__("jsr $0340");
 
     // read results
     if (tests[i].rmw == 1)
-      result_q = *(unsigned long*)0x384; // load from test value 2 location
+      result_q = *(unsigned long *)0x384; // load from test value 2 location
     else
-      result_q = *(unsigned long*)0x38c; // load non-q stored result
-    result_f = *(unsigned char*)0x390; // the flags after the op
+      result_q = *(unsigned long *)0x38c; // load non-q stored result
+    result_f = *(unsigned char *)0x390;   // the flags after the op
 
-    reslo = (unsigned int) (result_q&0xffff);
-    reshi = (unsigned int) (result_q>>16);
+    reslo = (unsigned int)(result_q & 0xffff);
+    reshi = (unsigned int)(result_q >> 16);
     format_flags(result_f);
     // check return values
-    if (result_q != tests[i].expected && (result_f&tests[i].flag_mask) != tests[i].flag_val) {
-        snprintf(concmsg, 35, "%-.11s q=$%04x%04x %s", tests[i].message, reshi, reslo, flagstr);
-        failstr[0] = 'q';
-        failstr[1] = 'f';
-        failstr[2] = 0x0;
-        status = TEST_FAIL;
-    } else if (result_q != tests[i].expected) {
-        snprintf(concmsg, 35, "%-.11s q=$%04x%04x", tests[i].message, reshi, reslo);
-        failstr[0] = 'q';
-        failstr[1] = 0x0;
-        status = TEST_FAIL;
-    } else if ((result_f&tests[i].flag_mask) != tests[i].flag_val) {
-        snprintf(concmsg, 35, "%-.11s %s", tests[i].message, flagstr);
-        failstr[0] = 'f';
-        failstr[1] = 0x0;
-        status = TEST_FAIL;
-    } else {
-        snprintf(concmsg, 35, "%-.11s", tests[i].message);
-        failstr[0] = 0x0;
-        status = TEST_PASS;
+    if (result_q != tests[i].expected && (result_f & tests[i].flag_mask) != tests[i].flag_val) {
+      snprintf(concmsg, 35, "%-.11s q=$%04x%04x %s", tests[i].message, reshi, reslo, flagstr);
+      failstr[0] = 'q';
+      failstr[1] = 'f';
+      failstr[2] = 0x0;
+      status = TEST_FAIL;
+    }
+    else if (result_q != tests[i].expected) {
+      snprintf(concmsg, 35, "%-.11s q=$%04x%04x", tests[i].message, reshi, reslo);
+      failstr[0] = 'q';
+      failstr[1] = 0x0;
+      status = TEST_FAIL;
+    }
+    else if ((result_f & tests[i].flag_mask) != tests[i].flag_val) {
+      snprintf(concmsg, 35, "%-.11s %s", tests[i].message, flagstr);
+      failstr[0] = 'f';
+      failstr[1] = 0x0;
+      status = TEST_FAIL;
+    }
+    else {
+      snprintf(concmsg, 35, "%-.11s", tests[i].message);
+      failstr[0] = 0x0;
+      status = TEST_PASS;
     }
 
     if (line < 24) {
       if (status == TEST_FAIL)
-        snprintf(msg, 80, "*%03d - fail(%-2s) - %-11.11s q=$%04x%04x %s", sub, failstr, tests[i].message, reshi, reslo, flagstr);
+        snprintf(
+            msg, 80, "*%03d - fail(%-2s) - %-11.11s q=$%04x%04x %s", sub, failstr, tests[i].message, reshi, reslo, flagstr);
       else
         snprintf(msg, 80, "*%03d - pass     - %-11.11s q=$%04x%04x %s", sub, tests[i].message, reshi, reslo, flagstr);
-      print_text80(0, line++, (status == TEST_FAIL)?2:5, msg);
+      print_text80(0, line++, (status == TEST_FAIL) ? 2 : 5, msg);
     }
     unit_test_set_current_name(concmsg);
     unit_test_report(ISSUE_NUM, sub++, status);

@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 #define MAX_COMMITS 65536
-char* commits[MAX_COMMITS];
+char *commits[MAX_COMMITS];
 int commit_count = 0;
 
 void usage(void)
@@ -17,13 +17,13 @@ void usage(void)
   exit(-1);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   if (argc != 3)
     usage();
 
   int issue = atoi(argv[1]);
-  char* branch = argv[2];
+  char *branch = argv[2];
 
   fprintf(stderr, "Fetching list of commits...\n");
   unlink("merge-issue.log");
@@ -35,7 +35,7 @@ int main(int argc, char** argv)
   snprintf(issuetag, 1024, "#%d", issue);
 
   fprintf(stderr, "Finding relevant commits...\n");
-  FILE* f = fopen("merge-issue.log", "r");
+  FILE *f = fopen("merge-issue.log", "r");
   char line[1024];
   char last_commit[1024];
   char commit_msg[1024];

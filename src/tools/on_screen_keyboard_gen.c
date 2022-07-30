@@ -4,9 +4,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  FILE* f = fopen(argv[1] ? argv[1] : "keyboard.txt", "r");
+  FILE *f = fopen(argv[1] ? argv[1] : "keyboard.txt", "r");
 
   char line[1024];
   int b[32];

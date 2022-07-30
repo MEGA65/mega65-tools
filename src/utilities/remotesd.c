@@ -56,7 +56,7 @@ void check_xemu_flag(void)
   }
 }
 
-void serial_write_string(uint8_t* m, uint16_t len)
+void serial_write_string(uint8_t *m, uint16_t len)
 {
 
   for (i = 0; i < len; i++) {
@@ -274,8 +274,8 @@ void wait_for_sdcard_to_go_busy(void)
 void mount_file(void)
 {
   printf("Mounting \"%s\"...\n", filename);
-  strcpy((char*)0x0400, filename);
-  *((char*)0x400 + strlen(filename)) = 0x00;
+  strcpy((char *)0x0400, filename);
+  *((char *)0x400 + strlen(filename)) = 0x00;
 
   // Call dos_setname()
   __asm__("LDY #$04");
@@ -360,20 +360,20 @@ void main(void)
         case 0x06: // multi write middle
         case 0x07: // multi write end
           job_addr++;
-          buffer_address = *(uint32_t*)job_addr;
+          buffer_address = *(uint32_t *)job_addr;
           job_addr += 4;
-          sector_number = *(uint32_t*)job_addr;
+          sector_number = *(uint32_t *)job_addr;
           job_addr += 4;
 
 #if DEBUG > 0
-          printf("$%04x : write sector $%08lx from mem $%07lx\n", *(uint16_t*)0xDC08, sector_number, buffer_address);
+          printf("$%04x : write sector $%08lx from mem $%07lx\n", *(uint16_t *)0xDC08, sector_number, buffer_address);
 #endif
 
           //	  lcopy(buffer_address,0x0400,512);
           lcopy(buffer_address, 0xffd6e00, 512);
 
           // Write sector
-          *(uint32_t*)0xD681 = sector_number;
+          *(uint32_t *)0xD681 = sector_number;
           POKE(0xD680, 0x57); // Open write gate
           if (job_type == 0x02)
             POKE(0xD680, 0x03);
@@ -397,16 +397,16 @@ void main(void)
         // - - - - - - - - - - - - - - - - - - - - -
         case 0x01:
           job_addr++;
-          buffer_address = *(uint32_t*)job_addr;
+          buffer_address = *(uint32_t *)job_addr;
           job_addr += 4;
-          sector_number = *(uint32_t*)job_addr;
+          sector_number = *(uint32_t *)job_addr;
           job_addr += 4;
 
 #if DEBUG
-          printf("$%04x : Read sector $%08lx into mem $%07lx\n", *(uint16_t*)0xDC08, sector_number, buffer_address);
+          printf("$%04x : Read sector $%08lx into mem $%07lx\n", *(uint16_t *)0xDC08, sector_number, buffer_address);
 #endif
           // Do read
-          *(uint32_t*)0xD681 = sector_number;
+          *(uint32_t *)0xD681 = sector_number;
           POKE(0xD680, 0x02);
 
           wait_for_sdcard_to_go_busy();
@@ -421,7 +421,7 @@ void main(void)
           serial_write_string(msg, strlen(msg));
 
 #if DEBUG
-          printf("$%04x : Read sector done\n", *(uint16_t*)0xDC08);
+          printf("$%04x : Read sector done\n", *(uint16_t *)0xDC08);
 #endif
 
           break;
@@ -432,9 +432,9 @@ void main(void)
         case 0x03: // 0x03 == with RLE
         case 0x04: // 0x04 == no RLE
           job_addr++;
-          sector_count = *(uint16_t*)job_addr;
+          sector_count = *(uint16_t *)job_addr;
           job_addr += 2;
-          sector_number = *(uint32_t*)job_addr;
+          sector_number = *(uint32_t *)job_addr;
           job_addr += 4;
 
 #if DEBUG > 1
@@ -470,7 +470,7 @@ void main(void)
                 POKE(0xD020, PEEK(0xD020) + 1);
 
                 // Do read
-                *(uint32_t*)0xD681 = sector_number;
+                *(uint32_t *)0xD681 = sector_number;
 
                 read_pending = 1;
                 sector_count--;
@@ -522,25 +522,25 @@ void main(void)
             rle_finalise();
 
 #if DEBUG
-          sector_number = *(uint32_t*)(job_addr - 4);
-          sector_count = *(uint16_t*)(job_addr - 6);
-          printf("$%04x : Completed read sector $%08lx (count=%d)\n", *(uint16_t*)0xDC08, sector_number, sector_count);
+          sector_number = *(uint32_t *)(job_addr - 4);
+          sector_count = *(uint16_t *)(job_addr - 6);
+          printf("$%04x : Completed read sector $%08lx (count=%d)\n", *(uint16_t *)0xDC08, sector_number, sector_count);
 #endif
 
           snprintf(msg, 80, "ftjobdone:%04x:\n\r", job_type_addr);
           serial_write_string(msg, strlen(msg));
 
 #if DEBUG
-          printf("$%04x : Read sector done\n", *(uint16_t*)0xDC08);
+          printf("$%04x : Read sector done\n", *(uint16_t *)0xDC08);
 #endif
 
           break;
 
         case 0x0f: // 0x0F == Read a slab of QSPI flash
           job_addr++;
-          sector_count = *(uint16_t*)job_addr;
+          sector_count = *(uint16_t *)job_addr;
           job_addr += 2;
-          sector_number = *(uint32_t*)job_addr;
+          sector_number = *(uint32_t *)job_addr;
           job_addr += 4;
 
 #if DEBUG > 1
@@ -576,17 +576,18 @@ void main(void)
                 POKE(0xD020, PEEK(0xD020) + 1);
 
                 // Do read
-                *(uint32_t*)0xD681 = sector_number;
+                *(uint32_t *)0xD681 = sector_number;
 
                 read_pending = 1;
                 sector_count--;
 
                 POKE(0xD680, 0x53);
 
-		// Wait just a short time for the fast flash transaction to complete
-		for(z=0;z<180;z++) continue;
+                // Wait just a short time for the fast flash transaction to complete
+                for (z = 0; z < 180; z++)
+                  continue;
 
-                sector_number+=512;
+                sector_number += 512;
               }
             }
             if (read_pending && (!buffer_ready)) {
@@ -625,35 +626,33 @@ void main(void)
             }
           } // end while we have sectors to send
 
-
 #if DEBUG
-          sector_number = *(uint32_t*)(job_addr - 4);
-          sector_count = *(uint16_t*)(job_addr - 6);
-          printf("$%04x : Completed read flash $%08lx (count=%d)\n", *(uint16_t*)0xDC08, sector_number, sector_count);
+          sector_number = *(uint32_t *)(job_addr - 4);
+          sector_count = *(uint16_t *)(job_addr - 6);
+          printf("$%04x : Completed read flash $%08lx (count=%d)\n", *(uint16_t *)0xDC08, sector_number, sector_count);
 #endif
 
           snprintf(msg, 80, "ftjobdone:%04x:\n\r", job_type_addr);
           serial_write_string(msg, strlen(msg));
 
 #if DEBUG
-          printf("$%04x : Read flash done\n", *(uint16_t*)0xDC08);
+          printf("$%04x : Read flash done\n", *(uint16_t *)0xDC08);
 #endif
 
           break;
 
-	  
         // - - - - - - - - - - - - - - - - - - - - -
         // Send block of memory
         // - - - - - - - - - - - - - - - - - - - - -
         case 0x11:
           job_addr++;
-          buffer_address = *(uint32_t*)job_addr;
+          buffer_address = *(uint32_t *)job_addr;
           job_addr += 4;
-          transfer_size = *(uint32_t*)job_addr;
+          transfer_size = *(uint32_t *)job_addr;
           job_addr += 4;
 
 #if DEBUG
-          printf("$%04x : Send mem $%07lx to $%07lx: %02x %02x ...\n", *(uint16_t*)0xDC08, buffer_address,
+          printf("$%04x : Send mem $%07lx to $%07lx: %02x %02x ...\n", *(uint16_t *)0xDC08, buffer_address,
               buffer_address + transfer_size - 1, lpeek(buffer_address), lpeek(buffer_address + 1));
 #endif
 
@@ -669,7 +668,7 @@ void main(void)
           serial_write_string(msg, strlen(msg));
 
 #if DEBUG
-          printf("$%04x : Send mem done\n", *(uint16_t*)0xDC08);
+          printf("$%04x : Send mem done\n", *(uint16_t *)0xDC08);
 #endif
 
           break;
@@ -679,7 +678,7 @@ void main(void)
         // - - - - - - - - - - - - - - - - - - - - -
         case 0x12:
           job_addr++;
-          strcpy(filename, (char*)job_addr);
+          strcpy(filename, (char *)job_addr);
           mount_file();
           break;
 
@@ -705,7 +704,7 @@ void main(void)
       serial_write_string(msg, strlen(msg));
 
 #if DEBUG
-      printf("$%04x : Sending batch done\n", *(uint16_t*)0xDC08);
+      printf("$%04x : Sending batch done\n", *(uint16_t *)0xDC08);
 #endif
     }
   }
