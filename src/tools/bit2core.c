@@ -428,21 +428,29 @@ void build_core_file(const int bit_size, int *core_len, unsigned char *core_file
 
 unsigned long htoc64l(unsigned long v)
 {
-  unsigned char c[4];
+  union {
+    unsigned char c[4];
+    unsigned long l;
+  } conv;
 
-  c[0] = (v >> 0) & 0xff;
-  c[1] = (v >> 8) & 0xff;
-  c[2] = (v >> 16) & 0xff;
-  c[3] = (v >> 24) & 0xff;
-  return *(unsigned long *)c;
+  conv.c[0] = (v >> 0) & 0xff;
+  conv.c[1] = (v >> 8) & 0xff;
+  conv.c[2] = (v >> 16) & 0xff;
+  conv.c[3] = (v >> 24) & 0xff;
+
+  return conv.l;
 }
 
 unsigned long c64tohl(unsigned long v)
 {
-  unsigned char *c = (unsigned char *)&v;
-  unsigned long o = 0;
-  o = (c[0] << 0) + (c[1] << 8) + (c[2] << 16) + (c[3] << 24);
-  return o;
+  union {
+    unsigned char c[4];
+    unsigned long l;
+  } conv;
+
+  conv.l = v;
+
+  return (conv.c[0] << 0) + (conv.c[1] << 8) + (conv.c[2] << 16) + (conv.c[3] << 24);
 }
 
 unsigned char file_data[1024 * 1024];
