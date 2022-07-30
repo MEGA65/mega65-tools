@@ -30,6 +30,7 @@ src/tools/ftphelper.c
 *.xz
 *.exe
 .nova
+.vscode
 monitorload_dlls
 test.wxs
 cbmconvert
