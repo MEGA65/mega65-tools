@@ -105,18 +105,18 @@ char *load_binary = NULL;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
-int fpgajtag_main(char* bitstream);
-char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode);
-int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity);
-void set_vcd_file(char* name);
+int fpgajtag_main(char *bitstream);
+char *init_fpgajtag(const char *serialno, const char *serialport, uint32_t file_idcode);
+int xilinx_boundaryscan(char *xdc, char *bsdl, char *sensitivity);
+void set_vcd_file(char *name);
 void do_exit(int retval);
 
-extern const char* version_string;
+extern const char *version_string;
 
 #define MAX_CMD_OPTS 50
 int cmd_count = 0, cmd_log_start = -1, cmd_log_end = -1;
-char* cmd_desc[MAX_CMD_OPTS];
-char* cmd_arg[MAX_CMD_OPTS];
+char *cmd_desc[MAX_CMD_OPTS];
+char *cmd_arg[MAX_CMD_OPTS];
 struct option cmd_opts[MAX_CMD_OPTS];
 #define CMD_OPTION(Oname, Ohas, Oflag, Oval, Oarg, Odesc)                                                                   \
   cmd_opts[cmd_count].name = Oname;                                                                                         \
@@ -296,10 +296,10 @@ int get_terminal_size(int max_width)
   return max_width > 0 && width > max_width ? max_width : width;
 }
 
-char* wrap_line(const char* line, int wrap, int* offset)
+char *wrap_line(const char *line, int wrap, int *offset)
 {
   int pos;
-  char* buffer;
+  char *buffer;
 
   if (strlen(line) <= wrap) {
     *offset = -1;
@@ -318,7 +318,7 @@ char* wrap_line(const char* line, int wrap, int* offset)
   return buffer;
 }
 
-void usage(int exitcode, char* message)
+void usage(int exitcode, char *message)
 {
   char optstr[MAX_TERM_WIDTH + 1], *argstr, *temp;
   int optlen, offset = 0, first, width = get_terminal_size(MAX_TERM_WIDTH) - 1;
@@ -588,7 +588,7 @@ int memory_save(const int start, const int end, const char *filename)
   int memsave_start_addr = -1;
   int memsave_end_addr = -1;
   int cur_addr, count;
-  unsigned char membuf[4096], is_basic=0;
+  unsigned char membuf[4096], is_basic = 0;
   FILE *o;
 
   if (start == -1 && end == -1) {
@@ -766,7 +766,7 @@ int get_system_bitstream_version(void)
   usleep(20000);
   timeout = time(NULL);
   while (timeout + 2 > time(NULL)) {
-    len = serialport_read(fd, (unsigned char*)buf, 512);
+    len = serialport_read(fd, (unsigned char *)buf, 512);
     if (len != 0)
       break;
   }
@@ -793,7 +793,7 @@ int get_system_bitstream_version(void)
   log_debug("get_system_bitstream_version: dumping $FFD3629");
   slow_write(fd, "mffd3629 1\r", 11);
   usleep(20000);
-  while (!(len = serialport_read(fd, (unsigned char*)buf, 512)))
+  while (!(len = serialport_read(fd, (unsigned char *)buf, 512)))
     ;
   // search version byte and translate
   found = strstr(buf, ":0FFD3629:");
@@ -846,11 +846,11 @@ int get_system_bitstream_version(void)
 }
 
 #ifndef WINDOWS
-char* find_serial_port()
+char *find_serial_port()
 {
   int i, res;
-  char* device = NULL;
-  static char* devglob =
+  char *device = NULL;
+  static char *devglob =
 #if defined(__APPLE__)
       "/dev/cu.usbserial-*";
 #else
@@ -1714,7 +1714,7 @@ unsigned char inbuf[8192];
 unsigned int failcount, test_last_issue, test_last_sub;
 FILE *logPtr;
 
-void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char state, char* msg)
+void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char state, char *msg)
 {
   char outstring[255];
   char temp[255];
@@ -1722,7 +1722,7 @@ void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char sta
   struct timeval currentTime;
 
   gettimeofday(&currentTime, NULL);
-  strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime((const time_t*)&(currentTime.tv_sec)));
+  strftime(outstring, 255, "%Y-%m-%dT%H:%M:%S", gmtime((const time_t *)&(currentTime.tv_sec)));
 
   snprintf(temp, 255, ".%03dZ %s (Issue#%04d, Test #%03d", (unsigned int)currentTime.tv_usec / 1000, test_states[state],
       issue, sub);
@@ -2145,25 +2145,24 @@ int main(int argc, char **argv)
       wait_for_bitstream = 1;
       break;
     case 0x81: // memsave
-      {
-        char *next;
-        if (!optarg)
+    {
+      char *next;
+      if (!optarg)
+        usage(-3, "failed to parse memsave address argument");
+      if (strchr(optarg, ':') && strchr(optarg, ',')) { // got both range and filename
+        if (sscanf(optarg, "%x:%x;", &memsave_start, &memsave_end) != 2)
           usage(-3, "failed to parse memsave address argument");
-        if (strchr(optarg, ':') && strchr(optarg, ',')) { // got both range and filename
-          if (sscanf(optarg, "%x:%x;", &memsave_start, &memsave_end) != 2)
-            usage(-3, "failed to parse memsave address argument");
-          next = strchr(optarg, ',') + 1;
-          memsave_filename = strdup(next);
-        }
-        else if (strchr(optarg, ','))
-          usage(-3, "failed to parse memsave argument (range without file?)");
-        else {
-          memsave_start = -1;
-          memsave_end = -1;
-          memsave_filename = strdup(optarg);
-        }
+        next = strchr(optarg, ',') + 1;
+        memsave_filename = strdup(next);
       }
-      break;
+      else if (strchr(optarg, ','))
+        usage(-3, "failed to parse memsave argument (range without file?)");
+      else {
+        memsave_start = -1;
+        memsave_end = -1;
+        memsave_filename = strdup(optarg);
+      }
+    } break;
     default: // can not happen?
       usage(-3, "Unknown option.");
     }
@@ -3195,7 +3194,7 @@ int main(int argc, char **argv)
        * reset can be interpreted as write requests by check_for_vf011_requests
        * and might kill the D81 image... so better bail out here!
        */
-      if (b > 64 && strstr((char*)buff, "MEGA65 Serial Monitor")) {
+      if (b > 64 && strstr((char *)buff, "MEGA65 Serial Monitor")) {
         log_crit("reset detected, please power cycle your MEGA65");
         break;
       }

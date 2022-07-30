@@ -78,8 +78,8 @@ int switch_to_c64mode(void);
 PORT_TYPE open_tcp_port(char *portname);
 void close_tcp_port(PORT_TYPE localfd);
 void close_default_tcp_port(void);
-void do_write(PORT_TYPE localfd, char* str);
-int do_read(PORT_TYPE localfd, char* str, int max);
+void do_write(PORT_TYPE localfd, char *str);
+int do_read(PORT_TYPE localfd, char *str, int max);
 void progress_to_RTI(void);
 
 #ifdef WINDOWS

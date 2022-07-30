@@ -1477,7 +1477,7 @@ int do_serial_port_write(int fd, uint8_t *buffer, size_t size, const char *funct
   return size;
 }
 
-size_t do_serial_port_read(int fd, uint8_t* buffer, size_t size, const char* function, const char* file, const int line)
+size_t do_serial_port_read(int fd, uint8_t *buffer, size_t size, const char *function, const char *file, const int line)
 {
   int count;
 

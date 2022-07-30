@@ -9,15 +9,15 @@
 #define PORT_TYPE int
 #endif
 
-bool serialOpen(char* portName);
+bool serialOpen(char *portName);
 bool serialClose(void);
-void serialWrite(char* string);
-bool serialRead(char* buf, int bufsize);
+void serialWrite(char *string);
+bool serialRead(char *buf, int bufsize);
 void serialBaud(bool fastmode);
 void serialFlush(void);
 
 /** TODO: m65common defines this, I guess: extern int fd; **/
 
-extern int do_ftp(char* bitstream);
+extern int do_ftp(char *bitstream);
 
 #endif

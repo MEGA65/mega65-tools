@@ -191,16 +191,15 @@ void print_screencode(unsigned char c, int upper_case)
 {
   // A nice reference for these mappings can be found here:
   // https://style64.org/petscii/
-  static int map_screencode_to_utf8[][2] = {
-    { 0x40, 0x2501 }, // box drawings heavy horizontal
-    { 0x43, 0x2501 }, // box drawings heavy horizontal
-    { 0x60, 0xa0 },   // no-break space?
-    { 0x61, 0x258c }, // left half block
-    { 0x62, 0x2584 }, // lower half block
-    { 0x63, 0x2594 }, // upper one eigth block
-    { 0x64, 0x2581 }, // lower one eigth block
-    { 0x65, 0x258e }, // left one quarter block
-    { 0x66, 0x2592 }, // medium shade
+  static int map_screencode_to_utf8[][2] = { { 0x40, 0x2501 }, // box drawings heavy horizontal
+    { 0x43, 0x2501 },                                          // box drawings heavy horizontal
+    { 0x60, 0xa0 },                                            // no-break space?
+    { 0x61, 0x258c },                                          // left half block
+    { 0x62, 0x2584 },                                          // lower half block
+    { 0x63, 0x2594 },                                          // upper one eigth block
+    { 0x64, 0x2581 },                                          // lower one eigth block
+    { 0x65, 0x258e },                                          // left one quarter block
+    { 0x66, 0x2592 },                                          // medium shade
     { 0x67, 0x258a }, // left three quarter block (but it really should be right one quarter block)
     { 0x68, 0x25db }, // no equivalant to lower half medium shade, so got an approximation
     { 0x69, 0x25e4 }, // black upper left triangle
@@ -775,7 +774,7 @@ void paint_screen_shot(void)
   return;
 }
 
-int do_screen_shot(char* userfilename)
+int do_screen_shot(char *userfilename)
 {
   log_note("fetching screenshot");
   log_debug("syncing to monitor");
