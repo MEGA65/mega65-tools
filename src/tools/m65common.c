@@ -938,6 +938,29 @@ int push_ram(unsigned long address, unsigned int count, unsigned char *buffer)
   return 0;
 }
 
+char parse_byte(const unsigned char *source, unsigned char *target)
+{
+  unsigned char val = 0;
+  if (source[0] >= '0' && source[0] <= '9')
+    val = ((source[0] - 48) << 4);
+  else if (source[0] >= 'A' && source[0] <= 'F')
+    val = ((source[0] - 55) << 4);
+  else if (source[0] >= 'a' && source[0] <= 'f')
+    val = ((source[0] - 87) << 4);
+  else
+    return -1;
+  if (source[1] >= '0' && source[1] <= '9')
+    val |= (source[1] - 48);
+  else if (source[1] >= 'A' && source[1] <= 'F')
+    val |= (source[1] - 55);
+  else if (source[1] >= 'a' && source[1] <= 'f')
+    val |= (source[1] - 87);
+  else
+    return -1;
+  *target = val;
+  return 0;
+}
+
 int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer)
 {
   /* Fetch a block of RAM into the provided buffer.
@@ -946,10 +969,10 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer)
 
   unsigned long addr = address;
   unsigned long end_addr;
-  char cmd[8192];
+  char cmd[80], *found;
   unsigned char read_buff[8192];
   char next_addr_str[8192];
-  int ofs = 0;
+  int ofs = 0, s_offset;
 
   //  fprintf(stderr,"Fetching $%x bytes @ $%lx\n",count,address);
 
@@ -959,19 +982,18 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer)
     if ((last_rx < time(0)) || (addr == end_addr)) {
       //	printf("no response for 1 sec: Requesting more.\n");
       if ((address + count - addr) < 17) {
-        snprintf(cmd, 8192, "m%X\r", (unsigned int)addr);
+        snprintf(cmd, 79, "m%X\r", (unsigned int)addr);
         end_addr = addr + 0x10;
       }
       else {
-        snprintf(cmd, 8192, "M%X\r", (unsigned int)addr);
+        snprintf(cmd, 79, "M%X\r", (unsigned int)addr);
         end_addr = addr + 0x100;
       }
       //	printf("Sending '%s'\n",cmd);
       slow_write_safe(fd, cmd, strlen(cmd));
       last_rx = time(0);
     }
-    snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
-    int b = serialport_read(fd, &read_buff[ofs], 8192 - ofs);
+    int b = serialport_read(fd, &read_buff[ofs], 8191 - ofs);
     if (b <= 0)
       b = 0;
     //            else
@@ -981,37 +1003,39 @@ int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer)
     //      if (b) dump_bytes(0,"read data",&read_buff[ofs],b);
     read_buff[ofs + b] = 0;
     ofs += b;
-    char *s = strstr((char *)read_buff, next_addr_str);
-    if (s && (strlen(s) >= 42)) {
-      char b = s[42];
-      s[42] = 0;
-      // log_debug("found data for $%08x: %s", (unsigned int)addr, s);
-      s[42] = b;
+    snprintf(next_addr_str, 8192, "\n:%08X:", (unsigned int)addr);
+    found = strstr((char *)read_buff, next_addr_str);
+    if (found && (strlen(found) >= 43)) {
+      /* debug
+      char b = s[43];
+      s[43] = 0;
+      log_debug("found data for $%08x: %s", (unsigned int)addr, s);
+      s[43] = b;
+      */
       for (int i = 0; i < 16; i++) {
 
         // Don't write more bytes than requested
         if ((addr - address + i) >= count)
           break;
 
-        char hex[3];
-        hex[0] = s[1 + 10 + i * 2 + 0];
-        hex[1] = s[1 + 10 + i * 2 + 1];
-        hex[2] = 0;
-        buffer[addr - address + i] = strtol(hex, NULL, 16);
+        if (parse_byte((unsigned char *)&found[11 + i * 2], &buffer[addr - address + i])) {
+          log_debug("fetch_ram: error parsing %s", found);
+        }
       }
       addr += 16;
 
       // Shuffle buffer down
-      int s_offset = (long long)s - (long long)read_buff + 42;
+      s_offset = (long long)found - (long long)read_buff + 43;
       bcopy(&read_buff[s_offset], &read_buff[0], 8192 - (ofs - s_offset));
       ofs -= s_offset;
     }
   }
   if (addr >= (address + count)) {
-    //    fprintf(stderr,"Memory read complete at $%lx\n",addr);
+    // log_debug("fetch_ram: read complete at $%08lx\n", addr);
     return 0;
   }
   else {
+    // TODO: better return -1 and let caller decide?
     log_crit("could not read requested memory region.");
     exit(-1);
   }
