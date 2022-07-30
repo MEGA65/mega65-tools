@@ -56,6 +56,7 @@
 
 #include "m65common.h"
 #include "logging.h"
+#include "screen_shot.h"
 
 #define UT_TIMEOUT 10
 #define UT_RES_TIMEOUT 127
@@ -104,14 +105,11 @@ char *load_binary = NULL;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
-int do_screen_shot(char *userfilename);
 int fpgajtag_main(char *bitstream);
 char *init_fpgajtag(const char *serialno, const char *serialport, uint32_t file_idcode);
 int xilinx_boundaryscan(char *xdc, char *bsdl, char *sensitivity);
 void set_vcd_file(char *name);
 void do_exit(int retval);
-int do_screen_shot_ascii(void);
-void get_video_state(void);
 
 extern const char *version_string;
 
