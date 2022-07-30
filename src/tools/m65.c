@@ -105,7 +105,6 @@ char *load_binary = NULL;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
-int do_screen_shot(char* userfilename);
 int fpgajtag_main(char* bitstream);
 char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_idcode);
 int xilinx_boundaryscan(char* xdc, char* bsdl, char* sensitivity);

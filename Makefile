@@ -616,19 +616,27 @@ $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 
 # ========== m65dbg ==========
 
-M65DBG_SOURCES = $(TOOLDIR)/m65dbg/m65dbg.c $(TOOLDIR)/logging.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/version.c
-M65DBG_INCLUDES = -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/
-M65DBG_LIBRARIES = -lpng -lpthread -lusb-1.0 -lz
+TEST:=$(shell test -d /cygdrive && echo cygwin)
+ifneq "$(TEST)" ""
+  M65DEBUG_READLINE=-L/usr/bin -lreadline7
+else
+  M65DEBUG_READLINE=-lreadline
+endif
 
-$(BINDIR)/m65dbg:	$(M65DBG_SOURCES) Makefile
+M65DBG_HEADERS = $(TOOLDIR)/m65dbg/commands.h $(TOOLDIR)/m65dbg/gs4510.h $(TOOLDIR)/m65dbg/serial.h
+M65DBG_SOURCES = $(TOOLDIR)/m65dbg/m65dbg.c $(TOOLDIR)/m65dbg/commands.c $(TOOLDIR)/m65dbg/gs4510.c $(TOOLDIR)/m65dbg/serial.c $(TOOLDIR)/logging.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/version.c
+M65DBG_INCLUDES = -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/
+M65DBG_LIBRARIES = -lpng -lpthread -lusb-1.0 -lz $(M65DEBUG_READLINE)
+
+$(BINDIR)/m65dbg:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(MAKE_VERSION)
 	$(CC) $(COPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
 
-$(BINDIR)/m65dbg.osx:	$(M65DBG_SOURCES) Makefile
+$(BINDIR)/m65dbg.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(MAKE_VERSION)
 	$(CC) $(COPT) -D__APPLE__ $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.osx $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
 
-$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) Makefile
+$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(MAKE_VERSION)
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
 
