@@ -370,71 +370,72 @@ void usage(int exitcode, char *message)
 
 void init_cmd_options(void)
 {
-  CMD_OPTION("help", 0, 0, 'h', "", "Display help and exit.");
+  // clang-format off
+  CMD_OPTION("help",      0, 0,         'h', "",      "Display help and exit.");
   cmd_log_start = cmd_count;
-  CMD_OPTION("quiet", 0, &loglevel, 1, "", "Only display errors or critical errors.");
-  CMD_OPTION("verbose", 0, &loglevel, 4, "", "More verbose logging.");
-  CMD_OPTION("debug", 0, &loglevel, 5, "", "Enable debug logging.");
+  CMD_OPTION("quiet",     0, &loglevel, 1,   "",      "Only display errors or critical errors.");
+  CMD_OPTION("verbose",   0, &loglevel, 4,   "",      "More verbose logging.");
+  CMD_OPTION("debug",     0, &loglevel, 5,   "",      "Enable debug logging.");
   cmd_log_end = cmd_count;
-  CMD_OPTION("log", 1, 0, '0', "level", "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
+  CMD_OPTION("log",       1, 0,         '0', "level", "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
-  CMD_OPTION("autodiscover", 0, 0, 'j', "", "Try to autodiscover device and exit.");
-  CMD_OPTION("device", 1, 0, 'l', "port", "Name of serial <port> to use, e.g., " DEVICENAME ".");
-  CMD_OPTION("fpga", 1, 0, 'f', "serial", "Select which FPGA to reconfigure by specifying JTAG <serial>.");
-  CMD_OPTION("speed", 1, 0, 's', "230400|1000000|1500000|2000000|4000000",
-      "Speed of serial port in <bits per second> (defaults to 2000000). This needs to match the speed your bitstream uses!");
-  CMD_OPTION("usedk", 0, 0, 'K', "", "Use DK backend for libUSB, if available.");
+  CMD_OPTION("autodiscover", 0, 0,      'j', "",      "Try to autodiscover device and exit.");
+  CMD_OPTION("device",    1, 0,         'l', "port",  "Name of serial <port> to use, e.g., "DEVICENAME".");
+  CMD_OPTION("fpga",      1, 0,         'f', "serial","Select which FPGA to reconfigure by specifying JTAG <serial>.");
+  CMD_OPTION("speed",     1, 0,         's', "230400|1000000|1500000|2000000|4000000",
+                  "Speed of serial port in <bits per second> (defaults to 2000000). This needs to match the speed your bitstream uses!");
+  CMD_OPTION("usedk",     0, 0,         'K', "",      "Use DK backend for libUSB, if available.");
 
-  CMD_OPTION("bootslot", 1, 0, 'Z', "slot|addr",
-      "Reconfigure FPGA from specified <slot> (argument<8) or <addr>ess (hex) in flash.");
-  CMD_OPTION("bit", 1, 0, 'b', "file", "name of a FPGA bitstream <file> to load.");
-  CMD_OPTION("bitonly", 1, 0, 'q', "file",
-      "name of a FPGA bitstream <file> to load and then directly quit. Use this for cores other than MEGA65.");
-  CMD_OPTION("vivadopath", 1, 0, 'v', "", "The location of the Vivado executable to use for -b on Windows.");
+  CMD_OPTION("bootslot",  1, 0,         'Z', "slot|addr", "Reconfigure FPGA from specified <slot> (argument<8) or <addr>ess (hex) in flash.");
+  CMD_OPTION("bit",       1, 0,         'b', "file",  "name of a FPGA bitstream <file> to load.");
+  CMD_OPTION("bitonly",   1, 0,         'q', "file",  "name of a FPGA bitstream <file> to load and then directly quit. Use this for cores other than MEGA65.");
+  CMD_OPTION("vivadopath",1, 0,         'v', "",      "The location of the Vivado executable to use for -b on Windows.");
 
-  CMD_OPTION("reset", 0, 0, 'F', "", "Force reset on start.");
-  CMD_OPTION("halt", 0, 0, 'H', "", "Halt CPU after loading ROMs and program.");
-  CMD_OPTION("nocart", 0, 0, 'N', "", "Disable a running cartridge, and boot to C64 mode.");
-  CMD_OPTION("run", 0, 0, 'r', "", "Automatically RUN programme after loading.");
-  CMD_OPTION("break", 1, 0, 'B', "addr", "set a breakpoint at <addr>ess (hex) on synchronising, and then immediately exit.");
+  CMD_OPTION("reset",     0, 0,         'F', "",      "Force reset on start.");
+  CMD_OPTION("halt",      0, 0,         'H', "",      "Halt CPU after loading ROMs and program.");
+  CMD_OPTION("nocart",    0, 0,         'N', "",      "Disable a running cartridge, and boot to C64 mode.");
+  CMD_OPTION("run",       0, 0,         'r', "",      "Automatically RUN programme after loading.");
+  CMD_OPTION("break",     1, 0,         'B', "addr",  "set a breakpoint at <addr>ess (hex) on synchronising, and then immediately exit.");
 
-  CMD_OPTION("hyppostatus", 0, 0, 'X', "", "Show a report of current Hypervisor status.");
-  CMD_OPTION("inject", 1, 0, '@', "file@addr", "Load a binary <file> at <addr>ess (hex).");
-  CMD_OPTION("c64mode", 0, 0, '4', "", "Switch to C64 mode.");
-  CMD_OPTION("volume", 1, 0, 'A', "x[-y]=p",
-      "Set audio coefficient(s) <x> (and optionally up to <y>) to <p> percent of maximum volume.");
-  CMD_OPTION("mixer", 0, 0, 'a', "", "Read and display audio cross-bar mixer status.");
-  CMD_OPTION("pal", 0, 0, 'p', "", "switch to PAL video mode.");
-  CMD_OPTION("ntsc", 0, 0, 'n', "", "switch to NTSC video mode.");
+  CMD_OPTION("hyppostatus", 0, 0,       'X', "",      "Show a report of current Hypervisor status.");
+  CMD_OPTION("inject",    1, 0,         '@', "file@addr", "Load a binary <file> at <addr>ess (hex).");
+  CMD_OPTION("c64mode",   0, 0,         '4', "",      "Switch to C64 mode.");
+  CMD_OPTION("volume",    1, 0,         'A', "x[-y]=p", "Set audio coefficient(s) <x> (and optionally up to <y>) to <p> percent of maximum volume.");
+  CMD_OPTION("mixer",     0, 0,         'a', "",      "Read and display audio cross-bar mixer status.");
+  CMD_OPTION("pal",       0, 0,         'p', "",      "switch to PAL video mode.");
+  CMD_OPTION("ntsc",      0, 0,         'n', "",      "switch to NTSC video mode.");
 
-  CMD_OPTION("virtuald81", 1, 0, 'd', "d81", "enable virtual D81 access on local <d81> image.");
+  CMD_OPTION("virtuald81",1, 0,         'd', "d81",   "enable virtual D81 access on local <d81> image.");
 
-  CMD_OPTION("unittest", 2, 0, 'u', "timeout", "run program in unit test mode (<timeout> in seconds, defaults to 10).");
-  CMD_OPTION("utlog", 1, 0, 'w', "file", "append unit test results to <file>.");
+  CMD_OPTION("unittest",  2, 0,         'u', "timeout", "run program in unit test mode (<timeout> in seconds, defaults to 10).");
+  CMD_OPTION("utlog",     1, 0,         'w', "file",  "append unit test results to <file>.");
 
-  CMD_OPTION(
-      "screenshot", 2, 0, 'S', "file", "show text rendering of MEGA65 screen, optionally save PNG screenshot to <file>.");
+  CMD_OPTION("screenshot", 2, 0,        'S', "file",  "show text rendering of MEGA65 screen, optionally save PNG screenshot to <file>.");
 
-  CMD_OPTION("hyppo", 1, 0, 'k', "file", "HICKUP <file> to replace the HYPPO in the bitstream.");
-  /* NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware
-     for the bitstream, and @issue/tag for HYPPO. */
-  CMD_OPTION("flashmenu", 1, 0, 'U', "file", "Flash menu <file> to preload at $50000-$57FFF.");
-  CMD_OPTION("basicrom", 1, 0, 'R', "file", "BASIC ROM <file> to preload at $20000-$3FFFF.");
-  CMD_OPTION("charrom", 1, 0, 'C', "file", "Character ROM <file> to preload at $FF7E000.");
-  CMD_OPTION("colourrom", 1, 0, 'c', "file", "Colour RAM <file> to preload at $FF80000.");
+  CMD_OPTION("hyppo",     1, 0,         'k', "file",  "HICKUP <file> to replace the HYPPO in the bitstream.");
+    /* NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware
+       for the bitstream, and @issue/tag for HYPPO. */
+  CMD_OPTION("flashmenu", 1, 0,         'U', "file",  "Flash menu <file> to preload at $50000-$57FFF.");
+  CMD_OPTION("basicrom",  1, 0,         'R', "file",  "BASIC ROM <file> to preload at $20000-$3FFFF.");
+  CMD_OPTION("charrom",   1, 0,         'C', "file",  "Character ROM <file> to preload at $FF7E000.");
+  CMD_OPTION("colourrom", 1, 0,         'c', "file",  "Colour RAM <file> to preload at $FF80000.");
 
-  CMD_OPTION("vtype", 1, 0, 't', "-|text|file",
-      "Type <text> via keyboard virtualisation. If a <file>name is provided, the contents of the file are typed. "
-      "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
-  CMD_OPTION("vtyperet", 1, 0, 'T', "-|text|file", "As virttype, but add a RETRUN at the end of the line.");
+  CMD_OPTION("vtype",     1, 0,         't', "-|text|file",
+                  "Type <text> via keyboard virtualisation. If a <file>name is provided, the contents of the file are typed. "
+                  "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
+  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text|file", "As virttype, but add a RETRUN at the end of the line.");
 
-  CMD_OPTION("boundaryscan", 1, 0, 'J', "xdc,bsdl[,sens[,log]]",
-      "Do JTAG boundary scan of attached FPGA, using the provided <xdc> and <bsdl> files. "
-      "A <sens>itivity list can also be provided, to restrict the set of signals monitored. "
-      "Result is logged into the specified <log> file, if provided.");
-  CMD_OPTION("ethvideo", 0, 0, 'E', "", "Enable streaming of video via ethernet.");
-  CMD_OPTION("ethcpulog", 0, 0, 'L', "", "Enable streaming of CPU instruction log via ethernet.");
-  CMD_OPTION("phoneosk", 0, 0, 'o', "", "Enable on-screen keyboard (MEGAphone).");
+  CMD_OPTION("memsave",   1, 0,         0x81, "[addr:addr;]filename", "saves memory range addr:addr (hex) to filename. "
+                  "If addr range is omitted, save current basic memory. "
+                  "Only BASIC save without addr range will add load addr in front of data!");
+
+  CMD_OPTION("boundaryscan", 1, 0,      'J', "xdc,bsdl[,sens[,log]]",
+                  "Do JTAG boundary scan of attached FPGA, using the provided <xdc> and <bsdl> files. "
+                  "A <sens>itivity list can also be provided, to restrict the set of signals monitored. "
+                  "Result is logged into the specified <log> file, if provided.");
+  CMD_OPTION("ethvideo",  0, 0,         'E', "",      "Enable streaming of video via ethernet.");
+  CMD_OPTION("ethcpulog", 0, 0,         'L', "",      "Enable streaming of CPU instruction log via ethernet.");
+  CMD_OPTION("phoneosk",  0, 0,         'o', "",      "Enable on-screen keyboard (MEGAphone).");
   CMD_OPTION("debugloadmem", 0, &debug_load_memory, 1, "", "DEBUG - test load memory function.");
   // clang-format on
 }
