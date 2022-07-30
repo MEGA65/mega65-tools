@@ -131,6 +131,8 @@ TOOLS=$(TOOLSUNX) $(TOOLSWIN)
 SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
 
+.PHONY: all allunix tests tools utilities format clean cleangen
+
 all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
 allmac:	$(SDCARD_FILES) $(TOOLSMAC) $(UTILITIES) $(TESTS)
 allwin:	$(SDCARD_FILES) $(TOOLSWIN) $(UTILITIES) $(TESTS)
