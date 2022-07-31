@@ -1605,6 +1605,34 @@ void close_serial_port(void)
 
 #endif
 
+unsigned char wait_for_serial(const unsigned char what, const unsigned long timeout_sec, const unsigned long timeout_usec) {
+  fd_set read_set;
+  fd_set write_set;
+  struct timeval timeout;
+  unsigned char res = 0;
+
+  FD_ZERO(&read_set);
+  if (what & WAIT_READ)
+    FD_SET(fd, &read_set);
+  FD_ZERO(&write_set);
+  if (what & WAIT_WRITE)
+    FD_SET(fd, &write_set);
+  if (timeout_sec > 0 || timeout_usec > 0) {
+    timeout.tv_sec = timeout_sec;
+    timeout.tv_usec = timeout_usec;
+  }
+
+  if (select(fd + 1, &read_set, &write_set, NULL, timeout_sec > 0 || timeout_usec > 0 ? &timeout : NULL) < 1) {
+    log_debug("wait for serial: nothing there");
+    return 0;
+  }
+  if (FD_ISSET(fd, &read_set)) res |= WAIT_READ;
+  if (FD_ISSET(fd, &write_set)) res |= WAIT_WRITE;
+
+  log_debug("wait_for_serial(%x): got something %x", what, res);
+  return res;
+}
+
 /*
         borrowed from: https://www.binarytides.com/hostname-to-ip-address-c-sockets-linux/
         Get ip from domain name

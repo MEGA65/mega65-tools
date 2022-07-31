@@ -1793,12 +1793,9 @@ void unit_test_log(unsigned char bytes[4])
 
 void enterTestMode()
 {
-
   unsigned char receiveString, recent_bytes_fill = 0;
   int currentMessagePos;
   time_t currentTime;
-
-  monitor_sync();
 
   log_note("Entering unit test mode. Waiting for test results.");
   testname[0] = 0; // initialize test name with empty string
@@ -1825,6 +1822,7 @@ void enterTestMode()
 
   while (time(NULL) - currentTime < unit_test_timeout) {
 
+    if (!wait_for_serial(WAIT_READ, unit_test_timeout>>1, 0)) continue;
     int b = serialport_read(fd, inbuf, 8192);
 
     for (int i = 0; i < b; i++) {
@@ -3156,6 +3154,11 @@ int main(int argc, char **argv)
       if (!halt) {
         start_cpu();
       }
+
+      // we need to clean up serial here, before we actually start the unit test
+      // to get rid of the stuff that was send before
+      if (unit_test_mode)
+        monitor_sync();
 
       if (do_run) {
         stuff_keybuffer("RUN:\r");

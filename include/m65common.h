@@ -35,6 +35,10 @@ int do_serial_port_write(int fd, uint8_t *buffer, size_t size, const char *func,
 
 #define FAT32_MIN_END_OF_CLUSTER_MARKER 0xffffff8
 
+#define WAIT_READ 0x1
+#define WAIT_WRITE 0x2
+unsigned char wait_for_serial(const unsigned char what, const unsigned long timeout_sec, const unsigned long timeout_usec);
+
 int fetch_ram(unsigned long address, unsigned int count, unsigned char *buffer);
 int push_ram(unsigned long address, unsigned int count, unsigned char *buffer);
 int mega65_poke(unsigned int addr, unsigned char value);
