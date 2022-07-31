@@ -615,18 +615,21 @@ int stuff_keybuffer(char *s)
 
   snprintf(cmd, 1024, "s%x 0\r", buffer_len_addr);
   slow_write(fd, cmd, strlen(cmd));
-  usleep(10000);
+  usleep(25000);
 
+  // only use 9 of the 10 chars in the keybuffer
+  // using all 10 makes weird chars on the 1st call
+#define MAX_KEYBUFFER_CHARS 9
   pos = s;
   while (*pos) {
     snprintf(cmd, 1024, "s%04x", buffer_addr);
-    for (i = 0; i < 10 && pos[i]; i++) {
+    for (i = 0; i < MAX_KEYBUFFER_CHARS && pos[i]; i++) {
       snprintf(cmd + 5 + i * 3, 6, " %02x", toupper(pos[i]));
     }
     log_debug("stuff_keybuffer: '%s' %d", cmd, i);
     snprintf(cmd + 5 + i * 3, 40, "\rs%x %d\r", buffer_len_addr, i);
     slow_write(fd, cmd, strlen(cmd));
-    if (i == 10)
+    if (i == MAX_KEYBUFFER_CHARS)
       usleep(25000);
     pos = pos + i;
   }

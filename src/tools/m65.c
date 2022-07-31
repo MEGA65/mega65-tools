@@ -2725,6 +2725,8 @@ int main(int argc, char **argv)
   // -4 Switch to C64 mode
   if ((!saw_c64_mode) && do_go64) {
     switch_to_c64mode();
+    // the systems needs a bit to switch over
+    usleep(200000);
   }
 
   if (type_text)
