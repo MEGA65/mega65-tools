@@ -190,7 +190,7 @@ test: $(GTESTFILES)
 		name=$${test%%.test}; \
 		name=$${name##*/}; \
 		echo ""; \
-		echo "TESTING: $${name^^*}..."; \
+		echo "TESTING: $$name..."; \
 		echo "======================"; \
 		$$test; \
 	done
@@ -201,7 +201,7 @@ test.exe: $(GTESTFILESEXE)
 		name=$${name##*/}; \
 		path=$${test%/*}; \
 		echo ""; \
-		echo "TESTING: $${name^^*}..."; \
+		echo "TESTING: $$name..."; \
 		echo "======================"; \
 		cd $$path; ./$${test##*/}; \
 	done
