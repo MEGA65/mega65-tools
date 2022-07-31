@@ -574,7 +574,6 @@ else
   M65DEBUG_READLINE=-lreadline
 endif
 
-M65DBG_HEADERS = $(TOOLDIR)/m65dbg/commands.h $(TOOLDIR)/m65dbg/gs4510.h $(TOOLDIR)/m65dbg/serial.h
 M65DBG_SOURCES = $(TOOLDIR)/m65dbg/m65dbg.c $(TOOLDIR)/m65dbg/commands.c $(TOOLDIR)/m65dbg/gs4510.c $(TOOLDIR)/m65dbg/serial.c $(TOOLDIR)/logging.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/version.c
 M65DBG_INCLUDES = -Iinclude $(LIBUSBINC)
 M65DBG_LIBRARIES = -lpng -lpthread -lusb-1.0 -lz $(M65DEBUG_READLINE)
