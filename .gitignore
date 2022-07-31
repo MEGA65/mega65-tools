@@ -11,9 +11,15 @@ bin/readdisk
 bin/romdiff
 bin/bit2mcs
 bin/mfm-decode
+bin/md2h65
+
 src/tools/version.c
 src/tools/bin2c
 src/tools/ftphelper.c
+src/tools/ascii_font.c
+
+gtest/bin/*
+
 *~
 #*#
 .#*
@@ -21,6 +27,7 @@ src/tools/ftphelper.c
 *.gz
 *.o
 *.D81
+*.d81
 *.map
 *.prg
 *.png
