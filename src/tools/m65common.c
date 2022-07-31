@@ -1606,6 +1606,9 @@ void close_serial_port(void)
 #endif
 
 unsigned char wait_for_serial(const unsigned char what, const unsigned long timeout_sec, const unsigned long timeout_usec) {
+#ifdef WINDOWS
+  return 0xff;
+#else
   fd_set read_set;
   fd_set write_set;
   struct timeval timeout;
@@ -1631,6 +1634,7 @@ unsigned char wait_for_serial(const unsigned char what, const unsigned long time
 
   log_debug("wait_for_serial(%x): got something %x", what, res);
   return res;
+#endif
 }
 
 /*
