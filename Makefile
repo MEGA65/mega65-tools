@@ -174,7 +174,7 @@ format:
 	find . -type d \( $${submodules:3} \) -prune -false -o \( -iname '*.h' -o -iname '*.c' -o -iname '*.cpp' \) -print | xargs clang-format --style=file -i --verbose
 
 clean:	cleantest
-	rm -f $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg $(TESTDIR)/*.o $(EXAMPLEDIR)/*.o
+	rm -f src/tools/version.c $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg $(TESTDIR)/*.o $(EXAMPLEDIR)/*.o
 
 cleanall:	clean
 	for path in `git submodule | awk '{ print "./" $$2 }'`; do \
@@ -498,13 +498,13 @@ $(BINDIR)/romdiff.osx:	$(TOOLDIR)/romdiff.c Makefile
 ##
 ## ========== m65 ==========
 ##
-$(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
+$(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c include/*.h Makefile
 	$(CC) $(COPT) -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/m65 $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
-$(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+$(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
 	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/m65.osx $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
-$(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h Makefile
+$(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
 	$(WINCC) $(WINCOPT) -g -Wall -Iinclude `pkg-config --cflags libusb-1.0` $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/process.c $(BUILD_STATIC) -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
