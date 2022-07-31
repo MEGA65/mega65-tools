@@ -1712,7 +1712,7 @@ unsigned char inbuf[8192];
 unsigned int failcount, test_last_issue, test_last_sub;
 FILE *logPtr;
 
-void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char state, char *msg)
+void unit_test_logline(unsigned short issue, unsigned char sub, unsigned char state, char *msg)
 {
   char outstring[255];
   char temp[255];
@@ -1743,9 +1743,10 @@ void unit_test_logline(unsigned char issue, unsigned char sub, unsigned char sta
 
 void unit_test_log(unsigned char bytes[4])
 {
-  int test_issue = bytes[0] + (bytes[1] << 8);
-  int test_sub = bytes[2];
+  unsigned short test_issue = bytes[0] + (bytes[1] << 8);
+  unsigned char test_sub = bytes[2];
   // dump_bytes(0, "bytes", bytes, 4);
+  // fprintf(stderr, "issue = %d, sub = %d\n", test_issue, test_sub);
 
   // check for log message, but no PASS/FAIL follows
   if (testlog[0] && bytes[3] != 0xf2 && bytes[3] != 0xf3) {
@@ -1796,6 +1797,8 @@ void enterTestMode()
   unsigned char receiveString, recent_bytes_fill = 0;
   int currentMessagePos;
   time_t currentTime;
+
+  monitor_sync();
 
   log_note("Entering unit test mode. Waiting for test results.");
   testname[0] = 0; // initialize test name with empty string
