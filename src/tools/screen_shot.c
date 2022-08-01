@@ -767,6 +767,40 @@ void paint_screen_shot(void)
   return;
 }
 
+void progress_to_RTI(void)
+{
+  int bytes = 0;
+  int match_state = 0;
+  int b = 0;
+  unsigned char buff[8192];
+  slow_write_safe(fd, "tc\r", 3);
+  while (1) {
+    b = serialport_read(fd, buff, 8192);
+    if (b > 0)
+      dump_bytes(2, "RTI search input", buff, b);
+    if (b > 0) {
+      bytes += b;
+      buff[b] = 0;
+      for (int i = 0; i < b; i++) {
+        if (match_state == 0 && buff[i] == 'R') {
+          match_state = 1;
+        }
+        else if (match_state == 1 && buff[i] == 'T') {
+          match_state = 2;
+        }
+        else if (match_state == 2 && buff[i] == 'I') {
+          slow_write_safe(fd, "\r", 1);
+          fprintf(stderr, "RTI seen after %d bytes\n", bytes);
+          return;
+        }
+        else
+          match_state = 0;
+      }
+    }
+    fflush(stdout);
+  }
+}
+
 int do_screen_shot(char *userfilename)
 {
   log_note("fetching screenshot");
