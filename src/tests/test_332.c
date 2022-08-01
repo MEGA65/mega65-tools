@@ -340,9 +340,9 @@ void main(void)
         snprintf(msg, 80, "sprite %d: all colours wrong (check display)", i + 1);
       }
     }
-    print_text80(0, line++, test_pass?5:2, msg);
+    print_text80(0, line++, test_pass ? 5 : 2, msg);
     unit_test_log(msg);
-    unit_test_report(ISSUE_NUM, sub++, test_pass?TEST_PASS:TEST_FAIL);
+    unit_test_report(ISSUE_NUM, sub++, test_pass ? TEST_PASS : TEST_FAIL);
   }
   unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);
   keybuffer(1);

@@ -1822,7 +1822,8 @@ void enterTestMode()
 
   while (time(NULL) - currentTime < unit_test_timeout) {
 
-    if (!wait_for_serial(WAIT_READ, unit_test_timeout>>1, 0)) continue;
+    if (!wait_for_serial(WAIT_READ, unit_test_timeout >> 1, 0))
+      continue;
     int b = serialport_read(fd, inbuf, 8192);
 
     for (int i = 0; i < b; i++) {
