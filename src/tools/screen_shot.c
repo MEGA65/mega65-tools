@@ -283,7 +283,7 @@ int do_screen_shot_ascii(void)
         char_id = char_value & 0x1fff;
         char_background_colour = background_colour;
       }
-      int glyph_width_deduct = char_value >> 13;
+      // int glyph_width_deduct = char_value >> 13;
 
       // Set foreground and background colours
       int foreground_colour = colour_value & 0xff;
@@ -314,8 +314,8 @@ int do_screen_shot_ascii(void)
       int glyph_4bit = colour_value & 0x0800;
       if (glyph_4bit)
         glyph_full_colour = 1;
-      if (colour_value & 0x0400)
-        glyph_width_deduct += 8;
+      // if (colour_value & 0x0400)
+      //   glyph_width_deduct += 8;
 
       int fg = foreground_colour;
       int bg = char_background_colour;
