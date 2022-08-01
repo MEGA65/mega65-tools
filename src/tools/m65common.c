@@ -1605,7 +1605,8 @@ void close_serial_port(void)
 
 #endif
 
-unsigned char wait_for_serial(const unsigned char what, const unsigned long timeout_sec, const unsigned long timeout_usec) {
+unsigned char wait_for_serial(const unsigned char what, const unsigned long timeout_sec, const unsigned long timeout_usec)
+{
 #ifdef WINDOWS
   return 0xff;
 #else
@@ -1629,8 +1630,10 @@ unsigned char wait_for_serial(const unsigned char what, const unsigned long time
     log_debug("wait for serial: nothing there");
     return 0;
   }
-  if (FD_ISSET(fd, &read_set)) res |= WAIT_READ;
-  if (FD_ISSET(fd, &write_set)) res |= WAIT_WRITE;
+  if (FD_ISSET(fd, &read_set))
+    res |= WAIT_READ;
+  if (FD_ISSET(fd, &write_set))
+    res |= WAIT_WRITE;
 
   log_debug("wait_for_serial(%x): got something %x", what, res);
   return res;

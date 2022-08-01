@@ -52,7 +52,8 @@ void main(void)
       for (count = 0; count < NUM_ITERATIONS_PER_ADDR; count++) {
         read_mem_value = lpeek(address);
         if (read_mem_value != initial_mem_value) {
-          snprintf(msg, 40, "\n%cAttic RAM Test failure at %07lx: %x vs %x%c\n", 28, address, initial_mem_value, read_mem_value, 5);
+          snprintf(msg, 40, "\n%cAttic RAM Test failure at %07lx: %x vs %x%c\n", 28, address, initial_mem_value,
+              read_mem_value, 5);
           unit_test_fail(msg);
           printf("\n%s\n", msg);
           seq = 0x7ffe;
