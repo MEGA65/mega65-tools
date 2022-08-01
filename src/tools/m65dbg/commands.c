@@ -1,6 +1,7 @@
 /* vim: set expandtab shiftwidth=2 tabstop=2: */
 
-#define _BSD_SOURCE _BSD_SOURCE
+#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
@@ -15,8 +16,8 @@
 #include "gs4510.h"
 #include "screen_shot.h"
 
-char pathBitstream[256] = "";
-char devSerial[100] = "/dev/ttyUSB1";
+char pathBitstream[PATHBITSTREAMSIZE] = "";
+char devSerial[DEVSERIALSIZE] = "/dev/ttyUSB1";
 
 int get_sym_value(char *token);
 
@@ -500,7 +501,7 @@ void parse_ca65_segments(FILE *f, char *line)
   memset(&segmentOffsets, 0, sizeof(segmentOffsets));
 
   while (!feof(f)) {
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
 
     if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n') {
       return;
@@ -514,7 +515,7 @@ void parse_ca65_segments(FILE *f, char *line)
       return;
 
     val = strtol(sval, NULL, 16);
-    strcpy(segmentOffsets.segments[segmentOffsets.seg_cnt].name, name);
+    strncpy(segmentOffsets.segments[segmentOffsets.seg_cnt].name, name, TSEGMENT_NAME_SIZE);
     segmentOffsets.segments[segmentOffsets.seg_cnt].offset = val;
     segmentOffsets.seg_cnt++;
   }
@@ -530,7 +531,7 @@ void parse_ca65_modules(FILE *f, char *line)
   type_offsets mo = { { 0 } };
 
   while (!feof(f)) {
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
 
     if (line[0] == '\0' || line[0] == '\r' || line[0] == '\n') {
       if (state == 1)
@@ -549,7 +550,7 @@ void parse_ca65_modules(FILE *f, char *line)
 
     switch (state) {
     case 0: // get module name
-      strcpy(mo.modulename, line);
+      strncpy(mo.modulename, line, TOFFSETS_MODULENAME_SIZE);
       state = 1;
       break;
 
@@ -566,7 +567,7 @@ void parse_ca65_modules(FILE *f, char *line)
 
       p = sval + 5;
       val = strtol(p, NULL, 16);
-      strcpy(mo.segments[mo.seg_cnt].name, name);
+      strlcpy(mo.segments[mo.seg_cnt].name, name, TSEGMENT_NAME_SIZE);
       mo.segments[mo.seg_cnt].offset = val;
       mo.seg_cnt++;
       // printf("ca65 module: %s : %s - offs = $%04X\n", mo.modulename, name, val);
@@ -582,7 +583,7 @@ void parse_ca65_symbols(FILE *f, char *line)
   char str[64];
 
   while (!feof(f)) {
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
 
     // if (starts_with(line, "zerobss"))
     //   printf(line);
@@ -608,24 +609,24 @@ void parse_ca65_symbols(FILE *f, char *line)
 
 void load_ca65_map(FILE *f)
 {
-  char line[1024];
+  char line[LINEBUFSIZE];
   rewind(f);
   while (!feof(f)) {
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
 
     if (starts_with(line, "Modules list:")) {
-      fgets(line, 1024, f); // ignore following "----" line
+      fgets(line, LINEBUFSIZE, f); // ignore following "----" line
       parse_ca65_modules(f, line);
       continue;
     }
     if (starts_with(line, "Segment list:")) {
-      fgets(line, 1024, f); // ignore following "----" line
-      fgets(line, 1024, f); // ignore following "Name" line
-      fgets(line, 1024, f); // ignore following "----" line
+      fgets(line, LINEBUFSIZE, f); // ignore following "----" line
+      fgets(line, LINEBUFSIZE, f); // ignore following "Name" line
+      fgets(line, LINEBUFSIZE, f); // ignore following "----" line
       parse_ca65_segments(f, line);
     }
     if (starts_with(line, "Exports list by name:")) {
-      fgets(line, 1024, f); // ignore following "----" line
+      fgets(line, LINEBUFSIZE, f); // ignore following "----" line
       parse_ca65_symbols(f, line);
       continue;
     }
@@ -638,8 +639,8 @@ void load_lbl(const char *fname)
   FILE *f = fopen(fname, "rt");
 
   while (!feof(f)) {
-    char line[1024];
-    fgets(line, 1024, f);
+    char line[LINEBUFSIZE];
+    fgets(line, LINEBUFSIZE, f);
 
     char saddr[128];
     char sym[1024];
@@ -659,10 +660,10 @@ void load_lbl(const char *fname)
 void load_map(const char *fname)
 {
   char strMapFile[200];
-  strcpy(strMapFile, fname);
+  strlcpy(strMapFile, fname, 200);
   char *sdot = strrchr(strMapFile, '.');
   *sdot = '\0';
-  strcat(strMapFile, ".map");
+  strlcat(strMapFile, ".map", 200);
 
   // check if file exists
   if (access(strMapFile, F_OK) != -1) {
@@ -673,9 +674,9 @@ void load_map(const char *fname)
     int first_line = 1;
 
     while (!feof(f)) {
-      char line[1024];
+      char line[LINEBUFSIZE];
       char sval[256];
-      fgets(line, 1024, f);
+      fgets(line, LINEBUFSIZE, f);
 
       if (first_line) {
         first_line = 0;
@@ -704,7 +705,7 @@ void load_map(const char *fname)
 int get_segment_offset(const char *current_segment)
 {
   for (int k = 0; k < segmentOffsets.seg_cnt; k++) {
-    if (strcmp(current_segment, segmentOffsets.segments[k].name) == 0) {
+    if (strncmp(current_segment, segmentOffsets.segments[k].name, TSEGMENT_NAME_SIZE) == 0) {
       return segmentOffsets.segments[k].offset;
     }
   }
@@ -716,9 +717,9 @@ int get_module_offset(const char *current_module, const char *current_segment)
   type_offsets *iter = lstModuleOffsets;
 
   while (iter != NULL) {
-    if (strcmp(current_module, iter->modulename) == 0) {
+    if (strncmp(current_module, iter->modulename, TOFFSETS_MODULENAME_SIZE) == 0) {
       for (int k = 0; k < iter->seg_cnt; k++) {
-        if (strcmp(current_segment, iter->segments[k].name) == 0) {
+        if (strncmp(current_segment, iter->segments[k].name, TSEGMENT_NAME_SIZE) == 0) {
           return iter->segments[k].offset;
         }
       }
@@ -733,7 +734,7 @@ char *get_module_string(const char *current_module)
   type_offsets *iter = lstModuleOffsets;
 
   while (iter != NULL) {
-    if (strcmp(current_module, iter->modulename) == 0) {
+    if (strncmp(current_module, iter->modulename, TOFFSETS_MODULENAME_SIZE) == 0) {
       return iter->modulename;
     }
     iter = iter->next;
@@ -744,11 +745,11 @@ char *get_module_string(const char *current_module)
 void load_ca65_list(const char *fname, FILE *f)
 {
   static char list_file_name[256];
-  strcpy(list_file_name, fname); // preserve a copy of this eternally
+  strlcpy(list_file_name, fname, 256); // preserve a copy of this eternally
 
   load_map(fname); // load the ca65 map file first, as it contains details that will help us parse the list file
 
-  char line[1024];
+  char line[LINEBUFSIZE];
   char current_module[256] = { 0 };
   char current_segment[256] = { 0 };
   int lineno = 1;
@@ -756,16 +757,16 @@ void load_ca65_list(const char *fname, FILE *f)
 
   while (!feof(f)) {
     lineno++;
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
 
     if (starts_with(line, "Current file:")) {
       // Retrieve the current file/module that was assembled
       if (strchr(line, '/') != NULL) // truncate a relative location like 'src/utilities/remotesd.s'?
       {
-        strcpy(current_module, strrchr(line, '/') + 1);
+        strlcpy(current_module, strrchr(line, '/') + 1, 256);
       }
       else
-        strcpy(current_module, strchr(line, ':') + 2);
+        strlcpy(current_module, strchr(line, ':') + 2, 256);
       current_module[strlen(current_module) - 1] = '\0';
       current_module[strlen(current_module) - 1] = 'o';
       current_segment[0] = '\0';
@@ -780,8 +781,7 @@ void load_ca65_list(const char *fname, FILE *f)
     char *p = get_nth_token(line, 2);
     if (p != NULL && strcasecmp(p, ".segment") == 0) {
       char *p = get_nth_token(line, 3);
-      strncpy(current_segment, p + 1, strlen(p + 1) - 1);
-      current_segment[strlen(p + 1) - 1] = '\0';
+      strlcpy(current_segment, p + 1, 256);
       // if (strcmp(current_module, "fdisk_fat32.o") == 0)
       // printf("line: %s\ncurrent_segment=%s\n", line, current_segment);
       // if (strcmp(current_segment, "CODET") == 0)
@@ -791,10 +791,9 @@ void load_ca65_list(const char *fname, FILE *f)
     // did we find a line with a relocatable address at the start of it
     if (line[0] != ' ' && line[1] != ' ' && line[2] != ' ' && line[3] != ' ' && line[4] != ' ' && line[5] != ' '
         && (line[6] == 'r' || line[6] == ' ') && line[7] == ' ' && line[8] != ' ') {
-      char saddr[8];
+      char saddr[7];
       int addr;
-      strncpy(saddr, line, 6);
-      saddr[7] = '\0';
+      strlcpy(saddr, line, 7);
       addr = strtol(saddr, NULL, 16);
 
       // convert relocatable address into absolute address
@@ -819,11 +818,11 @@ void load_ca65_list(const char *fname, FILE *f)
 void load_list(char *fname)
 {
   FILE *f = fopen(fname, "rt");
-  char line[1024];
+  char line[LINEBUFSIZE];
   int first_line = 1;
 
   while (!feof(f)) {
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
 
     if (first_line) {
       first_line = 0;
@@ -834,7 +833,7 @@ void load_list(char *fname)
       }
     }
 
-    if (strlen(line) == 0)
+    if (strnlen(line, LINEBUFSIZE) == 0)
       continue;
 
     char *s = strrchr(line, '|');
@@ -846,9 +845,9 @@ void load_list(char *fname)
       int addr;
       char file[1024];
       int lineno;
-      strcpy(file, &strtok(s, ":")[1]);
+      strlcpy(file, &strtok(s, ":")[1], 1024);
       if (strrchr(line, '/'))
-        strcpy(file, strrchr(file, '/') + 1);
+        strlcpy(file, strrchr(file, '/') + 1, 1024);
       sscanf(strtok(NULL, ":"), "%d", &lineno);
       sscanf(line, " %X", &addr);
 
@@ -877,14 +876,14 @@ int is_hexc(char c)
 void load_bsa_list(char *fname)
 {
   FILE *f = fopen(fname, "rt");
-  char line[1024];
+  char line[LINEBUFSIZE];
   int lineno = 0;
 
   while (!feof(f)) {
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
     lineno++;
 
-    if (strlen(line) < 8)
+    if (strnlen(line, LINEBUFSIZE) < 8)
       continue;
 
     if (is_hexc(line[0]) && is_hexc(line[1]) && is_hexc(line[2]) && is_hexc(line[3]) && line[4] == ' ') {
@@ -922,10 +921,10 @@ void load_bsa_list(char *fname)
 void load_acme_map(const char *fname)
 {
   char strMapFile[200];
-  strcpy(strMapFile, fname);
+  strlcpy(strMapFile, fname, 200);
   char *sdot = strrchr(strMapFile, '.');
   *sdot = '\0';
-  strcat(strMapFile, ".sym");
+  strlcat(strMapFile, ".sym", 200);
 
   // check if file exists
   if (access(strMapFile, F_OK) != -1) {
@@ -935,11 +934,11 @@ void load_acme_map(const char *fname)
     FILE *f = fopen(strMapFile, "rt");
 
     while (!feof(f)) {
-      char line[1024];
+      char line[LINEBUFSIZE];
       char sval[256];
       int addr;
       char sym[1024];
-      fgets(line, 1024, f);
+      fgets(line, LINEBUFSIZE, f);
       sscanf(line, "%s = %s", sym, sval);
       sscanf(sval, "$%04X", &addr);
 
@@ -971,17 +970,17 @@ bool is_hex(const char *str)
 void load_acme_list(char *fname)
 {
   FILE *f = fopen(fname, "rt");
-  char line[1024];
+  char line[LINEBUFSIZE];
   char curfile[256] = "";
   int lineno, memaddr;
   char val1[256];
   char val2[256];
 
   while (!feof(f)) {
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
 
-    if (starts_with(line, "; ****") && strstr(line, "Source:")) {
-      char *asmname = strstr(line, "Source: ") + strlen("Source: ");
+    if (starts_with(line, "; ****") && strnstr(line, "Source:", LINEBUFSIZE)) {
+      char *asmname = strnstr(line, "Source: ", LINEBUFSIZE) + strlen("Source: ");
       if (strrchr(asmname, '/'))
         asmname = strrchr(asmname, '/') + 1;
       sscanf(asmname, "%s", curfile);
@@ -1021,11 +1020,11 @@ void show_location(type_fileloc *fl)
   FILE *f = fopen(fl->file, "rt");
   if (f == NULL)
     return;
-  char line[1024];
+  char line[LINEBUFSIZE];
   int cnt = 1;
 
   while (!feof(f)) {
-    fgets(line, 1024, f);
+    fgets(line, LINEBUFSIZE, f);
     if (cnt >= (fl->lineno - dis_scope + dis_offs) && cnt <= (fl->lineno + dis_scope + dis_offs)) {
       int addr = find_addr_in_list(fl->file, cnt);
       char saddr[16] = "       ";
@@ -1159,10 +1158,10 @@ void put_mem28array(int addr, unsigned char *data, int size)
   int i = 0;
   while (i < size) {
     sprintf(str, " %02X", data[i]);
-    strcat(outbuf, str);
+    strlcat(outbuf, str, BUFSIZE);
     i++;
   }
-  strcat(outbuf, "\n");
+  strlcat(outbuf, "\n", BUFSIZE);
 
   serialWrite(outbuf);
   serialRead(inbuf, BUFSIZE);
@@ -1333,7 +1332,7 @@ void cmdMDump(void)
 }
 
 // return the last byte count
-int disassemble_addr_into_string(char *str, int addr, bool useAddr28)
+int disassemble_addr_into_string(char *str, size_t maxsize, int addr, bool useAddr28)
 {
   int last_bytecount = 0;
   char s[32] = { 0 };
@@ -1351,105 +1350,105 @@ int disassemble_addr_into_string(char *str, int addr, bool useAddr28)
 
   type_opcode_mode mode = opcode_mode[mode_lut[mem.b[0]]];
   sprintf(s, " %10s:%d ", mode.name, mode.val);
-  strcat(str, s);
+  strlcat(str, s, maxsize);
 
   // Opcode and arguments
   sprintf(s, "%02X ", mem.b[0]);
-  strcat(str, s);
+  strlcat(str, s, maxsize);
 
   last_bytecount = mode.val + 1;
 
   if (last_bytecount == 1) {
-    strcat(str, "      ");
+    strlcat(str, "      ", maxsize);
   }
   if (last_bytecount == 2) {
     sprintf(s, "%02X    ", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
   }
   if (last_bytecount == 3) {
     sprintf(s, "%02X %02X ", mem.b[1], mem.b[2]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
   }
 
   // Instruction name
   sprintf(s, "%-4s", instruction_lut[mem.b[0]]);
-  strcat(str, s);
+  strlcat(str, s, maxsize);
 
   switch (mode_lut[mem.b[0]]) {
   case M_impl:
     break;
   case M_InnX:
     sprintf(s, " ($%02X,X)", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_nn:
     sprintf(s, " $%02X", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_immnn:
     sprintf(s, " #$%02X", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_A:
     break;
   case M_nnnn:
     sprintf(s, " $%02X%02X", mem.b[2], mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_nnrr:
     sprintf(s, " $%02X,$%04X", mem.b[1], (addr + 3 + mem.b[2]));
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_rr:
     if (mem.b[1] & 0x80)
       sprintf(s, " $%04X", (addr + 2 - 256 + mem.b[1]));
     else
       sprintf(s, " $%04X", (addr + 2 + mem.b[1]));
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_InnY:
     sprintf(s, " ($%02X),Y", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_InnZ:
     sprintf(s, " ($%02X),Z", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_rrrr:
     sprintf(s, " $%04X", (addr + 2 + (mem.b[2] << 8) + mem.b[1]) & 0xffff);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_nnX:
     sprintf(s, " $%02X,X", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_nnnnY:
     sprintf(s, " $%02X%02X,Y", mem.b[2], mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_nnnnX:
     sprintf(s, " $%02X%02X,X", mem.b[2], mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_Innnn:
     sprintf(s, " ($%02X%02X)", mem.b[2], mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_InnnnX:
     sprintf(s, " ($%02X%02X,X)", mem.b[2], mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_InnSPY:
     sprintf(s, " ($%02X,SP),Y", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_nnY:
     sprintf(s, " $%02X,Y", mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   case M_immnnnn:
     sprintf(s, " #$%02X%02X", mem.b[2], mem.b[1]);
-    strcat(str, s);
+    strlcat(str, s, maxsize);
     break;
   }
 
@@ -1546,7 +1545,7 @@ void disassemble(bool useAddr28)
   int idx = 0;
 
   while (idx < cnt) {
-    last_bytecount = disassemble_addr_into_string(str, addr, useAddr28);
+    last_bytecount = disassemble_addr_into_string(str, 128, addr, useAddr28);
 
     // print from .list ref? (i.e., find source in .a65 file?)
     if (idx == 0) {
@@ -1656,13 +1655,13 @@ void cmdMCopy(void)
     for (int k = 0; k < 16; k++) {
       char strVal[10];
       sprintf(strVal, "%02X ", mem.b[k]);
-      strcat(strCmd, strVal);
+      strlcat(strCmd, strVal, 256);
       cnt++;
       if (cnt >= count)
         break;
     }
     printf("%d%%...\r", 100 * cnt / count);
-    strcat(strCmd, "\n");
+    strlcat(strCmd, "\n", 256);
     serialWrite(strCmd);
     serialRead(inbuf, BUFSIZE);
 
@@ -1697,10 +1696,10 @@ void write_bytes(int *addr, int size, ...)
   int i = 0;
   while (i < size) {
     sprintf(str, " %02X", va_arg(valist, int));
-    strcat(outbuf, str);
+    strlcat(outbuf, str, BUFSIZE);
     i++;
   }
-  strcat(outbuf, "\n");
+  strlcat(outbuf, "\n", BUFSIZE);
 
   serialWrite(outbuf);
   serialRead(inbuf, BUFSIZE);
@@ -1790,11 +1789,11 @@ int oneShotAssembly(int *paddr, char *strCommand)
   int opcode = 0;
   int startaddr = *paddr;
   int invalid = 0;
-  strcpy(str, strCommand);
-  if (str[strlen(str) - 1] == '\n')
-    str[strlen(str) - 1] = '\0';
+  strlcpy(str, strCommand, 128);
+  if (str[strnlen(str, 128) - 1] == '\n')
+    str[strnlen(str, 128) - 1] = '\0';
 
-  if (strlen(str) == 0)
+  if (strnlen(str, 128) == 0)
     return 0;
 
   strupper(str);
@@ -3027,7 +3026,7 @@ void cmdBackTrace(void)
   // get current register values
   reg_data reg = get_regs();
 
-  disassemble_addr_into_string(str, reg.pc, false);
+  disassemble_addr_into_string(str, 128, reg.pc, false);
   if (traceframe == 0)
     printf(KINV "#0: %s\n" KNRM, str);
   else
@@ -3037,7 +3036,7 @@ void cmdBackTrace(void)
   int *addresses = get_backtrace_addresses();
 
   for (int k = 0; k < 8; k++) {
-    disassemble_addr_into_string(str, addresses[k], false);
+    disassemble_addr_into_string(str, 128, addresses[k], false);
     if (traceframe - 1 == k)
       printf(KINV "#%d: %s\n" KNRM, k + 1, str);
     else
@@ -3188,31 +3187,36 @@ void cmdScreenshot(void)
 }
 
 /** TODO: refactor do_type_text out of m65.c **/
-/** extern **/ int type_text_cr = 0;
+/** extern int type_text_cr; **/
 void cmdType(void)
 {
-  char *tok = strtok(NULL, "\0");
-  int orig_fcntl = fcntl(fd, F_GETFL, NULL);
-  fcntl(fd, F_SETFL, orig_fcntl | O_NONBLOCK);
+  // char *tok = strtok(NULL, "\0");
+  // int orig_fcntl = fcntl(fd, F_GETFL, NULL);
+  // fcntl(fd, F_SETFL, orig_fcntl | O_NONBLOCK);
 
-  if (tok != NULL) {
-    type_text_cr = 1;
-    /** TODO: do_type_text(tok); */
-  }
-  else {
-    /** TODO: do_type_text("-"); */
-  }
-  fcntl(fd, F_SETFL, orig_fcntl);
+  // if (tok != NULL) {
+  //   type_text_cr = 1;
+  //   /** TODO: do_type_text(tok); */
+  // }
+  // else {
+  //   /** TODO: do_type_text("-"); */
+  // }
+  // fcntl(fd, F_SETFL, orig_fcntl);
+
+  printf("Type command temporarily disabled\n");
 }
 
+/** TODO: re-implement do_ftp(), originally from mega65_ftp.c **/
 void cmdFtp(void)
 {
-  int orig_fcntl = fcntl(fd, F_GETFL, NULL);
-  fcntl(fd, F_SETFL, orig_fcntl | O_NONBLOCK);
-  do_ftp(pathBitstream);
-  fcntl(fd, F_SETFL, orig_fcntl);
-  serialClose();
-  serialOpen(devSerial);
+  // int orig_fcntl = fcntl(fd, F_GETFL, NULL);
+  // fcntl(fd, F_SETFL, orig_fcntl | O_NONBLOCK);
+  // do_ftp(pathBitstream);
+  // fcntl(fd, F_SETFL, orig_fcntl);
+  // close_communication_port();
+  // open_the_serial_port(devSerial);
+
+  printf("FTP command temporarily disabled\n");
 }
 
 int cmdGetCmdCount(void)

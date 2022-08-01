@@ -100,7 +100,7 @@ void log_format(const int level, const char *message, va_list args)
 #ifndef __linux__
   // hack: apple and windows sometimes make %03d really long...
   char milli[128];
-  snprintf(milli, 127, "%03ld", currentTime.tv_usec / 1000);
+  snprintf(milli, 127, "%03ld", (long) currentTime.tv_usec / 1000);
   milli[3] = 0;
   int pos = snprintf(outstring, 1023, "%s.%sZ %s ", date, milli, log_level_name[level]);
 #else
@@ -112,7 +112,7 @@ void log_format(const int level, const char *message, va_list args)
     outstring[pos + pos2 + 1] = 0;
   }
 
-  fprintf(log_file, outstring);
+  fprintf(log_file, "%s", outstring);
 }
 
 /*
