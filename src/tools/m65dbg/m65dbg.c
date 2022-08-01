@@ -16,6 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "commands.h"
+#include "m65common.h"
 #include "screen_shot.h"
 #include "serial.h"
 
@@ -252,8 +253,7 @@ int main(int argc, char **argv)
   }
 
   // open the serial port
-  if (!serialOpen(devSerial))
-    return 1;
+  open_the_serial_port(devSerial);
 
   printf("- Type 'help' for new commands, '?'/'h' for raw commands.\n");
 

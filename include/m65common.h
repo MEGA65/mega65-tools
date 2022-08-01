@@ -2,6 +2,7 @@
 #define M65COMMON_H
 
 #include <stdint.h>
+#include <stdio.h>
 
 #ifdef WINDOWS
 #include <windows.h>

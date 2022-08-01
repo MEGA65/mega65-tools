@@ -3187,31 +3187,36 @@ void cmdScreenshot(void)
 }
 
 /** TODO: refactor do_type_text out of m65.c **/
-/** extern **/ int type_text_cr = 0;
+/** extern int type_text_cr; **/
 void cmdType(void)
 {
-  char *tok = strtok(NULL, "\0");
-  int orig_fcntl = fcntl(fd, F_GETFL, NULL);
-  fcntl(fd, F_SETFL, orig_fcntl | O_NONBLOCK);
+  // char *tok = strtok(NULL, "\0");
+  // int orig_fcntl = fcntl(fd, F_GETFL, NULL);
+  // fcntl(fd, F_SETFL, orig_fcntl | O_NONBLOCK);
 
-  if (tok != NULL) {
-    type_text_cr = 1;
-    /** TODO: do_type_text(tok); */
-  }
-  else {
-    /** TODO: do_type_text("-"); */
-  }
-  fcntl(fd, F_SETFL, orig_fcntl);
+  // if (tok != NULL) {
+  //   type_text_cr = 1;
+  //   /** TODO: do_type_text(tok); */
+  // }
+  // else {
+  //   /** TODO: do_type_text("-"); */
+  // }
+  // fcntl(fd, F_SETFL, orig_fcntl);
+
+  printf("Type command temporarily disabled\n");
 }
 
+/** TODO: re-implement do_ftp(), originally from mega65_ftp.c **/
 void cmdFtp(void)
 {
-  int orig_fcntl = fcntl(fd, F_GETFL, NULL);
-  fcntl(fd, F_SETFL, orig_fcntl | O_NONBLOCK);
-  do_ftp(pathBitstream);
-  fcntl(fd, F_SETFL, orig_fcntl);
-  serialClose();
-  serialOpen(devSerial);
+  // int orig_fcntl = fcntl(fd, F_GETFL, NULL);
+  // fcntl(fd, F_SETFL, orig_fcntl | O_NONBLOCK);
+  // do_ftp(pathBitstream);
+  // fcntl(fd, F_SETFL, orig_fcntl);
+  // close_communication_port();
+  // open_the_serial_port(devSerial);
+
+  printf("FTP command temporarily disabled\n");
 }
 
 int cmdGetCmdCount(void)
