@@ -104,7 +104,7 @@ void parse_packet(char* pkt) {
       break;
 
     case FS_WRITE:
-      if (strcmp(pkt, "/") == 0) {
+      if (strcmp(pkt, "") == 0) {
         fclose(f);
         printf("Closing file \"%s\"...\n", fname);
         file_state = FS_WAIT;
