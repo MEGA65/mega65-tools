@@ -64,7 +64,9 @@ int isValidMnemonic(char *str);
 
 #define BUFSIZE 4096
 
+#define PATHBITSTREAMSIZE 256
 extern char pathBitstream[];
+#define DEVSERIALSIZE 128
 extern char devSerial[];
 
 extern char outbuf[];

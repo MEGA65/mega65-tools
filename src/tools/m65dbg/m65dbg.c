@@ -20,14 +20,23 @@
 
 #define VERSION "v1.00"
 
-char *strInput = NULL;
+char strInputBuf[BUFSIZE] = { 0 };
 
 /**
  * retrieves a command via user input and places it in global strInput
  */
 void get_command(void)
 {
-  strInput = readline("<dbg>");
+  char *strInput = readline("<dbg>");
+  if (strInput == NULL) {
+    // EOF on an empty line = exit
+    strInputBuf[0] = 'x';
+    strInputBuf[1] = '\0';
+    printf("\n");
+    return;
+  }
+  strncpy(strInputBuf, strInput, BUFSIZE);
+  free(strInput);
 }
 
 void parse_command(void)
@@ -36,33 +45,31 @@ void parse_command(void)
   bool handled = false;
 
   // if command is empty, then repeat last command
-  if (strlen(strInput) == 0) {
-    free(strInput);
-    strInput = (char *)malloc(strlen(outbuf) + 1);
-    strcpy(strInput, outbuf);
+  if (strnlen(strInputBuf, BUFSIZE) == 0) {
+    strlcpy(strInputBuf, outbuf, BUFSIZE);
   }
 
   // ignore no command
-  if (strlen(strInput) == 0)
+  if (strnlen(strInputBuf, BUFSIZE) == 0)
     return;
 
   // preserve a copy of original command
-  strcpy(outbuf, strInput);
+  strncpy(outbuf, strInputBuf, BUFSIZE);
 
   // assume it might be a one-shot assembly command
-  if (isValidMnemonic(strInput)) {
+  if (isValidMnemonic(strInputBuf)) {
     // restore original command
-    strcpy(strInput, outbuf);
+    strlcpy(strInputBuf, outbuf, BUFSIZE);
 
-    if (doOneShotAssembly(strInput) > 0)
+    if (doOneShotAssembly(strInputBuf) > 0)
       handled = true;
   }
 
   // restore original command
-  strcpy(strInput, outbuf);
+  strlcpy(strInputBuf, outbuf, BUFSIZE);
 
   // tokenise command
-  token = strtok(strInput, " ");
+  token = strtok(strInputBuf, " ");
 
   // test for special commands provided by the m65dbg app
   if (!handled) {
@@ -88,10 +95,7 @@ void parse_command(void)
     printf("%s", inbuf);
   }
 
-  if (strInput != NULL) {
-    free(strInput);
-    strInput = NULL;
-  }
+  strInputBuf[0] = '\0';
 }
 
 // use ctrl-c to break out of any commands that loop (eg, finish/next)
@@ -161,32 +165,30 @@ static char **my_completion(const char *text, int start, int end)
 
 void load_init_file(char *filepath)
 {
+  char lineBuf[BUFSIZE];
+
   if (access(filepath, F_OK) != -1) {
     printf("Loading \"%s\"...\n", filepath);
 
     FILE *f = fopen(filepath, "r");
-    char *line = NULL;
-    size_t len = 0;
+    size_t lineBufSize = BUFSIZE;
 
-    while (getline(&line, &len, f) != -1) {
+    while (getline((char **)&lineBuf, &lineBufSize, f) != -1) {
       // remove any newline character at end of line
-      line[strcspn(line, "\n")] = 0;
+      lineBuf[strcspn(lineBuf, "\n")] = 0;
 
       // ignore empty lines
-      if (strlen(line) == 0)
+      if (strnlen(lineBuf, BUFSIZE) == 0)
         continue;
 
       // ignore any lines that start with '#', treat these as comments
-      if (strlen(line) > 0 && line[0] == '#')
+      if (strnlen(lineBuf, BUFSIZE) > 0 && lineBuf[0] == '#')
         continue;
 
       // execute each line
-      strInput = strdup(line);
+      strlcpy(strInputBuf, lineBuf, BUFSIZE);
       parse_command();
     }
-
-    if (line != NULL)
-      free(line);
   }
 }
 
@@ -235,7 +237,7 @@ int main(int argc, char **argv)
         exit(0);
       }
       k++;
-      strcpy(devSerial, argv[k]);
+      strncpy(devSerial, argv[k], DEVSERIALSIZE);
     }
 
     if (strcmp(argv[k], "-b") == 0) {
@@ -244,7 +246,7 @@ int main(int argc, char **argv)
         exit(0);
       }
       k++;
-      strcpy(pathBitstream, argv[k]);
+      strncpy(pathBitstream, argv[k], PATHBITSTREAMSIZE);
     }
   }
 
@@ -265,11 +267,11 @@ int main(int argc, char **argv)
 
     get_command();
 
-    if (!strInput || strcmp(strInput, "exit") == 0 || strcmp(strInput, "x") == 0 || strcmp(strInput, "q") == 0)
+    if (strncmp(strInputBuf, "exit", BUFSIZE) == 0 || strncmp(strInputBuf, "x", BUFSIZE) == 0 || strncmp(strInputBuf, "q", BUFSIZE) == 0)
       return 0;
 
-    if (strInput && *strInput)
-      add_history(strInput);
+    if (strInputBuf[0] != '\0')
+      add_history(strInputBuf);
 
     parse_command();
   }

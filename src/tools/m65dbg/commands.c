@@ -15,8 +15,8 @@
 #include "gs4510.h"
 #include "screen_shot.h"
 
-char pathBitstream[256] = "";
-char devSerial[100] = "/dev/ttyUSB1";
+char pathBitstream[PATHBITSTREAMSIZE] = "";
+char devSerial[DEVSERIALSIZE] = "/dev/ttyUSB1";
 
 int get_sym_value(char *token);
 
