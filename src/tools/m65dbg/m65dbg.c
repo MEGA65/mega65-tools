@@ -4,7 +4,8 @@
  * m65dbg - An enhanced remote serial debugger/monitor for the mega65 project
  **/
 
-#define _BSD_SOURCE _BSD_SOURCE
+#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 /** (stdio.h must come beforce readline) **/
 #include <stdio.h>
 #include <readline/readline.h>
