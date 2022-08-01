@@ -283,7 +283,7 @@ int do_screen_shot_ascii(void)
         char_id = char_value & 0x1fff;
         char_background_colour = background_colour;
       }
-      int glyph_width_deduct = char_value >> 13;
+      // int glyph_width_deduct = char_value >> 13;
 
       // Set foreground and background colours
       int foreground_colour = colour_value & 0xff;
@@ -314,8 +314,8 @@ int do_screen_shot_ascii(void)
       int glyph_4bit = colour_value & 0x0800;
       if (glyph_4bit)
         glyph_full_colour = 1;
-      if (colour_value & 0x0400)
-        glyph_width_deduct += 8;
+      // if (colour_value & 0x0400)
+      //   glyph_width_deduct += 8;
 
       int fg = foreground_colour;
       int bg = char_background_colour;
@@ -765,6 +765,40 @@ void paint_screen_shot(void)
   }
 
   return;
+}
+
+void progress_to_RTI(void)
+{
+  int bytes = 0;
+  int match_state = 0;
+  int b = 0;
+  unsigned char buff[8192];
+  slow_write_safe(fd, "tc\r", 3);
+  while (1) {
+    b = serialport_read(fd, buff, 8192);
+    if (b > 0)
+      dump_bytes(2, "RTI search input", buff, b);
+    if (b > 0) {
+      bytes += b;
+      buff[b] = 0;
+      for (int i = 0; i < b; i++) {
+        if (match_state == 0 && buff[i] == 'R') {
+          match_state = 1;
+        }
+        else if (match_state == 1 && buff[i] == 'T') {
+          match_state = 2;
+        }
+        else if (match_state == 2 && buff[i] == 'I') {
+          slow_write_safe(fd, "\r", 1);
+          fprintf(stderr, "RTI seen after %d bytes\n", bytes);
+          return;
+        }
+        else
+          match_state = 0;
+      }
+    }
+    fflush(stdout);
+  }
 }
 
 int do_screen_shot(char *userfilename)

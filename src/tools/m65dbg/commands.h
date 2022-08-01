@@ -63,8 +63,11 @@ char *cmdGetCmdName(int idx);
 int isValidMnemonic(char *str);
 
 #define BUFSIZE 4096
+#define LINEBUFSIZE 1024
 
+#define PATHBITSTREAMSIZE 256
 extern char pathBitstream[];
+#define DEVSERIALSIZE 128
 extern char devSerial[];
 
 extern char outbuf[];
@@ -85,13 +88,15 @@ typedef struct tse {
   struct tse *next;
 } type_symmap_entry;
 
+#define TSEGMENT_NAME_SIZE 64
 typedef struct tseg {
-  char name[64];
+  char name[TSEGMENT_NAME_SIZE];
   int offset;
 } type_segment;
 
+#define TOFFSETS_MODULENAME_SIZE 256
 typedef struct t_o {
-  char modulename[256];
+  char modulename[TOFFSETS_MODULENAME_SIZE];
   type_segment segments[32];
   int seg_cnt;
   int enabled;
