@@ -2417,7 +2417,8 @@ void change_dir(char* path)
     if (fat_opendir(path, TRUE)) {
       fprintf(stderr, "ERROR: Could not open directory '%s'\n", path);
     }
-    strcpy(current_dir, path);
+    else
+      strcpy(current_dir, path);
   }
   else {
     // relative path
