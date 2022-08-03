@@ -811,8 +811,8 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
           }
       }
       closedir(d);
-#endif
     }
+#endif
   }
 
   if (last_match != -1) {
@@ -822,7 +822,7 @@ char* init_fpgajtag(const char* serialno, const char* serialport, uint32_t file_
     return strdup(last_path);
   }
 
-  printf("id %x from file does not match usb interface\n", file_idcode);
+  fprintf(stderr,"id %x from file does not match usb interface\n", file_idcode);
 
   EXIT();
   return NULL;

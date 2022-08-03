@@ -1426,7 +1426,7 @@ int main(int argc, char** argv)
           "         and then log out, and log back in again, or failing that, reboot your computer and try again.\n"
           "\n");
     }
-    res = init_fpgajtag(NULL, NULL, fpga_id);
+    char* res = init_fpgajtag(NULL, NULL, fpga_id);
     if (res != NULL)
       serial_port = res;
   }
