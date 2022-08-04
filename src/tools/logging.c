@@ -95,7 +95,8 @@ void log_format(const int level, const char *message, va_list args)
   char outstring[1024];
   struct timeval currentTime;
   gettimeofday(&currentTime, NULL);
-  strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
+  int err = strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
+  fprintf(stderr, "%d - %s\n", err, date);
 
 #ifndef __linux__
   // hack: apple and windows sometimes make %03d really long...
