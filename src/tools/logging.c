@@ -91,24 +91,23 @@ void log_format(const int level, const char *message, va_list args)
   if (level > log_level)
     return;
 
-  int err;
   char date[32];
   char outstring[1024];
   struct timeval currentTime;
   gettimeofday(&currentTime, NULL);
-  fprintf(stderr, "%ld %ld\n", currentTime.tv_sec, currentTime.tv_usec);
-  struct tm *gmt = gmtime(&(currentTime.tv_sec));
-  err = strftime(date, 31, "%Y-%m-%d", gmt);
-  fprintf(stderr, "%s\n", date);
-  err = strftime(date, 31, "%H:%M:%S", gmt);
-  fprintf(stderr, "%s\n", date);
-  err = strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmt);
-  fprintf(stderr, "%d - %s\n", err, date);
+
+#ifndef WINDOWS
+  strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
+#else
+  // on WINDOWS we need to stay with time/gmtime/strftime
+  time_t now = time(NULL);
+  strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmtime(&now));
+#endif
 
 #ifndef __linux__
   // hack: apple and windows sometimes make %03d really long...
-  char milli[128];
-  snprintf(milli, 127, "%03ld", (long)currentTime.tv_usec / 1000);
+  char milli[32];
+  snprintf(milli, 31, "%03ld", (long)currentTime.tv_usec / 1000);
   milli[3] = 0;
   int pos = snprintf(outstring, 1023, "%s.%sZ %s ", date, milli, log_level_name[level]);
 #else
