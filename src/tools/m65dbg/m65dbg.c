@@ -268,7 +268,8 @@ int main(int argc, char **argv)
 
     get_command();
 
-    if (strncmp(strInputBuf, "exit", BUFSIZE) == 0 || strncmp(strInputBuf, "x", BUFSIZE) == 0 || strncmp(strInputBuf, "q", BUFSIZE) == 0)
+    if (strncmp(strInputBuf, "exit", BUFSIZE) == 0 || strncmp(strInputBuf, "x", BUFSIZE) == 0
+        || strncmp(strInputBuf, "q", BUFSIZE) == 0)
       return 0;
 
     if (strInputBuf[0] != '\0')
