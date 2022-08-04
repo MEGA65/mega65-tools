@@ -2265,16 +2265,19 @@ int main(int argc, char **argv)
     }
   }
 
+  if (!serial_port) {
 #ifndef WINDOWS
   // if we do not have a serial port yet (MacOS without -l option)
   // we try to detect by opening the serial ports we find
-  if (!serial_port) {
     if (!(serial_port = find_serial_port())) {
       log_crit("could not find a mega65 device on a serial port!");
       exit(1);
     }
-  }
+#else
+    log_crit("serial port not specified, aborting.");
+    exit(1);
 #endif
+  }
 
   log_info("opening serial port %s", serial_port);
   open_the_serial_port(serial_port);
