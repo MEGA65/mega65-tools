@@ -29,7 +29,11 @@ matrix:
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
-          export TRAVIS_TAG=CI-latest
+          if [[ "$TRAVIS_BRANCH" == "refactor_m65" ]]; then
+            export TRAVIS_TAG=CI-refactor-latest
+          else
+            export TRAVIS_TAG=CI-latest
+          fi
         fi
       - echo "MEGA65-TOOLS RELEASE FILES" > bin/RELEASE.txt
       - echo "Last updated at:" >> bin/RELEASE.txt
@@ -50,7 +54,8 @@ matrix:
         overwrite: true
         on:
           tags: false
-          branch: master
+          all_branches: true
+          condition: $TRAVIS_BRANCH =~ ^(master|refactor_m65)$
     - name: MacOS native compilation
       os: osx
       osx_image: xcode11
@@ -71,7 +76,11 @@ matrix:
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
-          export TRAVIS_TAG=CI-latest
+          if [[ "$TRAVIS_BRANCH" == "refactor_m65" ]]; then
+            export TRAVIS_TAG=CI-refactor-latest
+          else
+            export TRAVIS_TAG=CI-latest
+          fi
         fi
       - echo "MEGA65-TOOLS RELEASE FILES" > bin/RELEASE-OSX.txt
       - echo "Last updated at:" >> bin/RELEASE-OSX.txt
@@ -92,4 +101,5 @@ matrix:
         overwrite: true
         on:
           tags: false
-          branch: master
+          all_branches: true
+          condition: $TRAVIS_BRANCH =~ ^(master|refactor_m65)$
