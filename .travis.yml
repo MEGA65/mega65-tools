@@ -4,6 +4,7 @@ dist: focal
 branches: 
   except:
     - CI-latest
+    - CI-refactor-latest
 
 matrix:
   include:
