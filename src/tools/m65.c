@@ -126,70 +126,6 @@ struct option cmd_opts[MAX_CMD_OPTS];
   cmd_arg[cmd_count] = Oarg;                                                                                                \
   cmd_desc[cmd_count++] = Odesc
 
-void old_usage(void)
-{
-  fprintf(stderr, TOOLNAME "\n");
-  fprintf(stderr, "Version: %s\n\n", version_string);
-  fprintf(stderr,
-      "usage: m65 [-h|-?] [-0 <log level>] [-l <serial port>] [-s <230400|2000000|4000000>]  [-b <FPGA bitstream> [-v "
-      "<vivado.bat>] [[-k "
-      "<hickup file>] [-r] [-R romfile] [-U flashmenufile] [-C charromfile]] [-c COLOURRAM.BIN] [-B breakpoint] [-a] "
-      "[-A <xx[-yy]=ppp>] [-o] [-d diskimage.d81] [-j] [-J <XDC,BSDL[,sensitivity list]> [-V <vcd file>]] [[-1] [-x]"
-      "[<-t|-T> <text>] [-f FPGA serial ID] [filename]] [-H] [-E|-L] [-Z <flashaddr>] [-@ file@addr] [-N]"
-      "[-u timeout]\n");
-
-  fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n"
-                  "  -x - expert user, remove all warnings for newbies.\n"
-                  "  -@ - Load a binary file at a specific address.\n"
-                  "  -1 - Load as with ,8,1 taking the load address from the program, instead of assuming $0801\n"
-                  "  -4 - Switch to C64 mode before exiting.\n"
-                  "  -A - Set audio coefficient(s) xx (and optionally to yy) to ppp percent of maximum volume.\n"
-                  "  -a - Read and display audio cross-bar mixer status.\n"
-                  "  -B - Set a breakpoint on synchronising, and then immediately exit.\n"
-                  "  -b - Name of bitstream file to load.\n"
-                  "  -C - Character ROM file to preload.\n"
-                  "  -c - Colour RAM contents to preload.\n"
-                  "  -d - Enable virtual D81 access\n"
-                  "  -E - Enable streaming of video via ethernet.\n"
-                  "  -F - Force reset on start\n"
-                  "  -f - Specify which FPGA to reconfigure when calling fpgajtag\n"
-                  "  -h/-? - display this help and exit\n"
-                  "  -H - Halt CPU after loading ROMs.\n"
-                  "  -J - Do JTAG boundary scan of attached FPGA, using the provided XDC and BSDL files.\n"
-                  "       A sensitivity list can also be provided, to restrict the set of signals monitored.\n"
-                  "       This will likely be required when producing VCD files, as they can only log ~80 signals.\n"
-                  "  -j   Do JTAG operation(s), and nothing else.\n"
-                  "  -K - Use DK backend for libUSB, if available\n"
-                  "  -k - Name of hickup file to forcibly use instead of the HYPPO in the bitstream.\n"
-                  "       NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware\n"
-                  "             for the bitstream, and @issue/tag for HYPPO.\n"
-                  "  -L - Enable streaming of CPU instruction log via ethernet.\n"
-                  "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n"
-                  "  -N - Disable a running cartridge, and boot to C64 mode.\n"
-                  "  -n - Force NTSC video mode\n"
-                  "  -o - Enable on-screen keyboard\n"
-                  "  -p - Force PAL video mode\n"
-                  "  -q - Name of bitstream file to load and then directly quit. Use this for cores other than MEGA65.\n"
-                  "  -R - ROM file to preload at $20000-$3FFFF.\n"
-                  "  -r - Automatically RUN programme after loading.\n"
-                  "  -S - Show the text-mode screen\n"
-                  "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n"
-                  "       (Older bitstream use 230400, and newer ones 2000000 or 4000000).\n"
-                  "  -t - Type text via keyboard virtualisation.\n"
-                  "  -T - As above, but also provide carriage return\n"
-                  "  -U - Flash menu file to preload at $50000-$57FFF.\n"
-                  "  -u - Enable unit test mode: m65 does not terminate until it receives a response from a unit test.\n"
-                  "       (argument timeout in seconds, minimum is 10)\n"
-                  "  -v - The location of the Vivado executable to use for -b on Windows.\n"
-                  "  -w - Write (or append) unit test results to a logfile\n"
-                  "  -V - Write JTAG change log to VCD file, instead of to stdout.\n"
-                  "  -X - Show a report of current Hypervisor status.\n"
-                  "  -Z flashaddr - Zap (reconfigure) FPGA from specified hex address in flash.\n"
-                  "  filename - Load and run this file before exiting.\n"
-                  "\n");
-  exit(-3);
-}
-
 int loglevel = LOG_NOTE;
 int pal_mode = 0;
 int ntsc_mode = 0;
@@ -326,7 +262,7 @@ void usage(int exitcode, char *message)
   fprintf(stderr, PROGNAME ": [options] [prgname]\n");
 
   for (int i = 0; i < cmd_count; i++) {
-    if (cmd_opts[i].val && !cmd_opts[i].flag)
+    if (cmd_opts[i].val && !cmd_opts[i].flag && cmd_opts[i].val < 0x80)
       snprintf(optstr, width, "-%c|--%s", cmd_opts[i].val, cmd_opts[i].name);
     else
       snprintf(optstr, width, "--%s", cmd_opts[i].name);
