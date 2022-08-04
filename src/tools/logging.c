@@ -95,6 +95,7 @@ void log_format(const int level, const char *message, va_list args)
   char outstring[1024];
   struct timeval currentTime;
   gettimeofday(&currentTime, NULL);
+  fprintf(stderr, "%ld %ld ", currentTime.tv_sec, currentTime.tv_usec);
   int err = strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
   fprintf(stderr, "%d - %s\n", err, date);
 
