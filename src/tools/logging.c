@@ -91,12 +91,18 @@ void log_format(const int level, const char *message, va_list args)
   if (level > log_level)
     return;
 
+  int err;
   char date[32];
   char outstring[1024];
   struct timeval currentTime;
   gettimeofday(&currentTime, NULL);
-  fprintf(stderr, "%ld %ld ", currentTime.tv_sec, currentTime.tv_usec);
-  int err = strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmtime(&(currentTime.tv_sec)));
+  fprintf(stderr, "%ld %ld\n", currentTime.tv_sec, currentTime.tv_usec);
+  struct tm *gmt = gmtime(&(currentTime.tv_sec));
+  err = strftime(date, 31, "%Y-%m-%d", gmt);
+  fprintf(stderr, "%s\n", date);
+  err = strftime(date, 31, "%H:%M:%S", gmt);
+  fprintf(stderr, "%s\n", date);
+  err = strftime(date, 31, "%Y-%m-%dT%H:%M:%S", gmt);
   fprintf(stderr, "%d - %s\n", err, date);
 
 #ifndef __linux__
