@@ -16,4 +16,3 @@ datetime=$(date +%Y%m%d.%H)
 
 stringout="${datetime}-${branch2}-${version}"
 echo $stringout
-
