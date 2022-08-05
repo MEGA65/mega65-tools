@@ -1237,16 +1237,32 @@ int last_read_count = 0;
 
 #ifdef WINDOWS
 
+unsigned char win_err_use_neutral = 0;
 void print_error(const char *context)
 {
-  DWORD error_code = GetLastError();
+  DWORD error_code = GetLastError(), size;
   char buffer[256];
-  DWORD size = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_MAX_WIDTH_MASK, NULL, error_code,
-      MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), buffer, sizeof(buffer), NULL);
-  if (size == 0) {
-    buffer[0] = 0;
+  if (!win_err_use_neutral) {
+    size = FormatMessage(
+        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+        NULL, error_code,
+        MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+        (LPSTR)buffer, 256, NULL);
+    if (size == 0)
+      win_err_use_neutral = 1;
   }
-  log_error("%s: %s", context, buffer);
+  // fallback to system language if US English is not available
+  if (win_err_use_neutral)
+    size = FormatMessage(
+        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+        NULL, error_code,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)buffer, 256, NULL);
+  if (size == 0) {
+    log_debug("%s: error code %ld", context, error_code);
+    return;
+  }
+  log_debug("%s: %s", context, buffer);
 }
 
 // Opens the specified serial port, configures its timeouts, and sets its
