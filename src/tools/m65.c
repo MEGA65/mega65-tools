@@ -1972,7 +1972,7 @@ int main(int argc, char **argv)
 
   if (res == NULL) {
     if (!jtag_only)
-      log_note("tip: try using 'm65 --autodetect --verbose'");
+      log_note("tip: try using 'm65 --autodiscover --verbose'");
     log_crit("no valid serial port not found, aborting");
     exit(1);
   }
@@ -2018,7 +2018,7 @@ int main(int argc, char **argv)
     if (!serial_port) {
 #endif
       if (!jtag_only)
-        log_note("tip: try using 'm65 --autodetect --verbose'");
+        log_note("tip: try using 'm65 --autodiscover --verbose'");
       log_crit("serial port not specified, aborting.");
       exit(1);
 #ifdef __APPLE__
