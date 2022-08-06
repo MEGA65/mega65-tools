@@ -39,13 +39,7 @@ int usbdev_get_candidates(void)
   glob_t result;
   if (glob(devglob, 0, NULL, &result)) {
     globfree(&result);
-    return NULL;
-  }
-
-  paths = malloc((result.gl_pathc + 1) * sizeof(char *));
-  if (!paths) {
-    log_debug("m65ser_get_candidates: failed to alloc memory for device list");
-    return NULL;
+    return -1;
   }
 
   for (i = 0; i < result.gl_pathc && usbdev_info_count < MAX_USBDEV_INFO; i++) {
@@ -209,8 +203,6 @@ int usbdev_get_candidates(void)
     log_debug("m65ser_get_candidates: powershell not found or exited with error status");
     return -1;
   }
-
-  return usbdev_info_count;
 #endif
 
   return usbdev_info_count;
