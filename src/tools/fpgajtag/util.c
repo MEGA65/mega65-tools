@@ -43,8 +43,9 @@ static int usbValidDeviceList[][2] = {
   { 0x0403, 0x6010 }, // Trenz JTAG FTDI, NexysA7
   { 0x0403, 0x6011 }, // ???
   { 0x0403, 0x6014 }, // ???
-  // {0x09fb, 0x6810}, // Altera JTAG
-  { 0x10c4, 0xea60 }, // Wukong
+  // {0x09fb, 0x6810}, // Altera JTAG - was skipped in the code, so we skip here too
+  // { 0x10c4, 0xea60 }, // Wukong - not working
+  // { 0x03fd, 0x0013 }, // Wukong - not working
   { 0, 0 }            // end marker
 };
 

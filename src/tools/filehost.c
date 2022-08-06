@@ -186,7 +186,7 @@ int read_rows(char *str, int strcnt)
   static int squarebrackstart = 0;
   static int curlbrackstart = 0;
   static int quotestart = 0;
-  static tfile_info finfo = { 0 };
+  static tfile_info finfo = { "", "", "", "", "", "" };
 
   static int iskey = 1;
   char prevc = 0;
