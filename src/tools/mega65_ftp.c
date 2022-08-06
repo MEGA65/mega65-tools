@@ -772,7 +772,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
     }
   }
   else {
-    if (!open_the_serial_port(serial_port))
+    if (open_the_serial_port(serial_port))
       exit(-1);
     xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 

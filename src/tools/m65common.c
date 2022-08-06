@@ -1832,14 +1832,14 @@ int open_the_serial_port(char *serial_port)
 {
   if (serial_port == NULL) {
     log_error("serial port not set, aborting");
-    return 0;
+    return -1;
   }
 
   serial_port_is_tcp = 0;
   if (!strncasecmp(serial_port, "tcp", 3)) {
     fd = open_tcp_port(serial_port);
     serial_port_is_tcp = 1;
-    return 1;
+    return 0;
   }
 
 #ifdef WINDOWS
@@ -1849,7 +1849,7 @@ int open_the_serial_port(char *serial_port)
     log_crit("could not open serial port '%s'", serial_port);
     log_error("  (could the port be in use by another application?)");
     log_error("  (could the usb cable be disconnected or faulty?)");
-    return 0;
+    return -1;
   }
 
 #else /* !WINDOWS */
@@ -1857,7 +1857,7 @@ int open_the_serial_port(char *serial_port)
   fd = open(serial_port, O_RDWR);
   if (fd == -1) {
     log_crit("could not open serial port '%s'", serial_port);
-    return 0;
+    return -1;
   }
 
   set_serial_speed(fd, serial_speed);
@@ -1894,7 +1894,7 @@ int open_the_serial_port(char *serial_port)
 #endif /* __linux__ */
 #endif /* !WINDOWS */
 
-  return 1;
+  return 0;
 }
 
 int switch_to_c64mode(void)
@@ -1956,21 +1956,22 @@ int get_system_bitstream_version(void)
   size_t len = 0;
   time_t timeout;
 
-  log_debug("get_system_bitstream_version: start");
   // fetch version info via monitor 'h'
   // don' forget to sync console with '\xf#\r'
+  log_debug("get_system_bitstream_version: writing reset/help");
 #ifdef WINDOWS
   slow_write(fd, "\xf#\rh\r", 5);
 #else
-  log_debug("get_system_bitstream_version: write %d %d", write(fd, "\xf#\rh\r", 5), errno);
+  write(fd, "\xf#\rh\r", 5);
 #endif
   usleep(20000);
   timeout = time(NULL);
-  while (timeout + 10 > time(NULL)) {
-    wait_for_serial(WAIT_READ, 2, 0);
+  while (timeout + 2 > time(NULL)) {
     len = serialport_read(fd, (unsigned char *)buf, 512);
-    if (len == -1)
-      log_debug("get_system_bitstream_version: read error %d", errno);
+    if (len == -1) {
+      log_error("get_system_bitstream_version: read error %d", errno);
+      return -1;
+    }
     if (len > 0)
       break;
   }
@@ -2061,7 +2062,7 @@ char *find_serial_port(const int serial_speed)
   while ((device = usbdev_get_next_device(0))) {
     // this must use m65serial to open and read!
     log_debug("find_serial_port: trying %s", device);
-    if (!open_the_serial_port(device))
+    if (open_the_serial_port(device))
       continue;
 
     res = get_system_bitstream_version();

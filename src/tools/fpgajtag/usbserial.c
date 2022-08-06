@@ -49,7 +49,7 @@ int usbdev_get_candidates(void)
   }
 
   for (i = 0; i < result.gl_pathc && usbdev_info_count < MAX_USBDEV_INFO; i++) {
-    log_info("detected serial port %s (apple, no further information)", sult.gl_pathv[i]);
+    log_info("detected serial port %s (apple, no further information)", result.gl_pathv[i]);
     usbdev_info[usbdev_info_count].device = strdup(result.gl_pathv[i]);
     usbdev_info[usbdev_info_count].vendor_id = -1;
     usbdev_info[usbdev_info_count].product_id = -1;

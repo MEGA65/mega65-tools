@@ -1192,7 +1192,7 @@ int main(int argc, char **argv)
     log_crit("serial port not specified, aborting.");
     exit(1);
   }
-  if (!open_the_serial_port(serial_port))
+  if (open_the_serial_port(serial_port))
     exit(-1);
   xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 

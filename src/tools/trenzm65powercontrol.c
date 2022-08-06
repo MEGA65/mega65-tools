@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 {
   printf("Opening %s...\n", serial_port);
   serial_speed = 1000000;
-  if (!open_the_serial_port(serial_port))
+  if (open_the_serial_port(serial_port))
     exit(-1);
 
   int len = 2;

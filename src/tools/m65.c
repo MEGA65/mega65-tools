@@ -2027,7 +2027,7 @@ int main(int argc, char **argv)
   }
 
   log_info("opening serial port %s", serial_port);
-  if (!open_the_serial_port(serial_port))
+  if (open_the_serial_port(serial_port))
     exit(-1);
   xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
