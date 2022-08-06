@@ -675,11 +675,12 @@ int main(int argc, char **argv)
       // Log the trace
       if (sample_counts[arg]) {
         // Calculate cumulative time
-        traces[arg][sample_counts[arg]++] = gap + traces[arg][sample_counts[arg] - 1];
+        traces[arg][sample_counts[arg]] = gap + traces[arg][sample_counts[arg] - 1];
       }
       else {
-        traces[arg][sample_counts[arg]++] = gap;
+        traces[arg][sample_counts[arg]] = gap;
       }
+      sample_counts[arg]++;
       if (traces[arg][sample_counts[arg] - 1] > max_time)
         max_time = traces[arg][sample_counts[arg] - 1];
 
