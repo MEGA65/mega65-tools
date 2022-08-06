@@ -35,15 +35,27 @@
 #include "util.h"
 #include "elfdef.h"
 
-extern int usedk;
+int fpgajtag_usbdk_enable = 0;
+int fpgajtag_libusb_open_failed = 0;
 
+static int usbValidDeviceList[][2] = {
+  { 0x0403, 0x6001 }, // ???
+  { 0x0403, 0x6010 }, // Trenz JTAG FTDI, NexysA7
+  { 0x0403, 0x6011 }, // ???
+  { 0x0403, 0x6014 }, // ???
+  // {0x09fb, 0x6810}, // Altera JTAG
+  { 0x10c4, 0xea60 }, // Wukong
+  { 0, 0 }            // end marker
+};
+
+// what is that for?
 #ifdef __arm__
 #define NO_LIBUSB
 #else
 #include <libusb.h>
 #endif
 
-#include "logging.h"
+#include <logging.h>
 
 // for using libftdi.so
 //#define USE_LIBFTDI
@@ -364,12 +376,15 @@ uint8_t *read_data(void)
 
 /*
  * USB interface
+ * fills the usbinfo_array with information and returns it
  */
 USB_INFO *fpgausb_init(void)
 {
-  int i = 0;
+  int i = 0, j, res;
 #ifndef NO_LIBUSB
   libusb_device *dev;
+  struct libusb_device_descriptor desc;
+
 #define UDESC(A)                                                                                                            \
   libusb_get_string_descriptor_ascii(                                                                                       \
       usbhandle, desc.A, usbinfo_array[usbinfo_array_index].A, sizeof(usbinfo_array[usbinfo_array_index].A))
@@ -382,7 +397,7 @@ USB_INFO *fpgausb_init(void)
     exit(-1);
   }
 
-  if (usedk) {
+  if (fpgajtag_usbdk_enable) {
 #ifdef LIBUSB_OPTION_USE_USBDK
     log_info("requesting to use USBDK backend.");
     int res = libusb_set_option(usb_context, LIBUSB_OPTION_USE_USBDK);
@@ -397,55 +412,45 @@ USB_INFO *fpgausb_init(void)
   }
 
   while ((dev = device_list[i++])) {
-    struct libusb_device_descriptor desc;
     if (libusb_get_device_descriptor(dev, &desc) < 0)
       continue;
-    if (desc.idVendor == 0x403
-        && (desc.idProduct == 0x6001 || desc.idProduct == 0x6010 || desc.idProduct == 0x6011
-            || desc.idProduct == 0x6014)) { /* Xilinx */
-      usbinfo_array[usbinfo_array_index].dev = dev;
-      usbinfo_array[usbinfo_array_index].idVendor = desc.idVendor;
-      usbinfo_array[usbinfo_array_index].idProduct = desc.idProduct;
-      usbinfo_array[usbinfo_array_index].bcdDevice = desc.bcdDevice;
-      usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
-      int open_result = libusb_open(dev, &usbhandle);
-      if (open_result < 0) {
-        log_error(
-            "Could not open USB device[VID: %04X, PID: %04X]: Error code %d", desc.idVendor, desc.idProduct, open_result);
-        log_error("  libusb says: %s", libusb_strerror(open_result));
-        continue; // keep looking for other devices E.g. my system has multiple FTDIs some for work (which will fail to open
-                  // here) so keep looking for another that might open (i.e., the proper MEGA65 JTAG one)
-      }
-      else {
-        log_debug("successfully opened USB device[VID: %04X, PID: %04X]", desc.idVendor, desc.idProduct);
-        if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
-          log_debug("error getting USB device attributes (iManuf=%x, iProd=%x, iSerial=%x)", UDESC(iManufacturer),
-              UDESC(iProduct), UDESC(iSerialNumber));
-          libusb_close(usbhandle);
-          usbhandle = NULL;
-          continue;
-        }
-      }
-      usbinfo_array_index++;
+
+    // check for valid FTDI devices
+    for (j = 0; usbValidDeviceList[j][0]; j++)
+      if (desc.idVendor == usbValidDeviceList[j][0] && desc.idProduct == usbValidDeviceList[j][1])
+        break;
+    if (!usbValidDeviceList[j][0])
+      continue;
+
+    if ((res = libusb_open(dev, &usbhandle)) < 0) {
+      log_error("could not open USB device [%04X:%04X]: %s (%d)", desc.idVendor, desc.idProduct, libusb_strerror(res), res);
+      fpgajtag_libusb_open_failed = 1;
+      continue;
     }
-    else if (desc.idVendor == USB_JTAG_ALTERA && desc.idProduct == 0x6810) { /* Altera */
-      usbinfo_array[usbinfo_array_index].dev = dev;
-      usbinfo_array[usbinfo_array_index].idVendor = desc.idVendor;
-      usbinfo_array[usbinfo_array_index].idProduct = desc.idProduct;
-      usbinfo_array[usbinfo_array_index].bcdDevice = desc.bcdDevice;
-      usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
-      if (libusb_open(dev, &usbhandle) < 0) {
-        log_error("error getting USB device attributes (libusb_open() returned failure), skipping");
-        usbhandle = NULL;
-        continue;
-      }
+    // log_debug("opened USB device [%04X:%04X]", desc.idVendor, desc.idProduct);
+
+    // fetch device info strings and store in m65com_usbinfo
+    // skip device if this fails
+    if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
+      log_debug("error getting USB device attributes");
       libusb_close(usbhandle);
-      usbhandle = NULL;
-      usbinfo_array_index++;
+      continue;
     }
+    libusb_close(usbhandle);
+
+    usbinfo_array[usbinfo_array_index].dev = dev;
+    usbinfo_array[usbinfo_array_index].idVendor = desc.idVendor;
+    usbinfo_array[usbinfo_array_index].idProduct = desc.idProduct;
+    usbinfo_array[usbinfo_array_index].bcdDevice = desc.bcdDevice;
+    usbinfo_array[usbinfo_array_index].bNumConfigurations = desc.bNumConfigurations;
+
+    usbinfo_array_index++;
   }
 #endif
-  log_info("Found %d candidate USB devices.", usbinfo_array_index);
+  // explicit end marker
+  usbinfo_array[usbinfo_array_index].dev = NULL;
+  log_info("found %d candidate USB devices.", usbinfo_array_index);
+
   return usbinfo_array;
 }
 

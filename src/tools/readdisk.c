@@ -37,8 +37,9 @@
 #include <pthread.h>
 #include <libusb.h>
 
-#include "m65common.h"
-#include "logging.h"
+#include <m65common.h>
+#include <logging.h>
+#include <fpgajtag.h>
 
 #define UT_TIMEOUT 10
 
@@ -75,10 +76,6 @@ char *load_binary = NULL;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
-int fpgajtag_main(char *bitstream, char *serialport);
-char *init_fpgajtag(const char *serialno, const char *serialport, uint32_t file_idcode);
-int xilinx_boundaryscan(char *xdc, char *bsdl, char *sensitivity);
-void set_vcd_file(char *name);
 void do_exit(int retval);
 void get_video_state(void);
 
@@ -907,12 +904,7 @@ void load_bitstream(char *bitstream)
   else {
     // No Vivado.bat, so try to use internal fpgajtag implementation.
     fprintf(stderr, "INFO: NOT using vivado.bat file\n");
-    if (fpga_serial) {
-      fpgajtag_main(bitstream, fpga_serial);
-    }
-    else {
-      fpgajtag_main(bitstream, NULL);
-    }
+    fpgajtag_main(bitstream);
   }
   log_note("Bitstream loaded");
 }
@@ -1166,60 +1158,42 @@ int main(int argc, char **argv)
     }
   }
 
-  // Automatically find the serial port on Linux, if one has not been
-  // provided
-  // Detect only A7100T parts
-  // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
-#if defined(__APPLE__) || defined(WINDOWS)
-  if (bitstream && !serial_port)
-#else
-  if (!serial_port)
-#endif
-  {
-    char *res;
-    log_info("scanning bitstream file '%s' for device ID", bitstream);
-    unsigned int fpga_id = 0xffffffff;
-    FILE *f = fopen(bitstream, "rb");
-    if (f) {
-      unsigned char buff[8192];
-      int len = fread(buff, 1, 8192, f);
-      log_debug("read %d bytes to search", len);
-      for (int i = 0; i < len; i++) {
-        if ((buff[i + 0] == 0x30) && (buff[i + 1] == 0x01) && (buff[i + 2] == 0x80) && (buff[i + 3] == 0x01)) {
-          i += 4;
-          fpga_id = buff[i + 0] << 24;
-          fpga_id |= buff[i + 1] << 16;
-          fpga_id |= buff[i + 2] << 8;
-          fpga_id |= buff[i + 3] << 0;
+  // Automatically find the serial port
+  unsigned int fpga_id = get_bitstream_fpgaid(bitstream);
 
-          log_info("detected FPGA ID %08x from bitstream file.\n", fpga_id);
-          break;
-        }
-      }
-      fclose(f);
-    }
-    log_info("using fpga_id %08x", fpga_id);
-    if (!checkUSBPermissions()) {
-      log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
-      log_warn("    You may be able to solve this problem via the following:");
-      log_warn("        sudo usermod -a -G dialout <your username>");
-      log_warn("    and then:");
-      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
-               "sudo tee /etc/udev/rules.d/40-xilinx.rules");
-      log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
-    }
-    res = init_fpgajtag(NULL, serial_port, fpga_id);
-    if (res == NULL) {
-      log_crit("no valid serial port not found, aborting");
-      exit(1);
-    }
-    if (serial_port) {
-      free(serial_port);
-    }
-    serial_port = res;
+  char *res = init_fpgajtag(fpga_serial, serial_port, fpga_id);
+
+#ifndef WINDOWS
+  // this is set by fpgajtag/util.c:fpgausb_init which is called by fpgajtag/fpgajtag.c:init_fpgajtag
+  if (fpgajtag_libusb_open_failed) {
+    log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
+    log_warn("    You may be able to solve this problem via the following:");
+    log_warn("        sudo usermod -a -G dialout <your username>");
+    log_warn("    and then:");
+    log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
+             "sudo tee /etc/udev/rules.d/40-xilinx.rules");
+    log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
   }
+#endif
 
-  open_the_serial_port(serial_port);
+  if (res == NULL) {
+    log_crit("no valid serial port not found, aborting");
+    exit(1);
+  }
+  if (serial_port) {
+    free(serial_port);
+  }
+  if (!strcmp(res, "UNKNOWN"))
+    serial_port = NULL;
+  else
+    serial_port = res;
+
+  if (!serial_port) {
+    log_crit("serial port not specified, aborting.");
+    exit(1);
+  }
+  if (!open_the_serial_port(serial_port))
+    exit(-1);
   xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
   rxbuff_detect();

@@ -51,8 +51,11 @@
 #include <arpa/inet.h>
 #endif
 
-#include "m65common.h"
-#include "logging.h"
+#include <libusb.h>
+
+#include <m65common.h>
+#include <logging.h>
+#include <fpgajtag.h>
 
 #define SLOW_FACTOR 1
 #define SLOW_FACTOR2 1
@@ -1243,21 +1246,15 @@ void print_error(const char *context)
   DWORD error_code = GetLastError(), size;
   char buffer[256];
   if (!win_err_use_neutral) {
-    size = FormatMessage(
-        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
-        NULL, error_code,
-        MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
-        (LPSTR)buffer, 256, NULL);
+    size = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK, NULL,
+        error_code, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), (LPSTR)buffer, 256, NULL);
     if (size == 0)
       win_err_use_neutral = 1;
   }
   // fallback to system language if US English is not available
   if (win_err_use_neutral)
-    size = FormatMessage(
-        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
-        NULL, error_code,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)buffer, 256, NULL);
+    size = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK, NULL,
+        error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)buffer, 256, NULL);
   if (size == 0) {
     log_debug("%s: error code %ld", context, error_code);
     return;
@@ -1831,41 +1828,42 @@ void close_communication_port(void)
     close_serial_port();
 }
 
-void open_the_serial_port(char *serial_port)
+int open_the_serial_port(char *serial_port)
 {
   if (serial_port == NULL) {
-    log_crit("serial port not set, aborting");
-    exit(-1);
+    log_error("serial port not set, aborting");
+    return 0;
   }
 
   serial_port_is_tcp = 0;
   if (!strncasecmp(serial_port, "tcp", 3)) {
     fd = open_tcp_port(serial_port);
     serial_port_is_tcp = 1;
-    return;
+    return 1;
   }
 
 #ifdef WINDOWS
   fd.type = WINPORT_TYPE_FILE;
   fd.fdfile = open_serial_port(serial_port, 2000000);
   if (fd.fdfile == INVALID_HANDLE_VALUE) {
-    log_error("could not open serial port '%s'", serial_port);
+    log_crit("could not open serial port '%s'", serial_port);
     log_error("  (could the port be in use by another application?)");
     log_error("  (could the usb cable be disconnected or faulty?)");
-    exit(-1);
+    return 0;
   }
 
-#else
+#else /* !WINDOWS */
   errno = 0;
   fd = open(serial_port, O_RDWR);
   if (fd == -1) {
-    log_error("could not open serial port '%s'", serial_port);
-    exit(-1);
+    log_crit("could not open serial port '%s'", serial_port);
+    return 0;
   }
 
   set_serial_speed(fd, serial_speed);
 
-  // Also try to reduce serial port latency
+#ifdef __linux__
+  // Also try to reduce serial port latency on linux
   char *last_part = serial_port;
   for (int i = 0; serial_port[i]; i++)
     if (serial_port[i] == '/')
@@ -1893,7 +1891,10 @@ void open_the_serial_port(char *serial_port)
       }
     }
   }
-#endif
+#endif /* __linux__ */
+#endif /* !WINDOWS */
+
+  return 1;
 }
 
 int switch_to_c64mode(void)
@@ -1911,4 +1912,173 @@ int switch_to_c64mode(void)
     retries++;
   }
   return saw_c64_mode == 0;
+}
+
+unsigned int get_bitstream_fpgaid(const char *bitstream)
+{
+  unsigned int fpga_id = 0xffffffff, found = 0; // wildcard match for the last valid device
+  if (bitstream) {
+    log_info("scanning bitstream file '%s' for FPGA ID", bitstream);
+    FILE *f = fopen(bitstream, "rb");
+    if (f) {
+      unsigned char buff[8192];
+      int len = fread(buff, 1, 8192, f);
+      if (len < 8192)
+        log_debug("only got %d bytes from bitstream, file to short?", len);
+      for (int i = 0; i < len; i++) {
+        if ((buff[i + 0] == 0x30) && (buff[i + 1] == 0x01) && (buff[i + 2] == 0x80) && (buff[i + 3] == 0x01)) {
+          i += 4;
+          fpga_id = buff[i + 0] << 24;
+          fpga_id |= buff[i + 1] << 16;
+          fpga_id |= buff[i + 2] << 8;
+          fpga_id |= buff[i + 3] << 0;
+
+          log_info("detected FPGA ID %08x from bitstream file", fpga_id);
+          found = 1;
+          break;
+        }
+      }
+      fclose(f);
+    }
+  }
+  if (!found)
+    log_info("using default FPGA ID %x", fpga_id);
+
+  return fpga_id;
+}
+
+char system_bitstream_version[64] = "VERSION NOT FOUND";
+char system_hardware_model_name[64] = "UNKNOWN";
+unsigned char system_hardware_model = 0;
+int get_system_bitstream_version(void)
+{
+  char buf[512], *found, *end;
+  size_t len = 0;
+  time_t timeout;
+
+  log_debug("get_system_bitstream_version: start");
+  // fetch version info via monitor 'h'
+  // don' forget to sync console with '\xf#\r'
+#ifdef WINDOWS
+  slow_write(fd, "\xf#\rh\r", 5);
+#else
+  log_debug("get_system_bitstream_version: write %d %d", write(fd, "\xf#\rh\r", 5), errno);
+#endif
+  usleep(20000);
+  timeout = time(NULL);
+  while (timeout + 10 > time(NULL)) {
+    wait_for_serial(WAIT_READ, 2, 0);
+    len = serialport_read(fd, (unsigned char *)buf, 512);
+    if (len == -1)
+      log_debug("get_system_bitstream_version: read error %d", errno);
+    if (len > 0)
+      break;
+  }
+  if (len == 0)
+    return -1;
+
+  log_debug("get_system_bitstream_version: got help answer (len=%d)", len);
+  found = strstr(buf, "build GIT: ");
+  if (found != NULL) {
+    found += 11; // skip found prefix
+    end = strchr(found, '\r');
+    if (end != NULL) {
+      *end = 0;
+      strncpy(system_bitstream_version, found, 63);
+      system_bitstream_version[63] = 0;
+      log_debug("get_system_bitstream_version: version %s", system_bitstream_version);
+    }
+  }
+  else {
+    log_debug("get_system_bitstream_version: version not found");
+    return -1;
+  }
+
+  log_debug("get_system_bitstream_version: dumping $FFD3629");
+  slow_write(fd, "mffd3629 1\r", 11);
+  usleep(20000);
+  while (!(len = serialport_read(fd, (unsigned char *)buf, 512)))
+    ;
+  // search version byte and translate
+  found = strstr(buf, ":0FFD3629:");
+  if (found != NULL) {
+    found += 10;
+    system_hardware_model = ((unsigned char)found[0] - (found[0] > 57 ? 55 : 48)) * 16 + (unsigned char)found[1]
+                          - (found[1] > 57 ? 55 : 48);
+    switch (system_hardware_model) {
+    case 1:
+      strcpy(system_hardware_model_name, "MEGA65 R1");
+      break;
+    case 2:
+      strcpy(system_hardware_model_name, "MEGA65 R2");
+      break;
+    case 3:
+      strcpy(system_hardware_model_name, "MEGA65 R3");
+      break;
+    case 33:
+      strcpy(system_hardware_model_name, "MEGAPHONE R1 PROTOTYPE");
+      break;
+    case 64:
+      strcpy(system_hardware_model_name, "NEXYS 4 PSRAM");
+      break;
+    case 65:
+      strcpy(system_hardware_model_name, "NEXYS 4 DDR (NO WIDGET)");
+      break;
+    case 66:
+      strcpy(system_hardware_model_name, "NEXYS 4 DDR (WIDGET)");
+      break;
+    case 253:
+      strcpy(system_hardware_model_name, "QMTECH WUKONG BOARD");
+      break;
+    case 254:
+      strcpy(system_hardware_model_name, "SIMULATED MEGA65");
+      break;
+    case 255:
+      strcpy(system_hardware_model_name, "HARDWARE NOT SPECIFIED");
+      break;
+    default:
+      snprintf(system_hardware_model_name, 31, "UNKNOWN MODEL $%02X", system_hardware_model);
+    }
+    log_debug("get_system_bitstream_version: hardware $%02X '%s'", system_hardware_model, system_hardware_model_name);
+  }
+  else {
+    log_debug("get_system_bitstream_version: hardware not detected");
+    return -1;
+  }
+
+  return 0;
+}
+
+char *find_serial_port(const int serial_speed)
+{
+#ifndef WINDOWS
+  int res, fd;
+  char *device;
+
+  log_note("no serial device given, trying brute-force autodetect");
+
+  usbdev_get_next_device(1);
+  while ((device = usbdev_get_next_device(0))) {
+    // this must use m65serial to open and read!
+    log_debug("find_serial_port: trying %s", device);
+    if (!open_the_serial_port(device))
+      continue;
+
+    res = get_system_bitstream_version();
+
+    close(fd);
+    fd = -1;
+
+    if (!res) {
+      log_note("selecting %s: %s (%s)", device, system_hardware_model_name, system_bitstream_version);
+      break;
+    }
+    else
+      log_note("%s: no reply", device);
+  }
+
+  return device ? strdup(device) : NULL;
+#else
+  return NULL;
+#endif
 }

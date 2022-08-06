@@ -62,6 +62,12 @@ int sector_cache_count = 0;
 unsigned char sector_cache[SECTOR_CACHE_SIZE][512];
 unsigned int sector_cache_sectors[SECTOR_CACHE_SIZE];
 
+// dummy, don't want to include fpgajtag for device discovery yet
+char *usbdev_get_next_device(const int start)
+{
+  return NULL;
+}
+
 struct m65dirent {
   long d_ino;                    /* start cluster */
   long d_filelen;                /* length of file */
@@ -766,7 +772,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
     }
   }
   else {
-    open_the_serial_port(serial_port);
+    if (!open_the_serial_port(serial_port))
+      exit(-1);
     xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
     rxbuff_detect();

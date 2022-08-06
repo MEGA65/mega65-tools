@@ -54,9 +54,10 @@
 #include <windows.h>
 #endif
 
-#include "m65common.h"
-#include "logging.h"
-#include "screen_shot.h"
+#include <m65common.h>
+#include <logging.h>
+#include <screen_shot.h>
+#include <fpgajtag.h>
 
 #define UT_TIMEOUT 10
 #define UT_RES_TIMEOUT 127
@@ -99,16 +100,10 @@ int unit_test_timeout = UT_TIMEOUT;
 
 int halt = 0;
 
-int usedk = 0;
-
 char *load_binary = NULL;
 
 int viciv_mode_report(unsigned char *viciv_regs);
 
-int fpgajtag_main(char *bitstream);
-char *init_fpgajtag(const char *serialno, const char *serialport, uint32_t file_idcode);
-int xilinx_boundaryscan(char *xdc, char *bsdl, char *sensitivity);
-void set_vcd_file(char *name);
 void do_exit(int retval);
 
 extern const char *version_string;
@@ -165,7 +160,7 @@ char *search_path = ".";
 char *bitstream = NULL;
 char *vivado_bat = NULL;
 char *hyppo = NULL;
-char *fpga_serial = NULL;
+char *jtag_serial = NULL;
 char *serial_port = NULL;
 char modeline_cmd[1024] = "";
 int break_point = -1;
@@ -314,7 +309,7 @@ void init_cmd_options(void)
 
   CMD_OPTION("autodiscover", 0, 0,      'j', "",      "Try to autodiscover device and exit.");
   CMD_OPTION("device",    1, 0,         'l', "port",  "Name of serial <port> to use, e.g., "DEVICENAME".");
-  CMD_OPTION("fpga",      1, 0,         'f', "serial","Select which FPGA to reconfigure by specifying JTAG <serial>.");
+  CMD_OPTION("jtagser",   1, 0,         'f', "serial","Select which FPGA to reconfigure by specifying JTAG <serial>.");
   CMD_OPTION("speed",     1, 0,         's', "230400|1000000|1500000|2000000|4000000",
                   "Speed of serial port in <bits per second> (defaults to 2000000). This needs to match the speed your bitstream uses!");
   CMD_OPTION("usedk",     0, 0,         'K', "",      "Use DK backend for libUSB, if available.");
@@ -679,150 +674,6 @@ void show_hyppo_report(void)
     printf("%c", pd_buffer[0x01 + i]);
   printf("\n");
 }
-
-static char system_bitstream_version[64] = "VERSION NOT FOUND";
-static char system_hardware_model_name[64] = "UNKNOWN";
-static unsigned char system_hardware_model = 0;
-int get_system_bitstream_version(void)
-{
-  char buf[512], *found, *end;
-  size_t len = 0;
-  time_t timeout;
-
-  log_debug("get_system_bitstream_version: start");
-  // fetch version info via monitor 'h'
-  // don' forget to sync console with '\xf#\r'
-#ifdef WINDOWS
-  slow_write(fd, "\xf#\rh\r", 5);
-#else
-  write(fd, "\xf#\rh\r", 5);
-#endif
-  usleep(20000);
-  timeout = time(NULL);
-  while (timeout + 2 > time(NULL)) {
-    len = serialport_read(fd, (unsigned char *)buf, 512);
-    if (len != 0)
-      break;
-  }
-  if (len == 0)
-    return -1;
-
-  log_debug("get_system_bitstream_version: got help answer (len=%d)", len);
-  found = strstr(buf, "build GIT: ");
-  if (found != NULL) {
-    found += 11; // skip found prefix
-    end = strchr(found, '\r');
-    if (end != NULL) {
-      *end = 0;
-      strncpy(system_bitstream_version, found, 63);
-      system_bitstream_version[63] = 0;
-      log_debug("get_system_bitstream_version: version %s", system_bitstream_version);
-    }
-  }
-  else {
-    log_debug("get_system_bitstream_version: version not found");
-    return -1;
-  }
-
-  log_debug("get_system_bitstream_version: dumping $FFD3629");
-  slow_write(fd, "mffd3629 1\r", 11);
-  usleep(20000);
-  while (!(len = serialport_read(fd, (unsigned char *)buf, 512)))
-    ;
-  // search version byte and translate
-  found = strstr(buf, ":0FFD3629:");
-  if (found != NULL) {
-    found += 10;
-    system_hardware_model = ((unsigned char)found[0] - (found[0] > 57 ? 55 : 48)) * 16 + (unsigned char)found[1]
-                          - (found[1] > 57 ? 55 : 48);
-    switch (system_hardware_model) {
-    case 1:
-      strcpy(system_hardware_model_name, "MEGA65 R1");
-      break;
-    case 2:
-      strcpy(system_hardware_model_name, "MEGA65 R2");
-      break;
-    case 3:
-      strcpy(system_hardware_model_name, "MEGA65 R3");
-      break;
-    case 33:
-      strcpy(system_hardware_model_name, "MEGAPHONE R1 PROTOTYPE");
-      break;
-    case 64:
-      strcpy(system_hardware_model_name, "NEXYS 4 PSRAM");
-      break;
-    case 65:
-      strcpy(system_hardware_model_name, "NEXYS 4 DDR (NO WIDGET)");
-      break;
-    case 66:
-      strcpy(system_hardware_model_name, "NEXYS 4 DDR (WIDGET)");
-      break;
-    case 253:
-      strcpy(system_hardware_model_name, "QMTECH WUKONG BOARD");
-      break;
-    case 254:
-      strcpy(system_hardware_model_name, "SIMULATED MEGA65");
-      break;
-    case 255:
-      strcpy(system_hardware_model_name, "HARDWARE NOT SPECIFIED");
-      break;
-    default:
-      snprintf(system_hardware_model_name, 31, "UNKNOWN MODEL $%02X", system_hardware_model);
-    }
-    log_debug("get_system_bitstream_version: hardware $%02X '%s'", system_hardware_model, system_hardware_model_name);
-  }
-  else {
-    log_debug("get_system_bitstream_version: hardware not detected");
-    return -1;
-  }
-
-  return 0;
-}
-
-#ifndef WINDOWS
-char *find_serial_port()
-{
-  int i, res;
-  char *device = NULL;
-  static char *devglob =
-#if defined(__APPLE__)
-      "/dev/cu.usbserial-*";
-#else
-      "/dev/ttyUSB*";
-#endif
-  log_note("no serial device given, trying brute-force autodetect");
-  glob_t result;
-  if (glob(devglob, 0, NULL, &result)) {
-    globfree(&result);
-    return NULL;
-  }
-  for (i = 0; i < result.gl_pathc; i++) {
-    fd = open(result.gl_pathv[i], O_RDWR);
-    if (fd == -1) {
-      log_error("%s: failed to open", result.gl_pathv[i]);
-      continue;
-    }
-    log_debug("find_serial_port: setting speed");
-    set_serial_speed(fd, serial_speed);
-
-    res = get_system_bitstream_version();
-
-    close(fd);
-    fd = -1;
-
-    if (!res) {
-      log_note("%s: %s (%s)", result.gl_pathv[i], system_hardware_model_name, system_bitstream_version);
-      device = strdup(result.gl_pathv[i]);
-      break;
-    }
-    else
-      log_note("%s: no reply", result.gl_pathv[i]);
-  }
-
-  globfree(&result);
-  return device;
-}
-#endif
 
 int type_serial_mode = 0;
 
@@ -1839,35 +1690,6 @@ void enterTestMode()
   do_exit(UT_RES_TIMEOUT);
 }
 
-unsigned char checkUSBPermissions()
-{
-#ifndef WINDOWS
-  libusb_device_handle *usbhandle = NULL;
-  struct libusb_context *usb_context;
-  libusb_device **device_list;
-  libusb_device *dev;
-  unsigned int i = 0;
-
-  if (libusb_init(&usb_context) < 0 || libusb_get_device_list(usb_context, &device_list) < 0) {
-    printf("libusb_init failed\n");
-    exit(-1);
-  }
-  while ((dev = device_list[i++])) {
-    struct libusb_device_descriptor desc;
-    if (libusb_get_device_descriptor(dev, &desc) < 0)
-      continue;
-    if (desc.idVendor != 0x0403) // others do not matter, suppress complaint
-      continue;
-    int open_result = libusb_open(dev, &usbhandle);
-    if (open_result < 0) {
-      return 0;
-    }
-  }
-#endif
-
-  return 1;
-}
-
 int main(int argc, char **argv)
 {
   int opt_index;
@@ -1924,7 +1746,7 @@ int main(int argc, char **argv)
       hyppo_report = 1;
       break;
     case 'K':
-      usedk = 1;
+      fpgajtag_usbdk_enable = 1;
       break;
     case 'Z': {
       // Zap (reconfig) FPGA via MEGA65 reconfig registers
@@ -1994,7 +1816,7 @@ int main(int argc, char **argv)
       wait_for_bitstream = 1;
       break;
     case 'f':
-      fpga_serial = strdup(optarg);
+      jtag_serial = strdup(optarg);
       break;
     case 'l':
       serial_port = strdup(optarg);
@@ -2117,62 +1939,50 @@ int main(int argc, char **argv)
 
   log_note("%s %s", TOOLNAME, version_string);
 
-  // Automatically find the serial port on Linux, if one has not been
-  // provided
-  // Detect only A7100T parts
-  // XXX Will require patching for MEGA65 R1 PCBs, as they have an A200T part.
-#if defined(__APPLE__) || defined(WINDOWS)
-  if (bitstream && !serial_port)
-#endif
-  {
-    unsigned int fpga_id = 0xffffffff, found = 0; // wildcard match for the last valid device
-    if (bitstream) {
-      log_info("Scanning bitstream file '%s' for device ID", bitstream);
-      FILE *f = fopen(bitstream, "rb");
-      if (f) {
-        unsigned char buff[8192];
-        int len = fread(buff, 1, 8192, f);
-        log_debug("  read %d bytes to search", len);
-        for (int i = 0; i < len; i++) {
-          if ((buff[i + 0] == 0x30) && (buff[i + 1] == 0x01) && (buff[i + 2] == 0x80) && (buff[i + 3] == 0x01)) {
-            i += 4;
-            fpga_id = buff[i + 0] << 24;
-            fpga_id |= buff[i + 1] << 16;
-            fpga_id |= buff[i + 2] << 8;
-            fpga_id |= buff[i + 3] << 0;
+  /*
+   * Automatically find the serial port
+   *
+   * This will use various source of information to determine which
+   * serial port to use.
+   *
+   * If a bitstream is provided, it's fpga_id is extracted and used to select
+   * the proper device.
+   * If a serial port is given, this will be used to select the device.
+   * If a JTAG serial id is given, this is used to select the USB device.
+   * If multiple selectors are given, all muss match!
+   *
+   * This is done by init_fpgajtag, which returns the device as a string.
+   */
+  unsigned int fpga_id = get_bitstream_fpgaid(bitstream);
 
-            log_info("detected FPGA ID %08x from bitstream file.", fpga_id);
-            found = 1;
-            break;
-          }
-        }
-        fclose(f);
-      }
-    }
-    if (!found)
-      log_info("using default fpga_id %x\n", fpga_id);
-    if (!checkUSBPermissions()) {
-      log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
-      log_warn("    You may be able to solve this problem via the following:");
-      log_warn("        sudo usermod -a -G dialout <your username>");
-      log_warn("    and then:");
-      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
-               "sudo tee /etc/udev/rules.d/40-xilinx.rules");
-      log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
-    }
-    char *res = init_fpgajtag(fpga_serial, serial_port, fpga_id);
-    if (res == NULL) {
-      log_crit("no valid serial port not found, aborting");
-      exit(1);
-    }
-    if (serial_port) {
-      free(serial_port);
-    }
-    if (!strcmp(res, "NULL"))
-      serial_port = NULL;
-    else
-      serial_port = res;
+  char *res = init_fpgajtag(jtag_serial, serial_port, fpga_id);
+
+#ifndef WINDOWS
+  // this is set by fpgajtag/util.c:fpgausb_init which is called by fpgajtag/fpgajtag.c:init_fpgajtag
+  if (fpgajtag_libusb_open_failed) {
+    log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
+    log_warn("    You may be able to solve this problem via the following:");
+    log_warn("        sudo usermod -a -G dialout <your username>");
+    log_warn("    and then:");
+    log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
+             "sudo tee /etc/udev/rules.d/40-xilinx.rules");
+    log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
   }
+#endif
+
+  if (res == NULL) {
+    if (!jtag_only)
+      log_note("tip: try using 'm65 --autodetect --verbose'");
+    log_crit("no valid serial port not found, aborting");
+    exit(1);
+  }
+  if (serial_port) {
+    free(serial_port);
+  }
+  if (!strcmp(res, "UNKNOWN"))
+    serial_port = NULL;
+  else
+    serial_port = res;
 
   if (boundary_scan) {
 #ifdef WINDOWS
@@ -2202,21 +2012,23 @@ int main(int argc, char **argv)
   }
 
   if (!serial_port) {
-#ifndef WINDOWS
-  // if we do not have a serial port yet (MacOS without -l option)
-  // we try to detect by opening the serial ports we find
-    if (!(serial_port = find_serial_port())) {
-      log_crit("could not find a mega65 device on a serial port!");
+#ifdef __APPLE__
+    // for apple we try a brute force search
+    serial_port = find_serial_port(serial_speed);
+    if (!serial_port) {
+#endif
+      if (!jtag_only)
+        log_note("tip: try using 'm65 --autodetect --verbose'");
+      log_crit("serial port not specified, aborting.");
       exit(1);
+#ifdef __APPLE__
     }
-#else
-    log_crit("serial port not specified, aborting.");
-    exit(1);
 #endif
   }
 
   log_info("opening serial port %s", serial_port);
-  open_the_serial_port(serial_port);
+  if (!open_the_serial_port(serial_port))
+    exit(-1);
   xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
   rxbuff_detect();

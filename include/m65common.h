@@ -77,7 +77,7 @@ HANDLE open_serial_port(const char *device, uint32_t baud_rate);
 #else
 void set_serial_speed(int fd, int serial_speed);
 #endif
-void open_the_serial_port(char *serial_port);
+int open_the_serial_port(char *serial_port);
 void close_communication_port(void);
 int switch_to_c64mode(void);
 PORT_TYPE open_tcp_port(char *portname);
@@ -112,5 +112,15 @@ extern int saw_c64_mode;
 extern int saw_c65_mode;
 extern int saw_openrom;
 extern int xemu_flag;
+
+// moved stuff
+
+extern char system_bitstream_version[64];
+extern char system_hardware_model_name[64];
+extern unsigned char system_hardware_model;
+
+unsigned int get_bitstream_fpgaid(const char *bitstream);
+int get_system_bitstream_version(void);
+char *find_serial_port(const int serial_speed);
 
 #endif // M65COMMON_H
