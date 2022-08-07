@@ -307,7 +307,9 @@ void init_cmd_options(void)
   cmd_log_end = cmd_count;
   CMD_OPTION("log",       1, 0,         '0', "level", "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
-  CMD_OPTION("autodiscover", 0, 0,      'j', "",      "Try to autodiscover device and exit.");
+  CMD_OPTION("autodiscover", 0, 0,      'j', "",
+                  "Try to autodiscover device and exit. "
+                  "NOTE: m65 always tries to autodiscover the device if needed. This option is just for debugging.");
   CMD_OPTION("device",    1, 0,         'l', "port",  "Name of serial <port> to use, e.g., "DEVICENAME".");
   CMD_OPTION("jtagser",   1, 0,         'f', "serial","Select which FPGA to reconfigure by specifying JTAG <serial>.");
   CMD_OPTION("speed",     1, 0,         's', "230400|1000000|1500000|2000000|4000000",

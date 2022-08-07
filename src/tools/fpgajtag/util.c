@@ -424,7 +424,7 @@ USB_INFO *fpgausb_init(void)
       continue;
 
     if ((res = libusb_open(dev, &usbhandle)) < 0) {
-      log_error("could not open USB device [%04X:%04X]: %s (%d)", desc.idVendor, desc.idProduct, libusb_strerror(res), res);
+      log_debug("could not open USB device [%04X:%04X]: %s (%d)", desc.idVendor, desc.idProduct, libusb_strerror(res), res);
       fpgajtag_libusb_open_failed = 1;
       continue;
     }

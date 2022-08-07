@@ -708,6 +708,7 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
   ENTER();
   int i, j, ser, bus, pnum_len, last_index = -1, last_match = -1;
   uint8_t pnum[8];
+  uint32_t last_idcode = 0xffffffff;
   char last_path[1024] = "UNKNOWN";
 
   // get usbdev candidates
@@ -775,6 +776,7 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
         log_info("  id code %08x matches %08x", idcode_array[j], match_any_idcode ? 0xffffffff : fpga_id);
         last_index = j;
         last_match = i;
+        last_idcode = idcode_array[j];
         if (ser > -1) {
           strncpy(last_path, usbdev_info[ser].device, 1023);
           last_path[1023] = 0;
@@ -783,6 +785,8 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
           strcpy(last_path, "UNKNOWN");
         break;
       }
+    if (j == idcode_count)
+      log_info("  id codes do not match %08x", match_any_idcode ? 0xffffffff : fpga_id);
 
     // autodiscover?
     if (!serialno && !serialport && (fpga_id == 0xffffffff || match_any_idcode))
@@ -803,8 +807,7 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
       log_warn("please supply device string using --device option");
 #endif
     log_note("selecting device %s (%s; %04X:%04X; %s; %08x)", last_path, uinfo[last_match].iManufacturer,
-        uinfo[last_match].idVendor, uinfo[last_match].idProduct, uinfo[last_match].iSerialNumber,
-        last_index < idcode_count ? idcode_array[last_index] : 0xffffffff);
+        uinfo[last_match].idVendor, uinfo[last_match].idProduct, uinfo[last_match].iSerialNumber, last_idcode);
     jtag_index = last_index;
     uinfo_selected = last_match;
 
