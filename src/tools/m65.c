@@ -1945,6 +1945,11 @@ int main(int argc, char **argv)
    * This will use various source of information to determine which
    * serial port to use.
    *
+   * It needs only be executed if:
+   *  - user did not provide a serial_port (lets autodetect one)
+   *  - user did request autodiscover (jtag_only)
+   *  - user wants to push a bitstream to the device (requires jtag init)
+   *
    * If a bitstream is provided, it's fpga_id is extracted and used to select
    * the proper device.
    * If a serial port is given, this will be used to select the device.
@@ -1953,36 +1958,38 @@ int main(int argc, char **argv)
    *
    * This is done by init_fpgajtag, which returns the device as a string.
    */
-  unsigned int fpga_id = get_bitstream_fpgaid(bitstream);
+  if (bitstream || jtag_only || !serial_port) {
+    unsigned int fpga_id = get_bitstream_fpgaid(bitstream);
 
-  char *res = init_fpgajtag(jtag_serial, serial_port, fpga_id);
+    char *res = init_fpgajtag(jtag_serial, serial_port, fpga_id);
 
-#ifndef WINDOWS
-  // this is set by fpgajtag/util.c:fpgausb_init which is called by fpgajtag/fpgajtag.c:init_fpgajtag
-  if (fpgajtag_libusb_open_failed) {
-    log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
-    log_warn("    You may be able to solve this problem via the following:");
-    log_warn("        sudo usermod -a -G dialout <your username>");
-    log_warn("    and then:");
-    log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
-             "sudo tee /etc/udev/rules.d/40-xilinx.rules");
-    log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
-  }
-#endif
+  #ifndef WINDOWS
+    // this is set by fpgajtag/util.c:fpgausb_init which is called by fpgajtag/fpgajtag.c:init_fpgajtag
+    if (fpgajtag_libusb_open_failed) {
+      log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
+      log_warn("    You may be able to solve this problem via the following:");
+      log_warn("        sudo usermod -a -G dialout <your username>");
+      log_warn("    and then:");
+      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
+              "sudo tee /etc/udev/rules.d/40-xilinx.rules");
+      log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
+    }
+  #endif
 
-  if (res == NULL) {
-    if (!jtag_only)
-      log_note("tip: try using 'm65 --autodiscover --verbose'");
-    log_crit("no valid serial port not found, aborting");
-    exit(1);
+    if (res == NULL) {
+      if (!jtag_only)
+        log_note("tip: try using 'm65 --autodiscover --verbose'");
+      log_crit("no valid serial port not found, aborting");
+      exit(1);
+    }
+    if (serial_port) {
+      free(serial_port);
+    }
+    if (!strcmp(res, "UNKNOWN"))
+      serial_port = NULL;
+    else
+      serial_port = res;
   }
-  if (serial_port) {
-    free(serial_port);
-  }
-  if (!strcmp(res, "UNKNOWN"))
-    serial_port = NULL;
-  else
-    serial_port = res;
 
   if (boundary_scan) {
 #ifdef WINDOWS
