@@ -84,6 +84,44 @@ void usage(void)
 
 enum FILE_STATE { FS_WAIT, FS_WRITE };
 
+void convert_to_pcfile(const char* src_name)
+{
+  char dest_name[256];
+  char str[16];
+  strcpy(dest_name, src_name);
+  strcat(dest_name, "PC");  // converted files are .ELPC
+
+  FILE* fin = fopen(src_name, "rb");
+  FILE* fout = fopen(dest_name, "wb");
+
+  int c;
+
+  while (!feof(fin)) {
+    c = fgetc(fin);
+    if (c >= 65 && c <= 90) // petscii-lowercase to ascii-lowercase?
+      c += 32;
+    else if (c >= 193 && c <= 218) // petscii-uppercase to ascii-uppercase?
+      c -= 128;
+    else if (c == '\r') // petscii EOL?
+      c = '\n'; // switch to linux EOL
+    else if (c == 0xa4) // petscii underscore to ascii underscore?
+      c = '_';
+    else if (c == 145) // petscii up-arrow to ascii-caret?
+      c = '^';
+    else if ((c >= 0 && c <= 12) || (c >= 14 && c <= 31) || (c >= 94 && c <=162)) {
+      sprintf(str, "{x%X}", c);
+      fwrite(str, 1, strlen(str), fout);
+      continue;
+    }
+
+    fputc(c, fout);
+  }
+  fclose(fin);
+  fclose(fout);
+
+  printf("Saved out pc-friendly version as \"%s\"...\n", dest_name);
+}
+
 void parse_packet(char* pkt) {
   static enum FILE_STATE file_state = FS_WAIT;
   static char fname[256] = "";
@@ -108,6 +146,8 @@ void parse_packet(char* pkt) {
         fclose(f);
         printf("Closing file \"%s\"...\n", fname);
         file_state = FS_WAIT;
+        if (strcmp(fname+strlen(fname)-3,".EL") == 0)
+          convert_to_pcfile(fname);
       }
       else {
         unsigned int len = strlen(pkt);
