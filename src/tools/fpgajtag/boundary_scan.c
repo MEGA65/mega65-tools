@@ -168,6 +168,13 @@ int xilinx_boundaryscan(char *xdc, char *bsdl, char *sensitivity)
 {
   ENTER();
 
+  // reopen device found by init_fpgajtag
+  if (uinfo_selected == -1) {
+    log_crit("no usb device selected, aborting flash");
+    exit(-5);
+  }
+  get_deviceid(uinfo_selected, interface_id);
+
   char last_rdata[1024];
   int loop = 1;
   int first_time = 1;
