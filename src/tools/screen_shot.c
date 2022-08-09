@@ -251,7 +251,25 @@ int do_screen_shot_ascii(void)
 
   // printf("Got screen line @ $%x. %d to go.\n",screen_address,screen_rows_remaining);
 
-#ifndef WINDOWS
+#ifdef WINDOWS
+  // enable VT100 sequence processing for windows console
+#define WINANSIMODE (ENABLE_PROCESSED_OUTPUT|ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_WRAP_AT_EOL_OUTPUT)
+  unsigned char wincon_changed = 0;
+  DWORD conmode;
+  HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+  if (GetConsoleMode(console, &conmode)) {
+    log_debug("screenshot_ascii: win console mode is %04x", conmode);
+    if ((conmode & WINANSIMODE) != WINANSIMODE) {
+      if (!SetConsoleMode(console, conmode | WINANSIMODE)) {
+        log_error("failed to set win console to VT100 mode, console screenshot not possible");
+        return 1;
+      }
+      log_debug("screenshot_ascii: enabled VT100 processing for win console");
+      wincon_changed = 1;
+    }
+  }
+#endif
+
   // Display a thin border
   printf("%c[48;2;%d;%d;%dm", 27, mega65_rgb(border_colour, 0, 0), mega65_rgb(border_colour, 1, 0),
       mega65_rgb(border_colour, 2, 0));
@@ -347,9 +365,13 @@ int do_screen_shot_ascii(void)
     printf(" ");
   printf("%c[0m", 27);
 
-#endif
-
   printf("\n");
+
+#ifdef WINDOWS
+  // restore old setting
+  if (wincon_changed)
+    SetConsoleMode(console, conmode);
+#endif
 
   return 0;
 }
@@ -814,6 +836,12 @@ int do_screen_shot(char *userfilename)
 
   log_note("got ASCII screenshot");
   do_screen_shot_ascii();
+
+  // filename == "0" means no png screenshot
+  if (!strcmp(userfilename, "0")) {
+    log_note("no PNG screenshot requested (filename \"0\")");
+    return 1;
+  }
 
   FILE *f = NULL;
   char filename[1024];

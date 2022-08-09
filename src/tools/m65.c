@@ -340,7 +340,9 @@ void init_cmd_options(void)
   CMD_OPTION("unittest",  2, 0,         'u', "timeout", "run program in unit test mode (<timeout> in seconds, defaults to 10).");
   CMD_OPTION("utlog",     1, 0,         'w', "file",  "append unit test results to <file>.");
 
-  CMD_OPTION("screenshot", 2, 0,        'S', "file",  "show text rendering of MEGA65 screen, optionally save PNG screenshot to <file>.");
+  CMD_OPTION("screenshot", 2, 0,        'S', "file",
+                  "show text rendering of MEGA65 screen, optionally save PNG screenshot to <file>. "
+                  "Use 0 as <file> to not save a PNG screenshot.");
 
   CMD_OPTION("hyppo",     1, 0,         'k', "file",  "HICKUP <file> to replace the HYPPO in the bitstream.");
     /* NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware
