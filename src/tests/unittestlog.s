@@ -5,18 +5,18 @@
 	ptrTest0	=	$FA
 
 
-	.define TEST_START $f0
-	.define TEST_SKIP $f1
-	.define TEST_PASS $f2
-	.define TEST_FAIL $f3
-	.define TEST_ERROR $f4
-	.define TEST_LOG $fd
-	.define TEST_SETNAME $fe
-	.define TEST_DONEALL $ff
+	.define TEST_START	$f0
+	.define TEST_SKIP	$f1
+	.define TEST_PASS	$f2
+	.define TEST_FAIL	$f3
+	.define TEST_ERROR	$f4
+	.define TEST_LOG	$fd
+	.define TEST_SETNAME	$fe
+	.define TEST_DONEALL	$ff
 
 
 __tests_out:
-	.byte	$00
+	.word	$00
 
 __ut_issueNum:
 	.word	$0000
@@ -50,6 +50,7 @@ unit_test_report:
 ;.A	=	<msg
 ;.X	=	>msg
 ;.Y	=	cmd
+;.Z used
 ;void _unit_test_msg(char *msg, char cmd)
 _unit_test_msg:
 		STA	ptrTest0
@@ -84,6 +85,8 @@ _unit_test_msg:
 
 ;.A	=	<name
 ;.X	=	>name
+;.Y used
+;.Z used
 ;void unit_test_set_current_name(char *name)
 unit_test_set_current_name:
 		LDY	#TEST_SETNAME
@@ -93,6 +96,8 @@ unit_test_set_current_name:
 
 ;.A	=	<name
 ;.X	=	>name
+;.Y used
+;.Z used
 ;void unit_test_log(char *msg)
 unit_test_log:
 		LDY	#TEST_LOG
@@ -136,14 +141,16 @@ unit_test_setup:
 
 ;.A	=	<msg
 ;.X	=	>msg
+;.Y used
+;.Z used
 ; msg can be 0, then no message is logged
 ;void unit_test_ok(char *msg)
 unit_test_ok:
 		TAY
 		STX	__tests_out
 		ORA	__tests_out
-		TYA
 		BEQ	@nolog
+		TYA
 		JSR	unit_test_log
 
 @nolog:
@@ -160,14 +167,16 @@ unit_test_ok:
 
 ;.A	=	<msg
 ;.X	=	>msg
+;.Y used
+;.Z used
 ; msg can be 0, then no message is logged
 ;void unit_test_fail(char *msg)
 unit_test_fail:
 		TAY
 		STX	__tests_out
 		ORA	__tests_out
-		TYA
 		BEQ	@nolog
+		TYA
 		JSR	unit_test_log
 
 @nolog:
@@ -182,7 +191,10 @@ unit_test_fail:
 		RTS
 
 
+;.A used
+;.X used
 ;.Y	set to 0 to use 0 as subisse, set to non-0 to use current subissue
+;.Z used
 ;void unit_test_done(char zero_sub_issue) {
 unit_test_done:
 		CPY	#0

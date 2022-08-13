@@ -41,15 +41,10 @@ bootstrap:
 strTestName0:
 		.asciiz	"MAPed DMA $D706"
 
-strTestSuccess0:
-		.asciiz	"DMA call succeeded"
-strTestError0:
-		.asciiz	"DMA call failed"
-strTestErrorEnd:
-
-valErrorCode:
-		.byte	$00
-
+strTest1:
+		.asciiz	"DMA ETRIG copy"
+strTest2:
+		.asciiz	"DMA ETRIGMAPD fill"
 valTargetData:
 		.res	16, 0
 
@@ -80,7 +75,7 @@ init:
 		LDZ	#$00
 
 		MAP
-;		EOM
+		EOM
 
 		JSR	initM65IOFast
 
@@ -90,6 +85,11 @@ init:
 		LDZ	#>454
 		JSR	unit_test_setup
 
+;	initialize reloc with different value
+		LDA	#0
+		STA	ADDR_RELOC
+
+;	execute first DMA coyp
 		JSR	copyFarProgram
 
 		LDA	#$00
@@ -99,58 +99,48 @@ init:
 ;		LDZ	#$00
 
 		MAP
-;		EOM
+		EOM
 
-		LDA	#'1'
-		STA	valErrorCode
+		LDA	#<strTest1
+		LDX	#>strTest1
+		LDY	ADDR_RELOC
+		CPY	FARPROGRAM
+		BNE	@fail1
+		JSR	unit_test_ok
+		BRA	@logdone1
+@fail1:
+		JSR	unit_test_fail
+		JMP	@skiptest2
+@logdone1:
 
-		LDA	ADDR_RELOC
-		CMP	FARPROGRAM
-		BNE	@fail
-
+;	now execute second DMA within FAR routine
 		JSR	farRoutine
 
+@skiptest2:
 		LDA	#$00
 		LDX	#$00
 		LDY	#$00
 		LDZ	#$00
 
 		MAP
-;		EOM
+		EOM
 
-		LDA	#'2'
-		STA	valErrorCode
-
-		LDA	valTargetData
-		CMP	#TARGETVAL
-		BNE	@fail
-
+		LDA	#<strTest2
+		LDX	#>strTest2
+		LDY	valTargetData
+		CPY	#TARGETVAL
+		BNE	@fail2
+		JSR	unit_test_ok
 		LDA	#$05
 		STA	$D020
-
-		LDA	#<strTestSuccess0
-		LDX	#>strTestSuccess0
-		JSR	unit_test_ok
-
-		JMP	main
-
-@fail:
-		LDA	valErrorCode
-		STA	$0400
-
-		STA	strTestErrorEnd - 2
-
-		LDA	#<strTestError0
-		LDX	#>strTestError0
+		BRA	@logdone2
+@fail2:
 		JSR	unit_test_fail
-
 		LDA	#$02
 		STA	$D020
-
-main:
+@logdone2:
 		LDY	#0
 		JSR	unit_test_done
-
 
 halt:
 		JMP	halt
@@ -187,16 +177,16 @@ dmaNearFillList:
 	.byte	$81,$00 			; Destination MB 
 	.byte	$00  				; No more options
 		
-	.byte	$00					;Command LSB
-	.word	ENDFARPROGRAM - ADDR_RELOC				;Count LSB Count MSB
+	.byte	$00				; Command LSB
+	.word	ENDFARPROGRAM - ADDR_RELOC	; Count LSB Count MSB
 dmaNearFillSrc:
-	.word	FARPROGRAM			;Source Address LSB Source Address MSB
-	.byte	$00					;Source Address BANK and FLAGS
+	.word	FARPROGRAM			; Source Address LSB Source Address MSB
+	.byte	$00				; Source Address BANK and FLAGS
 dmaNearFillDst:
-	.word	ADDR_RELOC			;Destination Address LSB Destination Address MSB
-	.byte	$04					;Destination Address BANK and FLAGS
-	.byte	$00					;Command MSB
-	.word	$0000				;Modulo LSB / Mode Modulo MSB / Mode
+	.word	ADDR_RELOC			; Destination Address LSB Destination Address MSB
+	.byte	$04				; Destination Address BANK and FLAGS
+	.byte	$00				; Command MSB
+	.word	$0000				; Modulo LSB / Mode Modulo MSB / Mode
 
 
 ;-----------------------------------------------------------
@@ -207,7 +197,7 @@ copyFarProgram:
 		LDA	#>dmaNearFillList
 		STA	$D701
 		LDA	#<dmaNearFillList
-		STA	$D706
+		STA	$D705
 
 		RTS
 
@@ -236,16 +226,16 @@ dmaFarFillList:
 	.byte	$81,$00 			; Destination MB 
 	.byte	$00  				; No more options
 		
-	.byte	$03					;Command LSB
-	.word	$0016				;Count LSB Count MSB
+	.byte	$03				; Command LSB
+	.word	$0016				; Count LSB Count MSB
 dmaFarFillSrc:
-	.word	TARGETVAL			;Source Address LSB Source Address MSB
-	.byte	$00					;Source Address BANK and FLAGS
+	.word	TARGETVAL			; Source Address LSB Source Address MSB
+	.byte	$00				; Source Address BANK and FLAGS
 dmaFarFillDst:
-	.word	valTargetData		;Destination Address LSB Destination Address MSB
-	.byte	$00					;Destination Address BANK and FLAGS
-	.byte	$00					;Command MSB
-	.word	$0000				;Modulo LSB / Mode Modulo MSB / Mode
+	.word	valTargetData			; Destination Address LSB Destination Address MSB
+	.byte	$00				; Destination Address BANK and FLAGS
+	.byte	$00				; Command MSB
+	.word	$0000				; Modulo LSB / Mode Modulo MSB / Mode
 
 ;===========================================================
 ENDFARPROGRAM:
