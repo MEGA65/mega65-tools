@@ -35,6 +35,7 @@ CC65=  $(CC65_PREFIX)cc65
 CA65=  $(CC65_PREFIX)ca65 --cpu 4510
 LD65=  $(CC65_PREFIX)ld65 -t none
 CL65=  $(CC65_PREFIX)cl65 --config src/tests/tests_cl65.cfg
+CL65ONLY=  $(CC65_PREFIX)cl65
 CC65_DEPEND=
 
 LIBUSBINC=	-I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/
@@ -90,6 +91,7 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_342.prg \
 		$(TESTDIR)/test_378.prg \
 		$(TESTDIR)/test_390.prg \
+		$(TESTDIR)/test_454.prg \
 		$(TESTDIR)/test_458.prg \
 		$(TESTDIR)/test_459.prg \
 		$(TESTDIR)/test_468.prg \
@@ -271,6 +273,10 @@ $(SDCARD_DIR)/M65TESTS.D81:	$(CBMCONVERT) $(TESTS)
 # common test rule
 $(TESTDIR)/%.prg:	$(TESTDIR)/%.c include/*.h $(CC65) $(MEGA65LIBC)
 	$(CL65) -I include/ -I $(SRCDIR)/mega65-libc/cc65/include -O -o $(TESTDIR)/$*.prg --mapfile $(TESTDIR)/$*.map $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+
+# asm test rule
+$(TESTDIR)/%.prg:       $(TESTDIR)/%.s $(TESTDIR)/unittestlog.s
+	$(CL65ONLY) -t none -o $@ $<
 
 # tests that need additional pices of code
 $(TESTDIR)/vicii.prg:       $(TESTDIR)/vicii.c $(TESTDIR)/vicii_asm.s $(CC65) $(MEGA65LIBC)

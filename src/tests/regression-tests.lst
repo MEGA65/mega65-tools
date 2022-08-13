@@ -7,6 +7,7 @@
 # TIMEOUT is used as parameter to m65 -u
 #
 test_332.prg    10
+test_454.prg    10
 test_468.prg    10
 test_585.prg    20
 # END OF FILE
