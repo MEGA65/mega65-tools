@@ -88,14 +88,20 @@ int usbdev_get_candidates(void)
         log_debug("m65ser_get_candidates: failed to parse bus/port (split2)");
         continue;
       }
-      if (sscanf(pos, "/%d-%hhd.%hhd:", &bus, &pnum0, &pnum1) != 3) {
-        log_debug("m65ser_get_candidates: failed to parse bus/port (scan) %s", pos);
-        continue;
+      if (sscanf(pos, "/%d-%hhd.%hhd[.:]", &bus, &pnum0, &pnum1) != 3) {
+        if (sscanf(pos, "/%d-%hhd:", &bus, &pnum0) != 2) {
+          log_debug("m65ser_get_candidates: failed to parse bus/port (scan) %s", pos);
+          continue;
+        } else
+          pnum1 = 255;
       }
 
       snprintf(link, PATH_MAX, "/dev/%s", de->d_name);
 
-      log_info("detected serial port %s (%d-%d.%d)", link, bus, pnum0, pnum1);
+      if (pnum1 != 255)
+        log_info("detected serial port %s (%d-%d.%d)", link, bus, pnum0, pnum1);
+      else
+        log_info("detected serial port %s (%d-%d)", link, bus, pnum0);
       usbdev_info[usbdev_info_count].device = strdup(link);
       usbdev_info[usbdev_info_count].vendor_id = -1;
       usbdev_info[usbdev_info_count].product_id = -1;
