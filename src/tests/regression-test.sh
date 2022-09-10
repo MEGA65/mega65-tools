@@ -85,7 +85,7 @@ while read -r test timeout; do
     fi
     COUNT+=1
     echo "running ${test}..."
-    ${SCRIPTPATH}/../../bin/m65 ${DEVICE} -b "${BITSTREAM}" -4 -r -w ${LOGPATH}/ut-${test%%.prg}.log -u $timeout "${SCRIPTPATH}/${test}" >& /dev/null
+    ${SCRIPTPATH}/../../bin/m65 ${DEVICE} --bit "${BITSTREAM}" --c64mode --run --unittest=$timeout --utlog ${LOGPATH}/ut-${test%%.prg}.log "${SCRIPTPATH}/${test}" >& /dev/null
     parse_test_log ${LOGPATH}/ut-${test%%.prg}.log
 done < ${SCRIPTPATH}/regression-tests.lst
 
