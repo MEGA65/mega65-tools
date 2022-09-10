@@ -14,6 +14,10 @@ if [[ $# -eq 3 ]]; then
     DEVICE="-l $3"
 fi
 
+# extract bitstream name for logfiles
+LOGNAME=${BITSTREAM%%.bit}
+LOGNAME=${LOGNAME##*/}
+
 SCRIPT="$(readlink --canonicalize-existing "$0")"
 SCRIPTPATH="$(dirname "$SCRIPT")"
 
@@ -69,27 +73,35 @@ parse_test_log () {
     FAILED+=fail
 }
 
+main () {
+    echo "Running regression tests for bitstream"
+    echo "  ${BITSTREAM}"
+    echo
 
-echo "Running regression tests for bitstream"
-echo "  ${BITSTREAM}"
-echo
+    while read -r test timeout; do
+        # skip comments and empty lines
+        if [[ $test =~ ^# || -z $test ]]; then
+            continue
+        fi
+        # check if timeout is an number or use default timeout
+        if [[ !($timeout =~ ^[0-9]+$) ]]; then
+            timeout=$DEFAULT_TIMEOUT
+        fi
+        utlog="${LOGPATH}/${LOGNAME}.${test%%.prg}.log"
+        if [[ -e ${utlog} ]]; then
+            rm ${utlog}
+        fi
+        echo "running ${test}..."
+        ${SCRIPTPATH}/../../bin/m65 ${DEVICE} --bit "${BITSTREAM}" --c64mode --run --unittest=$timeout --utlog ${utlog} "${SCRIPTPATH}/${test}" >& /dev/null
+        parse_test_log ${utlog}
+        COUNT+=1
+    done < ${SCRIPTPATH}/regression-tests.lst
 
-while read -r test timeout; do
-    # skip comments and empty lines
-    if [[ $test =~ ^# || -z $test ]]; then
-        continue
-    fi
-    # check if timeout is an number or use default timeout
-    if [[ !($timeout =~ ^[0-9]+$) ]]; then
-        timeout=$DEFAULT_TIMEOUT
-    fi
-    COUNT+=1
-    echo "running ${test}..."
-    ${SCRIPTPATH}/../../bin/m65 ${DEVICE} --bit "${BITSTREAM}" --c64mode --run --unittest=$timeout --utlog ${LOGPATH}/ut-${test%%.prg}.log "${SCRIPTPATH}/${test}" >& /dev/null
-    parse_test_log ${LOGPATH}/ut-${test%%.prg}.log
-done < ${SCRIPTPATH}/regression-tests.lst
+    echo
+    echo "Executed ${COUNT} tests for bitstream ${BITSTREAM##*/} with ${FAILED} failed."
 
-echo
-echo "Executed ${COUNT} tests for bitstream ${BITSTREAM##*/} with ${FAILED} failed."
+    exit $FAILED
+}
 
-exit $FAILED
+main | tee ${LOGPATH}/${LOGNAME}.regression.log
+
