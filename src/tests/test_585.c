@@ -39,12 +39,12 @@ void main(void)
   printf("%c%c", 147, 5); // clear screen; color white
   printf("issue #%d - %s\n", ISSUE_NUM, ISSUE_NAME);
 
-  // Prime attic ram to avoid first-read issue.
-  lpeek(address);
-
   for (i = 0; i < NUM_TESTS; i++) {
+    // Prime attic ram to avoid first-read issue.
+    lpeek(test_address[i]);
+
     for (seq = 0, address = test_address[i]; seq < 0x1000; seq++, address++) {
-      printf("Testing Memory At $%08lx\n%c", address, 145); // 145=up arrow for overwrite
+      printf("Testing Memory At $%07lx\n%c", address, 145); // 145=up arrow for overwrite
 
       // read once to get baseline
       initial_mem_value = lpeek(address);
@@ -52,10 +52,10 @@ void main(void)
       for (count = 0; count < NUM_ITERATIONS_PER_ADDR; count++) {
         read_mem_value = lpeek(address);
         if (read_mem_value != initial_mem_value) {
-          snprintf(msg, 40, "\n%cAttic RAM Test failure at %07lx: %x vs %x%c\n", 28, address, initial_mem_value,
-              read_mem_value, 5);
+          snprintf(msg, 40, "Test failure at $%07lx: $%02x != $%02x", address, initial_mem_value,
+              read_mem_value);
           unit_test_fail(msg);
-          printf("\n%s\n", msg);
+          printf("\n%c%s%c\n", 28, msg, 5);
           seq = 0x7ffe;
           break;
         }
