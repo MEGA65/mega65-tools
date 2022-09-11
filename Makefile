@@ -229,7 +229,7 @@ $(CBMCONVERT):
 	echo "Could not find the program 'convert'. Try the following:"
 	echo "sudo apt-get install imagemagick"
 
-$(TOOLDIR)/version.c: $(SRCDIR)/gitversion.sh .git/HEAD
+$(TOOLDIR)/version.c: $(SRCDIR)/gitversion.sh
 	@if [ -z "$(DO_MKVER)" ] || [ "$(DO_MKVER)" -eq "1" ] ; then \
 		echo "Retrieving Git version string... (set env-var DO_MKVER=0 to turn this behaviour off)" ; \
 		echo 'const char *version_string="'`$(SRCDIR)/gitversion.sh`'";' > $(TOOLDIR)/version.c ; \
