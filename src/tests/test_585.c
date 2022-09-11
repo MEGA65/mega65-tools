@@ -6,23 +6,31 @@ Issue #585 - Some bitstream builds result in faulty attic ram reads
 #define NUM_ITERATIONS_PER_ADDR 10
 
 #include <stdio.h>
+#include <stdint.h>
 #include <memory.h>
 #include <tests.h>
 
-#define NUM_TESTS 5
+#define NUM_TESTS 8
 long test_address[NUM_TESTS] = {
   0x8000000,
-  0x80f7000,
-  0x8253000,
-  0x86af000,
-  0x87fa000,
+  0x8100000,
+  0x8200000,
+  0x8300000,
+  0x8400000,
+  0x8500000,
+  0x8600000,
+  0x8700000,
 };
+
+// in test_585_asm.s
+int8_t test_status = -1;
+extern void test_memory(void);
 
 void main(void)
 {
-  unsigned char initial_mem_value, read_mem_value, i, count;
+  unsigned char i;
+  unsigned short pos;
   long address;
-  unsigned short seq;
   char msg[41] = "";
 
   asm("sei");
@@ -40,31 +48,24 @@ void main(void)
   printf("issue #%d - %s\n", ISSUE_NUM, ISSUE_NAME);
 
   for (i = 0; i < NUM_TESTS; i++) {
+    printf("Testing Memory At $%07lx\n", test_address[i]);
     // Prime attic ram to avoid first-read issue.
-    lpeek(test_address[i]);
+    pos = 0x400 + 40 + 20 + 80*i;
+    *(unsigned char *)0x24 = (unsigned char)(pos & 0xff);
+    *(unsigned char *)0x25 = (unsigned char)((pos >> 8) & 0xff);
+    *(unsigned long *)0xa5 = test_address[i];
+    test_memory();
 
-    for (seq = 0, address = test_address[i]; seq < 0x1000; seq++, address++) {
-      printf("Testing Memory At $%07lx\n%c", address, 145); // 145=up arrow for overwrite
-
-      // read once to get baseline
-      initial_mem_value = lpeek(address);
-
-      for (count = 0; count < NUM_ITERATIONS_PER_ADDR; count++) {
-        read_mem_value = lpeek(address);
-        if (read_mem_value != initial_mem_value) {
-          snprintf(msg, 40, "Test failure at $%07lx: $%02x != $%02x", address, initial_mem_value,
-              read_mem_value);
-          unit_test_fail(msg);
-          printf("\n%c%s%c\n", 28, msg, 5);
-          seq = 0x7ffe;
-          break;
-        }
-      }
+    if (test_status != 0) {
+      address = *(unsigned long *)0xa5;
+      snprintf(msg, 40, "attic ram test $%07lx", address);
+      unit_test_fail(msg);
+      printf("%cAttic RAM Test failed at $%07lx%c\n", 28, address, 5);
     }
-    if (seq == 0x1000) {
+    else {
       snprintf(msg, 40, "attic ram test $%07lx", test_address[i]);
       unit_test_ok(msg);
-      printf("\n%cAttic RAM Test at $%07lx succeeded%c\n", 30, test_address[i], 5);
+      printf("%cAttic RAM Test at $%07lx succeeded%c\n", 30, test_address[i], 5);
     }
   }
 

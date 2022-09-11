@@ -286,6 +286,9 @@ $(TESTDIR)/vicii.prg:       $(TESTDIR)/vicii.c $(TESTDIR)/vicii_asm.s $(CC65) $(
 $(TESTDIR)/test_290.prg:       $(TESTDIR)/test_290.c $(CC65) $(MEGA65LIBC)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/random.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
 
+$(TESTDIR)/test_585.prg:       $(TESTDIR)/test_585.c $(TESTDIR)/test_585_asm.s $(CC65) $(MEGA65LIBC)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/test_585_asm.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+
 $(TESTDIR)/test_604.prg:       $(TESTDIR)/test_604.c $(TESTDIR)/test_604_asm.s $(CC65) $(MEGA65LIBC)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/test_604_asm.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
 
