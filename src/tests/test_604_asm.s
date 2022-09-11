@@ -3,38 +3,38 @@
 	.import _test_status
 	
 _setup_irq:
-  sei
+	sei
 	;; disable cia irqs
-  lda #$7f
+	lda #$7f
 	sta $dc0d
 	sta $dd0d
-  ;; ack cia irqs potentially pending
+	;; ack cia irqs potentially pending
 	lda $dc0d
 	lda $dd0d
 
-  ;; disable RSTDELEN
-  lda #%01000000
+	;; disable RSTDELEN
+	lda #%01000000
 	trb $d05d
 	;; raster irq compare
 	lda #$60
 	sta $d079
-  ;; enable physical rasters
-  lda #%10000111
+	;; enable physical rasters
+	lda #%10000111
 	trb $d07a
-  ;; enable raster irq
+	;; enable raster irq
 	lda #$01
 	sta $d01a
-  ;; ack raster irq potentially pending
+	;; ack raster irq potentially pending
 	lda #$ff
 	sta $d019
 
-  ;; setup irq vector
+	;; setup irq vector
 	lda #<_irq_handler
 	sta $0314
 	lda #>_irq_handler
 	sta $0315
 
-  cli
+	cli
 	rts
 
 _irq_handler:
@@ -65,4 +65,4 @@ exit:
 
 
 last_frame_counter:
-  .word $0000
+	.word $0000
