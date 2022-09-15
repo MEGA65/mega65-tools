@@ -51,13 +51,15 @@ int usbdev_get_candidates(void)
     usbdev_info[usbdev_info_count].bus = -1;
     usbdev_info[usbdev_info_count].pnum0 = -1;
     usbdev_info[usbdev_info_count].pnum1 = -1;
+    usbdev_info[usbdev_info_count].pnum2 = -1;
+    usbdev_info[usbdev_info_count].pnum3 = -1;
     usbdev_info_count++;
   }
 
   globfree(&result);
 #elif defined(__linux__)
   int bus;
-  uint8_t pnum0, pnum1;
+  uint8_t pnum0 = 255, pnum1 = 255, pnum2 = 255, pnum3 = 255;
   char path[PATH_MAX];
   char link[PATH_MAX];
   char *pos;
@@ -88,17 +90,25 @@ int usbdev_get_candidates(void)
         log_debug("m65ser_get_candidates: failed to parse bus/port (split2)");
         continue;
       }
-      if (sscanf(pos, "/%d-%hhd.%hhd[.:]", &bus, &pnum0, &pnum1) != 3) {
-        if (sscanf(pos, "/%d-%hhd:", &bus, &pnum0) != 2) {
-          log_debug("m65ser_get_candidates: failed to parse bus/port (scan) %s", pos);
-          continue;
-        } else
-          pnum1 = 255;
+      // this could be done more elegantly...
+      if (sscanf(pos, "/%d-%hhd.%hhd.%hhd.%hhd:", &bus, &pnum0, &pnum1, &pnum2, &pnum3) != 5) {
+        if (sscanf(pos, "/%d-%hhd.%hhd.%hhd:", &bus, &pnum0, &pnum1, &pnum2) != 4) {
+          if (sscanf(pos, "/%d-%hhd.%hhd:", &bus, &pnum0, &pnum1) != 3) {
+            if (sscanf(pos, "/%d-%hhd:", &bus, &pnum0) != 2) {
+              log_debug("m65ser_get_candidates: failed to parse bus/port (scan) %s", pos);
+              continue;
+            }
+          }
+        }
       }
 
       snprintf(link, PATH_MAX, "/dev/%s", de->d_name);
 
-      if (pnum1 != 255)
+      if (pnum1 != 255 && pnum2 != 255 && pnum3 != 255)
+        log_info("detected serial port %s (%d-%d.%d.%d.%d)", link, bus, pnum0, pnum1, pnum2, pnum3);
+      else if (pnum1 != 255 && pnum2 != 255)
+        log_info("detected serial port %s (%d-%d.%d.%d)", link, bus, pnum0, pnum1, pnum2);
+      else if (pnum1 != 255)
         log_info("detected serial port %s (%d-%d.%d)", link, bus, pnum0, pnum1);
       else
         log_info("detected serial port %s (%d-%d)", link, bus, pnum0);
@@ -109,6 +119,8 @@ int usbdev_get_candidates(void)
       usbdev_info[usbdev_info_count].bus = bus;
       usbdev_info[usbdev_info_count].pnum0 = pnum0;
       usbdev_info[usbdev_info_count].pnum1 = pnum1;
+      usbdev_info[usbdev_info_count].pnum2 = pnum2;
+      usbdev_info[usbdev_info_count].pnum3 = pnum3;
       usbdev_info_count++;
     }
   }
@@ -193,6 +205,8 @@ int usbdev_get_candidates(void)
           usbdev_info[usbdev_info_count].bus = -1;
           usbdev_info[usbdev_info_count].pnum0 = -1;
           usbdev_info[usbdev_info_count].pnum1 = -1;
+          usbdev_info[usbdev_info_count].pnum2 = -1;
+          usbdev_info[usbdev_info_count].pnum3 = -1;
           usbdev_info_count++;
         }
         else

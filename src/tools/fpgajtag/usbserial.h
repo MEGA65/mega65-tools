@@ -12,7 +12,7 @@ typedef struct {
   int vendor_id, product_id;
   // linux
   int bus;
-  uint8_t pnum0, pnum1;
+  uint8_t pnum0, pnum1, pnum2, pnum3;
 } usbdev_infoT;
 
 extern int usbdev_info_count;
