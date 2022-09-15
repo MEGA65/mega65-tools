@@ -257,8 +257,12 @@ void usage(int exitcode, char *message)
   fprintf(stderr, PROGNAME ": [options] [prgname]\n");
 
   for (int i = 0; i < cmd_count; i++) {
-    if (cmd_opts[i].val && !cmd_opts[i].flag && cmd_opts[i].val < 0x80)
-      snprintf(optstr, width, "-%c|--%s", cmd_opts[i].val, cmd_opts[i].name);
+    if (cmd_opts[i].val && !cmd_opts[i].flag && cmd_opts[i].val < 0x80) {
+      if (cmd_opts[i].has_arg == 2)
+        snprintf(optstr, width, "-%c[<%s>] | --%s", cmd_opts[i].val, cmd_arg[i], cmd_opts[i].name);
+      else
+        snprintf(optstr, width, "-%c|--%s", cmd_opts[i].val, cmd_opts[i].name);
+    }
     else
       snprintf(optstr, width, "--%s", cmd_opts[i].name);
 
@@ -342,7 +346,8 @@ void init_cmd_options(void)
 
   CMD_OPTION("screenshot", 2, 0,        'S', "file",
                   "show text rendering of MEGA65 screen, optionally save PNG screenshot to <file>. "
-                  "Use 0 as <file> to not save a PNG screenshot.");
+                  "Use 0 as <file> to not save a PNG screenshot. <file> defaults to "
+                  "'mega65-screen-XXXXXX.png' with XXXXXX being autoincremented.");
 
   CMD_OPTION("hyppo",     1, 0,         'k', "file",  "HICKUP <file> to replace the HYPPO in the bitstream.");
     /* NOTE: You can use bitstream and/or HYPPO from the Jenkins server by using @issue/tag/hardware
@@ -355,7 +360,7 @@ void init_cmd_options(void)
   CMD_OPTION("vtype",     1, 0,         't', "-|text|file",
                   "Type <text> via keyboard virtualisation. If a <file>name is provided, the contents of the file are typed. "
                   "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
-  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text|file", "As virttype, but add a RETRUN at the end of the line.");
+  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text|file", "As virttype, but add a RETURN at the end of the line.");
 
   CMD_OPTION("memsave",   1, 0,         0x81, "[addr:addr;]filename", "saves memory range addr:addr (hex) to filename. "
                   "If addr range is omitted, save current basic memory. "
