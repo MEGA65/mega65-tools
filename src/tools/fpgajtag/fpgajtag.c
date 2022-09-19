@@ -740,7 +740,7 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
 
     // now find the serial device in the list of candidates
     for (ser = 0; ser < usbdev_info_count; ser++)
-      // match linux by bus-port(.subport)
+      // match linux/macos by bus-port(.subport)
       if (usbdev_info[ser].bus > -1 && usbdev_info[ser].bus == bus && usbdev_info[ser].pnum0 == pnum[0]
           && (pnum_len == 1 || usbdev_info[ser].pnum1 == pnum[1])
           && (pnum_len <= 2 || usbdev_info[ser].pnum2 == pnum[2])
@@ -751,7 +751,6 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
                && !strncmp(
                    usbdev_info[ser].serial_no, (char *)uinfo[i].iSerialNumber, strlen((char *)uinfo[i].iSerialNumber)))
         break;
-    // sorry, nothing yet there for apple!
     if (ser >= usbdev_info_count)
       ser = -1;
     else
@@ -798,16 +797,6 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
   }
 
   if (last_match != -1) {
-#ifdef __APPLE__
-    log_warn("apple does not allow to match usb serial device to libusb device!");
-    if (serialport) {
-      log_warn("using supplied serial port string '%s'", serialport);
-      strncpy(last_path, serialport, 1024);
-      last_path[1023] = 0;
-    }
-    else
-      log_warn("please supply device string using --device option");
-#endif
     log_note("selecting device %s (%s; %04X:%04X; %s; %08x)", last_path, uinfo[last_match].iManufacturer,
         uinfo[last_match].idVendor, uinfo[last_match].idProduct, uinfo[last_match].iSerialNumber, last_idcode);
     jtag_index = last_index;

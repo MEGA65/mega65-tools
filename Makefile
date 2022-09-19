@@ -3,12 +3,13 @@
 
 #COPT=	-Wall -g -std=gnu99 -fsanitize=address -fno-omit-frame-pointer -fsanitize-address-use-after-scope
 #CC=	clang
-COPT=	-Wall -g -std=gnu99 -I/opt/local/include -L/opt/local/lib -I/usr/local/include/libusb-1.0 -L/usr/local/lib -mno-sse3 -march=x86-64
+COPT=	-Wall -g -std=gnu99 `pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3 -march=x86-64
 # -I/usr/local/Cellar/libusb/1.0.23/include/libusb-1.0/ -L/usr/local/Cellar/libusb/1.0.23/lib/libusb-1.0/
 CC=	gcc
 CXX=g++
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
+MACCOPT=$(COPT) -framework CoreFoundation -framework IOKit
 
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
@@ -515,7 +516,7 @@ $(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TO
 	$(CC) $(COPT) -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/m65 $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
 $(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
-	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/m65.osx $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
+	$(CC) $(MACCOPT) -D__APPLE__ -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/m65.osx $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
 $(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
 	$(WINCC) $(WINCOPT) -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c $(BUILD_STATIC) -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
@@ -587,7 +588,7 @@ else
   M65DEBUG_READLINE=-lreadline
 endif
 
-M65DBG_SOURCES = $(TOOLDIR)/m65dbg/m65dbg.c $(TOOLDIR)/m65dbg/commands.c $(TOOLDIR)/m65dbg/gs4510.c $(TOOLDIR)/m65dbg/serial.c $(TOOLDIR)/logging.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/version.c
+M65DBG_SOURCES = $(TOOLDIR)/m65dbg/m65dbg.c $(TOOLDIR)/m65dbg/commands.c $(TOOLDIR)/m65dbg/gs4510.c $(TOOLDIR)/m65dbg/serial.c $(TOOLDIR)/logging.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/version.c
 M65DBG_INCLUDES = -Iinclude $(LIBUSBINC)
 M65DBG_LIBRARIES = -lpng -lpthread -lusb-1.0 -lz $(M65DEBUG_READLINE)
 
@@ -595,7 +596,7 @@ $(BINDIR)/m65dbg:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(CC) $(COPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
 
 $(BINDIR)/m65dbg.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
-	$(CC) $(COPT) -D__APPLE__ $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.osx $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
+	$(CC) $(MACCOPT) -D__APPLE__ $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.osx $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
 
 $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
