@@ -5,13 +5,19 @@
 #include <string.h>
 #include <libusb.h>
 
-#ifndef WINDOWS
-#include <glob.h>
-#include <dirent.h>
 #ifdef __linux__
+#include <dirent.h>
 #include <linux/limits.h>
 #endif
-#endif
+
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/serial/IOSerialKeys.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/IOCFPlugIn.h>
+#include <sys/param.h>
+#include <IOKit/usb/IOUSBLib.h>
+#endif // __APPLE__
 
 #include <logging.h>
 #include "usbserial.h"
@@ -32,31 +38,105 @@ usbdev_infoT usbdev_info[MAX_USBDEV_INFO];
 int usbdev_get_candidates(void)
 {
 #if defined(__APPLE__)
-  // apple has no way (yet) to get information about usb devices
-  int i;
-  static char *devglob = "/dev/cu.usbserial-*";
+  int score = 0;
+  unsigned int len;
+  uint16_t vendor_id, product_id;
+  uint32_t location_id;
+  uint8_t bus, pnum0, pnum1, pnum2, pnum3;
 
-  glob_t result;
-  if (glob(devglob, 0, NULL, &result)) {
-    globfree(&result);
+  bool found;
+  CFMutableDictionaryRef classes_to_match;
+  kern_return_t kern_result;
+  io_iterator_t	serial_port_iterator;
+  io_service_t device, parent_device;
+  io_struct_inband_t dev_node;
+  io_registry_entry_t parent_registry_entry;
+  IOCFPlugInInterface **plug = NULL;
+  IOUSBDeviceInterface **dev = NULL;
+
+  classes_to_match = IOServiceMatching(kIOSerialBSDServiceValue);
+  if (classes_to_match == NULL) {
+    log_debug("m65ser_get_candidates: IOServiceMatching returned a NULL dictionary.\n");
     return -1;
   }
+  // Look for devices that claim to be modems.
+  CFDictionarySetValue(classes_to_match,
+                       CFSTR(kIOSerialBSDTypeKey),
+                       CFSTR(kIOSerialBSDModemType));
 
-  for (i = 0; i < result.gl_pathc && usbdev_info_count < MAX_USBDEV_INFO; i++) {
-    log_info("detected serial port %s (apple, no further information)", result.gl_pathv[i]);
-    usbdev_info[usbdev_info_count].device = strdup(result.gl_pathv[i]);
-    usbdev_info[usbdev_info_count].vendor_id = -1;
-    usbdev_info[usbdev_info_count].product_id = -1;
+  kern_result = IOServiceGetMatchingServices(kIOMasterPortDefault, classes_to_match, &serial_port_iterator);
+  if (kern_result != KERN_SUCCESS) {
+    log_debug("m65ser_get_candidates: IOServiceGetMatchingServices returned error %d\n", kern_result);
+    return -1;
+  }
+	 
+  while ((device = IOIteratorNext(serial_port_iterator)) && usbdev_info_count < MAX_USBDEV_INFO) {
+    len = 256;
+    IORegistryEntryGetProperty(device, kIOCalloutDeviceKey, dev_node, &len);
+
+    // All known working JTAGS enumerate their uart device with last digit 1, ignore all others
+    if (len < 6 || dev_node[len - 2] != '1') continue;
+
+    found = false;
+    parent_device = device;
+    for (;;) {
+      // no more parents -> this is no usb device
+      if (IORegistryEntryGetParentEntry(parent_device, kIOServicePlane, &parent_registry_entry)) {
+        break;
+      }
+
+      parent_device = parent_registry_entry;
+
+      if (IOObjectConformsTo(parent_device, kIOUSBDeviceClassName)) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) continue;
+
+    kern_result = IOCreatePlugInInterfaceForService(parent_device, kIOUSBDeviceUserClientTypeID, kIOCFPlugInInterfaceID, &plug, &score);
+    if (kern_result != KERN_SUCCESS || plug == NULL) {
+      log_debug("m65ser_get_candidates: Can't obtain USB device plugin interface\n");
+      continue;
+    }
+
+    kern_result = (*plug)->QueryInterface(plug, CFUUIDGetUUIDBytes(kIOUSBDeviceInterfaceID), (void *)&dev);
+    (*plug)->Release(plug);
+    if (kern_result != kIOReturnSuccess || dev == NULL) {
+      log_debug("m65ser_get_candidates: Can't obtain USB interface\n");
+      continue;
+    }
+
+    if ((*dev)->GetDeviceVendor(dev, &vendor_id) != kIOReturnSuccess ||
+        (*dev)->GetDeviceProduct(dev, &product_id) != kIOReturnSuccess ||
+        (*dev)->GetLocationID(dev, &location_id) != kIOReturnSuccess) {
+      log_debug("m65ser_get_candidates: Can't read USB device parameters\n");
+      (*dev)->Release(dev);
+      continue;
+    }
+
+    bus = location_id >> 24;
+    pnum0 = (location_id >> 20) & 0xf;
+    pnum1 = (location_id >> 16) & 0xf;
+    pnum2 = (location_id >> 12) & 0xf;
+    pnum3 = (location_id >> 8) & 0xf;
+
+    log_info("detected serial port %s (%d-%d.%d.%d.%d)", dev_node, bus, pnum0, pnum1, pnum2, pnum3);
+    usbdev_info[usbdev_info_count].device = strdup(dev_node);
+    usbdev_info[usbdev_info_count].vendor_id = vendor_id;
+    usbdev_info[usbdev_info_count].product_id = product_id;
     usbdev_info[usbdev_info_count].serial_no = NULL;
-    usbdev_info[usbdev_info_count].bus = -1;
-    usbdev_info[usbdev_info_count].pnum0 = -1;
-    usbdev_info[usbdev_info_count].pnum1 = -1;
-    usbdev_info[usbdev_info_count].pnum2 = -1;
-    usbdev_info[usbdev_info_count].pnum3 = -1;
+    usbdev_info[usbdev_info_count].bus = bus;
+    usbdev_info[usbdev_info_count].pnum0 = pnum0;
+    usbdev_info[usbdev_info_count].pnum1 = pnum1;
+    usbdev_info[usbdev_info_count].pnum2 = pnum2;
+    usbdev_info[usbdev_info_count].pnum3 = pnum3;
     usbdev_info_count++;
   }
 
-  globfree(&result);
+  IOObjectRelease(device);
+
 #elif defined(__linux__)
   int bus;
   uint8_t pnum0 = 255, pnum1 = 255, pnum2 = 255, pnum3 = 255;
