@@ -1,8 +1,20 @@
 #!/bin/bash
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-    echo "Usage: $0 BITSTREAM LOGPATH [DEVICE]"
+SCRIPT="$(readlink --canonicalize-existing "$0")"
+SCRIPTPATH="$(dirname "${SCRIPT}")"
+SCRIPTNAME=${SCRIPT##*/}
+
+usage () {
+    echo "Usage: ${SCRIPTNAME} BITSTREAM LOGPATH [DEVICE]"
+    if [[ "x$1" != "x" ]]; then
+        echo
+        echo $1
+    fi
     exit 1
+}
+
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+    usage
 fi
 
 DEFAULT_TIMEOUT=60
@@ -11,15 +23,21 @@ BITSTREAM=$1
 LOGPATH=$2
 DEVICE=
 if [[ $# -eq 3 ]]; then
+    if [[ ! -e $3 ]]; then
+        usage "device $3 does not exist"
+    fi
     DEVICE="-l $3"
+fi
+if [[ ! -e ${BITSTREAM} ]]; then
+    usage "bitstream does not exist"
+fi
+if [[ ! -d ${LOGPATH} ]]; then
+    usage "logpath does not exist or is not directory"
 fi
 
 # extract bitstream name for logfiles
 LOGNAME=${BITSTREAM%%.bit}
 LOGNAME=${LOGNAME##*/}
-
-SCRIPT="$(readlink --canonicalize-existing "$0")"
-SCRIPTPATH="$(dirname "$SCRIPT")"
 
 declare -i FAILED; FAILED=0
 declare -i COUNT; COUNT=0
@@ -103,5 +121,5 @@ main () {
     exit $FAILED
 }
 
-main | tee ${LOGPATH}/${LOGNAME}.regression.log
-
+set -o pipefail
+main | tee ${LOGPATH}/${LOGNAME}.tests.log
