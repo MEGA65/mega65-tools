@@ -50,7 +50,7 @@ void main(void)
   for (i = 0; i < NUM_TESTS; i++) {
     printf("Testing Memory At $%07lx\n", test_address[i]);
     // Prime attic ram to avoid first-read issue.
-    pos = 0x400 + 40 + 20 + 80*i;
+    pos = 0x400 + 40 + 20 + 80 * i;
     *(unsigned char *)0x24 = (unsigned char)(pos & 0xff);
     *(unsigned char *)0x25 = (unsigned char)((pos >> 8) & 0xff);
     *(unsigned long *)0xa5 = test_address[i];

@@ -1972,7 +1972,7 @@ int main(int argc, char **argv)
 
     char *res = init_fpgajtag(jtag_serial, serial_port, fpga_id);
 
-  #ifndef WINDOWS
+#ifndef WINDOWS
     // this is set by fpgajtag/util.c:fpgausb_init which is called by fpgajtag/fpgajtag.c:init_fpgajtag
     if (fpgajtag_libusb_open_failed) {
       log_warn("May not be able to auto-detect USB port due to insufficient permissions.");
@@ -1980,10 +1980,10 @@ int main(int argc, char **argv)
       log_warn("        sudo usermod -a -G dialout <your username>");
       log_warn("    and then:");
       log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
-              "sudo tee /etc/udev/rules.d/40-xilinx.rules");
+               "sudo tee /etc/udev/rules.d/40-xilinx.rules");
       log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
     }
-  #endif
+#endif
 
     if (res == NULL) {
       if (!jtag_only)

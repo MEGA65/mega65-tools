@@ -47,7 +47,7 @@ int usbdev_get_candidates(void)
   bool found;
   CFMutableDictionaryRef classes_to_match;
   kern_return_t kern_result;
-  io_iterator_t	serial_port_iterator;
+  io_iterator_t serial_port_iterator;
   io_service_t device, parent_device;
   io_struct_inband_t dev_node;
   io_registry_entry_t parent_registry_entry;
@@ -60,22 +60,21 @@ int usbdev_get_candidates(void)
     return -1;
   }
   // Look for devices that claim to be modems.
-  CFDictionarySetValue(classes_to_match,
-                       CFSTR(kIOSerialBSDTypeKey),
-                       CFSTR(kIOSerialBSDModemType));
+  CFDictionarySetValue(classes_to_match, CFSTR(kIOSerialBSDTypeKey), CFSTR(kIOSerialBSDModemType));
 
   kern_result = IOServiceGetMatchingServices(kIOMasterPortDefault, classes_to_match, &serial_port_iterator);
   if (kern_result != KERN_SUCCESS) {
     log_debug("m65ser_get_candidates: IOServiceGetMatchingServices returned error %d\n", kern_result);
     return -1;
   }
-	 
+
   while ((device = IOIteratorNext(serial_port_iterator)) && usbdev_info_count < MAX_USBDEV_INFO) {
     len = 256;
     IORegistryEntryGetProperty(device, kIOCalloutDeviceKey, dev_node, &len);
 
     // All known working JTAGS enumerate their uart device with last digit 1, ignore all others
-    if (len < 6 || dev_node[len - 2] != '1') continue;
+    if (len < 6 || dev_node[len - 2] != '1')
+      continue;
 
     found = false;
     parent_device = device;
@@ -93,9 +92,11 @@ int usbdev_get_candidates(void)
       }
     }
 
-    if (!found) continue;
+    if (!found)
+      continue;
 
-    kern_result = IOCreatePlugInInterfaceForService(parent_device, kIOUSBDeviceUserClientTypeID, kIOCFPlugInInterfaceID, &plug, &score);
+    kern_result = IOCreatePlugInInterfaceForService(
+        parent_device, kIOUSBDeviceUserClientTypeID, kIOCFPlugInInterfaceID, &plug, &score);
     if (kern_result != KERN_SUCCESS || plug == NULL) {
       log_debug("m65ser_get_candidates: Can't obtain USB device plugin interface\n");
       continue;
@@ -108,9 +109,9 @@ int usbdev_get_candidates(void)
       continue;
     }
 
-    if ((*dev)->GetDeviceVendor(dev, &vendor_id) != kIOReturnSuccess ||
-        (*dev)->GetDeviceProduct(dev, &product_id) != kIOReturnSuccess ||
-        (*dev)->GetLocationID(dev, &location_id) != kIOReturnSuccess) {
+    if ((*dev)->GetDeviceVendor(dev, &vendor_id) != kIOReturnSuccess
+        || (*dev)->GetDeviceProduct(dev, &product_id) != kIOReturnSuccess
+        || (*dev)->GetLocationID(dev, &location_id) != kIOReturnSuccess) {
       log_debug("m65ser_get_candidates: Can't read USB device parameters\n");
       (*dev)->Release(dev);
       continue;

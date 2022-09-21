@@ -1,8 +1,8 @@
 /*
   Fine raster IRQs (compare registers $d079/$d07a) do not behave as are known
-  from a VIC-II. They compare and set the relevant bit in $d019 both at the 
-  beginning of a raster line as well as at the very end. This leads to odd 
-  effects if the IRQ is acknowledged when still in the line where it was 
+  from a VIC-II. They compare and set the relevant bit in $d019 both at the
+  beginning of a raster line as well as at the very end. This leads to odd
+  effects if the IRQ is acknowledged when still in the line where it was
   triggered (eg. if the ack is happening at the beginning of the IRQ handler).
   The result is the IRQ is triggered twice instead of once (see issue #604).
 
@@ -47,33 +47,30 @@ void main(void)
   setup_irq();
 
   last_frame = PEEK(0xD7FA);
-  while (frames_to_go != 0)
-  {
+  while (frames_to_go != 0) {
     cur_frame = PEEK(0xD7FA);
-    if (cur_frame != last_frame)
-    {
+    if (cur_frame != last_frame) {
       last_frame = cur_frame;
       --frames_to_go;
     }
   }
 
-  switch (test_status)
-  {
-    case -1:
-      snprintf(msg, 80, "irq handler was not able to execute");
-      unit_test_fail(msg);
-      break;
-    case 0:
-      snprintf(msg, 80, "raster irq working as expected");
-      unit_test_ok(msg);
-      break;
-    case 1:
-      snprintf(msg, 80, "raster irq behaviour wrong, called multiple times per frame");
-      unit_test_fail(msg);
-      break;
-    default:
-      snprintf(msg, 80, "internal error in test case");
-      unit_test_fail(msg);
+  switch (test_status) {
+  case -1:
+    snprintf(msg, 80, "irq handler was not able to execute");
+    unit_test_fail(msg);
+    break;
+  case 0:
+    snprintf(msg, 80, "raster irq working as expected");
+    unit_test_ok(msg);
+    break;
+  case 1:
+    snprintf(msg, 80, "raster irq behaviour wrong, called multiple times per frame");
+    unit_test_fail(msg);
+    break;
+  default:
+    snprintf(msg, 80, "internal error in test case");
+    unit_test_fail(msg);
   }
 
   unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);

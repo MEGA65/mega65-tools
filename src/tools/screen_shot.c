@@ -253,7 +253,7 @@ int do_screen_shot_ascii(void)
 
 #ifdef WINDOWS
   // enable VT100 sequence processing for windows console
-#define WINANSIMODE (ENABLE_PROCESSED_OUTPUT|ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_WRAP_AT_EOL_OUTPUT)
+#define WINANSIMODE (ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING | ENABLE_WRAP_AT_EOL_OUTPUT)
   unsigned char wincon_changed = 0;
   DWORD conmode;
   HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);

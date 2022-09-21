@@ -742,8 +742,7 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
     for (ser = 0; ser < usbdev_info_count; ser++)
       // match linux/macos by bus-port(.subport)
       if (usbdev_info[ser].bus > -1 && usbdev_info[ser].bus == bus && usbdev_info[ser].pnum0 == pnum[0]
-          && (pnum_len == 1 || usbdev_info[ser].pnum1 == pnum[1])
-          && (pnum_len <= 2 || usbdev_info[ser].pnum2 == pnum[2])
+          && (pnum_len == 1 || usbdev_info[ser].pnum1 == pnum[1]) && (pnum_len <= 2 || usbdev_info[ser].pnum2 == pnum[2])
           && (pnum_len <= 3 || usbdev_info[ser].pnum3 == pnum[3]))
         break;
       // match by serial_no on windows
