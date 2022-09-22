@@ -8,9 +8,11 @@ Tools and Utilities for the MEGA65 Retro Computers, such as:
 
 # Download
 
-Latest binaries are always available here:
+We are working on a new enhanced version in the refactor_m65 branch. It is good to use, you can get the latest builds here:
+- https://github.com/MEGA65/mega65-tools/releases/tag/CI-refactor-latest
 
-* https://github.com/MEGA65/mega65-tools/releases/tag/CI-latest
+The old master binaries are always available here:
+- https://github.com/MEGA65/mega65-tools/releases/tag/CI-latest
 
 # Building under Linux
 
