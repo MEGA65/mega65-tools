@@ -262,6 +262,7 @@ int poke_offset = 0;
 int poke_value = 0;
 int fhnum = 0;
 int slotnum = 0;
+unsigned char force_helper_push = 0;
 
 #define M65DT_REG 1
 #define M65DT_DIR 2
@@ -278,9 +279,10 @@ void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr, "version: %s\n\n", version_string);
-  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  "
+  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  "
                   "[-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n");
+  fprintf(stderr, "  -F - force startup, even if other program is detected\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
@@ -704,7 +706,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
   log_setup(stderr, LOG_NOTE);
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:0:n")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:0:nF")) != -1) {
     switch (opt) {
     case '0':
       loglevel = log_parse_level(optarg);
@@ -712,6 +714,9 @@ int DIRTYMOCK(main)(int argc, char **argv)
         log_warn("failed to parse log level!");
       else
         log_setup(stderr, loglevel);
+      break;
+    case 'F':
+      force_helper_push = 1;
       break;
     case 'D':
       debug_serial = 1;
@@ -794,7 +799,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
 
     fake_stop_cpu();
 
-    load_helper();
+    if (load_helper())
+      return 1;
 
     // Give helper time to get all sorted.
     // Without this delay serial monitor commands to set memory seem to fail :/
@@ -935,7 +941,8 @@ int sdhc_check(void)
 
 int load_helper(void)
 {
-  int retVal = 0;
+  char buffer[8193];
+  int retVal = 0, bytes;
   do {
     if (!helper_installed) {
       // Install helper routine
@@ -946,20 +953,34 @@ int load_helper(void)
       // MEGA65FT1.0 string
       request_remotesd_version();
       sleep(1);
-      char buffer[8193];
-      int bytes = serialport_read(fd, (unsigned char *)buffer, 8192);
-      buffer[8192] = 0;
-      if (bytes >= (int)strlen("MEGA65FT1.0")) {
-        for (int i = 0; i < bytes - strlen("MEGA65FT1.0"); i++) {
-          log_debug("i=%d, bytes=%d, strlen=%d", i, bytes, (int)strlen("MEGA65FT1.0"));
-          if (!strncmp("MEGA65FT1.0", &buffer[i], strlen("MEGA65FT1.0"))) {
-            log_debug("helper already running. Nothing to do");
-            return 0;
-          }
-        }
+      bytes = serialport_read(fd, (unsigned char *)buffer, 8192);
+      buffer[bytes] = 0;
+      if (strstr(buffer, "MEGA65FT1.0")) {
+        helper_installed = 1;
+        log_debug("helper already running. Nothing to do");
+        return 0;
       }
 
       detect_mode();
+
+      // the helper is not responding, let's check if there
+      // is a program in memory we could destroy
+      // WARNING: this also prevents mega65_ftp from starting
+      // if the flasher is running! Don't remove!
+      snprintf(buffer, 80, saw_c64_mode ? "m0801\n" : "m2001\n");
+      serialport_write(fd, (unsigned char *)buffer, strlen(buffer));
+      usleep(20000);
+      bytes = serialport_read(fd, (unsigned char *)buffer, 8192);
+      buffer[bytes] = 0;
+      // return should be :00002001:0000... or :00000801:0000... if prg is empty
+      if (!strstr(buffer, "01:0000")) {
+        if (force_helper_push)
+          log_warn("trying to overwriting program in memory!");
+        else {
+          log_error("a program is already in memory, refusing to start helper! (-F to override)");
+          return -1;
+        }
+      }
 
       if ((!saw_c64_mode)) {
         start_cpu();
