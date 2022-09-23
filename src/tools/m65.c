@@ -1970,7 +1970,7 @@ int main(int argc, char **argv)
   if (bitstream || jtag_only || !serial_port) {
     unsigned int fpga_id = get_bitstream_fpgaid(bitstream);
 
-    char *res = init_fpgajtag(jtag_serial, serial_port, fpga_id);
+    char *detected_port = init_fpgajtag(jtag_serial, serial_port, fpga_id);
 
 #ifndef WINDOWS
     // this is set by fpgajtag/util.c:fpgausb_init which is called by fpgajtag/fpgajtag.c:init_fpgajtag
@@ -1985,19 +1985,29 @@ int main(int argc, char **argv)
     }
 #endif
 
-    if (res == NULL) {
+    // check if init_fpgajtag did totally fail
+    if (detected_port == NULL) {
       if (!jtag_only)
         log_note("tip: try using 'm65 --autodiscover --verbose'");
-      log_crit("no valid serial port not found, aborting");
+      log_crit("no valid jtag port not found, aborting");
       exit(1);
     }
-    if (serial_port) {
-      free(serial_port);
+
+    // check if a UART was matched to JTAG (detected_port != UNKNOWN)
+    if (strcmp(detected_port, "UNKNOWN")) {
+      // we did detect a serial device
+      if (serial_port) {
+        // but the user also gave us --device
+        if (strcmp(serial_port, detected_port))
+          // serial_port != detected_port, we stick to the commandline but warn the user
+          log_warn("autodetected port does not match --device argument: %s != %s", detected_port, serial_port);
+        // if it is the same, we can just use keep it
+      }
+      else // user did not specify a serial_port, use detected one
+        serial_port = detected_port;
     }
-    if (!strcmp(res, "UNKNOWN"))
-      serial_port = NULL;
-    else
-      serial_port = res;
+    // so here detected_port is UNKNOWN and we work with what the user has given
+    // the UNKNOWN device was already reported by init_fpgajtag
   }
 
   if (boundary_scan) {
@@ -2013,6 +2023,7 @@ int main(int argc, char **argv)
 #endif
   }
 
+  // autodiscover/jtag_only mode, abort here before doing anything
   if (jtag_only)
     do_exit(0);
 
@@ -2028,18 +2039,10 @@ int main(int argc, char **argv)
   }
 
   if (!serial_port) {
-#ifdef __APPLE__
-    // for apple we try a brute force search
-    serial_port = find_serial_port(serial_speed);
-    if (!serial_port) {
-#endif
-      if (!jtag_only)
-        log_note("tip: try using 'm65 --autodiscover --verbose'");
-      log_crit("serial port not specified, aborting.");
-      exit(1);
-#ifdef __APPLE__
-    }
-#endif
+    if (!jtag_only)
+      log_note("tip: try using 'm65 --autodiscover --verbose'");
+    log_crit("serial port not specified, aborting.");
+    exit(1);
   }
 
   log_info("opening serial port %s", serial_port);
