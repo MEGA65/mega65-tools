@@ -4563,8 +4563,6 @@ BOOL is_d81_file(char *filename)
 
 int is_fragmented(char *filename)
 {
-  int fragmented_flag = 0;
-
   if (!safe_open_dir())
     exit(-1);
 
@@ -4574,17 +4572,15 @@ int is_fragmented(char *filename)
     exit(-1);
   }
 
-  unsigned int first_cluster_of_file = calc_first_cluster_of_file();
-
-  unsigned int current_cluster = first_cluster_of_file;
-  int next_cluster;
+  unsigned int current_cluster = calc_first_cluster_of_file();
+  unsigned int next_cluster;
   while ((next_cluster = chained_cluster(current_cluster)) < FAT32_MIN_END_OF_CLUSTER_MARKER) {
     if (next_cluster != current_cluster + 1)
-      fragmented_flag = 1;
+      return 1;
     current_cluster = next_cluster;
   }
 
-  return fragmented_flag;
+  return 0;
 }
 
 int queue_mount_file(char *filename)
