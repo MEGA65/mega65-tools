@@ -427,6 +427,10 @@ USB_INFO *fpgausb_init(void)
 
     if ((res = libusb_open(dev, &usbhandle)) < 0) {
       log_debug("could not open USB device [%04X:%04X]: %s (%d)", desc.idVendor, desc.idProduct, libusb_strerror(res), res);
+#ifdef WINDOWS
+      if (res == -5) // Entity not found error
+        log_note("please check USB driver for Serial Converter A / Interface 0: needs to be WinUSB!");
+#endif
       fpgajtag_libusb_open_failed = 1;
       continue;
     }
