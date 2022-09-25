@@ -524,6 +524,9 @@ $(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c 
 	$(WINCC) $(WINCOPT) -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c $(BUILD_STATIC) -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
+## special target for linux static win build even if DO_STATIC is 0
+static_m65_exe:		$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
+	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
 ##
 ## ========== mega65_ftp ==========
 ##
