@@ -765,7 +765,7 @@ char *init_fpgajtag(const char *serialno, const char *serialport, const uint32_t
       log_concat(j + 1 == idcode_count ? "%08x" : "%08x,", idcode_array[j]);
     log_info(NULL);
     // check if device is powered on
-    if (idcode_count == 16 && (idcode_array[0] == 0x0fffffff || idcode_array[0] == 0x0)) {
+    if (idcode_count == 16 && (idcode_array[0] < 0x00ffffff || idcode_array[0] >= 0x0fffffff)) {
       log_info("  device seems to be disabled, please power on");
       continue;
     }
