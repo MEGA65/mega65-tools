@@ -62,8 +62,6 @@ int usbdev_get_candidates(void)
     log_debug("m65ser_get_candidates: IOServiceMatching returned a NULL dictionary.\n");
     return -1;
   }
-  // Look for devices that claim to be modems.
-  CFDictionarySetValue(classes_to_match, CFSTR(kIOSerialBSDTypeKey), CFSTR(kIOSerialBSDModemType));
 
   kern_result = IOServiceGetMatchingServices(kIOMasterPortDefault, classes_to_match, &serial_port_iterator);
   if (kern_result != KERN_SUCCESS) {
