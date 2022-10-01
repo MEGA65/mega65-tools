@@ -358,17 +358,17 @@ void main(void)
   println_text80(1, "WireKrill 0.0.1 Network Analyser.");
   println_text80(1, "(C) Paul Gardner-Stephen, 2020-2022.");
 
-  // Clear reset on ethernet controller
-  POKE(0xD6E0, 0x00);
-  POKE(0xD6E0, 0x03);
-
   // No promiscuous mode, ignore corrupt packets, accept broadcast and multicast
   // default RX and TX phase adjust.
   POKE(0xD6E5, 0x30);
 
   // Reset ethernet
+  // Datasheet requires at least 500usec held low, then at least 100usec after release,
+  // before anything else is done to it.
   POKE(0xd6e0, 0);
+  for(i=0;i<10;i++) wait_10ms();
   POKE(0xd6e0, 3);
+  for(i=0;i<10;i++) wait_10ms();
   POKE(0xd6e1, 3);
   POKE(0xd6e1, 0);
 
@@ -647,7 +647,7 @@ void main(void)
 	//            TEST(1, mdio1, 6, "Preamble suppression");
 	if ((mdio1 ^ last_mdio1) & (1 << 5)) {
 	  if (mdio1 & (1 << 5))
-	    println_text80(5, "PHY: Auto-negotiation completee");
+	    println_text80(5, "PHY: Auto-negotiation complete");
 	  else
 	    println_text80(7, "PHY: Auto-negotiation in progress");
 	}
