@@ -72,6 +72,18 @@ void wait_10ms(void)
   }
 }
 
+void wait_1ms(void)
+{
+  // 16 x ~64usec raster lines = ~1ms
+  int c = 16;
+  unsigned char b;
+  while (c--) {
+    b = PEEK(0xD012U);
+    while (b == PEEK(0xD012U))
+      continue;
+  }
+}
+
 unsigned short mdio_read_register(unsigned char addr, unsigned char reg)
 {
   unsigned short result = 0, r1 = 1, r2 = 2, r3 = 3;
@@ -85,13 +97,23 @@ unsigned short mdio_read_register(unsigned char addr, unsigned char reg)
     // Use new MIIM interface
     POKE(0xD6e6L, (reg & 0x1f) + ((addr & 7) << 5));
     // Reading takes a little while...
-    for (result = 0; result < 32000; result++)
-      continue;
+    // ~100 bits at ~500KHz = ~200usec
+    wait_1ms();
     result = PEEK(0xD6E7L);
     result |= PEEK(0xD6E8L) << 8;
   }
 
   return result;
+}
+
+unsigned short mdio_write_register(unsigned char addr, unsigned char reg, unsigned short val)
+{
+    POKE(0xD6e6L, (reg & 0x1f) + ((addr & 7) << 5));
+    POKE(0xD6E8L, val>>8);
+    POKE(0xD6E7L, val>>0);
+    // Allow write to finish before scheduling the read
+    wait_1ms();
+    return mdio_read_register(addr,reg);
 }
 
 #define TEST(reg, v, bit, desc)                                                                                             \
@@ -270,8 +292,35 @@ unsigned char safe_char(unsigned char in)
 
 #endif
 
-unsigned short mdio0 = 0, mdio1 = 0, last_mdio0 = 0, last_mdio1 = 0, frame_count = 0;
+unsigned short mdio1 = 0, last_mdio1 = 0, frame_count = 0;
 unsigned char phy, last_frame_num = 0, show_hex = 0, last_d6ef = 0;
+
+void errata_ksz8081rnd(void)
+{
+  /* 
+     There is a known problem with high BER and packet loss
+   */
+  
+}
+
+void mdio_dump(void)
+{
+  unsigned char i;
+  for(i=0;i<32;i+=8) {
+    snprintf(msg, 160, "  MDIO: %02x: %04x %04x %04x %04x %04x %04x %04x %04x",
+	     i,
+	     mdio_read_register(phy,i+0),
+	     mdio_read_register(phy,i+1),
+	     mdio_read_register(phy,i+2),
+	     mdio_read_register(phy,i+3),
+	     mdio_read_register(phy,i+4),
+	     mdio_read_register(phy,i+5),
+	     mdio_read_register(phy,i+6),
+	     mdio_read_register(phy,i+7)
+	     );
+    println_text80(7, msg);
+  }
+}
 
 #ifdef NATIVE_TEST
 int main(int argc, char **argv)
@@ -287,7 +336,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "ERROR: Failed to open PCAP capture file '%s'\nPCAP said: %s\n", argv[1], errbuf);
     exit(-1);
   }
-
+  
 #else
 void main(void)
 {
@@ -336,28 +385,77 @@ void main(void)
   snprintf(msg, 160, "Network PHY is at MDIO address $%x", phy);
   println_text80(1, msg);
 
-#if 0
+#if 1
   i=mdio_read_register(phy,0x1f);
   if (i&(1<<10)) {
-    snprintf(msg, 160, "WARNING: Cable-unplug power-saving enabled.", phy);
+    snprintf(msg, 160, "WARNING: Cable-unplug power-saving enabled ($%04x).", i);
+    println_text80(2, msg);
+    mdio_write_register(phy,0x1f,i&0xfbff);
+  }
+  i=mdio_read_register(phy,0x1f);
+  if (i&(1<<10)) {
+    snprintf(msg, 160, "WARNING: Cable-unplug power-saving still enabled.", phy);
+    println_text80(2, msg);
+  }
+  if ((i&(1<<7))) {
+    snprintf(msg, 160, "WARNING: PHY using 25MHz clock: Setting to 50MHz", phy);
+    println_text80(2, msg);
+    mdio_write_register(phy,0x1f,i&0xff7f);
+  }
+  mdio_write_register(phy,0x1f,0x8100);
+  i=mdio_read_register(phy,0x1f);
+  if ((i&(1<<7))) {
+    snprintf(msg, 160, "WARNING: PHY still using 25MHz clock after setting to 50MHz", phy);
     println_text80(2, msg);
   }
   i=mdio_read_register(phy,0x18);
   if (i&(1<<11)) {
-    snprintf(msg, 160, "WARNING: Cable-unplug auto-neg power-saving enabled.", phy);
+    snprintf(msg, 160, "WARNING: Cable-unplug auto-neg power-saving enabled.", i);
+    println_text80(2, msg);
+    mdio_write_register(phy,0x18,i&0xf7ff);
+  }
+  i=mdio_read_register(phy,0x18);
+  if (i&(1<<11)) {
+    snprintf(msg, 160, "WARNING: Cable-unplug auto-neg power-saving still enabled.", phy);
     println_text80(2, msg);
   }
 #endif
+
+  mdio_dump();
   
+  // Clear queued packets
+  for(i=0;i<255;i++) {
+    if (PEEK(0xD6E1) & 0x20) // Packet received
+    {
+      // Pop a frame from the buffer list
+      POKE(0xD6E1, 0x01);
+      POKE(0xD6E1, 0x03);
+      POKE(0xD6E1, 0x01);
+    }
+  }
+
+  // Apply KSZ8081RND errata
+  errata_ksz8081rnd();
+
+#if 0
+  while(PEEK(0xD610)) POKE(0xD610,0);
+  while(!PEEK(0xD610)) continue;
+#endif
+
+  // Get initial value of MDIO register 1 for monitoring link status changes
+  last_mdio1 = mdio_read_register(phy,0x01);
+
   while (1) {
 
+#if 0
     if (PEEK(0xD6EF) != last_d6ef) {
       last_d6ef = PEEK(0xD6EF);
       snprintf(msg, 160, "#$%02x : $D6EF change: CPU buffer=%d, ETH buffer=%d, toggles=%d, rotates=%d", PEEK(0xD7FA),
           (PEEK(0xD6EF) >> 0) & 3, (PEEK(0xD6EF) >> 2) & 3, (PEEK(0xD6EF) >> 6) & 3, (PEEK(0xD6EF) >> 4) & 0x3);
       println_text80(1, msg);
     }
-
+#endif
+    
     // Check for new packets
     if (PEEK(0xD6E1) & 0x20) // Packet received
     {
@@ -392,7 +490,7 @@ void main(void)
                 frame_buffer[16 + 20 + 5] + (frame_buffer[16 + 20 + 4] << 8),
                 frame_buffer[16 + 20 + 7] + (frame_buffer[16 + 20 + 6] << 8));
             println_text80(13, msg);
-            //      show_hex=0;
+	    show_hex=0;
           }
           else if (frame_buffer[16 + 20] == 0x03) // DESTINATION UNREACHABLE
           {
@@ -531,48 +629,50 @@ void main(void)
 
     // Periodically ask for update to MDIO register read
     if (PEEK(0xD7FA) != last_frame_num) {
+      // Report MDIO changes
+      mdio1 = mdio_read_register(phy,0x01);
+      if ((mdio1 != last_mdio1)) {
+	
+	snprintf(msg,80,"MDIO register 1 = $%04x, was $%04x",mdio1,last_mdio1);
+	println_text80(7,msg);
+	mdio_dump();
+	// And re-prime to read register 1 again after dumping the registers
+	POKE(0xD6E6L, 1);
+	
+	//            TEST(1, mdio1, 15, "T4 capable");
+	//            TEST(1, mdio1, 14, "100TX FD capable");
+	//            TEST(1, mdio1, 13, "100TX HD capable");
+	//            TEST(1, mdio1, 12, "10T FD capable");
+	//            TEST(1, mdio1, 11, "10T HD capable");
+	//            TEST(1, mdio1, 6, "Preamble suppression");
+	if ((mdio1 ^ last_mdio1) & (1 << 5)) {
+	  if (mdio1 & (1 << 5))
+	    println_text80(5, "PHY: Auto-negotiation completee");
+	  else
+	    println_text80(7, "PHY: Auto-negotiation in progress");
+	}
+	if ((mdio1 ^ last_mdio1) & (1 << 2)) {
+	  if (mdio1 & (1 << 2))
+	    println_text80(5, "PHY: Link is up");
+	  else
+	    println_text80(2, "PHY: Link DOWN");
+	}
+	
+	// TEST(1, mdio1, 5, "Auto-neg complete");
+	TEST(1, mdio1, 4, "Remote fault");
+	//                  TEST(1, mdio1, 3, "Can auto-neg");
+	
+	//                  TEST(1, mdio1, 2, "Link is up");
+	TEST(1, mdio1, 1, "Jabber detected");
+	//                  TEST(1, mdio1, 0, "Supports ex-cap regs");
+	
+	last_mdio1 = mdio1;
+      }
+
+      // Schedule next read
       last_frame_num = PEEK(0xD7FA);
-      POKE(0xD6E6L, 1);
     }
 
-    // Report MDIO changes
-    mdio1 = PEEK(0xD6E7L);
-    mdio1 |= PEEK(0xD6E8L) << 8;
-    // Work around bug where MDIO register 1 some times reads shifted by one bit
-    if ((mdio1 & 0xf000) == 0xf000)
-      mdio1 = last_mdio1;
-    if ((mdio1 != last_mdio1)) {
-
-      //            TEST(1, mdio1, 15, "T4 capable");
-      //            TEST(1, mdio1, 14, "100TX FD capable");
-      //            TEST(1, mdio1, 13, "100TX HD capable");
-      //            TEST(1, mdio1, 12, "10T FD capable");
-      //            TEST(1, mdio1, 11, "10T HD capable");
-      //            TEST(1, mdio1, 6, "Preamble suppression");
-      if ((mdio1 ^ last_mdio1) & (1 << 5)) {
-        if (mdio1 & (1 << 5))
-          println_text80(5, "PHY: Auto-negotiation completee");
-        else
-          println_text80(7, "PHY: Auto-negotiation in progress");
-      }
-      if ((mdio1 ^ last_mdio1) & (1 << 2)) {
-        if (mdio1 & (1 << 2))
-          println_text80(5, "PHY: Link is up");
-        else
-          println_text80(2, "PHY: Link DOWN");
-      }
-
-      //            TEST(1, mdio1, 5, "Auto-neg complete");
-                  TEST(1, mdio1, 4, "Remote fault");
-      //            TEST(1, mdio1, 3, "Can auto-neg");
-
-      //            TEST(1, mdio1, 2, "Link is up");
-                  TEST(1, mdio1, 1, "Jabber detected");
-      //            TEST(1, mdio1, 0, "Supports ex-cap regs");
-
-      last_mdio0 = mdio0;
-      last_mdio1 = mdio1;
-    }
   }
 
 #ifdef NATIVE_TEST
