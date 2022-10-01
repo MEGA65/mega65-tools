@@ -1979,7 +1979,7 @@ int main(int argc, char **argv)
       log_warn("    You may be able to solve this problem via the following:");
       log_warn("        sudo usermod -a -G dialout <your username>");
       log_warn("    and then:");
-      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\"' | "
+      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\", MODE=\"0666\"' | "
                "sudo tee /etc/udev/rules.d/40-xilinx.rules");
       log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
     }
