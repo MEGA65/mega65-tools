@@ -307,7 +307,7 @@ void main(void)
   clear_text80();
 
   println_text80(1, "WireKrill 0.0.1 Network Analyser.");
-  println_text80(1, "(C) Paul Gardner-Stephen, 2020-2021.");
+  println_text80(1, "(C) Paul Gardner-Stephen, 2020-2022.");
 
   // Clear reset on ethernet controller
   POKE(0xD6E0, 0x00);
@@ -336,6 +336,19 @@ void main(void)
   snprintf(msg, 160, "Network PHY is at MDIO address $%x", phy);
   println_text80(1, msg);
 
+#if 0
+  i=mdio_read_register(phy,0x1f);
+  if (i&(1<<10)) {
+    snprintf(msg, 160, "WARNING: Cable-unplug power-saving enabled.", phy);
+    println_text80(2, msg);
+  }
+  i=mdio_read_register(phy,0x18);
+  if (i&(1<<11)) {
+    snprintf(msg, 160, "WARNING: Cable-unplug auto-neg power-saving enabled.", phy);
+    println_text80(2, msg);
+  }
+#endif
+  
   while (1) {
 
     if (PEEK(0xD6EF) != last_d6ef) {
@@ -530,12 +543,12 @@ void main(void)
       mdio1 = last_mdio1;
     if ((mdio1 != last_mdio1)) {
 
-      //      TEST(1, mdio1, 15, "T4 capable");
-      //      TEST(1, mdio1, 14, "100TX FD capable");
-      //      TEST(1, mdio1, 13, "100TX HD capable");
-      //      TEST(1, mdio1, 12, "10T FD capable");
-      //      TEST(1, mdio1, 11, "10T HD capable");
-      //      TEST(1, mdio1, 6, "Preamble suppression");
+      //            TEST(1, mdio1, 15, "T4 capable");
+      //            TEST(1, mdio1, 14, "100TX FD capable");
+      //            TEST(1, mdio1, 13, "100TX HD capable");
+      //            TEST(1, mdio1, 12, "10T FD capable");
+      //            TEST(1, mdio1, 11, "10T HD capable");
+      //            TEST(1, mdio1, 6, "Preamble suppression");
       if ((mdio1 ^ last_mdio1) & (1 << 5)) {
         if (mdio1 & (1 << 5))
           println_text80(5, "PHY: Auto-negotiation completee");
@@ -549,13 +562,13 @@ void main(void)
           println_text80(2, "PHY: Link DOWN");
       }
 
-      //      TEST(1, mdio1, 5, "Auto-neg complete");
-      //      TEST(1, mdio1, 4, "Remote fault");
-      //      TEST(1, mdio1, 3, "Can auto-neg");
+      //            TEST(1, mdio1, 5, "Auto-neg complete");
+                  TEST(1, mdio1, 4, "Remote fault");
+      //            TEST(1, mdio1, 3, "Can auto-neg");
 
-      //      TEST(1, mdio1, 2, "Link is up");
-      //      TEST(1, mdio1, 1, "Jabber detected");
-      //      TEST(1, mdio1, 0, "Supports ex-cap regs");
+      //            TEST(1, mdio1, 2, "Link is up");
+                  TEST(1, mdio1, 1, "Jabber detected");
+      //            TEST(1, mdio1, 0, "Supports ex-cap regs");
 
       last_mdio0 = mdio0;
       last_mdio1 = mdio1;
