@@ -132,6 +132,8 @@ char msg[160 + 1];
 
 unsigned short i;
 
+unsigned char loopback_mode=0;
+
 void graphics_clear_screen(void)
 {
   lfill(0x40000L, 0, 32768L);
@@ -385,7 +387,7 @@ void main(void)
   snprintf(msg, 160, "Network PHY is at MDIO address $%x", phy);
   println_text80(1, msg);
 
-#if 1
+#if 0
   i=mdio_read_register(phy,0x1f);
   if (i&(1<<10)) {
     snprintf(msg, 160, "WARNING: Cable-unplug power-saving enabled ($%04x).", i);
@@ -447,6 +449,32 @@ void main(void)
 
   while (1) {
 
+    switch(PEEK(0xD610)) {
+    case 0x44: case 0x64:
+      // Digital loopback test
+
+      // Enable digital loopback mode
+      mdio_write_register(phy,0x00,0x6100);
+
+      loopback_mode=1;
+
+      println_text80(7, "Activated digital loopback test mode.");
+      
+      POKE(0xD610,0);
+      break;
+    case 0x03:
+
+      // Cancel digital loopback mode, if it was selected
+      mdio_write_register(phy,0x00,0x0100);
+
+      loopback_mode=0;
+
+      println_text80(7, "Ending loopback test mode.");
+      
+      POKE(0xD610,0);
+      break;
+    }
+    
 #if 0
     if (PEEK(0xD6EF) != last_d6ef) {
       last_d6ef = PEEK(0xD6EF);
@@ -629,6 +657,27 @@ void main(void)
 
     // Periodically ask for update to MDIO register read
     if (PEEK(0xD7FA) != last_frame_num) {
+
+      // If in loopback mode, send a frame
+      if (loopback_mode) {
+	// DST=broadcast
+	for(i=0;i<6;i++) frame_buffer[i]=0xff;
+	// SRC=01:02:03:40:50:60
+	for(i=6;i<12;i++) frame_buffer[i]=(i-5)<<((i>8)?4:0);
+	// TYPE=0x1234
+	frame_buffer[12]=0x12;
+	frame_buffer[13]=0x34;
+	// 256 bytes of ascending values
+	for(i=0;i<256;i++) frame_buffer[14+i]=i;
+	// Copy to eth frame buffer and TX frame of 14+256 bytes
+	lcopy((unsigned long)frame_buffer,0xffde800,14+256);
+	// Set frame length to 14 + 1*256
+	POKE(0xD6E2,14);
+	POKE(0xD6E3,1);
+	// TX frame
+	POKE(0xD6E4,0x01);
+      }
+
       // Report MDIO changes
       mdio1 = mdio_read_register(phy,0x01);
       if ((mdio1 != last_mdio1)) {
@@ -639,12 +688,6 @@ void main(void)
 	// And re-prime to read register 1 again after dumping the registers
 	POKE(0xD6E6L, 1);
 	
-	//            TEST(1, mdio1, 15, "T4 capable");
-	//            TEST(1, mdio1, 14, "100TX FD capable");
-	//            TEST(1, mdio1, 13, "100TX HD capable");
-	//            TEST(1, mdio1, 12, "10T FD capable");
-	//            TEST(1, mdio1, 11, "10T HD capable");
-	//            TEST(1, mdio1, 6, "Preamble suppression");
 	if ((mdio1 ^ last_mdio1) & (1 << 5)) {
 	  if (mdio1 & (1 << 5))
 	    println_text80(5, "PHY: Auto-negotiation complete");
@@ -658,13 +701,8 @@ void main(void)
 	    println_text80(2, "PHY: Link DOWN");
 	}
 	
-	// TEST(1, mdio1, 5, "Auto-neg complete");
 	TEST(1, mdio1, 4, "Remote fault");
-	//                  TEST(1, mdio1, 3, "Can auto-neg");
-	
-	//                  TEST(1, mdio1, 2, "Link is up");
 	TEST(1, mdio1, 1, "Jabber detected");
-	//                  TEST(1, mdio1, 0, "Supports ex-cap regs");
 	
 	last_mdio1 = mdio1;
       }
