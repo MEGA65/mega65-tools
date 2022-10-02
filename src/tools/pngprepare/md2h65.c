@@ -35,7 +35,7 @@
  *
  * Parts:
  * Copyright 2002-2010 Guillaume Cottenceau.
- * Copyright 2015-2018 Paul Gardner-Stephen.
+ * Copyright 2015-2022 Paul Gardner-Stephen.
  *
  * This software may be freely redistributed under the terms
  * of the X11 license.
@@ -1110,9 +1110,13 @@ int do_pass(char **argv)
   fwrite(block_header, 8, 1, outfile);
 
   // Write 1500 bytes of nulls at the end, to work around WeeIP data-on-close
-  // bug
+  // bug.
+  // XXX - Actually, now that the MEGA65 can have 32 ethernet frames in the
+  // queue, if we see a FIN early, WeeIP's idea of "I saw a FIN, regardless of
+  // the sequence number, I'm going to disconnect RIGHT NOW!" means we need even
+  // more empty space here, until I fix that bug.
   bzero(screen_ram, 1500);
-  fwrite(screen_ram, 1500, 1, outfile);
+  for(int i=0;i<32;i++) fwrite(screen_ram, 1500, 1, outfile);
 
   if (outfile != NULL) {
     fclose(outfile);
