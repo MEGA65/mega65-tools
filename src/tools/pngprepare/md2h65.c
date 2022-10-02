@@ -149,7 +149,8 @@ void quantise_colours(struct tile_set *ts)
     ts->target_colours[i] = i;
 
   int colour_count = ts->colour_count;
-  while (colour_count > 255) {
+  // Colour $FF = 255 has trouble in FCM chars, so don't use it
+  while (colour_count > 254) {
     int freq = 999999999;
     int colour_num = 99999999;
     // Don't remap the C64 normal 16 colours
@@ -223,7 +224,7 @@ int palette_lookup(struct tile_set *ts, int r, int g, int b)
   }
 
   // new colour, check if palette has space
-  if (ts->colour_count == 256) {
+  if (ts->colour_count == 255) {
     fprintf(stderr, "WARNING: Image has many colours. A second pass will be required.\n");
     second_pass_required = 1;
   }
@@ -753,6 +754,9 @@ void emit_word(char *word)
         register_box(url_id, screen_x, screen_y, screen_x + s->width - 1, screen_y + s->height - 1);
       }
 
+      fprintf(stderr,"INFO: Drawing image of %dx%d tiles\n",
+	      s->width,s->height);
+      
       if (s->width > 80 || (s->height + screen_y) > max_lines) {
         fprintf(stderr, "WARNING: Not enough space left on page to fit image '%s'\n", imgname);
       }
