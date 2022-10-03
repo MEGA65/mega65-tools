@@ -139,7 +139,11 @@ unsigned int bad_loop_frames=0;
 unsigned int missed_loop_frames=0;
 unsigned char skip_frame=0;
 unsigned char saw_loop_frame=0;
+unsigned char send_loop_frame=0;
 unsigned char error_map[1024];
+unsigned char icmp_only=0;
+
+unsigned char loop_data[256];
 
 void graphics_clear_screen(void)
 {
@@ -307,10 +311,25 @@ unsigned char phy, last_frame_num = 0, show_hex = 0, last_d6ef = 0;
 void errata_ksz8081rnd(void)
 {
   /* 
-     There is a known problem with high BER and packet loss
+     None of the errata work-arounds are required at this time.
    */
   
 }
+
+void clear_rx_queue(void)
+{
+  // Clear queued packets
+  for(i=0;i<255;i++) {
+    if (PEEK(0xD6E1) & 0x20) // Packet received
+      {
+	// Pop a frame from the buffer list
+	POKE(0xD6E1, 0x01);
+	POKE(0xD6E1, 0x03);
+	POKE(0xD6E1, 0x01);
+      }
+  }
+}
+
 
 void eth_reset(void)
 {
@@ -322,6 +341,9 @@ void eth_reset(void)
   for(i=0;i<20;i++) wait_10ms();
   POKE(0xd6e1, 3);
   POKE(0xd6e1, 0);
+
+  clear_rx_queue();
+  
 }
 
 void mdio_dump(void)
@@ -380,6 +402,7 @@ void main(void)
   println_text80(1, "WireKrill 0.0.1 Network Analyser.");
   println_text80(1, "(C) Paul Gardner-Stephen, 2020-2022.");
 
+  
   // No promiscuous mode, ignore corrupt packets, accept broadcast and multicast
   // default RX and TX phase adjust.
   POKE(0xD6E5, 0x30);
@@ -387,6 +410,11 @@ void main(void)
   // Reset ethernet
   eth_reset();
 
+  POKE(0xD6E5,0x32); // enable buff ID peeking via CRC-disable bit
+  snprintf(msg, 160, "Initial buffer status: [CPU=$%02x, ETH=$%02x]", PEEK(0xD6EC),PEEK(0xD6EE));
+  POKE(0xD6E5,0x30); // enable buff ID peeking via CRC-disable bit
+  println_text80(1, msg);
+  
   // Accept broadcast and multicast frames, and enable promiscuous mode
   POKE(0xD6E5, 0x30);
 
@@ -438,17 +466,8 @@ void main(void)
 
   mdio_dump();
   
-  // Clear queued packets
-  for(i=0;i<255;i++) {
-    if (PEEK(0xD6E1) & 0x20) // Packet received
-    {
-      // Pop a frame from the buffer list
-      POKE(0xD6E1, 0x01);
-      POKE(0xD6E1, 0x03);
-      POKE(0xD6E1, 0x01);
-    }
-  }
-
+  clear_rx_queue();
+    
   // Apply KSZ8081RND errata
   errata_ksz8081rnd();
 
@@ -478,11 +497,12 @@ void main(void)
       // Select -0.6ns (|=0x0000), 0ns (|=0x7000) or +0.6ns (|=0xf000) for REFCLK
       // pad delay.
       switch(PEEK(0xD610)) {
-      case 0x31: i|=0x0000; break;
-      case 0x32: i|=0x7000; break;
-      case 0x33: i|=0xf000; break;
+      case 0x31: i=0x0000; break;
+      case 0x32: i=0x7777; break;
+      case 0x33: i=0xffff; break;
       }
       mdio_write_register(phy,0x19,i);
+      mdio_write_register(phy,0x1a,i);
       snprintf(msg,80,"Setting register $19 to $%04x\n",i);
       println_text80(7,msg);
       
@@ -519,9 +539,25 @@ void main(void)
       mdio_dump();
       POKE(0xD610,0);      
       break;
+    case 0x4c: case 0x6c:
+      // Send a single loop-back frame for testing
+      send_loop_frame=1;
+      POKE(0xD610,0);      
+      break;
+    case 0x49: case 0x69:
+      icmp_only^=1;
+      if (icmp_only) println_text80(7,"Will report only ICMP frames.");
+      else println_text80(7,"ICMP filter disactivated.");
+      POKE(0xD610,0);      
+      break;
     case 0x44: case 0x64:
-      // Digital loopback test
+      // Digital loopback test      
 
+      clear_rx_queue();
+      
+      total_loop_frames=0;
+      bad_loop_frames=0;
+      missed_loop_frames=0;      
       for(i=0;i<1024;i++) error_map[i]=0;
       
       // Enable digital loopback mode
@@ -571,25 +607,39 @@ void main(void)
       lfill((long)msg, 0, 160);
       len = frame_buffer[0] + ((frame_buffer[1] & 0xf) << 8);
 
+      skip_frame=0;
+      
       // Check if its a loop-back debug frame: If so, report only success or failure
       if ((frame_buffer[8]==0x01)&&(frame_buffer[9]==0x02)&&(frame_buffer[10]==0x03)&&
 	  (frame_buffer[11]==0x40)&&(frame_buffer[12]==0x50)&&(frame_buffer[13]==0x60)) {
-	// It's a loopback frame
 
+	unsigned int loop_frame_num=frame_buffer[16+0]+(frame_buffer[16+1]<<8);
+	
+	// It's a loopback frame
 	saw_loop_frame=1;
+
+	if (total_loop_frames!=loop_frame_num) {
+	  snprintf(msg,80,"ERROR: Expected loopback frame #%d, but saw #%d",total_loop_frames,loop_frame_num);
+	  println_text80(2, msg);
+	  for(i=0;i<100;i++) wait_10ms();
+	}
+	
 	for(i=0;i<256;i++) {
-	  if (frame_buffer[16+i]!=i) break;	  
+	  if (frame_buffer[16+i]!=loop_data[i]) break;	  
 	}
 	total_loop_frames++;
 	if (i==256) {
 	  //	  println_text80(1,"Good loop back frame");
-	  skip_frame=1; good_loop_frames++;
+	  // skip_frame=1;
+	  show_hex = 1;      
+	  good_loop_frames++;
 	  if (good_loop_frames==50) {
 	    println_text80(1, "50 consecutive loop-back frames received without error.");	    
 	    good_loop_frames=0;
 	  }
 	}
 	else {
+
 	  bad_loop_frames++;
 	  snprintf(msg,80,"Error in loop-back frame detected after %d good frames (position %d).",good_loop_frames,i);	    
 	  println_text80(2, msg);
@@ -599,7 +649,7 @@ void main(void)
 
 	  for(i=0;i<1024;i++) {
 	    unsigned char mask=0xc0 >> ((i&3) << 1);
-	    if ((frame_buffer[16+(i>>2)]&mask)!=((i>>2)&mask)) {
+	    if ((frame_buffer[16+(i>>2)]&mask)!=(loop_data[i>>2]&mask)) {
 	      POKE(0xc002,0x21);
 	      if (error_map[i]<9) {
 		error_map[i]++;
@@ -663,15 +713,22 @@ void main(void)
       }
 
       if (!skip_frame) {
-	snprintf(msg, 160, "#$%02x : Ethernet Frame #%d", PEEK(0xD7FA), ++frame_count);
-	println_text80(1, msg);
-	
-	snprintf(msg, 160, "  %02x:%02x:%02x:%02x:%02x:%02x > %02x:%02x:%02x:%02x:%02x:%02x : len=%d($%x), rxerr=%c",
-		 frame_buffer[8], frame_buffer[9], frame_buffer[10], frame_buffer[11], frame_buffer[12], frame_buffer[13],
-		 frame_buffer[2], frame_buffer[3], frame_buffer[4], frame_buffer[5], frame_buffer[6], frame_buffer[7], len, len,
-		 (frame_buffer[1] & 0x80) ? 'Y' : 'N');
-	println_text80(13, msg);
-	show_hex = 1;      
+
+	if (!icmp_only) {
+
+	  POKE(0xD6E5,0x32); // enable buff ID peeking via CRC-disable bit
+	  snprintf(msg, 160, "#$%02x : Ethernet Frame #%d [CPU=$%02x, ETH=$%02x]", PEEK(0xD7FA), ++frame_count,
+		   PEEK(0xD6EC),PEEK(0xD6EE));
+	  POKE(0xD6E5,0x30); // enable buff ID peeking via CRC-disable bit
+	  println_text80(1, msg);
+	  
+	  snprintf(msg, 160, "  %02x:%02x:%02x:%02x:%02x:%02x > %02x:%02x:%02x:%02x:%02x:%02x : len=%d($%x), rxerr=%c",
+		   frame_buffer[8], frame_buffer[9], frame_buffer[10], frame_buffer[11], frame_buffer[12], frame_buffer[13],
+		   frame_buffer[2], frame_buffer[3], frame_buffer[4], frame_buffer[5], frame_buffer[6], frame_buffer[7], len, len,
+		   (frame_buffer[1] & 0x80) ? 'Y' : 'N');
+	  println_text80(13, msg);
+	  show_hex = 1;
+	} else show_hex=0;
 	
 	if (frame_buffer[16] == 0x45) {
 	  // IPv4
@@ -701,6 +758,9 @@ void main(void)
 		       frame_buffer[start_of_protocol_header + 4], frame_buffer[start_of_protocol_header + 5],
 		       frame_buffer[start_of_protocol_header + 6], frame_buffer[start_of_protocol_header + 7]);
 	      }
+	  }
+	  else if (icmp_only) {
+	    show_hex=0;
 	  }
 	  else if (frame_buffer[16 + 9] == 0x06) // TCP
 	    {
@@ -823,6 +883,12 @@ void main(void)
 	    println_text80(14, msg);
 	  }
 	}
+
+#if 0
+	// Wait for a key between each frame
+	while(!PEEK(0xD610)) POKE(0xD020,PEEK(0xD020)+1);
+	POKE(0xD610,0);
+#endif	
       }
     }
 
@@ -830,7 +896,7 @@ void main(void)
     if (PEEK(0xD7FA) != last_frame_num) {
 
       // If in loopback mode, send a frame
-      if (loopback_mode) {
+      if (loopback_mode||send_loop_frame) {
 	if (!saw_loop_frame) {
 	  missed_loop_frames++;
 	  println_text80(8,"Missed loopback frame. CRC error?");
@@ -842,8 +908,31 @@ void main(void)
 	// TYPE=0x1234
 	frame_buffer[12]=0x12;
 	frame_buffer[13]=0x34;
-	// 256 bytes of ascending values
-	for(i=0;i<256;i++) frame_buffer[14+i]=i;
+	// 256 bytes of data in the frame
+
+	switch(last_frame_num&3) {
+	case 0:
+	  // Ascending values
+	  for(i=0;i<256;i++) loop_data[i]=i;      
+	  break;
+	case 1:
+	  // All zeroes
+	  for(i=0;i<256;i++) loop_data[i]=0;      
+	  break;
+	case 2:
+	  // All $FF
+	  for(i=0;i<256;i++) loop_data[i]=0xff;      
+	  break;
+	case 3:
+	  // Pseudo-random data
+	  for(i=0;i<256;i++) loop_data[i]=PEEK(256*(last_frame_num>>2));      
+	  break;
+	}
+
+	loop_data[0]=total_loop_frames;
+	loop_data[1]=total_loop_frames>>8;
+	
+	for(i=0;i<256;i++) frame_buffer[14+i]=loop_data[i];
 	// Copy to eth frame buffer and TX frame of 14+256 bytes
 	lcopy((unsigned long)frame_buffer,0xffde800,14+256);
 	// Set frame length to 14 + 1*256
@@ -852,6 +941,7 @@ void main(void)
 	// TX frame
 	POKE(0xD6E4,0x01);
 	saw_loop_frame=0;
+	send_loop_frame=0;
       }
 
       // Report MDIO changes
