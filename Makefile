@@ -439,7 +439,7 @@ $(BINDIR)/pnghcprepare:	$(TOOLDIR)/pngprepare/pnghcprepare.c Makefile
 
 # Utility to make prerendered H65 pages from markdopwn source files
 $(BINDIR)/md2h65:	$(TOOLDIR)/pngprepare/md2h65.c Makefile $(TOOLDIR)/ascii_font.c
-	$(CC) $(COPT) -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/md2h65 $(TOOLDIR)/pngprepare/md2h65.c $(TOOLDIR)/ascii_font.c -lpng
+	$(CC) $(COPT) -I/usr/local/include -I/usr/include/freetype2 -L/usr/local/lib -o $(BINDIR)/md2h65 $(TOOLDIR)/pngprepare/md2h65.c $(TOOLDIR)/ascii_font.c -lpng -lfreetype
 
 $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
 	$(CC) $(COPT) -o $(BINDIR)/utilpacker $(TOOLDIR)/utilpacker/utilpacker.c

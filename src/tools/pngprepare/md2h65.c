@@ -51,8 +51,16 @@
 #include <strings.h>
 #include <stdarg.h>
 
+// For images
 #define PNG_DEBUG 3
 #include <png.h>
+
+// For fonts
+#include <math.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include <unistd.h>
+
 
 extern unsigned char ascii_font[4097];
 
@@ -74,6 +82,22 @@ png_infop info_ptr;
 int number_of_passes;
 png_bytep *row_pointers;
 int multiplier;
+
+FT_Library    library;
+#define FONT_PARAGRAPH 0
+#define FONT_H1 1
+#define FONT_H2 2
+#define FONT_H3 3
+#define FONT_PARAGRAPH_BOLD 4
+#define FONT_PARAGRAPH_ITALIC 5
+#define MAX_TYPEFACES (5+1)
+FT_Face       type_faces[MAX_TYPEFACES];
+
+FT_GlyphSlot  glyph_slot;
+FT_Error      error;
+
+  int           n;
+
 
 /* ============================================================= */
 
@@ -650,7 +674,7 @@ char *get_attribute(char *key)
   return NULL;
 }
 
-void emit_paragraph(void)
+void next_paragraph(void)
 {
   // End a previous paragraph, if one was started.
   if (in_paragraph) {
@@ -664,7 +688,7 @@ void emit_paragraph(void)
   }
 }
 
-void emit_paragraph_no_gap(void)
+void next_paragraph_no_gap(void)
 {
   // End a previous paragraph, if one was started.
   if (in_paragraph) {
@@ -710,7 +734,8 @@ void emit_word(char *word)
   if (word[0] == '*' && word[1] == '*') {
     // Bold
     text_colour_saved = text_colour;
-    text_colour = 7; // bold = yellow
+    attributes = 0x20; // Reverse text for bold
+    // text_colour = 7; // bold = yellow
     start = 2;
   }
   else if (word[0] == '[') {
@@ -764,7 +789,7 @@ void emit_word(char *word)
         // Make sure we are on a fresh line before displaying an image,
         // but don't force a blank line, so images and text can be placed
         // flush
-        emit_paragraph_no_gap();
+        next_paragraph_no_gap();
 
         // Draw the image on the screen and colour RAM
         for (y = 0; y < s->height; y++) {
@@ -896,18 +921,36 @@ int do_pass(char **argv)
   line[0] = 0;
   fgets(line, 1024, infile);
   while (line[0]) {
+    char font_id_str[1024];
+    char font_file[1024];
+    int font_size;
+    if (sscanf(line,"#define FONT(%[^)]) %s,%d",font_id_str,font_file,&font_size)==3) {
+      // Redefine a font
+      int font_id=-1;
+      if (!strcasecmp(font_id_str,"h1")) font_id=FONT_H1;
+      if (!strcasecmp(font_id_str,"h2")) font_id=FONT_H2;
+      if (!strcasecmp(font_id_str,"h3")) font_id=FONT_H3;
+      if (!strcasecmp(font_id_str,"p")) font_id=FONT_PARAGRAPH;
+      if (!strcasecmp(font_id_str,"bold")) font_id=FONT_PARAGRAPH_BOLD;
+      if (!strcasecmp(font_id_str,"italic")) font_id=FONT_PARAGRAPH_ITALIC;
+      if (font_id==-1) {
+	fprintf(stderr,"ERROR: Unsupported FONT('%s') definition. Only h1, h2, h3, p, bold and italic are supported right now.\n",
+		font_id_str);
+	exit(-1);
+      }
+    }
     if (line[0] == '#') {
-      emit_paragraph();
+      next_paragraph();
       // Heading
       text_colour = 1;   // white text for headings
       attributes = 0x80; // underline for headings
       emit_text(&line[2]);
       text_colour = 14;
-      emit_paragraph();
+      next_paragraph();
     }
     else if (line[0] == '\n' || line[0] == '\r') {
       // Blank line = paragraph break
-      emit_paragraph();
+      next_paragraph();
     }
     else {
       // Normal text
@@ -1134,13 +1177,26 @@ int do_pass(char **argv)
 
 int main(int argc, char **argv)
 {
-
   if (argc != 3) {
     fprintf(stderr, "Usage: md2h65 <input.md> <output.h65>\n");
     exit(-1);
   }
 
-  // Allow upto 128KB of tiles
+  // Default to all fonts using MEGA65 ASCII font
+  for(int i=0;i<MAX_TYPEFACES;i++) type_faces[i]=NULL;
+  
+  // Setup TTF handling library
+  error = FT_Init_FreeType( &library );              /* initialize library */
+
+  //  error = FT_New_Face( library, filename, 0, &face );/* create face object */
+  /* error handling omitted */
+
+  //  error = FT_Set_Pixel_Sizes( face, font_size, font_size);
+  /* error handling omitted */
+
+  //  glyph_slot = type_faces[FONT_PARAGRAPH]->glyph;
+  
+  // Allow upto 128KB of tiles (for both graphics and font glyphs)
   ts = new_tileset(128 * 1024 / 64);
   palette_c64_init(ts);
 
