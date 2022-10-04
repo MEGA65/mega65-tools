@@ -706,8 +706,15 @@ void emit_accumulated_line(void)
     // XXX - Emit accumulated line by copying the rows of screen and colour RAM into place.
     int first_row = MAX_LINE_HEIGHT - accline_height;
     int last_row = MAX_LINE_HEIGHT -1 + accline_depth;
-    printf("[Line = +%d,-%d]\n",accline_height,accline_depth);
+    printf("[Line = +%d,-%d, first=%d, last=%d, accline_len=%d]\n",
+	   accline_height,accline_depth, first_row, last_row, accline_len);
     for(int row = first_row; row <= last_row; row++) {
+
+      if (screen_y * (MAX_LINE_LENGTH*2) >= MAX_COLOURRAM_SIZE) {
+	fprintf(stderr,"ERROR: Page too long. Split into separate files, or use smaller fonts.\n");
+	exit(-1);
+      }
+      
       memcpy(&screen_ram[screen_y * (MAX_LINE_LENGTH*2)],accline_screen_ram[row],accline_len*2);
       memcpy(&colour_ram[screen_y * (MAX_LINE_LENGTH*2)],accline_colour_ram[row],accline_len*2);
       screen_y++;
@@ -777,21 +784,19 @@ int emit_accumulated_word(void)
   
   if (!type_faces[current_font]) {
     int len = word_len;
-    if ((80 - screen_x) < len) {
-      screen_y++;
-      screen_x = indent;
+    if ((MAX_LINE_LENGTH - accline_len) < len) {
+      emit_accumulated_line();
     }
+    // Draw single char high C64 ASCII font text directly
     for (int xx = 0; xx < len; xx++) {
-      if (screen_x >= 80) {
-	screen_x = 0;
-	screen_y++;
+      if (accline_len >= MAX_LINE_LENGTH) {
+	emit_accumulated_line();
       }
-      if (screen_y * 160 + screen_x * 2 < MAX_COLOURRAM_SIZE) {
-	screen_ram[screen_y * 160 + screen_x * 2 + 0] = word[xx];
-	colour_ram[screen_y * 160 + screen_x * 2 + 0] = 0;
-	colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
-      }
-      screen_x++;
+      accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=word[xx];
+      accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+1]=0;
+      accline_colour_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=0;
+      accline_colour_ram[MAX_LINE_HEIGHT-1][accline_len*2+1]=text_colour + attributes;
+      accline_len++;
     }
   } else {
     // True-type font
@@ -809,7 +814,7 @@ int emit_accumulated_word(void)
   }
 
   // Show the user the word we have emitted
-  for(int i=0;i<word_len;i++) printf("%c",word[i]); printf(" "); fflush(stdout);
+  for(int i=0;i<word_len;i++) { printf("%c",word[i]); } printf(" "); fflush(stdout);
   
   word_len=0; word[0]=0;
 
