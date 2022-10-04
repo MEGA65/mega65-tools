@@ -89,14 +89,18 @@ FT_Library    library;
 #define FONT_H2 2
 #define FONT_H3 3
 #define FONT_PARAGRAPH_BOLD 4
-#define FONT_PARAGRAPH_ITALIC 5
-#define MAX_TYPEFACES (5+1)
+#define FONT_PARAGRAPH_BOLDITALIC 5
+#define FONT_PARAGRAPH_ITALIC 6
+#define MAX_TYPEFACES (FONT_PARAGRAPH_ITALIC+1)
 FT_Face       type_faces[MAX_TYPEFACES];
+int current_font = FONT_PARAGRAPH;
 
 FT_GlyphSlot  glyph_slot;
 FT_Error      error;
 
-  int           n;
+int           n;
+
+
 
 
 /* ============================================================= */
@@ -546,6 +550,7 @@ unsigned char text_colour = 14;
 unsigned char text_colour_saved = 14;
 unsigned char indent = 0;
 unsigned char attributes = 0;
+unsigned char attributes_saved = 0;
 unsigned char screen_ram[MAX_COLOURRAM_SIZE];
 unsigned char colour_ram[MAX_COLOURRAM_SIZE];
 const int max_lines = (MAX_COLOURRAM_SIZE / (80 * 2));
@@ -686,6 +691,11 @@ void next_paragraph(void)
     in_paragraph = 0;
     indent = 0;
   }
+
+  // Reset to paragraph font after
+  current_font = FONT_PARAGRAPH;
+  attributes = 0x00;
+  text_colour = 14;
 }
 
 void next_paragraph_no_gap(void)
@@ -698,6 +708,11 @@ void next_paragraph_no_gap(void)
     in_paragraph = 0;
     indent = 0;
   }
+
+  // Reset to paragraph font after
+  current_font = FONT_PARAGRAPH;
+  attributes = 0x00;
+  text_colour = 14;
 }
 
 unsigned char ascii_to_screen_code(unsigned char c)
@@ -709,7 +724,50 @@ unsigned char ascii_to_screen_code(unsigned char c)
   // if (c>='a'&&c<='z') c=c^0x20;
 }
 
-void emit_word(char *word)
+// Accumulated word (int type to allow use of unicode points)
+int word[1024];
+int word_len=0;
+
+int emit_accumulated_word(void)
+{
+  
+  if (!type_faces[current_font]) {
+    int len = word_len;
+    if ((80 - screen_x) < len) {
+      screen_y++;
+      screen_x = indent;
+    }
+    for (int xx = 0; xx < len; xx++) {
+      if (screen_x >= 80) {
+	screen_x = 0;
+	screen_y++;
+      }
+      if (screen_y * 160 + screen_x * 2 < MAX_COLOURRAM_SIZE) {
+	screen_ram[screen_y * 160 + screen_x * 2 + 0] = ascii_to_screen_code(word[xx]);
+	colour_ram[screen_y * 160 + screen_x * 2 + 0] = 0;
+	colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
+      }
+      screen_x++;
+    }
+  } else {
+    // True-type font
+  }
+
+  for(int i=0;i<word_len;i++) printf("%c",word[i]); printf(" "); fflush(stdout);
+  
+  word_len=0; word[0]=0;
+
+  return 0;
+}
+
+void paragraph_font(void)
+{
+  text_colour = 14;
+  attributes = 0;
+  current_font = FONT_PARAGRAPH;
+}
+
+void emit_text(char *text)
 {
   /* Check for special formatting options:
      - Begins with * = enable bold/italic etc
@@ -726,49 +784,77 @@ void emit_word(char *word)
      In fact, initially, we will support only bold = **text goes here**
   */
 
-  int start = 0, x1, y1;
-  int end = strlen(word);
+  int x1, y1;
+  int len = strlen(text);
 
   in_paragraph = 1;
 
-  if (word[0] == '*' && word[1] == '*') {
-    // Bold
-    text_colour_saved = text_colour;
-    attributes = 0x20; // Reverse text for bold
-    // text_colour = 7; // bold = yellow
-    start = 2;
-  }
-  else if (word[0] == '[') {
-    char text[2048] = "", theurl[2048] = "";
-    // [text](url) -- A link
-    // NOT have any spaces in at the moment.
-    if (sscanf(word, "[%[^]]](%[^)])", text, theurl) == 2) {
+  char alttext[2048] = "", imgname[2048] = "", theurl[2048] = "";
+  
+  for(int i=0;i<len;) {
+
+    // Look for asterisks to toggle bold/italic
+    int stars=0;
+    while ((i<len)&&text[i]=='*') {
+      stars++; i++;
+    }
+    switch(stars) {
+    case 0: break;
+    case 1: // Toggle italic
+      if (current_font == FONT_PARAGRAPH) {
+	current_font = FONT_PARAGRAPH_ITALIC;
+	if (!type_faces[current_font]) text_colour = 7;
+      } else paragraph_font();
+      break;
+    case 2: // Toggle bold
+      if (current_font == FONT_PARAGRAPH) {
+	current_font = FONT_PARAGRAPH_BOLD;
+	attributes = 0x20; // Reverse text for bold
+      } else paragraph_font();
+      break;
+    case 3: // Toggle bold+italic
+      if (current_font == FONT_PARAGRAPH) {
+	current_font = FONT_PARAGRAPH_ITALIC;
+	if (!type_faces[current_font]) text_colour = 7;
+      } else paragraph_font();
+      break;
+    default:
+      // Too many stars
+      fprintf(stderr,"ERROR: Too many *'s in a row: only upto 3 are allowed. Escape with \\ for literals.\n");
+      fprintf(stderr,"       Offending text is: %s\n",text);
+      exit(-1);
+    }
+    if (stars) emit_accumulated_word();
+    
+    // Check for [text](url) -- A link
+    if (sscanf(&text[i], "[%[^]]](%[^)])%n", alttext, theurl,&n) == 3) {
+      i+=n;
       // Emit word and get the dimensions for it
+      attributes_saved = attributes;
       attributes = 0x80; // underline links
       text_colour_saved = text_colour;
       text_colour = 0x04; // purple text
+      // Remember where start of link appears
       x1 = screen_x;
       y1 = screen_y;
-      emit_word(text);
+      emit_text(alttext);
+      // If URL wrapped, then kludge to make whole link clickable
       if (screen_y > y1) {
         x1 = 0;
         y1 = screen_y;
       }
+      // Return to whatever text colour and attributes we had before the link
       text_colour = text_colour_saved;
       attributes = 0;
-      word[0] = 0;
-      end = 0;
 
       int url_id = register_url(theurl);
       register_box(url_id, x1, y1, screen_x, screen_y);
     }
-  }
-  else if (word[0] == '!' && word[1] == '[') {
-    char alttext[2048] = "", imgname[2048] = "";
     // ![alt-text](imagefile.png)
     // Currently we only support PNG images, and the alt text must
-    // NOT have any spaces in at the moment.
-    if (sscanf(word, "![%[^]]](%[^)])", alttext, imgname) == 2) {
+    else if (sscanf(text, "![%[^]]](%[^)])%n", alttext, imgname, &n) == 3) {
+      i+=n;
+      
       read_png_file(imgname);
       struct screen *s = png_to_screen(0, ts);
 
@@ -799,95 +885,30 @@ void emit_word(char *word)
         // Now advance our draw point to after the image
         screen_y += s->height;
       }
-    }
-    else {
-      fprintf(stderr, "WARNING: Could not parse image reference:\n  %s\n", word);
-      fprintf(stderr, "         (Don't forget alt text must be present, and NOT have any spaces in it).\n");
-      fprintf(stderr, "         imgname='%s', alttext='%s'\n", imgname, alttext);
-    }
-    // Don't output the image markdown
-    word[0] = 0;
-    end = 0;
-    start = 0;
-  }
-  if (word[end - 2] == '*' && word[end - 1] == '*') {
-    end -= 2;
-  }
-
-  int len = end - start;
-  if ((80 - screen_x) < len) {
-    screen_y++;
-    screen_x = indent;
-  }
-  for (int xx = start; xx < end; xx++) {
-    if (screen_x >= 80) {
-      screen_x = 0;
-      screen_y++;
-    }
-    if (screen_y * 160 + screen_x * 2 < MAX_COLOURRAM_SIZE) {
-      screen_ram[screen_y * 160 + screen_x * 2 + 0] = ascii_to_screen_code(word[xx]);
-      colour_ram[screen_y * 160 + screen_x * 2 + 0] = 0;
-      colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
-    }
-    screen_x++;
-  }
-
-  end = strlen(word);
-  if (word[end - 2] == '*' && word[end - 1] == '*') {
-    text_colour = text_colour_saved; // end of bold
-  }
-}
-
-void emit_text(char *text)
-{
-  // Emit the text
-  int last_was_word = 0;
-  char word[1024];
-  int word_len = 0;
-
-  if (screen_x > indent) {
-    // Emit a space before the text, if we are not the first
-    // thing on the line.
-    colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
-    screen_x++;
-    if (screen_x >= 80) {
-      screen_y++;
-      screen_x = indent;
-    }
-  }
-
-  // Emit word at a time, so that we can find special token
-  for (int i = 0; text[i]; i++) {
-    if (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r') {
-      word[word_len] = 0;
-      if (word_len) {
-        emit_word(word);
-        last_was_word = 1;
+    } else {
+      // Accumulate character into word, or terminate and emit word
+      switch(text[i]) {
+      case ' ': case '\t':
+	// End of word
+	emit_accumulated_word();
+	break;
+      default:
+	// Part of a word
+	if (word_len<1024) {
+	  word[word_len++]=text[i];
+	  word[word_len]=0;
+	} else {
+	  fprintf(stderr,"ERROR: Markdown contains a word that is too long.\n");
+	  exit(-1);
+	}
       }
-      word_len = 0;
-    }
-    else
-      word[word_len++] = text[i];
-
-    if (last_was_word) {
-      if (text[i] == ' ' || text[i] == '\t') {
-        // Emit a space after the word if required.
-        colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
-        screen_x++;
-        if (screen_x >= 80) {
-          screen_y++;
-          screen_x = indent;
-        }
-      }
-      last_was_word = 0;
+      i++;
     }
   }
+  
+  // And output any last bit of a word at the end of the text
+  if (word_len) emit_accumulated_word();
 
-  // Output any final word
-  if (word_len) {
-    word[word_len] = 0;
-    emit_word(word);
-  }
 }
 
 int do_pass(char **argv)
@@ -924,7 +945,7 @@ int do_pass(char **argv)
     char font_id_str[1024];
     char font_file[1024];
     int font_size;
-    if (sscanf(line,"#define FONT(%[^)]) %s,%d",font_id_str,font_file,&font_size)==3) {
+    if (sscanf(line,"#define FONT(%[^)]) %[^,],%d",font_id_str,font_file,&font_size)==3) {
       // Redefine a font
       int font_id=-1;
       if (!strcasecmp(font_id_str,"h1")) font_id=FONT_H1;
@@ -933,22 +954,50 @@ int do_pass(char **argv)
       if (!strcasecmp(font_id_str,"p")) font_id=FONT_PARAGRAPH;
       if (!strcasecmp(font_id_str,"bold")) font_id=FONT_PARAGRAPH_BOLD;
       if (!strcasecmp(font_id_str,"italic")) font_id=FONT_PARAGRAPH_ITALIC;
+      if (!strcasecmp(font_id_str,"bolditalic")) font_id=FONT_PARAGRAPH_BOLDITALIC;
       if (font_id==-1) {
-	fprintf(stderr,"ERROR: Unsupported FONT('%s') definition. Only h1, h2, h3, p, bold and italic are supported right now.\n",
+	fprintf(stderr,"ERROR: Unsupported FONT('%s') definition. Only h1, h2, h3, p, bold, bolditalic and italic are supported right now.\n",
 		font_id_str);
 	exit(-1);
       }
-    }
-    if (line[0] == '#') {
+      // Try loading the font
+      // Release old font, first.
+      if (type_faces[font_id]) {
+	FT_Done_Face(type_faces[font_id]);
+	type_faces[font_id]=NULL;
+      }
+      error = FT_New_Face( library, font_file, 0, &type_faces[font_id] );
+      if (error) { fprintf(stderr,"ERROR: Could not load font: %s\n",line); exit(-1); }
+      error = FT_Set_Pixel_Sizes( type_faces[font_id], font_size, font_size);
+      if (error) { fprintf(stderr,"ERROR: Could not set pixel size for font: %s\n",line); exit(-1); }
+      glyph_slot = type_faces[font_id]->glyph;
+      fprintf(stderr,"INFO: Loaded font: %s as %s, size %d\n",font_id_str,font_file,font_size);
+      
+    } else if (!strcmp("# ",line)) {
+      // Heading H1
       next_paragraph();
-      // Heading
+      current_font = FONT_H1;      
       text_colour = 1;   // white text for headings
       attributes = 0x80; // underline for headings
       emit_text(&line[2]);
-      text_colour = 14;
       next_paragraph();
-    }
-    else if (line[0] == '\n' || line[0] == '\r') {
+    } else if (!strcmp("## ",line)) {
+      // Heading H2
+      next_paragraph();
+      current_font = FONT_H2;      
+      text_colour = 1;   // white text for headings
+      attributes = 0x80; // underline for headings
+      emit_text(&line[3]);
+      next_paragraph();
+    } else if (!strcmp("### ",line)) {
+      // Heading H3
+      next_paragraph();
+      current_font = FONT_H3;      
+      text_colour = 1;   // white text for headings
+      attributes = 0x80; // underline for headings
+      emit_text(&line[4]);
+      next_paragraph();
+    } else if (line[0] == '\n' || line[0] == '\r') {
       // Blank line = paragraph break
       next_paragraph();
     }
@@ -1188,13 +1237,7 @@ int main(int argc, char **argv)
   // Setup TTF handling library
   error = FT_Init_FreeType( &library );              /* initialize library */
 
-  //  error = FT_New_Face( library, filename, 0, &face );/* create face object */
-  /* error handling omitted */
-
-  //  error = FT_Set_Pixel_Sizes( face, font_size, font_size);
-  /* error handling omitted */
-
-  //  glyph_slot = type_faces[FONT_PARAGRAPH]->glyph;
+  current_font = FONT_PARAGRAPH;
   
   // Allow upto 128KB of tiles (for both graphics and font glyphs)
   ts = new_tileset(128 * 1024 / 64);
