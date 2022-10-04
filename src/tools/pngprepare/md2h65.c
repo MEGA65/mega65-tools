@@ -973,7 +973,7 @@ int do_pass(char **argv)
       glyph_slot = type_faces[font_id]->glyph;
       fprintf(stderr,"INFO: Loaded font: %s as %s, size %d\n",font_id_str,font_file,font_size);
       
-    } else if (!strcmp("# ",line)) {
+    } else if (!strncmp("# ",line,2)) {
       // Heading H1
       next_paragraph();
       current_font = FONT_H1;      
@@ -981,7 +981,7 @@ int do_pass(char **argv)
       attributes = 0x80; // underline for headings
       emit_text(&line[2]);
       next_paragraph();
-    } else if (!strcmp("## ",line)) {
+    } else if (!strncmp("## ",line,3)) {
       // Heading H2
       next_paragraph();
       current_font = FONT_H2;      
@@ -989,7 +989,7 @@ int do_pass(char **argv)
       attributes = 0x80; // underline for headings
       emit_text(&line[3]);
       next_paragraph();
-    } else if (!strcmp("### ",line)) {
+    } else if (!strncmp("### ",line,4)) {
       // Heading H3
       next_paragraph();
       current_font = FONT_H3;      
