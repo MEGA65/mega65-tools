@@ -553,9 +553,29 @@ unsigned char attributes = 0;
 unsigned char attributes_saved = 0;
 unsigned char screen_ram[MAX_COLOURRAM_SIZE];
 unsigned char colour_ram[MAX_COLOURRAM_SIZE];
-const int max_lines = (MAX_COLOURRAM_SIZE / (80 * 2));
+#define MAX_LINE_LENGTH 80
+const int max_lines = (MAX_COLOURRAM_SIZE / (MAX_LINE_LENGTH * 2));
 unsigned int screen_ram_used = 0;
 unsigned int in_paragraph = 0;
+
+// Buffer for partially accumulated lines of text
+#define MAX_LINE_HEIGHT 64
+#define MAX_LINE_DEPTH 64
+unsigned char accline_screen_ram[MAX_LINE_LENGTH*2][MAX_LINE_HEIGHT+MAX_LINE_DEPTH];
+unsigned char accline_colour_ram[MAX_LINE_LENGTH*2][MAX_LINE_DEPTH+MAX_LINE_DEPTH];
+int accline_len=0;
+int accline_height=1;
+int accline_depth=0;
+
+// And the same for the current word being rendered
+unsigned char accword_screen_ram[MAX_LINE_LENGTH*2][MAX_LINE_HEIGHT];
+unsigned char accword_colour_ram[MAX_LINE_LENGTH*2][MAX_LINE_DEPTH];
+int accword_len=0;
+int accword_height=1;
+int accword_depth=0;
+
+
+
 #define MAX_URLS 255
 #define MAX_URL_LEN 255
 char urls[MAX_URLS][MAX_URL_LEN];
@@ -679,49 +699,73 @@ char *get_attribute(char *key)
   return NULL;
 }
 
+
+void emit_accumulated_line(void)
+{
+  if (accline_len) {
+    // XXX - Emit accumulated line by copying the rows of screen and colour RAM into place.
+    int first_row = MAX_LINE_HEIGHT - accline_height;
+    int last_row = MAX_LINE_HEIGHT -1 + accline_depth;
+    printf("[Line = +%d,-%d]\n",accline_height,accline_depth);
+    for(int row = first_row; row <= last_row; row++) {
+      memcpy(&screen_ram[screen_y * (MAX_LINE_LENGTH*2)],accline_screen_ram[row],accline_len*2);
+      memcpy(&colour_ram[screen_y * (MAX_LINE_LENGTH*2)],accline_colour_ram[row],accline_len*2);
+      screen_y++;
+    }
+
+    // XXX - Implement indent to allow text to flow around images
+    
+    // Set next draw position to start of the next line
+    screen_x = 0;
+    screen_y += accline_height + accline_depth;
+  }
+    
+  // Reset accumulated line
+  accline_len=0;
+  accline_height=1;
+  accline_depth=0;
+}
+
+void paragraph_font(void)
+{
+  text_colour = 14;
+  attributes = 0;
+  current_font = FONT_PARAGRAPH;
+}
+
 void next_paragraph(void)
 {
   // End a previous paragraph, if one was started.
+  emit_accumulated_line();
+  
   if (in_paragraph) {
-    if (screen_x)
-      screen_y += 2;
-    else
-      screen_y++;
-    screen_x = 0;
+    printf("[YSkip for new paragraph]\n");
+    screen_y++;
     in_paragraph = 0;
     indent = 0;
   }
 
   // Reset to paragraph font after
-  current_font = FONT_PARAGRAPH;
-  attributes = 0x00;
-  text_colour = 14;
+  paragraph_font();
 }
 
 void next_paragraph_no_gap(void)
 {
   // End a previous paragraph, if one was started.
+  emit_accumulated_line();
+  
   if (in_paragraph) {
-    if (screen_x)
-      screen_y += 1;
     screen_x = 0;
     in_paragraph = 0;
     indent = 0;
   }
 
   // Reset to paragraph font after
+  paragraph_font();
+  
   current_font = FONT_PARAGRAPH;
   attributes = 0x00;
   text_colour = 14;
-}
-
-unsigned char ascii_to_screen_code(unsigned char c)
-{
-  // Nothing to do when using the ASCII font
-  return c;
-
-  // XXX Fold lower to upper case for now
-  // if (c>='a'&&c<='z') c=c^0x20;
 }
 
 // Accumulated word (int type to allow use of unicode points)
@@ -743,7 +787,7 @@ int emit_accumulated_word(void)
 	screen_y++;
       }
       if (screen_y * 160 + screen_x * 2 < MAX_COLOURRAM_SIZE) {
-	screen_ram[screen_y * 160 + screen_x * 2 + 0] = ascii_to_screen_code(word[xx]);
+	screen_ram[screen_y * 160 + screen_x * 2 + 0] = word[xx];
 	colour_ram[screen_y * 160 + screen_x * 2 + 0] = 0;
 	colour_ram[screen_y * 160 + screen_x * 2 + 1] = text_colour + attributes;
       }
@@ -751,20 +795,25 @@ int emit_accumulated_word(void)
     }
   } else {
     // True-type font
+
+    // 1. Build render of word into a temporary screen/colour RAM buffer
+
+    // 2. Check if it is too wide for the current remaining line.
+    //    If so, start it on the next line. If it's still too long, we will just clip it.
+    //    If starting a new line, emit the accumulated line of text to start the new line.
+    emit_accumulated_line();
+
+    // 3. Copy it into the current accumulating line of text.
+    //    Update maximum above and below height of the line.
+    
   }
 
+  // Show the user the word we have emitted
   for(int i=0;i<word_len;i++) printf("%c",word[i]); printf(" "); fflush(stdout);
   
   word_len=0; word[0]=0;
 
   return 0;
-}
-
-void paragraph_font(void)
-{
-  text_colour = 14;
-  attributes = 0;
-  current_font = FONT_PARAGRAPH;
 }
 
 void emit_text(char *text)
@@ -786,8 +835,6 @@ void emit_text(char *text)
 
   int x1, y1;
   int len = strlen(text);
-
-  in_paragraph = 1;
 
   char alttext[2048] = "", imgname[2048] = "", theurl[2048] = "";
   
@@ -849,6 +896,8 @@ void emit_text(char *text)
 
       int url_id = register_url(theurl);
       register_box(url_id, x1, y1, screen_x, screen_y);
+
+      in_paragraph = 1;      
     }
     // ![alt-text](imagefile.png)
     // Currently we only support PNG images, and the alt text must
@@ -885,10 +934,12 @@ void emit_text(char *text)
         // Now advance our draw point to after the image
         screen_y += s->height;
       }
+
+      in_paragraph = 1;            
     } else {
       // Accumulate character into word, or terminate and emit word
       switch(text[i]) {
-      case ' ': case '\t':
+      case ' ': case '\t': case '\r': case '\n':
 	// End of word
 	emit_accumulated_word();
 	break;
@@ -901,6 +952,8 @@ void emit_text(char *text)
 	  fprintf(stderr,"ERROR: Markdown contains a word that is too long.\n");
 	  exit(-1);
 	}
+	if (!in_paragraph) printf("[Char '%c' started paragraph]\n",text[i]);
+	in_paragraph = 1;      
       }
       i++;
     }
@@ -975,7 +1028,9 @@ int do_pass(char **argv)
       
     } else if (!strncmp("# ",line,2)) {
       // Heading H1
+      printf("[in_para=%d]\n",in_paragraph);
       next_paragraph();
+      printf("[in_para=%d]\n",in_paragraph);
       current_font = FONT_H1;      
       text_colour = 1;   // white text for headings
       attributes = 0x80; // underline for headings
