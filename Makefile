@@ -279,10 +279,10 @@ $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -Iinclude/ -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/pulseoxy.prg:       $(TESTDIR)/pulseoxy.c $(CC65)
-	$(CL65) -O -o $*.prg --mapfile $*.map $< 
+	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
 $(TESTDIR)/qspitest.prg:       $(TESTDIR)/qspitest.c $(CC65)
-	$(CL65) -O -o $*.prg --mapfile $*.map $< 
+	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
 $(EXAMPLES)/unicorns.prg:       $(EXAMPLES)/unicorns.c $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $<
@@ -291,7 +291,7 @@ $(EXAMPLEDIR)/bmpview.prg:       $(EXAMPLEDIR)/bmpview.c $(CC65)
 	$(CL65)  -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
 $(TESTDIR)/eth_mdio.prg:       $(TESTDIR)/eth_mdio.c $(CC65)
-	$(CL65) -O -o $*.prg --mapfile $*.map $< 
+	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
 $(TESTDIR)/instructiontiming.prg:       $(TESTDIR)/instructiontiming.c $(TESTDIR)/instructiontiming_asm.s $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/instructiontiming_asm.s
@@ -447,7 +447,7 @@ $(BINDIR)/asciifont.bin:	$(BINDIR)/pngprepare $(ASSETS)/ascii00-ff.png
 
 $(TOOLDIR)/ascii_font.c:	$(BINDIR)/asciifont.bin
 	echo "unsigned char ascii_font[4097]={" > $(TOOLDIR)/ascii_font.c
-	hexdump -v -e '/1 "0x%02X, "' -e '8/1 """\n"' $(BINDIR)/asciifont.bin >> $(TOOLDIR)/ascii_font.c
+	hexdump -v -e '/1 "0x%02X, "' $(BINDIR)/asciifont.bin >> $(TOOLDIR)/ascii_font.c
 	echo "0};" >>$(TOOLDIR)/ascii_font.c
 
 $(BINDIR)/charrom.bin:	$(BINDIR)/pngprepare $(ASSETS)/8x8font.png
@@ -482,7 +482,7 @@ $(BINDIR)/md2h65:	$(TOOLDIR)/pngprepare/md2h65.c Makefile $(TOOLDIR)/ascii_font.
 $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
 	$(CC) $(COPT) -o $(BINDIR)/utilpacker $(TOOLDIR)/utilpacker/utilpacker.c
 
-/usr/bin/convert: 
+/usr/bin/convert:
 	echo "Could not find the program 'convert'. Try the following:"
 	echo "sudo apt-get install imagemagick"
 
@@ -587,15 +587,15 @@ $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) Makefile ncurses/lib/libncurses.a 
 	$(MAKE_VERSION)
 	$(CC) $(COPT) -Iinclude -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) Makefile 
+$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) Makefile
 	$(MAKE_VERSION)
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) Makefile 
+$(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) Makefile
 	$(MAKE_VERSION)
 	$(CC) $(COPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local//Cellar/libusb/1.0.18/include/libusb-1.0/ -o $(BINDIR)/mega65_ftp.osx $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 -lz -lpthread -lreadline -DINCLUDE_BIT2MCS
 
-$(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile 
+$(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
 
 
@@ -617,10 +617,10 @@ endef
 # - bin/bit2core.exe (for mingw)
 $(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c Makefile))
 
-$(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile 
+$(BINDIR)/bit2mcs:	$(TOOLDIR)/bit2mcs.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
 
-$(BINDIR)/bit2mcs.exe:	$(TOOLDIR)/bit2mcs.c Makefile 
+$(BINDIR)/bit2mcs.exe:	$(TOOLDIR)/bit2mcs.c Makefile
 	$(WINCC) $(WINCOPT) -g -Wall -o $(BINDIR)/bit2mcs $(TOOLDIR)/bit2mcs.c
 
 $(BINDIR)/monitor_save:	$(TOOLDIR)/monitor_save.c Makefile
