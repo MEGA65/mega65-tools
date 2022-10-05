@@ -802,7 +802,46 @@ int emit_accumulated_word(void)
     // True-type font
 
     // 1. Build render of word into a temporary screen/colour RAM buffer
+    for(int i=0;i<word_len;) {
+      // XXX - UTF-8 decode
+      int extra_bytes=0;
+      int code_point=0;
+      if (word[i]<0x80) {
+	// Single-byte ASCII range
+	code_point = word[i]&0x7f;
+      } else if ((word[i]&0xe0)==0xc0) {
+	// 2 byte unicode
+	extra_bytes=1;
+	code_point=word[i]&0x1f;
+      } else if ((word[i]&0xf0)==0xe0) {
+	// 3 byte unicode
+	extra_bytes=2;
+	code_point=word[i]&0x0f;
+      } else if ((word[i]&0xf8)==0xf0) {
+	// 4 byte unicode
+	extra_bytes=3;
+	code_point=word[i]&0x07;
+      } else {
+	fprintf(stderr,"Illegal character 0x%02x in UTF-8 text stream.\n",word[i]);
+	exit(-1);
+      }
+      i++;
+      while(extra_bytes) {
+	if ((word[i]&0xc0)!=0x80) {
+	  fprintf(stderr,"Illegal extension byte 0x%02x in UTF-8 text stream.\n",word[i]);
+	  exit(-1);
+	}
+	// Add the 6 new bits to the code point
+	code_point=code_point<<6;
+	code_point+=word[i]&0x3f;
+	extra_bytes--;
+	i++;
+      }
 
+      printf("[CP=$%x]\n",code_point);
+    }
+
+    
     // 2. Check if it is too wide for the current remaining line.
     //    If so, start it on the next line. If it's still too long, we will just clip it.
     //    If starting a new line, emit the accumulated line of text to start the new line.
