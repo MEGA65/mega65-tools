@@ -829,15 +829,15 @@ int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set
     for(y=0;y<8;y++) {
       for(x=0;x<8;x++)
         {
-          if (t.bytes[x][y]<0x10) 
-            printf(".");
-          else if ((t.bytes[x][y]&0xf0)<128) 
-            printf("+");
-          else
-            printf("*");
           if ((t.bytes[x][y]&0xf)==0) 
             printf(".");
           else if ((t.bytes[x][y]&0xf)<8) 
+            printf("+");
+          else
+            printf("*");
+          if (t.bytes[x][y]<0x10) 
+            printf(".");
+          else if ((t.bytes[x][y]&0xf0)<128) 
             printf("+");
           else
             printf("*");
@@ -846,7 +846,9 @@ int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set
     }
   }
   
-  return tile_lookup(ts,&t);
+  return tile_lookup(ts,&t)
+    // Adjust tile number in screen data for address of tile in RAM
+    + (0x40000 / 0x40);
 }
 
 int emit_word_gap(void)
@@ -1000,18 +1002,13 @@ int emit_accumulated_word(void)
 	for(y=char_rows-1;y>=-under_rows;y--)
 	  {
 	    int card_number=encode_glyph_card(glyph_slot,x,y,ts);
-	    if (card_number<0||card_number>4095) {
-	      fprintf(stderr,"ERROR: Ran out of tiles while rendering text. Use fewer or smaller sized fonts, or split page.\n");
-	      exit(-1);
-	    } else {
-	      printf("  encoding tile (%d,%d) using card #%d\n",x,y,card_number);   
-	      // XXX - Write tile details into accline_screen_ram and accline_colour_ram
-	      accline_screen_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+0]=card_number>>0;
-	      accline_screen_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+1]=card_number>>8;
-	      accline_colour_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+0]=0;
-	      accline_colour_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+1]=text_colour + attributes;
+	    printf("  encoding tile (%d,%d) using card $%04x\n",x,y,card_number);   
+	    // Write tile details into accline_screen_ram and accline_colour_ram
+	    accline_screen_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+0]=card_number>>0;
+	    accline_screen_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+1]=card_number>>8;
+	    accline_colour_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+	    accline_colour_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+1]=text_colour + attributes;
           }
-	}
 	accline_len++;
       }
     }
@@ -1315,8 +1312,8 @@ int do_pass(char **argv, struct tile_set *ts)
   header[5] = 0x00;
   // Screen line width
   header[6] = 80;
-  // $D054 value: Enable FCM for chars >$fF
-  header[7] = 0x05;
+  // $D054 value: Enable FCM for chars >$fF, enable alpha compositor
+  header[7] = 0x85;
   // Number of chars per line to display
   header[8] = 80;
   // V400/H640 flags
