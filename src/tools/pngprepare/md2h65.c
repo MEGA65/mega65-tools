@@ -1105,9 +1105,9 @@ void emit_text(char *text)
 
     // Emit word if we have just cancelled a fancy font face
     if ((!before)&&queued_word_gap) emit_word_gap();
-    
+
     // Check for [text](url) -- A link
-    if (sscanf(&text[i], "[%[^]]](%[^)])%n", alttext, theurl,&n) == 3) {
+    if (sscanf(&text[i], "[%[^]]](%[^)])%n", alttext, theurl,&n) == 2) {
       i+=n;
       // Emit word and get the dimensions for it
       attributes_saved = attributes;
@@ -1134,7 +1134,7 @@ void emit_text(char *text)
     }
     // ![alt-text](imagefile.png)
     // Currently we only support PNG images, and the alt text must
-    else if (sscanf(text, "![%[^]]](%[^)])%n", alttext, imgname, &n) == 3) {
+    else if (sscanf(&text[i], "![%[^]]](%[^)])%n", alttext, imgname, &n) == 2) {
       i+=n;
       
       read_png_file(imgname);
