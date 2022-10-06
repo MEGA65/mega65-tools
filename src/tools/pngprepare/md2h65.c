@@ -999,15 +999,16 @@ int emit_accumulated_word(void)
 	  fprintf(stderr,"ERROR: Word is too long.\n");
 	  exit(-1);
 	}
+	if (char_rows > accline_height) accline_height = char_rows;
 	for(y=char_rows-1;y>=-under_rows;y--)
 	  {
 	    int card_number=encode_glyph_card(glyph_slot,x,y,ts);
 	    printf("  encoding tile (%d,%d) using card $%04x\n",x,y,card_number);   
 	    // Write tile details into accline_screen_ram and accline_colour_ram
-	    accline_screen_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+0]=card_number>>0;
-	    accline_screen_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+1]=card_number>>8;
-	    accline_colour_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
-	    accline_colour_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+1]=text_colour + attributes;
+	    accline_screen_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+0]=card_number>>0;
+	    accline_screen_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+1]=card_number>>8;
+	    accline_colour_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+	    accline_colour_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+1]=text_colour + attributes;
           }
 	accline_len++;
       }
@@ -1321,7 +1322,7 @@ int do_pass(char **argv, struct tile_set *ts)
   // Number of screen lines
   header[10] = screen_y & 0xff;
   header[11] = screen_y >> 8;
-
+  
   // Screen colours
   header[12] = 0x06;
   header[13] = 0x06;
