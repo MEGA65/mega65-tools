@@ -557,6 +557,7 @@ unsigned char colour_ram[MAX_COLOURRAM_SIZE];
 const int max_lines = (MAX_COLOURRAM_SIZE / (MAX_LINE_LENGTH * 2));
 unsigned int screen_ram_used = 0;
 unsigned int in_paragraph = 0;
+unsigned int queued_word_gap = 0;
 
 // Buffer for partially accumulated lines of text
 #define MAX_LINE_HEIGHT 64
@@ -752,6 +753,8 @@ void next_paragraph(void)
     indent = 0;
   }
 
+  queued_word_gap=0;
+
   // Reset to paragraph font after
   paragraph_font();
 }
@@ -779,7 +782,7 @@ void next_paragraph_no_gap(void)
 int word[1024];
 int word_len=0;
 
-int encode_card(FT_GlyphSlot  slot,int card_x, int card_y)
+int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set *ts)
 {
   int min_x=slot->bitmap_left;
   if (min_x<0) min_x=0;
@@ -788,42 +791,53 @@ int encode_card(FT_GlyphSlot  slot,int card_x, int card_y)
   int max_y=slot->bitmap_top-1;
   int min_y=slot->bitmap_top-1-slot->bitmap.rows;
 
-  int base_x=card_x*8;
+  int base_x=card_x*16;
   int base_y=card_y*8;
 
   if (0) printf("x=%d..%d, y=%d..%d, base=(%d,%d)\n",
                 min_x,max_x,min_y,max_y,base_x,base_y);
-  
-  unsigned char card[64];
+
+  struct tile t;
 
   int x,y;
   for(y=0;y<8;y++) {
       for(x=0;x<8;x++)
         {
-          int x_pos=x+base_x-min_x;
+          int x_pos=x*2+base_x-min_x;
           int y_pos=slot->bitmap_top-((7-y)+base_y);
           //      printf("pixel (%d,%d) will be in bitmap (%d,%d)\n",
           //             x,y,x_pos,y_pos);
           if ((x_pos>=0&&x_pos<slot->bitmap.width)
               &&(y_pos>=0&&y_pos<slot->bitmap.rows)) {
             // Pixel is in bitmap
-            card[y*8+x]=slot->bitmap.buffer[x_pos+
-                                            y_pos*slot->bitmap.width];
+	    int low=slot->bitmap.buffer[x_pos+0+
+					y_pos*slot->bitmap.width];
+	    int hi=slot->bitmap.buffer[x_pos+1+
+					y_pos*slot->bitmap.width];
+	    low=(low>>4)&0xf;
+	    hi=hi&0xf0;
+            t.bytes[x][y]=hi+low;
           } else {
             // Pixel is not in bitmap, so blank pixel
-            card[y*8+x]=0x00;
+            t.bytes[x][y]=0x00;
           }
         }
   }
   
-  if (0) {
+  if (1) {
     printf("card (%d,%d) is:\n",card_x,card_y);
     for(y=0;y<8;y++) {
       for(x=0;x<8;x++)
         {
-          if (card[x+y*8]==0) 
+          if (t.bytes[x][y]<0x10) 
             printf(".");
-          else if (card[x+y*8]<128) 
+          else if ((t.bytes[x][y]&0xf0)<128) 
+            printf("+");
+          else
+            printf("*");
+          if ((t.bytes[x][y]&0xf)==0) 
+            printf(".");
+          else if ((t.bytes[x][y]&0xf)<8) 
             printf("+");
           else
             printf("*");
@@ -832,39 +846,44 @@ int encode_card(FT_GlyphSlot  slot,int card_x, int card_y)
     }
   }
   
-  // Now compare card with all previous ones
-  int c;
-  for(c=0;c<card_count;c++)
-    {
-      if (!bcmp(card,cards[c],64)) {
-        // printf("Re-using card #%d\n",c);
-        reuses++;
-        card_reused[c]++;
-        return c;
-      }
-    }
-  
-  // Store card if necessary
-  if (card_count>=MAX_CARDS) return -1;
-  //  printf("Creating card #%d\n",card_count);
-  card_reused[card_count]=0;
-  bcopy(card,cards[card_count++],64);
-  return card_count-1;
+  return tile_lookup(ts,&t);
 }
 
-
+int emit_word_gap(void)
+{
+  if (!type_faces[current_font]) {
+    // C64 ASCII Font
+    printf(" ");
+    // Draw single char high C64 ASCII font space following the previous word
+    accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=0x20;
+    accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+1]=0;
+    accline_colour_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=0;
+    accline_colour_ram[MAX_LINE_HEIGHT-1][accline_len*2+1]=text_colour + attributes;
+    accline_len++;
+  } else {
+    printf("!!!SPACE!!!");
+  }
+  queued_word_gap=0;
+  return 0;
+}
 
 int emit_accumulated_word(void)
 {
+  if (!word_len) return;
   
   if (!type_faces[current_font]) {
     int len = word_len;
-    if ((MAX_LINE_LENGTH - accline_len) < len) {
-      emit_accumulated_line();
-    }
+    // Is there room for the word and a space (or just the word, if there is nothing on the line so far)
+    if ( (accline_len && (MAX_LINE_LENGTH - accline_len) < (1+len))
+	 || ((!accline_len) && (MAX_LINE_LENGTH - accline_len) < len) )
+      {
+	queued_word_gap=0;
+	emit_accumulated_line();
+      }
     // Draw single char high C64 ASCII font text directly
     for (int xx = 0; xx < len; xx++) {
       if (accline_len >= MAX_LINE_LENGTH) {
+	queued_word_gap=0;
 	emit_accumulated_line();
       }
       accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=word[xx];
@@ -973,18 +992,28 @@ int emit_accumulated_word(void)
       
       // Now build the glyph map
       
-      for(y=char_rows-1;y>=-under_rows;y--)
-	for(x=0;x<char_columns;x++)
+      for(x=0;x<char_columns;x++) {
+	if (accline_len>=MAX_LINE_LENGTH) {
+	  fprintf(stderr,"ERROR: Word is too long.\n");
+	  exit(-1);
+	}
+	for(y=char_rows-1;y>=-under_rows;y--)
 	  {
-	    int card_number=encode_card(glyph_slot,x,y);
+	    int card_number=encode_glyph_card(glyph_slot,x,y,ts);
 	    if (card_number<0||card_number>4095) {
 	      fprintf(stderr,"ERROR: Ran out of tiles while rendering text. Use fewer or smaller sized fonts, or split page.\n");
 	      exit(-1);
 	    } else {
 	      printf("  encoding tile (%d,%d) using card #%d\n",x,y,card_number);   
 	      // XXX - Write tile details into accline_screen_ram and accline_colour_ram
+	      accline_screen_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+0]=card_number>>0;
+	      accline_screen_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+1]=card_number>>8;
+	      accline_colour_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+0]=0;
+	      accline_colour_ram[MAX_LINE_HEIGHT-char_rows+y][accline_len*2+1]=text_colour + attributes;
           }
 	}
+	accline_len++;
+      }
     }
     
     // 2. Check if it is too wide for the current remaining line.
@@ -998,10 +1027,12 @@ int emit_accumulated_word(void)
   }
 
   // Show the user the word we have emitted
-  for(int i=0;i<word_len;i++) { printf("%c",word[i]); } printf(" "); fflush(stdout);
+  printf("<"); for(int i=0;i<word_len;i++) { printf("%c",word[i]); } printf(">"); fflush(stdout);
   
   word_len=0; word[0]=0;
 
+  
+  
   return 0;
 }
 
@@ -1034,6 +1065,16 @@ void emit_text(char *text)
     while ((i<len)&&text[i]=='*') {
       stars++; i++;
     }
+
+    int before=1;
+    
+    // Emit accumulated word before setting fancy font face
+    if (current_font == FONT_PARAGRAPH) before=1;
+    
+    if (before&&queued_word_gap) emit_word_gap();
+    
+    if (stars&&word_len) emit_accumulated_word();
+    
     switch(stars) {
     case 0: break;
     case 1: // Toggle italic
@@ -1060,7 +1101,10 @@ void emit_text(char *text)
       fprintf(stderr,"       Offending text is: %s\n",text);
       exit(-1);
     }
-    if (stars) emit_accumulated_word();
+    if (stars) printf("{%d stars, wl=%d}",stars,word_len);
+
+    // Emit word if we have just cancelled a fancy font face
+    if ((!before)&&queued_word_gap) emit_word_gap();
     
     // Check for [text](url) -- A link
     if (sscanf(&text[i], "[%[^]]](%[^)])%n", alttext, theurl,&n) == 3) {
@@ -1125,12 +1169,14 @@ void emit_text(char *text)
       }
 
       in_paragraph = 1;            
-    } else {
+    } else if (!stars) {
       // Accumulate character into word, or terminate and emit word
       switch(text[i]) {
       case ' ': case '\t': case '\r': case '\n':
 	// End of word
 	emit_accumulated_word();
+	in_paragraph=1;
+	queued_word_gap=1;
 	break;
       default:
 	// Part of a word
@@ -1153,7 +1199,7 @@ void emit_text(char *text)
 
 }
 
-int do_pass(char **argv)
+int do_pass(char **argv, struct tile_set *ts)
 {
   unsigned char block_header[8];
 
@@ -1487,12 +1533,12 @@ int main(int argc, char **argv)
   ts = new_tileset(128 * 1024 / 64);
   palette_c64_init(ts);
 
-  do_pass(argv);
+  do_pass(argv,ts);
   pass_num = 2;
   if (second_pass_required) {
     fprintf(stderr, "Quantising colours for 2nd pass.\n");
     quantise_colours(ts);
     fprintf(stderr, "Running 2nd pass.\n");
-    do_pass(argv);
+    do_pass(argv,ts);
   }
 }
