@@ -5,7 +5,6 @@
 	;; until implemented. Won't be hard to implement.
 	
 basic_header
-	;; Auto-detect C64/C65 mode and either way jump into the assembly
 	!byte 0x10,0x08,<2021,>2021,0x9e
 	!pet "2061"
 	!byte 0x00,0x00,0x00
@@ -132,8 +131,13 @@ irq_handler
 	jmp $ea81
 
 filename:
+	;; AMIGA-BALL for testing
+	!byte $41,$4d,$49,$47,$41,$2d,$42,$41
+	!byte $4c,$4c,$a0,$a0,$a0,$a0,$a0,$a0
+
+filename_foo:
 	;; GYRRUS for testing
-	!byte $47,$59,$52,$52,$55,$53,$a0,$a0
+	!byte $47,$59,$52,$52,$55,$53,$a0,$a0 
 	!byte $a0,$a0,$a0,$a0,$a0,$a0,$a0,$a0
 
 	
@@ -215,6 +219,23 @@ fl_not_on_track_0:
 	lda #$10
 	sta $d081
 	rts
+
+fl_select_side0:	
+	lda #$00
+	sta $d086 		; requested side
+	;; Sides are inverted on the 1581
+	lda #$68
+	sta $d080 		; physical side selected of mechanical drive
+	rts
+
+fl_select_side1:	
+	lda #$01
+	sta $d086 		; requested side
+	;; Sides are inverted on the 1581
+	lda #$60
+	sta $d080 		; physical side selected of mechanical drive
+	rts
+	
 	
 fl_new_request:
 	;; Acknowledge fastload request
@@ -229,13 +250,14 @@ fl_new_request:
 	sta $d084
 	lda #(3/2)+1
 	sta $d085
-	lda #$00
-	sta $d086 		; side
+	jsr fl_select_side0
+
 	;; Request read
 	jsr fl_read_sector
 	rts
 	
 fl_directory_scan:
+	
 	;; Check if our filename we want is in this sector
 	jsr fl_copy_sector_to_buffer
 
@@ -264,6 +286,7 @@ fl_buffaddr:
 	cpy #$10
 	bne fl_check_loop_inner
 	;; Filename matches
+
 	txa
 	sec
 	sbc #$12
@@ -382,13 +405,28 @@ fl_on_correct_track:
 
 	
 fl_logical_to_physical_sector:
+
+	;; Display track and sector asked for
+	lda fl_file_next_track
+	ldx #0
+	jsr $bdcd
+	lda #$2d
+	jsr $ffd2
+	lda fl_file_next_sector
+	ldx #0
+	jsr $bdcd
+	lda #$0d
+	jsr $ffd2
+foop:
+	inc $d020
+	jmp foop
+	
 	;; Convert 1581 sector numbers to physical ones on the disk.
 	;; Track = Track - 1
 	;; Sector = 1 + (Sector/2)
 	;; Side = 0
 	;; If sector > 10, then sector=sector-10, side=1
-	lda #$00 		; side 0
-	sta $d086
+	jsr fl_select_side0
 	lda fl_file_next_track
 	dec
 	sta $d084
@@ -398,26 +436,15 @@ fl_logical_to_physical_sector:
 	cmp #10
 	bcs fl_on_second_side
 	sta $d085
-	jmp fl_set_fdc_head
+	rts
 	
 fl_on_second_side:
 	sec
 	sbc #10
 	sta $d085
-	lda #1
-	sta $d086
-
-	;; FALL THROUGH
-fl_set_fdc_head:
-	;; Select correct side of real disk drive
-	lda $d086
-	asl
-	asl
-	asl
-	and #$08
-	ora #$60
-	sta $d080
+	jsr fl_select_side1
 	rts
+	
 	
 fl_read_file_block:
 	;; We have a sector from the floppy drive.
@@ -553,6 +580,17 @@ fl_copy_sector_to_buffer:
 	sta $d701
 	lda #<fl_sector_read_dmalist
 	sta $d705
+
+	;; XXX Dump sector to screen for debug
+	ldx #0
+zzoo:	lda fastload_sector_buffer,x
+	sta $0500,x
+	lda fastload_sector_buffer+$100,x
+	sta $0600,x
+	inx
+	bne zzoo
+	
+	
 	rts
 
 fl_sector_read_dmalist:
