@@ -224,19 +224,19 @@ fl_not_on_track_0:
 	sta $d081
 	rts
 
-fl_select_side0:	
-	lda #$00
-	sta $d086 		; requested side
-	;; Sides are inverted on the 1581
-	lda #$68
-	sta $d080 		; physical side selected of mechanical drive
-	rts
-
 fl_select_side1:	
 	lda #$01
 	sta $d086 		; requested side
 	;; Sides are inverted on the 1581
 	lda #$60
+	sta $d080 		; physical side selected of mechanical drive
+	rts
+
+fl_select_side0:	
+	lda #$00
+	sta $d086 		; requested side
+	;; Sides are inverted on the 1581
+	lda #$68
 	sta $d080 		; physical side selected of mechanical drive
 	rts
 	
