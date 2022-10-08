@@ -488,7 +488,7 @@ fl_logical_to_physical_sector:
 	lda fl_file_next_sector
 	lsr
 	inc
-	cmp #10
+	cmp #11
 	bcs fl_on_second_side
 	sta $d085
 	rts
