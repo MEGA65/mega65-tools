@@ -725,7 +725,6 @@ void emit_accumulated_line(void)
     
     // Set next draw position to start of the next line
     screen_x = 0;
-    screen_y += accline_height + accline_depth;
   }
     
   // Reset accumulated line
@@ -909,8 +908,8 @@ int render_codepoint(int code_point)
   // Now build the glyph map
   
   for(x=0;x<char_columns;x++) {
-    if (accline_len>=MAX_LINE_LENGTH) {
-      fprintf(stderr,"ERROR: Word is too long.\n");
+    if (accword_len>=MAX_LINE_LENGTH) {
+      fprintf(stderr,"ERROR: Word is too long: '%s'\n",word);
       exit(-1);
     }
     if (char_rows > accword_height) accword_height = char_rows;
