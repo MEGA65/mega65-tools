@@ -2019,6 +2019,9 @@ int get_system_bitstream_version(void)
     case 33:
       strcpy(system_hardware_model_name, "MEGAPHONE R1 PROTOTYPE");
       break;
+    case 34:
+      strcpy(system_hardware_model_name, "MEGAPHONE R4 PROTOTYPE");
+      break;
     case 64:
       strcpy(system_hardware_model_name, "NEXYS 4 PSRAM");
       break;
