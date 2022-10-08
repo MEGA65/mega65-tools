@@ -558,18 +558,18 @@ unsigned int queued_word_gap = 0;
 // Buffer for partially accumulated lines of text
 #define MAX_LINE_HEIGHT 64
 #define MAX_LINE_DEPTH 64
-unsigned char accline_screen_ram[MAX_LINE_LENGTH * 2][MAX_LINE_HEIGHT + MAX_LINE_DEPTH];
-unsigned char accline_colour_ram[MAX_LINE_LENGTH * 2][MAX_LINE_DEPTH + MAX_LINE_DEPTH];
-int accline_len = 0;
-int accline_height = 1;
-int accline_depth = 0;
+unsigned char accline_screen_ram[MAX_LINE_HEIGHT+MAX_LINE_DEPTH][MAX_LINE_LENGTH*2];
+unsigned char accline_colour_ram[MAX_LINE_DEPTH+MAX_LINE_DEPTH][MAX_LINE_LENGTH*2];
+int accline_len=0;
+int accline_height=1;
+int accline_depth=0;
 
 // And the same for the current word being rendered
-unsigned char accword_screen_ram[MAX_LINE_LENGTH * 2][MAX_LINE_HEIGHT];
-unsigned char accword_colour_ram[MAX_LINE_LENGTH * 2][MAX_LINE_DEPTH];
-int accword_len = 0;
-int accword_height = 1;
-int accword_depth = 0;
+unsigned char accword_screen_ram[MAX_LINE_HEIGHT+MAX_LINE_DEPTH][MAX_LINE_LENGTH*2];
+unsigned char accword_colour_ram[MAX_LINE_HEIGHT+MAX_LINE_DEPTH][MAX_LINE_LENGTH*2];
+int accword_len=0;
+int accword_height=1;
+int accword_depth=0;
 
 #define MAX_URLS 255
 #define MAX_URL_LEN 255
@@ -699,14 +699,15 @@ void emit_accumulated_line(void)
   if (accline_len) {
     // XXX - Emit accumulated line by copying the rows of screen and colour RAM into place.
     int first_row = MAX_LINE_HEIGHT - accline_height;
-    int last_row = MAX_LINE_HEIGHT - 1 + accline_depth;
-    printf("[Line = +%d,-%d, first=%d, last=%d, accline_len=%d]\n", accline_height, accline_depth, first_row, last_row,
-        accline_len);
-    for (int row = first_row; row <= last_row; row++) {
-
-      if (screen_y * (MAX_LINE_LENGTH * 2) >= MAX_COLOURRAM_SIZE) {
-        fprintf(stderr, "ERROR: Page too long. Split into separate files, or use smaller fonts.\n");
-        exit(-1);
+    int last_row = MAX_LINE_HEIGHT -1 + accline_depth;
+    printf("[Line = +%d,-%d, first=%d, last=%d, accline_len=%d]\n",
+	   accline_height,accline_depth, first_row, last_row, accline_len);
+    for(int row = first_row; row <= last_row; row++) {
+      printf("DEBUG: Emitting row %d into y=%d\n",row,screen_y);
+      
+      if (screen_y * (MAX_LINE_LENGTH*2) >= MAX_COLOURRAM_SIZE) {
+	fprintf(stderr,"ERROR: Page too long. Split into separate files, or use smaller fonts.\n");
+	exit(-1);
       }
 
       memcpy(&screen_ram[screen_y * (MAX_LINE_LENGTH * 2)], accline_screen_ram[row], accline_len * 2);
@@ -940,22 +941,23 @@ int render_codepoint(int code_point)
     blank_card += (0x40000 / 0x40);
     
     printf("DEBUG: blank_card=$%04x\n",blank_card);
-    for(y=0;y<MAX_LINE_LENGTH;y++) {
-	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=blank_card>>0;
-	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(blank_card>>8)+(trim_pixels<<5);
-	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+    for(y=0;y<MAX_LINE_HEIGHT+MAX_LINE_DEPTH;y++) {
+	accword_screen_ram[y][accword_len*2+0]=blank_card>>0;
+	accword_screen_ram[y][accword_len*2+1]=(blank_card>>8)+(trim_pixels<<5);
+	accword_colour_ram[y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
 	if (y==(MAX_LINE_HEIGHT-1)) {
-	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
+	  accword_colour_ram[y][accword_len*2+1]=text_colour + attributes;
 	} else {
 	  // Do not apply underline to other than the base row
 	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
 	}
-	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
+	if (trim_pixels&8) accword_colour_ram[y][accword_len*2+0]|=0x04; // Trim 8 more pixels
     }
     for(y=char_rows-1;y>=-under_rows;y--)
       {
 	int card_number=encode_glyph_card(glyph_slot,x,y,ts);
-	printf("  encoding tile (%d,%d) using card $%04x\n",x,y,card_number);   
+	printf("  encoding tile (%d,%d) using card $%04x in row store y=%d\n",
+	       x,y,card_number,MAX_LINE_HEIGHT-1-y);   
 	// Write tile details into accline_screen_ram and accline_colour_ram
 	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=card_number>>0;
 	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(trim_pixels<<5);
@@ -1003,24 +1005,28 @@ int emit_rendered_word(void)
     printf("WARNING: Line too long, truncating.\n");
     accword_len=MAX_LINE_LENGTH-accline_len;
   }
-  for (int i = 0; i < accword_len * 2; i++) {
-    for (int j = 0; j < MAX_LINE_HEIGHT; j++) {
-      accline_screen_ram[j][accline_len * 2 + i] = accword_screen_ram[j][i];
-      accline_colour_ram[j][accline_len * 2 + i] = accword_colour_ram[j][i];
+  for(int j=0;j<MAX_LINE_HEIGHT+MAX_LINE_DEPTH;j++) {
+    int show=0;
+    for(int i=0;i<accword_len*2;i++) {
+      accline_screen_ram[j][accline_len*2+i]=accword_screen_ram[j][i];
+      accline_colour_ram[j][accline_len*2+i]=accword_colour_ram[j][i];
     }
   }
   accline_len+=accword_len;
-  printf("DEBUG: Appended %d columns to accline. accline_len=%d\n",accword_len,accline_len);
+  printf("DEBUG: Appended %d columns to accline. accline_len=%d, accword_h=%d,_d=%d\n",
+	 accword_len,accline_len,
+	 accword_height,accword_depth);
   if (accword_height>accline_height) accline_height=accword_height;
   if (accword_depth>accline_depth) accline_depth=accword_depth;
 
-  accword_height = 1;
-  accword_depth = 0;
-  accword_len = 0;
-  for (int j = 0; j < MAX_LINE_HEIGHT; j++) {
-    bzero(accword_screen_ram[j], MAX_LINE_LENGTH * 2);
-    bzero(accword_colour_ram[j], MAX_LINE_LENGTH * 2);
+  accword_height=1;
+  accword_depth=0;
+  accword_len=0;
+  for(int j=0;j<MAX_LINE_HEIGHT+MAX_LINE_DEPTH;j++) {
+    bzero(accword_screen_ram[j],MAX_LINE_LENGTH*2);
+    bzero(accword_colour_ram[j],MAX_LINE_LENGTH*2);
   }
+
 }
 
 int emit_word_gap(void)
