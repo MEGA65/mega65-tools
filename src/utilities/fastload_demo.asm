@@ -89,7 +89,6 @@ endofname:
 	;; (largely seeking to track 0)
 wait_for_fastload:	
 	lda fastload_request
-	sta $0420
 	bne wait_for_fastload
 	
 	;; Request fastload job
@@ -102,13 +101,12 @@ wait_for_fastload:
 	;; state of the loading.
 waiting
 	lda fastload_request
-	sta $0420
 	bmi error
 	bne waiting
 	beq done
 	
 error
-	inc $042f
+	inc $d020
 	jmp error
 
 done:
@@ -116,10 +114,27 @@ done:
 	lda #0
 	sta $7ff
 	sta $800
+
+	;; Restore IRQ and return to basic
+	sei
+	lda #$31
+	sta $0314
+	lda #$ea
+	sta $0315
+	;; Disable raster IRQ
+	lda #$00
+	sta $d01a
+	;; Re-enable CIA interrupt
+	lda #$81
+	sta $dc0d
+	cli
+
+	;; Revert to 1MHz
+	lda #64
+	sta 0
 	
-	inc $d020
-	inc $0400
-	jmp done
+	rts
+	
 	
 irq_handler
 	;; Here is our nice minimalistic IRQ handler that calls the fastload IRQ
@@ -382,21 +397,17 @@ fl_reading_sector:
 	;; and if not, select/step as required
 
 	lda fl_current_track
-	sta $0418
 	lda $d084
-	sta $0419
 	cmp fl_current_track
 	beq fl_on_correct_track
 	bcc fl_step_in
 fl_step_out:
-	inc $0410
 	;; We need to step first
 	lda #$18
 	sta $d081
 	inc fl_current_track
 	rts
 fl_step_in:
-	inc $0411
 	;; We need to step first
 	lda #$10
 	sta $d081
@@ -404,7 +415,6 @@ fl_step_in:
 	rts
 	
 fl_on_correct_track:
-	inc $044f
 	lda #$40
 	sta $d081
 
@@ -413,28 +423,6 @@ fl_on_correct_track:
 	lda fastload_request_stashed
 	sta fastload_request
 
-	lda #$52
-	jsr $ffd2
-	sei
-	lda #0
-	ldx $d084
-	jsr $bdcd
-	lda #$2c
-	jsr $ffd2
-	sei
-	lda #0
-	ldx $d085
-	jsr $bdcd
-	lda #$2c
-	jsr $ffd2
-	sei
-	lda #0
-	ldx $d086
-	jsr $bdcd
-	lda #$0d
-	jsr $ffd2
-	sei
-	
 	rts
 
 fl_step_track:
@@ -455,25 +443,6 @@ fl_not_end_of_file:
 
 	
 fl_logical_to_physical_sector:
-
-	lda #$4c
-	jsr $ffd2
-	sei
-	;; Display track and sector asked for
-	ldx fl_file_next_track
-	lda #0
-	jsr $bdcd
-	;; XXX - $FFD2 does CLI somewhere
-	lda #$2c
-	jsr $ffd2
-	sei
-	ldx fl_file_next_sector
-	lda #0
-	jsr $bdcd
-	;; XXX - $FFD2 does CLI somewhere
-	lda #$20
-	jsr $ffd2
-	sei
 
 	;; Convert 1581 sector numbers to physical ones on the disk.
 	;; Track = Track - 1
