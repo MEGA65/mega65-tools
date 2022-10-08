@@ -561,6 +561,7 @@ unsigned int queued_word_gap = 0;
 unsigned char accline_screen_ram[MAX_LINE_HEIGHT+MAX_LINE_DEPTH][MAX_LINE_LENGTH*2];
 unsigned char accline_colour_ram[MAX_LINE_DEPTH+MAX_LINE_DEPTH][MAX_LINE_LENGTH*2];
 int accline_len=0;
+int accline_display_len=0;
 int accline_height=1;
 int accline_depth=0;
 
@@ -568,6 +569,7 @@ int accline_depth=0;
 unsigned char accword_screen_ram[MAX_LINE_HEIGHT+MAX_LINE_DEPTH][MAX_LINE_LENGTH*2];
 unsigned char accword_colour_ram[MAX_LINE_HEIGHT+MAX_LINE_DEPTH][MAX_LINE_LENGTH*2];
 int accword_len=0;
+int accword_display_len=0;
 int accword_height=1;
 int accword_depth=0;
 
@@ -722,9 +724,10 @@ void emit_accumulated_line(void)
   }
 
   // Reset accumulated line
-  accline_len = 0;
-  accline_height = 1;
-  accline_depth = 0;
+  accline_len=0;
+  accline_display_len=0;
+  accline_height=1;
+  accline_depth=0;
 }
 
 void paragraph_font(void)
@@ -858,7 +861,7 @@ int render_codepoints(int *code_points,int num)
   
   // Try to make sure that we can use the full width, by combining glyphs until we have at least 8 in every
   // char block
-  while((total_width<=8)&&count<num) {
+  while((total_width<=11)&&count<num) {
     int code_point=code_points[count++];
 
     int glyph_index = FT_Get_Char_Index( type_faces[current_font], code_point );
@@ -924,16 +927,23 @@ int render_codepoints(int *code_points,int num)
       fprintf(stderr,"ERROR: Word is too long:\n");
       exit(-1);
     }
+    if (accword_display_len>640) {
+      fprintf(stderr,"ERROR: Rendered word is too long:\n");
+      exit(-1);
+    }
     if (char_rows > accword_height) accword_height = char_rows;
     if (under_rows > accword_depth) accword_depth = under_rows;
     
     // Blank out entire column, so that we avoid alignment issues with variable character heights
     int blank_card = tile_lookup(ts, &blank_tile);
     blank_card += (0x40000 / 0x40);
+
+    int this_trim=0;
+    if (x==(char_columns-1)) this_trim=trim_pixels;
     
     for(y=0;y<MAX_LINE_HEIGHT+MAX_LINE_DEPTH;y++) {
       accword_screen_ram[y][accword_len*2+0]=blank_card>>0;
-      accword_screen_ram[y][accword_len*2+1]=(blank_card>>8)+(trim_pixels<<5);
+      accword_screen_ram[y][accword_len*2+1]=(blank_card>>8)+(this_trim<<5);
       accword_colour_ram[y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
       if (y==(MAX_LINE_HEIGHT-1)) {
 	accword_colour_ram[y][accword_len*2+1]=text_colour + attributes;
@@ -941,7 +951,7 @@ int render_codepoints(int *code_points,int num)
 	// Do not apply underline to other than the base row
 	accword_colour_ram[y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
       }
-      if (trim_pixels&8) accword_colour_ram[y][accword_len*2+0]|=0x04; // Trim 8 more pixels
+      if (this_trim&8) accword_colour_ram[y][accword_len*2+0]|=0x04; // Trim 8 more pixels
     }
 
     for(y=char_rows-1;y>=-under_rows;y--)
@@ -951,7 +961,7 @@ int render_codepoints(int *code_points,int num)
 	       x,y,card_number,MAX_LINE_HEIGHT-1-y);   
 	// Write tile details into accline_screen_ram and accline_colour_ram
 	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=card_number>>0;
-	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(trim_pixels<<5);
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(this_trim<<5);
 	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
 	if (!y) {
 	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
@@ -959,7 +969,7 @@ int render_codepoints(int *code_points,int num)
 	  // Do not apply underline to other than the base row
 	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
 	}
-	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
+	if (this_trim&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
       }
       else {
         // Do not apply underline to other than the base row
@@ -987,6 +997,7 @@ int render_codepoints(int *code_points,int num)
     }
     accword_len++;
   }
+  accword_display_len+=total_width;
   return count;
 }
 
@@ -995,6 +1006,9 @@ int emit_rendered_word(void)
   if ((accline_len+accword_len)>MAX_LINE_LENGTH) {
     printf("WARNING: Line too long, truncating.\n");
     accword_len=MAX_LINE_LENGTH-accline_len;
+  }
+  if (accline_display_len+accword_display_len>640) {
+    printf("WARNING: Line too long, and will be clipped by the side border.\n");
   }
   for(int j=0;j<MAX_LINE_HEIGHT+MAX_LINE_DEPTH;j++) {
     //    int show=0;
@@ -1008,6 +1022,7 @@ int emit_rendered_word(void)
     //    if (show) printf("\n");
   }
   accline_len+=accword_len;
+  accline_display_len+=accword_display_len;
   printf("DEBUG: Appended %d columns to accline. accline_len=%d, accword_h=%d,_d=%d\n",
 	 accword_len,accline_len,
 	 accword_height,accword_depth);
@@ -1017,6 +1032,7 @@ int emit_rendered_word(void)
   accword_height=1;
   accword_depth=0;
   accword_len=0;
+  accword_display_len=0;
   for(int j=0;j<MAX_LINE_HEIGHT+MAX_LINE_DEPTH;j++) {
     bzero(accword_screen_ram[j],MAX_LINE_LENGTH*2);
     bzero(accword_colour_ram[j],MAX_LINE_LENGTH*2);
@@ -1138,18 +1154,28 @@ int emit_accumulated_word(void)
       for(int j=1;j<num;j++) printf("+ [CP=$%x]\n",code_points[i+j]);
 
       i+=num;
-      
-      // 2. Check if it is too wide for the current remaining line.
-      //    If so, start it on the next line. If it's still too long, we will just clip it.
-      //    If starting a new line, emit the accumulated line of text to start the new line.
-      if (accword_len+accline_len>MAX_LINE_LENGTH) {
-	emit_accumulated_line();
-      } 
-      
-      // 3. Copy it into the current accumulating line of text.
-      //    Update maximum above and below height of the line.
-      emit_rendered_word();
     }
+    
+    // 2. Check if it is too wide for the current remaining line.
+    //    If so, start it on the next line. If it's still too long, we will just clip it.
+    //    If starting a new line, emit the accumulated line of text to start the new line.
+    if ((accword_len+accline_len>MAX_LINE_LENGTH)
+	||(accword_display_len+accline_display_len>640)) {
+      printf("INFO: Breaking line as either %d+%d>%d chars, or %d+%d>640 px\n",
+	     accline_len,accword_len,MAX_LINE_LENGTH,
+	     accline_display_len,accword_display_len);
+      
+      emit_accumulated_line();
+    } else {
+      printf("INFO: Continuing line as neither %d+%d>%d chars, or %d+%d>640 px\n",
+	     accline_len,accword_len,MAX_LINE_LENGTH,
+	     accline_display_len,accword_display_len);
+    }
+    
+    // 3. Copy it into the current accumulating line of text.
+    //    Update maximum above and below height of the line.
+    emit_rendered_word();
+
     // Show the user the word we have emitted
     printf("<"); for(int i=0;i<word_len;i++) { printf("%c",word[i]); } printf(">"); fflush(stdout);
   }
