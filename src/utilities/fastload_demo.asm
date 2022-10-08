@@ -210,7 +210,7 @@ fl_idle:
 fl_seek_track_0:
 	lda $d082
 	and #$01
-	bne fl_not_on_track_0
+	beq fl_not_on_track_0
 	lda #$00
 	sta fastload_request
 	sta fl_current_track
