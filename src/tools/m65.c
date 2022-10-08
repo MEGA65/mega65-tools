@@ -1611,10 +1611,12 @@ void enterTestMode()
     }
 
     log_note("logging test results in %s", unittest_logfile);
-    fprintf(logPtr, ">>>>> TEST: %s\n===== BITSTREAM: %s\n===== MODELCODE: %02X\n===== MODEL: %s\n", filename,
-        system_bitstream_version, system_hardware_model, system_hardware_model_name);
+    fprintf(logPtr, ">>>>> TEST: %s\n===== BITSTREAM: %s\n===== MODELCODE: %02X\n===== MODEL: %s\n===== ROM: %s\n", filename,
+        system_bitstream_version, system_hardware_model, system_hardware_model_name, system_rom_version);
   }
-  log_note("System version: %s", system_bitstream_version);
+  log_note("System model: %s", system_hardware_model_name);
+  log_note("System CORE version: %s", system_bitstream_version);
+  log_note("System ROM version: %s", system_rom_version);
 
   while (time(NULL) - currentTime < unit_test_timeout) {
 
@@ -1979,7 +1981,8 @@ int main(int argc, char **argv)
       log_warn("    You may be able to solve this problem via the following:");
       log_warn("        sudo usermod -a -G dialout <your username>");
       log_warn("    and then:");
-      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\", MODE=\"0666\"' | "
+      log_warn("        echo 'ACTION==\"add\", ATTRS{idVendor}==\"0403\", ATTRS{idProduct}==\"6010\", GROUP=\"dialout\", "
+               "MODE=\"0666\"' | "
                "sudo tee /etc/udev/rules.d/40-xilinx.rules");
       log_warn("    and then log out, and log back in again, or failing that, reboot your computer and try again.");
     }
@@ -2131,8 +2134,10 @@ int main(int argc, char **argv)
   }
 
   // fetch version information
-  if (unit_test_mode)
+  if (unit_test_mode) {
     get_system_bitstream_version();
+    get_system_rom_version();
+  }
 
   // let's save as soon as possible, because first
   // loading an then saving makes no sense, right?

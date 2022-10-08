@@ -2050,6 +2050,40 @@ int get_system_bitstream_version(void)
   return 0;
 }
 
+char system_rom_version[18] = "UNKNOWN";
+char *get_system_rom_version(void)
+{
+  // Check for C65 ROM via version string
+  fetch_ram(0x20016L, 7, (unsigned char *)system_rom_version + 4);
+  if ((system_rom_version[4] == 'V') && (system_rom_version[5] == '9')) {
+    if (system_rom_version[6] >= '2')
+      system_rom_version[0] = 'M';
+    else
+      system_rom_version[0] = 'C';
+    system_rom_version[1] = '6';
+    system_rom_version[2] = '5';
+    system_rom_version[3] = ' ';
+    system_rom_version[11] = 0;
+    return system_rom_version;
+  }
+
+  // OpenROM - 16 characters "OYYMMDDCC       "
+  fetch_ram(0x20010L, 16, (unsigned char *)system_rom_version + 4);
+  if ((system_rom_version[4] == 'O') && (system_rom_version[11] == '2') && (system_rom_version[12] == '0')
+      && (system_rom_version[13] == ' ')) {
+    system_rom_version[0] = 'O';
+    system_rom_version[1] = 'P';
+    system_rom_version[2] = 'E';
+    system_rom_version[3] = 'N';
+    system_rom_version[4] = ' ';
+    system_rom_version[11] = 0;
+    return system_rom_version;
+  }
+
+  strcpy(system_rom_version, "NON MEGA65 ROM");
+  return system_rom_version;
+}
+
 char *find_serial_port(const int serial_speed)
 {
 #ifndef WINDOWS

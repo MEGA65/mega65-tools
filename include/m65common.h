@@ -118,9 +118,11 @@ extern int xemu_flag;
 extern char system_bitstream_version[64];
 extern char system_hardware_model_name[64];
 extern unsigned char system_hardware_model;
+extern char system_rom_version[18];
 
 unsigned int get_bitstream_fpgaid(const char *bitstream);
 int get_system_bitstream_version(void);
+char *get_system_rom_version(void);
 char *find_serial_port(const int serial_speed);
 
 #endif // M65COMMON_H
