@@ -853,6 +853,110 @@ int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set
     + (0x40000 / 0x40);
 }
 
+int render_codepoint(int code_point)
+{
+  int glyph_index = FT_Get_Char_Index( type_faces[current_font], code_point );
+  error = FT_Load_Glyph( type_faces[current_font], glyph_index, FT_LOAD_RENDER );
+  if (error) {
+    fprintf(stderr,"ERROR: Could not find glyph for Unicode Point 0x%x in font.\n",code_point);
+  }
+  int glyph_display_width=glyph_slot->bitmap_left+glyph_slot->bitmap.width;
+  if (glyph_display_width==0)
+    glyph_display_width=(glyph_slot->metrics.horiAdvance/64);
+  
+  printf("bitmap_left=%d, bitmap_top=%d\n", glyph_slot->bitmap_left, glyph_slot->bitmap_top);
+  printf("bitmap_width=%d, bitmap_rows=%d\n", glyph_slot->bitmap.width, glyph_slot->bitmap.rows);
+  
+  int char_rows=0,char_columns=0;
+  int under_rows=0,under_columns=0;
+  int blank_pixels_to_left=glyph_slot->bitmap_left;
+  if (blank_pixels_to_left<0) blank_pixels_to_left=0;
+  if (glyph_slot->bitmap_top>=0) {
+    char_rows=(glyph_slot->bitmap_top+1)/8;
+    if ((glyph_slot->bitmap_top+1)%8) char_rows++;
+    char_columns=glyph_display_width/16;
+    if (glyph_display_width&15) char_columns++;
+    if (!char_columns) { char_columns=1; char_rows=1; }
+    if (1) printf("Character is %dx%d cards above, and includes %d pixels to the left. bitmap_top=%d\n",
+		  char_columns,char_rows,blank_pixels_to_left,glyph_slot->bitmap_top);
+  }
+  if (1) printf("bitmap_top=%d, bitmap.rows=%d\n",glyph_slot->bitmap_top,glyph_slot->bitmap.rows);
+  if (glyph_slot->bitmap_top<glyph_slot->bitmap.rows) {
+    // Character has underhang as well
+    int underhang=glyph_slot->bitmap.rows-glyph_slot->bitmap_top;
+    under_rows=underhang/8;
+    if (underhang%8) under_rows++;
+    under_columns=(glyph_slot->bitmap_left+glyph_slot->bitmap.width+1)/16;
+    if ((glyph_slot->bitmap_left+glyph_slot->bitmap.width)%16) under_columns++;
+    if (1) printf("Character is %dx%d cards under (underhang=%d), and includes %d pixels to the left.\n",
+		  under_columns,under_rows,underhang,blank_pixels_to_left);
+  }
+  
+  int x,y;
+  
+  printf("y range = %d..%d\n",char_rows-1,-under_rows);
+  
+  printf("glyph display width = %d\n",glyph_display_width);
+  printf("horiAdvance = %d, char_columns=%d\n",
+	 (int)glyph_slot->metrics.horiAdvance,char_columns);
+  
+  // Record number of pixels to trim from right-most tile
+  int trim_pixels=16-(glyph_display_width&15);
+  if (!(glyph_display_width&15)) trim_pixels=0;
+  printf("glyph_display_width=%d, trim_pixels=%d\n",
+	 glyph_display_width,trim_pixels);
+  
+  // Now build the glyph map
+  
+  for(x=0;x<char_columns;x++) {
+    if (accline_len>=MAX_LINE_LENGTH) {
+      fprintf(stderr,"ERROR: Word is too long.\n");
+      exit(-1);
+    }
+    if (char_rows > accword_height) accword_height = char_rows;
+    if (under_rows > accword_depth) accword_depth = under_rows;
+    for(y=char_rows-1;y>=-under_rows;y--)
+      {
+	int card_number=encode_glyph_card(glyph_slot,x,y,ts);
+	printf("  encoding tile (%d,%d) using card $%04x\n",x,y,card_number);   
+	// Write tile details into accline_screen_ram and accline_colour_ram
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=card_number>>0;
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(trim_pixels<<5);
+	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
+	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
+      }
+    accword_len++;
+  }
+  return 0;
+}
+
+int emit_rendered_word(void)
+{
+  if ((accline_len+accword_len)>MAX_LINE_LENGTH) {
+    fprintf(stderr,"WARNING: Line too long, truncating.\n");
+    accword_len=MAX_LINE_LENGTH-accline_len;
+  }
+  for(int i=0;i<accword_len*2;i++) {
+    for(int j=0;j<MAX_LINE_HEIGHT;j++) {
+      accline_screen_ram[j][accline_len*2+i]=accword_screen_ram[j][i];
+      accline_colour_ram[j][accline_len*2+i]=accword_colour_ram[j][i];
+    }
+  }
+  accline_len+=accword_len;
+  fprintf(stderr,"DEBUG: Appended %d columns to accline. accline_len=%d\n",accword_len,accline_len);
+  if (accword_height>accline_height) accline_height=accword_height;
+  if (accword_depth>accline_depth) accline_depth=accword_depth;
+
+  accword_height=1;
+  accword_depth=0;
+  accword_len=0;
+  for(int j=0;j<MAX_LINE_HEIGHT;j++) {
+    bzero(accword_screen_ram[j],MAX_LINE_LENGTH*2);
+    bzero(accword_colour_ram[j],MAX_LINE_LENGTH*2);
+  }    
+}
+
 int emit_word_gap(void)
 {
   if (!type_faces[current_font]) {
@@ -866,6 +970,8 @@ int emit_word_gap(void)
     accline_len++;
   } else {
     printf("!!!SPACE!!!");
+    render_codepoint(0x20); // SPACE
+    emit_rendered_word();
   }
   queued_word_gap=0;
   return 0;
@@ -873,7 +979,11 @@ int emit_word_gap(void)
 
 int emit_accumulated_word(void)
 {
-  if (!word_len) return;
+  if (!word_len) {
+    accword_height=1;
+    accword_depth=0;
+    return 0;
+  }
   
   if (!type_faces[current_font]) {
     int len = word_len;
@@ -943,97 +1053,25 @@ int emit_accumulated_word(void)
       // use them H-flipped to pack two chars into one NCM block to save memory. But for now,
       // we will just make normal NCM blocks for each glyph, with the usual de-duplication
       // logic.
-      int glyph_index = FT_Get_Char_Index( type_faces[current_font], code_point );
-      error = FT_Load_Glyph( type_faces[current_font], glyph_index, FT_LOAD_RENDER );
-      if (error) {
-	fprintf(stderr,"ERROR: Could not find glyph for Unicode Point 0x%x in font.\n",code_point);
-      }
-      int glyph_display_width=glyph_slot->bitmap_left+glyph_slot->bitmap.width;
-      if (glyph_display_width==0)
-	glyph_display_width=(glyph_slot->metrics.horiAdvance/64);
-      
-      printf("bitmap_left=%d, bitmap_top=%d\n", glyph_slot->bitmap_left, glyph_slot->bitmap_top);
-      printf("bitmap_width=%d, bitmap_rows=%d\n", glyph_slot->bitmap.width, glyph_slot->bitmap.rows);
-
-      int char_rows=0,char_columns=0;
-      int under_rows=0,under_columns=0;
-      int blank_pixels_to_left=glyph_slot->bitmap_left;
-      if (blank_pixels_to_left<0) blank_pixels_to_left=0;
-      if (glyph_slot->bitmap_top>=0) {
-	char_rows=(glyph_slot->bitmap_top+1)/8;
-	if ((glyph_slot->bitmap_top+1)%8) char_rows++;
-	char_columns=glyph_display_width/16;
-	if (glyph_display_width&15) char_columns++;
-	if (!char_columns) { char_columns=1; char_rows=1; }
-	if (1) printf("Character is %dx%d cards above, and includes %d pixels to the left. bitmap_top=%d\n",
-		      char_columns,char_rows,blank_pixels_to_left,glyph_slot->bitmap_top);
-      }
-      if (1) printf("bitmap_top=%d, bitmap.rows=%d\n",glyph_slot->bitmap_top,glyph_slot->bitmap.rows);
-      if (glyph_slot->bitmap_top<glyph_slot->bitmap.rows) {
-	// Character has underhang as well
-	int underhang=glyph_slot->bitmap.rows-glyph_slot->bitmap_top;
-	under_rows=underhang/8;
-	if (underhang%8) under_rows++;
-	under_columns=(glyph_slot->bitmap_left+glyph_slot->bitmap.width+1)/16;
-	if ((glyph_slot->bitmap_left+glyph_slot->bitmap.width)%16) under_columns++;
-	if (1) printf("Character is %dx%d cards under (underhang=%d), and includes %d pixels to the left.\n",
-		      under_columns,under_rows,underhang,blank_pixels_to_left);
-      }
-      
-      int x,y;
-      
-      printf("y range = %d..%d\n",char_rows-1,-under_rows);
-      
-      printf("glyph display width = %d\n",glyph_display_width);
-      printf("horiAdvance = %d, char_columns=%d\n",
-	     (int)glyph_slot->metrics.horiAdvance,char_columns);
-    
-      // Record number of pixels to trim from right-most tile
-      int trim_pixels=16-(glyph_display_width&15);
-      if (!(glyph_display_width&15)) trim_pixels=0;
-      printf("glyph_display_width=%d, trim_pixels=%d\n",
-	     glyph_display_width,trim_pixels);
-      
-      // Now build the glyph map
-      
-      for(x=0;x<char_columns;x++) {
-	if (accline_len>=MAX_LINE_LENGTH) {
-	  fprintf(stderr,"ERROR: Word is too long.\n");
-	  exit(-1);
-	}
-	if (char_rows > accline_height) accline_height = char_rows;
-	for(y=char_rows-1;y>=-under_rows;y--)
-	  {
-	    int card_number=encode_glyph_card(glyph_slot,x,y,ts);
-	    printf("  encoding tile (%d,%d) using card $%04x\n",x,y,card_number);   
-	    // Write tile details into accline_screen_ram and accline_colour_ram
-	    accline_screen_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+0]=card_number>>0;
-	    accline_screen_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+1]=(card_number>>8)+(trim_pixels<<5);
-	    accline_colour_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
-	    accline_colour_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+1]=text_colour + attributes;
-	    if (trim_pixels&8) accline_colour_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+0]|=0x04; // Trim 8 more pixels
-          }
-	accline_len++;
-      }
+      render_codepoint(code_point);
     }
     
     // 2. Check if it is too wide for the current remaining line.
     //    If so, start it on the next line. If it's still too long, we will just clip it.
     //    If starting a new line, emit the accumulated line of text to start the new line.
-    emit_accumulated_line();
+    if (accword_len+accline_len>MAX_LINE_LENGTH) {
+      emit_accumulated_line();
+    } 
 
     // 3. Copy it into the current accumulating line of text.
     //    Update maximum above and below height of the line.
-    
+    emit_rendered_word();
   }
 
   // Show the user the word we have emitted
   printf("<"); for(int i=0;i<word_len;i++) { printf("%c",word[i]); } printf(">"); fflush(stdout);
   
   word_len=0; word[0]=0;
-
-  
-  
   return 0;
 }
 
