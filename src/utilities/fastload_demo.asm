@@ -3,13 +3,11 @@
 
 	;; XXX - Doesn't seek to tracks yet, so will not work with real disks
 	;; until implemented. Won't be hard to implement.
-	
-basic_header
-	!byte 0x10,0x08,<2021,>2021,0x9e
-	!pet "2061"
-	!byte 0x00,0x00,0x00
-	
 
+	!byte $00,$c0
+	*=$c000
+	
+	
 program_start:	
 
 	;; Select MEGA65 IO mode
@@ -91,6 +89,7 @@ endofname:
 	;; (largely seeking to track 0)
 wait_for_fastload:	
 	lda fastload_request
+	sta $0420
 	bne wait_for_fastload
 	
 	;; Request fastload job
@@ -103,6 +102,7 @@ wait_for_fastload:
 	;; state of the loading.
 waiting
 	lda fastload_request
+	sta $0420
 	bmi error
 	bne waiting
 	beq done
@@ -113,6 +113,7 @@ error
 
 done
 	inc $d020
+	inc $0400
 	jmp done
 	
 irq_handler
@@ -407,25 +408,39 @@ fl_on_correct_track:
 fl_logical_to_physical_sector:
 
 	;; Display track and sector asked for
-	lda fl_file_next_track
-	ldx #0
+	ldx fl_file_next_track
+	lda #0
 	jsr $bdcd
-	lda #$2d
+	;; XXX - $FFD2 does CLI somewhere
+	lda #$2c
 	jsr $ffd2
-	lda fl_file_next_sector
-	ldx #0
+	sei
+	ldx fl_file_next_sector
+	lda #0
 	jsr $bdcd
+	;; XXX - $FFD2 does CLI somewhere
 	lda #$0d
 	jsr $ffd2
+	sei
+
+	;; Wait for key press after each sector
+xcv:	
+	lda $d610
+	beq foop
+	sta $d610
+	jmp xcv
 foop:
 	inc $d020
-	jmp foop
+	lda $d610
+	beq foop
+	sta $d610
 	
 	;; Convert 1581 sector numbers to physical ones on the disk.
 	;; Track = Track - 1
 	;; Sector = 1 + (Sector/2)
 	;; Side = 0
 	;; If sector > 10, then sector=sector-10, side=1
+	;; but sides are inverted
 	jsr fl_select_side0
 	lda fl_file_next_track
 	dec
@@ -581,15 +596,16 @@ fl_copy_sector_to_buffer:
 	lda #<fl_sector_read_dmalist
 	sta $d705
 
-	;; XXX Dump sector to screen for debug
+	;; DEBUG: Show sector loaded
 	ldx #0
-zzoo:	lda fastload_sector_buffer,x
+dfg:	
+	lda fastload_sector_buffer,x
 	sta $0500,x
 	lda fastload_sector_buffer+$100,x
 	sta $0600,x
-	inx
-	bne zzoo
-	
+	dex
+	bne dfg
+
 	
 	rts
 
