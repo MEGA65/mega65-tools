@@ -186,6 +186,9 @@ fl_current_track:	!byte 0
 	
 fl_file_next_track:	!byte 0
 fl_file_next_sector:	!byte 0
+prev_track:	!byte 0
+prev_sector:	!byte 0
+prev_side:	!byte 0
 	
 fastload_sector_buffer:
 	*=*+512
@@ -415,6 +418,25 @@ fl_step_in:
 	rts
 	
 fl_on_correct_track:
+
+	lda $d084
+	cmp prev_track
+	bne fl_not_prev_sector
+	lda $d086
+	cmp prev_track
+	bne fl_not_prev_sector
+	lda $d085
+	eor prev_sector
+	and #$fe
+	bne fl_not_prev_sector
+
+	;; We are being asked to read the sector we already have in the buffer
+	;; Jump immediately to the correct routine
+	lda fastload_request_stashed
+	sta fastload_request
+	jmp fl_fdc_not_busy
+
+fl_not_prev_sector:	
 	lda #$40
 	sta $d081
 
@@ -436,7 +458,7 @@ fl_read_next_sector:
 	bne fl_not_end_of_file
 	rts
 fl_not_end_of_file:	
-	;; Read next sector of file
+	;; Read next sector of file	
 	jsr fl_logical_to_physical_sector
 	jsr fl_read_sector
 	rts
@@ -444,6 +466,15 @@ fl_not_end_of_file:
 	
 fl_logical_to_physical_sector:
 
+	;; Remember current loaded sector, so that we can optimise when asked
+	;; to read other half of same physical sector
+	lda $d084
+	sta prev_track
+	lda $d085
+	sta prev_sector
+	lda $d086
+	sta prev_side
+	
 	;; Convert 1581 sector numbers to physical ones on the disk.
 	;; Track = Track - 1
 	;; Sector = 1 + (Sector/2)
@@ -489,6 +520,7 @@ fl_read_file_block:
 fl_read_from_first_half:
 	lda #(>fastload_sector_buffer)+0
 	sta fl_read_dma_page
+
 	lda fastload_sector_buffer+1
 	sta fl_file_next_sector
 	lda fastload_sector_buffer+0
