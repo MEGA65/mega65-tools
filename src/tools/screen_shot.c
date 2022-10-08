@@ -529,13 +529,13 @@ void paint_screen_shot(void)
         colour_value = colour_value << 8;
         colour_value |= (colour_data[cy * screen_line_step + cx * (1 + sixteenbit_mode) + 1]);
       }
+      background_colour = vic_regs[0x21];
       if (extended_background_mode) {
         char_id = char_value &= 0x3f;
-        //	char_background_colour=vic_regs[0x21+((char_value>>6)&3)];
+        background_colour=vic_regs[0x21+((char_value>>6)&3)];
       }
       else {
         char_id = char_value & 0x1fff;
-        //	char_background_colour=background_colour;
       }
       int glyph_width_deduct = char_value >> 13;
 
@@ -659,28 +659,51 @@ void paint_screen_shot(void)
             int g = mega65_rgb(background_colour, 1, glyph_altpalette);
             int b = mega65_rgb(background_colour, 2, glyph_altpalette);
 
-            is_foreground = 0;
-
+            is_foreground = 0;	    
+	    
             if (glyph_4bit) {
+
+	      fprintf(stderr,"DEBUG: NCM: bg RGB=#%02x%02x%02x\n",r,g,b);
+	      
               // 16-colour 4 bits per pixel
               int c = glyph_data[((int)xx) / 2];
               if (((int)xx) & 1)
                 c = c >> 4;
               else
                 c = c & 0xf;
+
+	      fprintf(stderr,"DEBUG: NCM: fg RGB=#%02x%02x%02x\n",
+		      mega65_rgb(c, 0, glyph_altpalette),
+		      mega65_rgb(c, 1, glyph_altpalette),
+		      mega65_rgb(c, 2, glyph_altpalette)
+		      );
+	      
               if (glyph_with_alpha) {
                 // Alpha blended pixels:
                 // Here we blend the foreground and background colours we already know
                 // according to the alpha value
-                int a = c;
-                r = (mega65_rgb(foreground_colour, 0, glyph_altpalette) * a + r * (15 - a)) >> 8;
-                g = (mega65_rgb(foreground_colour, 1, glyph_altpalette) * a + g * (15 - a)) >> 8;
-                b = (mega65_rgb(foreground_colour, 2, glyph_altpalette) * a + b * (15 - a)) >> 8;
+                int a = c;	    
+                r = (mega65_rgb(foreground_colour, 0, glyph_altpalette) * a + r * (15 - a)) >> 4;
+                g = (mega65_rgb(foreground_colour, 1, glyph_altpalette) * a + g * (15 - a)) >> 4;
+                b = (mega65_rgb(foreground_colour, 2, glyph_altpalette) * a + b * (15 - a)) >> 4;
               }
               else {
-                r = mega65_rgb(c, 0, glyph_altpalette);
-                g = mega65_rgb(c, 1, glyph_altpalette);
-                b = mega65_rgb(c, 2, glyph_altpalette);
+		switch(c) {
+		case 0: // background colour
+		  // Keep background RGB value for colour index 0 of NCM char
+		  break;
+		case 0xf:
+		  // Use colour RAM foreground colour
+		  r = mega65_rgb(foreground_colour, 0, glyph_altpalette);
+		  g = mega65_rgb(foreground_colour, 1, glyph_altpalette);
+		  b = mega65_rgb(foreground_colour, 2, glyph_altpalette);		  
+		  break;
+		default:
+		  // Use colour index of pixel
+		  r = mega65_rgb(c, 0, glyph_altpalette);
+		  g = mega65_rgb(c, 1, glyph_altpalette);
+		  b = mega65_rgb(c, 2, glyph_altpalette);
+		}
               }
               if (c)
                 is_foreground = 1;
@@ -837,17 +860,17 @@ int do_screen_shot(char *userfilename)
   log_note("got ASCII screenshot");
   do_screen_shot_ascii();
 
-  // filename == "0" means no png screenshot
-  if (!strcmp(userfilename, "0")) {
-    log_note("no PNG screenshot requested (filename \"0\")");
-    return 1;
-  }
-
   FILE *f = NULL;
   char filename[1024];
-  if (userfilename != NULL)
+  if (userfilename != NULL) {
+    // filename == "0" means no png screenshot
+    if (!strcmp(userfilename, "0")) {
+      log_note("no PNG screenshot requested (filename \"0\")");
+      return 1;
+    }
+
     strncpy(filename, userfilename, 1023);
-  else
+  }  else
     for (int n = 0; n < 1000000; n++) {
       snprintf(filename, 1024, "mega65-screen-%06d.png", n);
       f = fopen(filename, "rb");
