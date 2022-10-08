@@ -795,7 +795,7 @@ int encode_glyph_card(int card_x, int card_y, struct tile_set *ts)
 {
   int base_x=card_x*16;
   // Y=0 is the card directly above the baseline, Y=-1 is directly below the baseline
-  int base_y=BITMAP_BASELINE - (card_y+1);
+  int base_y=BITMAP_BASELINE - (card_y+1)*8;
 
   struct tile t;
 
@@ -806,8 +806,8 @@ int encode_glyph_card(int card_x, int card_y, struct tile_set *ts)
           int x_pos=x*2+base_x;
           int y_pos=y+base_y;
       
-          //      printf("pixel (%d,%d) will be in bitmap (%d,%d)\n",
-	  //             x,y,x_pos,y_pos);
+	  // printf("pixel (%d,%d) will be in bitmap at (%d,%d)\n",
+	  //	 x,y,x_pos,y_pos);
 
 	  int low=glyph_bitmap[x_pos+0][y_pos];
 	  int hi=glyph_bitmap[x_pos+1][y_pos];
@@ -860,7 +860,7 @@ int render_codepoints(int *code_points,int num)
   // char block
   while((total_width<=8)&&count<num) {
     int code_point=code_points[count++];
-    
+
     int glyph_index = FT_Get_Char_Index( type_faces[current_font], code_point );
     error = FT_Load_Glyph( type_faces[current_font], glyph_index, FT_LOAD_RENDER );
     if (error) {
@@ -876,11 +876,15 @@ int render_codepoints(int *code_points,int num)
       glyph_display_width=(glyph_slot->metrics.horiAdvance/64);
     } else {
       // Copy glyph into the bitmap
-      for(int i=0;i<glyph_display_width;i++) {
-	int y_start=BITMAP_BASELINE-glyph_slot->bitmap_top;	
-	for(int y=0;y<glyph_slot->bitmap.rows;y++) {
-	  glyph_bitmap[total_width+i][y_start+y]=glyph_slot->bitmap.buffer[i+(y_start+y)*glyph_slot->bitmap.width];
+      int y_start=BITMAP_BASELINE-glyph_slot->bitmap_top;
+      printf("y_start=%d\n",y_start);
+      for(int y=0;y<glyph_slot->bitmap.rows;y++) {
+	printf("  row %d : ",y);
+	for(int i=0;i<glyph_display_width;i++) {
+	  if (glyph_slot->bitmap.buffer[i+y*glyph_slot->bitmap.width]) printf("+"); else printf(".");
+	  glyph_bitmap[total_width+i][y_start+y]=glyph_slot->bitmap.buffer[i+y*glyph_slot->bitmap.width];
 	}
+	printf("\n");
       }
       total_width+=glyph_display_width;
       if (max_height<glyph_slot->bitmap_top) max_height=glyph_slot->bitmap_top;
@@ -925,7 +929,6 @@ int render_codepoints(int *code_points,int num)
     int blank_card = tile_lookup(ts, &blank_tile);
     blank_card += (0x40000 / 0x40);
     
-    printf("DEBUG: blank_card=$%04x\n",blank_card);
     for(y=0;y<MAX_LINE_HEIGHT+MAX_LINE_DEPTH;y++) {
       accword_screen_ram[y][accword_len*2+0]=blank_card>>0;
       accword_screen_ram[y][accword_len*2+1]=(blank_card>>8)+(trim_pixels<<5);
@@ -1121,7 +1124,6 @@ int emit_accumulated_word(void)
     }
     
     for(int i=0;i<count;) {
-      printf("[CP=$%x]\n",code_points[i]);
       
       // 1.1. Get the glyph and render it into NCM blocks
       // XXX - Eventually check for NCM blocks with spare columns on the right-hand side, and
@@ -1129,6 +1131,10 @@ int emit_accumulated_word(void)
       // we will just make normal NCM blocks for each glyph, with the usual de-duplication
       // logic.
       int num=render_codepoints(&code_points[i],count-i);
+      printf("DEBUG: Output %d codepoints in one char.\n",num);
+      printf("[CP=$%x]\n",code_points[i]);
+      for(int j=1;j<num;j++) printf("+ [CP=$%x]\n",code_points[i+j]);
+
       i+=num;
       
       // 2. Check if it is too wide for the current remaining line.
