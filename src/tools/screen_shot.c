@@ -532,7 +532,7 @@ void paint_screen_shot(void)
       background_colour = vic_regs[0x21];
       if (extended_background_mode) {
         char_id = char_value &= 0x3f;
-        background_colour=vic_regs[0x21+((char_value>>6)&3)];
+        background_colour = vic_regs[0x21 + ((char_value >> 6) & 3)];
       }
       else {
         char_id = char_value & 0x1fff;
@@ -659,8 +659,8 @@ void paint_screen_shot(void)
             int g = mega65_rgb(background_colour, 1, glyph_altpalette);
             int b = mega65_rgb(background_colour, 2, glyph_altpalette);
 
-            is_foreground = 0;	    
-	    
+            is_foreground = 0;
+
             if (glyph_4bit) {
 
               // 16-colour 4 bits per pixel
@@ -674,28 +674,28 @@ void paint_screen_shot(void)
                 // Alpha blended pixels:
                 // Here we blend the foreground and background colours we already know
                 // according to the alpha value
-                int a = c;	    
+                int a = c;
                 r = (mega65_rgb(foreground_colour, 0, glyph_altpalette) * a + r * (15 - a)) / 15;
                 g = (mega65_rgb(foreground_colour, 1, glyph_altpalette) * a + g * (15 - a)) / 15;
                 b = (mega65_rgb(foreground_colour, 2, glyph_altpalette) * a + b * (15 - a)) / 15;
               }
               else {
-		switch(c) {
-		case 0: // background colour
-		  // Keep background RGB value for colour index 0 of NCM char
-		  break;
-		case 0xf:
-		  // Use colour RAM foreground colour
-		  r = mega65_rgb(foreground_colour, 0, glyph_altpalette);
-		  g = mega65_rgb(foreground_colour, 1, glyph_altpalette);
-		  b = mega65_rgb(foreground_colour, 2, glyph_altpalette);		  
-		  break;
-		default:
-		  // Use colour index of pixel
-		  r = mega65_rgb(c, 0, glyph_altpalette);
-		  g = mega65_rgb(c, 1, glyph_altpalette);
-		  b = mega65_rgb(c, 2, glyph_altpalette);
-		}
+                switch (c) {
+                case 0: // background colour
+                  // Keep background RGB value for colour index 0 of NCM char
+                  break;
+                case 0xf:
+                  // Use colour RAM foreground colour
+                  r = mega65_rgb(foreground_colour, 0, glyph_altpalette);
+                  g = mega65_rgb(foreground_colour, 1, glyph_altpalette);
+                  b = mega65_rgb(foreground_colour, 2, glyph_altpalette);
+                  break;
+                default:
+                  // Use colour index of pixel
+                  r = mega65_rgb(c, 0, glyph_altpalette);
+                  g = mega65_rgb(c, 1, glyph_altpalette);
+                  b = mega65_rgb(c, 2, glyph_altpalette);
+                }
               }
               if (c)
                 is_foreground = 1;
@@ -862,7 +862,8 @@ int do_screen_shot(char *userfilename)
     }
 
     strncpy(filename, userfilename, 1023);
-  }  else
+  }
+  else
     for (int n = 0; n < 1000000; n++) {
       snprintf(filename, 1024, "mega65-screen-%06d.png", n);
       f = fopen(filename, "rb");

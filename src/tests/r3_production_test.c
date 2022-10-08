@@ -348,12 +348,13 @@ void test_rtc(void)
     getrtc(&tm2);
     if (tm.tm_sec != tm2.tm_sec) {
       // Reset frame counter on first tick
-      if (frame_count<48) {
-        frame_count=0;
-        tm=tm2;
-      } else if (frame_count<52) {
+      if (frame_count < 48) {
+        frame_count = 0;
+        tm = tm2;
+      }
+      else if (frame_count < 52) {
         // 48--52 frames per tick = seems to be ticking right
-        rtc_bad=0;
+        rtc_bad = 0;
         break;
       }
     }
@@ -368,8 +369,8 @@ void main(void)
   POKE(0xD02F, 0x53);
 
   // PAL mode for 50Hz video
-  POKE(0xD06F,0x00);
-  
+  POKE(0xD06F, 0x00);
+
   // Floppy motor on
   POKE(0xD080, 0x60);
 

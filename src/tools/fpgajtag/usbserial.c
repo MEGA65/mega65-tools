@@ -99,7 +99,8 @@ int usbdev_get_candidates(void)
       }
 
       if (IOObjectConformsTo(device, kIOUSBInterfaceClassName)) {
-        kern_result = IOCreatePlugInInterfaceForService(device, kIOUSBInterfaceUserClientTypeID, kIOCFPlugInInterfaceID, &plug, &score);
+        kern_result = IOCreatePlugInInterfaceForService(
+            device, kIOUSBInterfaceUserClientTypeID, kIOCFPlugInInterfaceID, &plug, &score);
         if (kern_result != KERN_SUCCESS || plug == NULL) {
           log_debug("m65ser_get_candidates: Can't obtain USB device plugin interface\n");
           continue;
@@ -159,7 +160,8 @@ int usbdev_get_candidates(void)
     pnum3 = (location_id >> 8) & 0xf;
 
     if (usb_interface_number != 1) {
-      log_debug("skipping serial port %s (%d-%d.%d.%d.%d) with interface no %d\n", dev_node, bus, pnum0, pnum1, pnum2, pnum3, usb_interface_number);
+      log_debug("skipping serial port %s (%d-%d.%d.%d.%d) with interface no %d\n", dev_node, bus, pnum0, pnum1, pnum2, pnum3,
+          usb_interface_number);
     }
     else {
       log_info("detected serial port %s (%d-%d.%d.%d.%d)", dev_node, bus, pnum0, pnum1, pnum2, pnum3);

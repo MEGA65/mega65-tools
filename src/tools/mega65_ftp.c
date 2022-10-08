@@ -279,8 +279,9 @@ void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr, "version: %s\n\n", version_string);
-  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  "
-                  "[-b bitstream] [[-c command] ...]\n");
+  fprintf(stderr,
+      "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  "
+      "[-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n");
   fprintf(stderr, "  -F - force startup, even if other program is detected\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");

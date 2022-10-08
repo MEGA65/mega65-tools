@@ -61,7 +61,6 @@
 #include FT_FREETYPE_H
 #include <unistd.h>
 
-
 extern unsigned char ascii_font[4097];
 
 struct tile_set *ts = NULL;
@@ -83,7 +82,7 @@ int number_of_passes;
 png_bytep *row_pointers;
 int multiplier;
 
-FT_Library    library;
+FT_Library library;
 #define FONT_PARAGRAPH 0
 #define FONT_H1 1
 #define FONT_H2 2
@@ -91,17 +90,14 @@ FT_Library    library;
 #define FONT_PARAGRAPH_BOLD 4
 #define FONT_PARAGRAPH_BOLDITALIC 5
 #define FONT_PARAGRAPH_ITALIC 6
-#define MAX_TYPEFACES (FONT_PARAGRAPH_ITALIC+1)
-FT_Face       type_faces[MAX_TYPEFACES];
+#define MAX_TYPEFACES (FONT_PARAGRAPH_ITALIC + 1)
+FT_Face type_faces[MAX_TYPEFACES];
 int current_font = FONT_PARAGRAPH;
 
-FT_GlyphSlot  glyph_slot;
-FT_Error      error;
+FT_GlyphSlot glyph_slot;
+FT_Error error;
 
-int           n;
-
-
-
+int n;
 
 /* ============================================================= */
 
@@ -562,20 +558,18 @@ unsigned int queued_word_gap = 0;
 // Buffer for partially accumulated lines of text
 #define MAX_LINE_HEIGHT 64
 #define MAX_LINE_DEPTH 64
-unsigned char accline_screen_ram[MAX_LINE_LENGTH*2][MAX_LINE_HEIGHT+MAX_LINE_DEPTH];
-unsigned char accline_colour_ram[MAX_LINE_LENGTH*2][MAX_LINE_DEPTH+MAX_LINE_DEPTH];
-int accline_len=0;
-int accline_height=1;
-int accline_depth=0;
+unsigned char accline_screen_ram[MAX_LINE_LENGTH * 2][MAX_LINE_HEIGHT + MAX_LINE_DEPTH];
+unsigned char accline_colour_ram[MAX_LINE_LENGTH * 2][MAX_LINE_DEPTH + MAX_LINE_DEPTH];
+int accline_len = 0;
+int accline_height = 1;
+int accline_depth = 0;
 
 // And the same for the current word being rendered
-unsigned char accword_screen_ram[MAX_LINE_LENGTH*2][MAX_LINE_HEIGHT];
-unsigned char accword_colour_ram[MAX_LINE_LENGTH*2][MAX_LINE_DEPTH];
-int accword_len=0;
-int accword_height=1;
-int accword_depth=0;
-
-
+unsigned char accword_screen_ram[MAX_LINE_LENGTH * 2][MAX_LINE_HEIGHT];
+unsigned char accword_colour_ram[MAX_LINE_LENGTH * 2][MAX_LINE_DEPTH];
+int accword_len = 0;
+int accword_height = 1;
+int accword_depth = 0;
 
 #define MAX_URLS 255
 #define MAX_URL_LEN 255
@@ -700,37 +694,36 @@ char *get_attribute(char *key)
   return NULL;
 }
 
-
 void emit_accumulated_line(void)
 {
   if (accline_len) {
     // XXX - Emit accumulated line by copying the rows of screen and colour RAM into place.
     int first_row = MAX_LINE_HEIGHT - accline_height;
-    int last_row = MAX_LINE_HEIGHT -1 + accline_depth;
-    printf("[Line = +%d,-%d, first=%d, last=%d, accline_len=%d]\n",
-	   accline_height,accline_depth, first_row, last_row, accline_len);
-    for(int row = first_row; row <= last_row; row++) {
+    int last_row = MAX_LINE_HEIGHT - 1 + accline_depth;
+    printf("[Line = +%d,-%d, first=%d, last=%d, accline_len=%d]\n", accline_height, accline_depth, first_row, last_row,
+        accline_len);
+    for (int row = first_row; row <= last_row; row++) {
 
-      if (screen_y * (MAX_LINE_LENGTH*2) >= MAX_COLOURRAM_SIZE) {
-	fprintf(stderr,"ERROR: Page too long. Split into separate files, or use smaller fonts.\n");
-	exit(-1);
+      if (screen_y * (MAX_LINE_LENGTH * 2) >= MAX_COLOURRAM_SIZE) {
+        fprintf(stderr, "ERROR: Page too long. Split into separate files, or use smaller fonts.\n");
+        exit(-1);
       }
-      
-      memcpy(&screen_ram[screen_y * (MAX_LINE_LENGTH*2)],accline_screen_ram[row],accline_len*2);
-      memcpy(&colour_ram[screen_y * (MAX_LINE_LENGTH*2)],accline_colour_ram[row],accline_len*2);
+
+      memcpy(&screen_ram[screen_y * (MAX_LINE_LENGTH * 2)], accline_screen_ram[row], accline_len * 2);
+      memcpy(&colour_ram[screen_y * (MAX_LINE_LENGTH * 2)], accline_colour_ram[row], accline_len * 2);
       screen_y++;
     }
 
     // XXX - Implement indent to allow text to flow around images
-    
+
     // Set next draw position to start of the next line
     screen_x = 0;
   }
-    
+
   // Reset accumulated line
-  accline_len=0;
-  accline_height=1;
-  accline_depth=0;
+  accline_len = 0;
+  accline_height = 1;
+  accline_depth = 0;
 }
 
 void paragraph_font(void)
@@ -744,7 +737,7 @@ void next_paragraph(void)
 {
   // End a previous paragraph, if one was started.
   emit_accumulated_line();
-  
+
   if (in_paragraph) {
     printf("[YSkip for new paragraph]\n");
     screen_y++;
@@ -752,7 +745,7 @@ void next_paragraph(void)
     indent = 0;
   }
 
-  queued_word_gap=0;
+  queued_word_gap = 0;
 
   // Reset to paragraph font after
   paragraph_font();
@@ -762,7 +755,7 @@ void next_paragraph_no_gap(void)
 {
   // End a previous paragraph, if one was started.
   emit_accumulated_line();
-  
+
   if (in_paragraph) {
     screen_x = 0;
     in_paragraph = 0;
@@ -771,7 +764,7 @@ void next_paragraph_no_gap(void)
 
   // Reset to paragraph font after
   paragraph_font();
-  
+
   current_font = FONT_PARAGRAPH;
   attributes = 0x00;
   text_colour = 14;
@@ -779,79 +772,78 @@ void next_paragraph_no_gap(void)
 
 // Accumulated word (int type to allow use of unicode points)
 int word[1024];
-int word_len=0;
+int word_len = 0;
 
-int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set *ts)
+int encode_glyph_card(FT_GlyphSlot slot, int card_x, int card_y, struct tile_set *ts)
 {
-  int min_x=slot->bitmap_left;
-  if (min_x<0) min_x=0;
-  int max_x=slot->bitmap.width-1+min_x;
-  
-  int max_y=slot->bitmap_top-1;
-  int min_y=slot->bitmap_top-1-slot->bitmap.rows;
+  int min_x = slot->bitmap_left;
+  if (min_x < 0)
+    min_x = 0;
+  int max_x = slot->bitmap.width - 1 + min_x;
 
-  int base_x=card_x*16;
-  int base_y=card_y*8;
+  int max_y = slot->bitmap_top - 1;
+  int min_y = slot->bitmap_top - 1 - slot->bitmap.rows;
 
-  if (0) printf("x=%d..%d, y=%d..%d, base=(%d,%d)\n",
-                min_x,max_x,min_y,max_y,base_x,base_y);
+  int base_x = card_x * 16;
+  int base_y = card_y * 8;
+
+  if (0)
+    printf("x=%d..%d, y=%d..%d, base=(%d,%d)\n", min_x, max_x, min_y, max_y, base_x, base_y);
 
   struct tile t;
 
-  int x,y;
-  for(y=0;y<8;y++) {
-      for(x=0;x<8;x++)
-        {
-          int x_pos=x*2+base_x-min_x;
-          int y_pos=slot->bitmap_top-((7-y)+base_y);
-	   //      printf("pixel (%d,%d) will be in bitmap (%d,%d)\n",
-	   //             x,y,x_pos,y_pos);
-          if ((x_pos>=0&&x_pos<slot->bitmap.width)
-              &&(y_pos>=0&&y_pos<slot->bitmap.rows)) {
-            // Pixel is in bitmap
-	    int low=slot->bitmap.buffer[x_pos+0+
-					y_pos*slot->bitmap.width];
-	    int hi=slot->bitmap.buffer[x_pos+1+
-					y_pos*slot->bitmap.width];
-	    // Don't draw rubbish in the high nybl of odd-width glyphs
-	    if ((x_pos+1)>=slot->bitmap.width) hi=0;
-	    low=(low>>4)&0xf;
-	    hi=hi&0xf0;
-            t.bytes[x][y]=hi+low;
-          } else {
-            // Pixel is not in bitmap, so blank pixel
-            t.bytes[x][y]=0x00;
-          }
-        }
+  int x, y;
+  for (y = 0; y < 8; y++) {
+    for (x = 0; x < 8; x++) {
+      int x_pos = x * 2 + base_x - min_x;
+      int y_pos = slot->bitmap_top - ((7 - y) + base_y);
+      //      printf("pixel (%d,%d) will be in bitmap (%d,%d)\n",
+      //             x,y,x_pos,y_pos);
+      if ((x_pos >= 0 && x_pos < slot->bitmap.width) && (y_pos >= 0 && y_pos < slot->bitmap.rows)) {
+        // Pixel is in bitmap
+        int low = slot->bitmap.buffer[x_pos + 0 + y_pos * slot->bitmap.width];
+        int hi = slot->bitmap.buffer[x_pos + 1 + y_pos * slot->bitmap.width];
+        // Don't draw rubbish in the high nybl of odd-width glyphs
+        if ((x_pos + 1) >= slot->bitmap.width)
+          hi = 0;
+        low = (low >> 4) & 0xf;
+        hi = hi & 0xf0;
+        t.bytes[x][y] = hi + low;
+      }
+      else {
+        // Pixel is not in bitmap, so blank pixel
+        t.bytes[x][y] = 0x00;
+      }
+    }
   }
-  
+
   if (1) {
-    printf("card (%d,%d) is:\n",card_x,card_y);
-    for(y=0;y<8;y++) {
-      for(x=0;x<8;x++)
-        {
-          if ((t.bytes[x][y]&0xf)==0) 
-            printf(".");
-          else if ((t.bytes[x][y]&0xf)<8) 
-            printf("+");
-          else
-            printf("*");
-          if (t.bytes[x][y]<0x10) 
-            printf(".");
-          else if ((t.bytes[x][y]&0xf0)<128) 
-            printf("+");
-          else
-            printf("*");
-        }
+    printf("card (%d,%d) is:\n", card_x, card_y);
+    for (y = 0; y < 8; y++) {
+      for (x = 0; x < 8; x++) {
+        if ((t.bytes[x][y] & 0xf) == 0)
+          printf(".");
+        else if ((t.bytes[x][y] & 0xf) < 8)
+          printf("+");
+        else
+          printf("*");
+        if (t.bytes[x][y] < 0x10)
+          printf(".");
+        else if ((t.bytes[x][y] & 0xf0) < 128)
+          printf("+");
+        else
+          printf("*");
+      }
       printf("\n");
     }
   }
-  
-  return tile_lookup(ts,&t)
-    // Adjust tile number in screen data for address of tile in RAM
-    + (0x40000 / 0x40);
+
+  return tile_lookup(ts, &t)
+       // Adjust tile number in screen data for address of tile in RAM
+       + (0x40000 / 0x40);
 }
 
+// clang-format: off
 struct tile blank_tile = {
   { {0,0,0,0,0,0,0,0},
     {0,0,0,0,0,0,0,0},
@@ -863,106 +855,122 @@ struct tile blank_tile = {
     {0,0,0,0,0,0,0,0}
   }   
 };
+// clang-format: on
 
 int render_codepoint(int code_point)
 {
   glyph_slot = type_faces[current_font]->glyph;
 
-  int glyph_index = FT_Get_Char_Index( type_faces[current_font], code_point );
-  error = FT_Load_Glyph( type_faces[current_font], glyph_index, FT_LOAD_RENDER );
+  int glyph_index = FT_Get_Char_Index(type_faces[current_font], code_point);
+  error = FT_Load_Glyph(type_faces[current_font], glyph_index, FT_LOAD_RENDER);
   if (error) {
-    fprintf(stderr,"ERROR: Could not find glyph for Unicode Point 0x%x in font.\n",code_point);
+    fprintf(stderr, "ERROR: Could not find glyph for Unicode Point 0x%x in font.\n", code_point);
     exit(-1);
   }
-  int glyph_display_width=glyph_slot->bitmap_left+glyph_slot->bitmap.width;
-  if (glyph_display_width==0)
-    glyph_display_width=(glyph_slot->metrics.horiAdvance/64);
-  
+  int glyph_display_width = glyph_slot->bitmap_left + glyph_slot->bitmap.width;
+  if (glyph_display_width == 0)
+    glyph_display_width = (glyph_slot->metrics.horiAdvance / 64);
+
   printf("bitmap_left=%d, bitmap_top=%d\n", glyph_slot->bitmap_left, glyph_slot->bitmap_top);
   printf("bitmap_width=%d, bitmap_rows=%d\n", glyph_slot->bitmap.width, glyph_slot->bitmap.rows);
-  
-  int char_rows=0,char_columns=0;
-  int under_rows=0,under_columns=0;
-  int blank_pixels_to_left=glyph_slot->bitmap_left;
-  if (blank_pixels_to_left<0) blank_pixels_to_left=0;
-  if (glyph_slot->bitmap_top>=0) {
-    char_rows=(glyph_slot->bitmap_top+1)/8;
-    if ((glyph_slot->bitmap_top+1)%8) char_rows++;
-    char_columns=glyph_display_width/16;
-    if (glyph_display_width&15) char_columns++;
-    if (!char_columns) { char_columns=1; char_rows=1; }
-    if (1) printf("Character is %dx%d cards above, and includes %d pixels to the left. bitmap_top=%d\n",
-		  char_columns,char_rows,blank_pixels_to_left,glyph_slot->bitmap_top);
+
+  int char_rows = 0, char_columns = 0;
+  int under_rows = 0, under_columns = 0;
+  int blank_pixels_to_left = glyph_slot->bitmap_left;
+  if (blank_pixels_to_left < 0)
+    blank_pixels_to_left = 0;
+  if (glyph_slot->bitmap_top >= 0) {
+    char_rows = (glyph_slot->bitmap_top + 1) / 8;
+    if ((glyph_slot->bitmap_top + 1) % 8)
+      char_rows++;
+    char_columns = glyph_display_width / 16;
+    if (glyph_display_width & 15)
+      char_columns++;
+    if (!char_columns) {
+      char_columns = 1;
+      char_rows = 1;
+    }
+    if (1)
+      printf("Character is %dx%d cards above, and includes %d pixels to the left. bitmap_top=%d\n", char_columns, char_rows,
+          blank_pixels_to_left, glyph_slot->bitmap_top);
   }
-  if (1) printf("bitmap_top=%d, bitmap.rows=%d\n",glyph_slot->bitmap_top,glyph_slot->bitmap.rows);
-  if (glyph_slot->bitmap_top<glyph_slot->bitmap.rows) {
+  if (1)
+    printf("bitmap_top=%d, bitmap.rows=%d\n", glyph_slot->bitmap_top, glyph_slot->bitmap.rows);
+  if (glyph_slot->bitmap_top < glyph_slot->bitmap.rows) {
     // Character has underhang as well
-    int underhang=glyph_slot->bitmap.rows-glyph_slot->bitmap_top;
-    under_rows=underhang/8;
-    if (underhang%8) under_rows++;
-    under_columns=(glyph_slot->bitmap_left+glyph_slot->bitmap.width+1)/16;
-    if ((glyph_slot->bitmap_left+glyph_slot->bitmap.width)%16) under_columns++;
-    if (1) printf("Character is %dx%d cards under (underhang=%d), and includes %d pixels to the left.\n",
-		  under_columns,under_rows,underhang,blank_pixels_to_left);
+    int underhang = glyph_slot->bitmap.rows - glyph_slot->bitmap_top;
+    under_rows = underhang / 8;
+    if (underhang % 8)
+      under_rows++;
+    under_columns = (glyph_slot->bitmap_left + glyph_slot->bitmap.width + 1) / 16;
+    if ((glyph_slot->bitmap_left + glyph_slot->bitmap.width) % 16)
+      under_columns++;
+    if (1)
+      printf("Character is %dx%d cards under (underhang=%d), and includes %d pixels to the left.\n", under_columns,
+          under_rows, underhang, blank_pixels_to_left);
   }
-  
-  int x,y;
-  
-  printf("y range = %d..%d\n",char_rows-1,-under_rows);
-  
-  printf("glyph display width = %d\n",glyph_display_width);
-  printf("horiAdvance = %d, char_columns=%d\n",
-	 (int)glyph_slot->metrics.horiAdvance,char_columns);
-  
+
+  int x, y;
+
+  printf("y range = %d..%d\n", char_rows - 1, -under_rows);
+
+  printf("glyph display width = %d\n", glyph_display_width);
+  printf("horiAdvance = %d, char_columns=%d\n", (int)glyph_slot->metrics.horiAdvance, char_columns);
+
   // Record number of pixels to trim from right-most tile
-  int trim_pixels=16-(glyph_display_width&15);
-  if (!(glyph_display_width&15)) trim_pixels=0;
-  printf("glyph_display_width=%d, trim_pixels=%d\n",
-	 glyph_display_width,trim_pixels);
-  
+  int trim_pixels = 16 - (glyph_display_width & 15);
+  if (!(glyph_display_width & 15))
+    trim_pixels = 0;
+  printf("glyph_display_width=%d, trim_pixels=%d\n", glyph_display_width, trim_pixels);
+
   // Now build the glyph map
-  
-  for(x=0;x<char_columns;x++) {
-    if (accword_len>=MAX_LINE_LENGTH) {
-      fprintf(stderr,"ERROR: Word is too long: '%s'\n",word);
+
+  for (x = 0; x < char_columns; x++) {
+    if (accword_len >= MAX_LINE_LENGTH) {
+      fprintf(stderr, "ERROR: Word is too long: '%s'\n", word);
       exit(-1);
     }
-    if (char_rows > accword_height) accword_height = char_rows;
-    if (under_rows > accword_depth) accword_depth = under_rows;
+    if (char_rows > accword_height)
+      accword_height = char_rows;
+    if (under_rows > accword_depth)
+      accword_depth = under_rows;
 
     // Blank out entire column, so that we avoid alignment issues with variable character heights
     int blank_card = tile_lookup(ts, &blank_tile);
     blank_card += (0x40000 / 0x40);
-    
-    fprintf(stderr,"DEBUG: blank_card=$%04x\n",blank_card);
-    for(y=0;y<MAX_LINE_LENGTH;y++) {
-	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=blank_card>>0;
-	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(blank_card>>8)+(trim_pixels<<5);
-	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
-	if (y==(MAX_LINE_HEIGHT-1)) {
-	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
-	} else {
-	  // Do not apply underline to other than the base row
-	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
-	}
-	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
-    }
-    for(y=char_rows-1;y>=-under_rows;y--)
-      {
-	int card_number=encode_glyph_card(glyph_slot,x,y,ts);
-	printf("  encoding tile (%d,%d) using card $%04x\n",x,y,card_number);   
-	// Write tile details into accline_screen_ram and accline_colour_ram
-	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=card_number>>0;
-	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(trim_pixels<<5);
-	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
-	if (!y) {
-	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
-	} else {
-	  // Do not apply underline to other than the base row
-	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
-	}
-	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
+
+    fprintf(stderr, "DEBUG: blank_card=$%04x\n", blank_card);
+    for (y = 0; y < MAX_LINE_LENGTH; y++) {
+      accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] = blank_card >> 0;
+      accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (blank_card >> 8) + (trim_pixels << 5);
+      accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] = 0x20 + 0x08; // ALPHA + NCM glyph
+      if (y == (MAX_LINE_HEIGHT - 1)) {
+        accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = text_colour + attributes;
       }
+      else {
+        // Do not apply underline to other than the base row
+        accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (text_colour + attributes) & 0x7f;
+      }
+      if (trim_pixels & 8)
+        accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] |= 0x04; // Trim 8 more pixels
+    }
+    for (y = char_rows - 1; y >= -under_rows; y--) {
+      int card_number = encode_glyph_card(glyph_slot, x, y, ts);
+      printf("  encoding tile (%d,%d) using card $%04x\n", x, y, card_number);
+      // Write tile details into accline_screen_ram and accline_colour_ram
+      accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] = card_number >> 0;
+      accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (card_number >> 8) + (trim_pixels << 5);
+      accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] = 0x20 + 0x08; // ALPHA + NCM glyph
+      if (!y) {
+        accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = text_colour + attributes;
+      }
+      else {
+        // Do not apply underline to other than the base row
+        accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (text_colour + attributes) & 0x7f;
+      }
+      if (trim_pixels & 8)
+        accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] |= 0x04; // Trim 8 more pixels
+    }
     accword_len++;
   }
   return 0;
@@ -970,28 +978,30 @@ int render_codepoint(int code_point)
 
 int emit_rendered_word(void)
 {
-  if ((accline_len+accword_len)>MAX_LINE_LENGTH) {
-    fprintf(stderr,"WARNING: Line too long, truncating.\n");
-    accword_len=MAX_LINE_LENGTH-accline_len;
+  if ((accline_len + accword_len) > MAX_LINE_LENGTH) {
+    fprintf(stderr, "WARNING: Line too long, truncating.\n");
+    accword_len = MAX_LINE_LENGTH - accline_len;
   }
-  for(int i=0;i<accword_len*2;i++) {
-    for(int j=0;j<MAX_LINE_HEIGHT;j++) {
-      accline_screen_ram[j][accline_len*2+i]=accword_screen_ram[j][i];
-      accline_colour_ram[j][accline_len*2+i]=accword_colour_ram[j][i];
+  for (int i = 0; i < accword_len * 2; i++) {
+    for (int j = 0; j < MAX_LINE_HEIGHT; j++) {
+      accline_screen_ram[j][accline_len * 2 + i] = accword_screen_ram[j][i];
+      accline_colour_ram[j][accline_len * 2 + i] = accword_colour_ram[j][i];
     }
   }
-  accline_len+=accword_len;
-  fprintf(stderr,"DEBUG: Appended %d columns to accline. accline_len=%d\n",accword_len,accline_len);
-  if (accword_height>accline_height) accline_height=accword_height;
-  if (accword_depth>accline_depth) accline_depth=accword_depth;
+  accline_len += accword_len;
+  fprintf(stderr, "DEBUG: Appended %d columns to accline. accline_len=%d\n", accword_len, accline_len);
+  if (accword_height > accline_height)
+    accline_height = accword_height;
+  if (accword_depth > accline_depth)
+    accline_depth = accword_depth;
 
-  accword_height=1;
-  accword_depth=0;
-  accword_len=0;
-  for(int j=0;j<MAX_LINE_HEIGHT;j++) {
-    bzero(accword_screen_ram[j],MAX_LINE_LENGTH*2);
-    bzero(accword_colour_ram[j],MAX_LINE_LENGTH*2);
-  }    
+  accword_height = 1;
+  accword_depth = 0;
+  accword_len = 0;
+  for (int j = 0; j < MAX_LINE_HEIGHT; j++) {
+    bzero(accword_screen_ram[j], MAX_LINE_LENGTH * 2);
+    bzero(accword_colour_ram[j], MAX_LINE_LENGTH * 2);
+  }
 }
 
 int emit_word_gap(void)
@@ -1000,90 +1010,95 @@ int emit_word_gap(void)
     // C64 ASCII Font
     printf(" ");
     // Draw single char high C64 ASCII font space following the previous word
-    accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=0x20;
-    accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+1]=0;
-    accline_colour_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=0;
-    accline_colour_ram[MAX_LINE_HEIGHT-1][accline_len*2+1]=text_colour + attributes;
+    accline_screen_ram[MAX_LINE_HEIGHT - 1][accline_len * 2 + 0] = 0x20;
+    accline_screen_ram[MAX_LINE_HEIGHT - 1][accline_len * 2 + 1] = 0;
+    accline_colour_ram[MAX_LINE_HEIGHT - 1][accline_len * 2 + 0] = 0;
+    accline_colour_ram[MAX_LINE_HEIGHT - 1][accline_len * 2 + 1] = text_colour + attributes;
     accline_len++;
-  } else {
+  }
+  else {
     printf("!!!SPACE!!!");
     render_codepoint(0x20); // SPACE
     emit_rendered_word();
   }
-  queued_word_gap=0;
+  queued_word_gap = 0;
   return 0;
 }
 
 int emit_accumulated_word(void)
 {
   if (!word_len) {
-    accword_height=1;
-    accword_depth=0;
+    accword_height = 1;
+    accword_depth = 0;
     return 0;
   }
-  
+
   if (!type_faces[current_font]) {
     int len = word_len;
     // Is there room for the word and a space (or just the word, if there is nothing on the line so far)
-    if ( (accline_len && (MAX_LINE_LENGTH - accline_len) < (1+len))
-	 || ((!accline_len) && (MAX_LINE_LENGTH - accline_len) < len) )
-      {
-	queued_word_gap=0;
-	emit_accumulated_line();
-      }
+    if ((accline_len && (MAX_LINE_LENGTH - accline_len) < (1 + len))
+        || ((!accline_len) && (MAX_LINE_LENGTH - accline_len) < len)) {
+      queued_word_gap = 0;
+      emit_accumulated_line();
+    }
     // Draw single char high C64 ASCII font text directly
     for (int xx = 0; xx < len; xx++) {
       if (accline_len >= MAX_LINE_LENGTH) {
-	queued_word_gap=0;
-	emit_accumulated_line();
+        queued_word_gap = 0;
+        emit_accumulated_line();
       }
-      accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=word[xx];
-      accline_screen_ram[MAX_LINE_HEIGHT-1][accline_len*2+1]=0;
-      accline_colour_ram[MAX_LINE_HEIGHT-1][accline_len*2+0]=0;
-      accline_colour_ram[MAX_LINE_HEIGHT-1][accline_len*2+1]=text_colour + attributes;
+      accline_screen_ram[MAX_LINE_HEIGHT - 1][accline_len * 2 + 0] = word[xx];
+      accline_screen_ram[MAX_LINE_HEIGHT - 1][accline_len * 2 + 1] = 0;
+      accline_colour_ram[MAX_LINE_HEIGHT - 1][accline_len * 2 + 0] = 0;
+      accline_colour_ram[MAX_LINE_HEIGHT - 1][accline_len * 2 + 1] = text_colour + attributes;
       accline_len++;
     }
-  } else {
+  }
+  else {
     // True-type font
 
     // 1. Build render of word into a temporary screen/colour RAM buffer
-    for(int i=0;i<word_len;) {
+    for (int i = 0; i < word_len;) {
       // XXX - UTF-8 decode
-      int extra_bytes=0;
-      int code_point=0;
-      if (word[i]<0x80) {
-	// Single-byte ASCII range
-	code_point = word[i]&0x7f;
-      } else if ((word[i]&0xe0)==0xc0) {
-	// 2 byte unicode
-	extra_bytes=1;
-	code_point=word[i]&0x1f;
-      } else if ((word[i]&0xf0)==0xe0) {
-	// 3 byte unicode
-	extra_bytes=2;
-	code_point=word[i]&0x0f;
-      } else if ((word[i]&0xf8)==0xf0) {
-	// 4 byte unicode
-	extra_bytes=3;
-	code_point=word[i]&0x07;
-      } else {
-	fprintf(stderr,"Illegal character 0x%02x in UTF-8 text stream.\n",word[i]);
-	exit(-1);
+      int extra_bytes = 0;
+      int code_point = 0;
+      if (word[i] < 0x80) {
+        // Single-byte ASCII range
+        code_point = word[i] & 0x7f;
+      }
+      else if ((word[i] & 0xe0) == 0xc0) {
+        // 2 byte unicode
+        extra_bytes = 1;
+        code_point = word[i] & 0x1f;
+      }
+      else if ((word[i] & 0xf0) == 0xe0) {
+        // 3 byte unicode
+        extra_bytes = 2;
+        code_point = word[i] & 0x0f;
+      }
+      else if ((word[i] & 0xf8) == 0xf0) {
+        // 4 byte unicode
+        extra_bytes = 3;
+        code_point = word[i] & 0x07;
+      }
+      else {
+        fprintf(stderr, "Illegal character 0x%02x in UTF-8 text stream.\n", word[i]);
+        exit(-1);
       }
       i++;
-      while(extra_bytes) {
-	if ((word[i]&0xc0)!=0x80) {
-	  fprintf(stderr,"Illegal extension byte 0x%02x in UTF-8 text stream.\n",word[i]);
-	  exit(-1);
-	}
-	// Add the 6 new bits to the code point
-	code_point=code_point<<6;
-	code_point+=word[i]&0x3f;
-	extra_bytes--;
-	i++;
+      while (extra_bytes) {
+        if ((word[i] & 0xc0) != 0x80) {
+          fprintf(stderr, "Illegal extension byte 0x%02x in UTF-8 text stream.\n", word[i]);
+          exit(-1);
+        }
+        // Add the 6 new bits to the code point
+        code_point = code_point << 6;
+        code_point += word[i] & 0x3f;
+        extra_bytes--;
+        i++;
       }
 
-      printf("[CP=$%x]\n",code_point);
+      printf("[CP=$%x]\n", code_point);
 
       // 1.1. Get the glyph and render it into NCM blocks
       // XXX - Eventually check for NCM blocks with spare columns on the right-hand side, and
@@ -1092,13 +1107,13 @@ int emit_accumulated_word(void)
       // logic.
       render_codepoint(code_point);
     }
-    
+
     // 2. Check if it is too wide for the current remaining line.
     //    If so, start it on the next line. If it's still too long, we will just clip it.
     //    If starting a new line, emit the accumulated line of text to start the new line.
-    if (accword_len+accline_len>MAX_LINE_LENGTH) {
+    if (accword_len + accline_len > MAX_LINE_LENGTH) {
       emit_accumulated_line();
-    } 
+    }
 
     // 3. Copy it into the current accumulating line of text.
     //    Update maximum above and below height of the line.
@@ -1106,9 +1121,15 @@ int emit_accumulated_word(void)
   }
 
   // Show the user the word we have emitted
-  printf("<"); for(int i=0;i<word_len;i++) { printf("%c",word[i]); } printf(">"); fflush(stdout);
-  
-  word_len=0; word[0]=0;
+  printf("<");
+  for (int i = 0; i < word_len; i++) {
+    printf("%c", word[i]);
+  }
+  printf(">");
+  fflush(stdout);
+
+  word_len = 0;
+  word[0] = 0;
   return 0;
 }
 
@@ -1133,58 +1154,73 @@ void emit_text(char *text)
   int len = strlen(text);
 
   char alttext[2048] = "", imgname[2048] = "", theurl[2048] = "";
-  
-  for(int i=0;i<len;) {
+
+  for (int i = 0; i < len;) {
 
     // Look for asterisks to toggle bold/italic
-    int stars=0;
-    while ((i<len)&&text[i]=='*') {
-      stars++; i++;
+    int stars = 0;
+    while ((i < len) && text[i] == '*') {
+      stars++;
+      i++;
     }
 
-    int before=1;
-    
+    int before = 1;
+
     // Emit accumulated word before setting fancy font face
-    if (current_font == FONT_PARAGRAPH) before=1;
-    
-    if (before&&queued_word_gap) emit_word_gap();
-    
-    if (stars&&word_len) emit_accumulated_word();
-    
-    switch(stars) {
-    case 0: break;
+    if (current_font == FONT_PARAGRAPH)
+      before = 1;
+
+    if (before && queued_word_gap)
+      emit_word_gap();
+
+    if (stars && word_len)
+      emit_accumulated_word();
+
+    switch (stars) {
+    case 0:
+      break;
     case 1: // Toggle italic
       if (current_font == FONT_PARAGRAPH) {
-	current_font = FONT_PARAGRAPH_ITALIC;
-	if (!type_faces[current_font]) text_colour = 7;
-      } else paragraph_font();
+        current_font = FONT_PARAGRAPH_ITALIC;
+        if (!type_faces[current_font])
+          text_colour = 7;
+      }
+      else
+        paragraph_font();
       break;
     case 2: // Toggle bold
       if (current_font == FONT_PARAGRAPH) {
-	current_font = FONT_PARAGRAPH_BOLD;
-	attributes = 0x20; // Reverse text for bold
-      } else paragraph_font();
+        current_font = FONT_PARAGRAPH_BOLD;
+        attributes = 0x20; // Reverse text for bold
+      }
+      else
+        paragraph_font();
       break;
     case 3: // Toggle bold+italic
       if (current_font == FONT_PARAGRAPH) {
-	current_font = FONT_PARAGRAPH_ITALIC;
-	if (!type_faces[current_font]) text_colour = 7;
-      } else paragraph_font();
+        current_font = FONT_PARAGRAPH_ITALIC;
+        if (!type_faces[current_font])
+          text_colour = 7;
+      }
+      else
+        paragraph_font();
       break;
     default:
       // Too many stars
-      fprintf(stderr,"ERROR: Too many *'s in a row: only upto 3 are allowed. Escape with \\ for literals.\n");
-      fprintf(stderr,"       Offending text is: %s\n",text);
+      fprintf(stderr, "ERROR: Too many *'s in a row: only upto 3 are allowed. Escape with \\ for literals.\n");
+      fprintf(stderr, "       Offending text is: %s\n", text);
       exit(-1);
     }
-    if (stars) printf("{%d stars, wl=%d}",stars,word_len);
+    if (stars)
+      printf("{%d stars, wl=%d}", stars, word_len);
 
     // Emit word if we have just cancelled a fancy font face
-    if ((!before)&&queued_word_gap) emit_word_gap();
+    if ((!before) && queued_word_gap)
+      emit_word_gap();
 
     // Check for [text](url) -- A link
-    if (sscanf(&text[i], "[%[^]]](%[^)])%n", alttext, theurl,&n) == 2) {
-      i+=n;
+    if (sscanf(&text[i], "[%[^]]](%[^)])%n", alttext, theurl, &n) == 2) {
+      i += n;
       // Emit word and get the dimensions for it
       attributes_saved = attributes;
       attributes = 0x80; // underline links
@@ -1206,13 +1242,13 @@ void emit_text(char *text)
       int url_id = register_url(theurl);
       register_box(url_id, x1, y1, screen_x, screen_y);
 
-      in_paragraph = 1;      
+      in_paragraph = 1;
     }
     // ![alt-text](imagefile.png)
     // Currently we only support PNG images, and the alt text must
     else if (sscanf(&text[i], "![%[^]]](%[^)])%n", alttext, imgname, &n) == 2) {
-      i+=n;
-      
+      i += n;
+
       read_png_file(imgname);
       struct screen *s = png_to_screen(0, ts);
 
@@ -1223,9 +1259,8 @@ void emit_text(char *text)
         register_box(url_id, screen_x, screen_y, screen_x + s->width - 1, screen_y + s->height - 1);
       }
 
-      fprintf(stderr,"INFO: Drawing image of %dx%d tiles\n",
-	      s->width,s->height);
-      
+      fprintf(stderr, "INFO: Drawing image of %dx%d tiles\n", s->width, s->height);
+
       if (s->width > 80 || (s->height + screen_y) > max_lines) {
         fprintf(stderr, "WARNING: Not enough space left on page to fit image '%s'\n", imgname);
       }
@@ -1244,35 +1279,43 @@ void emit_text(char *text)
         screen_y += s->height;
       }
 
-      in_paragraph = 1;            
-    } else if (!stars) {
+      in_paragraph = 1;
+    }
+    else if (!stars) {
       // Accumulate character into word, or terminate and emit word
-      switch(text[i]) {
-      case ' ': case '\t': case '\r': case '\n':
-	// End of word
-	emit_accumulated_word();
-	in_paragraph=1;
-	queued_word_gap=1;
-	break;
+      switch (text[i]) {
+      case ' ':
+      case '\t':
+      case '\r':
+      case '\n':
+        // End of word
+        emit_accumulated_word();
+        in_paragraph = 1;
+        queued_word_gap = 1;
+        break;
       default:
-	// Part of a word
-	if (word_len<1024) {
-	  word[word_len++]=text[i];
-	  word[word_len]=0;
-	} else {
-	  fprintf(stderr,"ERROR: Markdown contains a word that is too long.\n");
-	  exit(-1);
-	}
-	if (!in_paragraph) printf("[Char '%c' started paragraph]\n",text[i]);
+        // Part of a word
+        if (word_len < 1024) {
+          word[word_len++] = text[i];
+          word[word_len] = 0;
+        }
+        else {
+          fprintf(stderr, "ERROR: Markdown contains a word that is too long.\n");
+          exit(-1);
+        }
+        if (!in_paragraph)
+          printf("[Char '%c' started paragraph]\n", text[i]);
+        in_paragraph = 1;
 	in_paragraph = 1;      
+        in_paragraph = 1;
       }
       i++;
     }
   }
-  
-  // And output any last bit of a word at the end of the text
-  if (word_len) emit_accumulated_word();
 
+  // And output any last bit of a word at the end of the text
+  if (word_len)
+    emit_accumulated_word();
 }
 
 int do_pass(char **argv, struct tile_set *ts)
@@ -1309,61 +1352,79 @@ int do_pass(char **argv, struct tile_set *ts)
     char font_id_str[1024];
     char font_file[1024];
     int font_size;
-    if (sscanf(line,"#define FONT(%[^)]) %[^,],%d",font_id_str,font_file,&font_size)==3) {
+    if (sscanf(line, "#define FONT(%[^)]) %[^,],%d", font_id_str, font_file, &font_size) == 3) {
       // Redefine a font
-      int font_id=-1;
-      if (!strcasecmp(font_id_str,"h1")) font_id=FONT_H1;
-      if (!strcasecmp(font_id_str,"h2")) font_id=FONT_H2;
-      if (!strcasecmp(font_id_str,"h3")) font_id=FONT_H3;
-      if (!strcasecmp(font_id_str,"p")) font_id=FONT_PARAGRAPH;
-      if (!strcasecmp(font_id_str,"bold")) font_id=FONT_PARAGRAPH_BOLD;
-      if (!strcasecmp(font_id_str,"italic")) font_id=FONT_PARAGRAPH_ITALIC;
-      if (!strcasecmp(font_id_str,"bolditalic")) font_id=FONT_PARAGRAPH_BOLDITALIC;
-      if (font_id==-1) {
-	fprintf(stderr,"ERROR: Unsupported FONT('%s') definition. Only h1, h2, h3, p, bold, bolditalic and italic are supported right now.\n",
-		font_id_str);
-	exit(-1);
+      int font_id = -1;
+      if (!strcasecmp(font_id_str, "h1"))
+        font_id = FONT_H1;
+      if (!strcasecmp(font_id_str, "h2"))
+        font_id = FONT_H2;
+      if (!strcasecmp(font_id_str, "h3"))
+        font_id = FONT_H3;
+      if (!strcasecmp(font_id_str, "p"))
+        font_id = FONT_PARAGRAPH;
+      if (!strcasecmp(font_id_str, "bold"))
+        font_id = FONT_PARAGRAPH_BOLD;
+      if (!strcasecmp(font_id_str, "italic"))
+        font_id = FONT_PARAGRAPH_ITALIC;
+      if (!strcasecmp(font_id_str, "bolditalic"))
+        font_id = FONT_PARAGRAPH_BOLDITALIC;
+      if (font_id == -1) {
+        fprintf(stderr,
+            "ERROR: Unsupported FONT('%s') definition. Only h1, h2, h3, p, bold, bolditalic and italic are supported right "
+            "now.\n",
+            font_id_str);
+        exit(-1);
       }
       // Try loading the font
       // Release old font, first.
       if (type_faces[font_id]) {
-	FT_Done_Face(type_faces[font_id]);
-	type_faces[font_id]=NULL;
+        FT_Done_Face(type_faces[font_id]);
+        type_faces[font_id] = NULL;
       }
-      error = FT_New_Face( library, font_file, 0, &type_faces[font_id] );
-      if (error) { fprintf(stderr,"ERROR: Could not load font: %s\n",line); exit(-1); }
-      error = FT_Set_Pixel_Sizes( type_faces[font_id], font_size, font_size);
-      if (error) { fprintf(stderr,"ERROR: Could not set pixel size for font: %s\n",line); exit(-1); }
+      error = FT_New_Face(library, font_file, 0, &type_faces[font_id]);
+      if (error) {
+        fprintf(stderr, "ERROR: Could not load font: %s\n", line);
+        exit(-1);
+      }
+      error = FT_Set_Pixel_Sizes(type_faces[font_id], font_size, font_size);
+      if (error) {
+        fprintf(stderr, "ERROR: Could not set pixel size for font: %s\n", line);
+        exit(-1);
+      }
       glyph_slot = type_faces[font_id]->glyph;
-      fprintf(stderr,"INFO: Loaded font: %s as %s, size %d\n",font_id_str,font_file,font_size);
-      
-    } else if (!strncmp("# ",line,2)) {
+      fprintf(stderr, "INFO: Loaded font: %s as %s, size %d\n", font_id_str, font_file, font_size);
+    }
+    else if (!strncmp("# ", line, 2)) {
       // Heading H1
-      printf("[in_para=%d]\n",in_paragraph);
+      printf("[in_para=%d]\n", in_paragraph);
       next_paragraph();
-      printf("[in_para=%d]\n",in_paragraph);
-      current_font = FONT_H1;      
+      printf("[in_para=%d]\n", in_paragraph);
+      current_font = FONT_H1;
       text_colour = 1;   // white text for headings
       attributes = 0x80; // underline for headings
       emit_text(&line[2]);
       next_paragraph();
-    } else if (!strncmp("## ",line,3)) {
+    }
+    else if (!strncmp("## ", line, 3)) {
       // Heading H2
       next_paragraph();
-      current_font = FONT_H2;      
+      current_font = FONT_H2;
       text_colour = 1;   // white text for headings
       attributes = 0x80; // underline for headings
       emit_text(&line[3]);
       next_paragraph();
-    } else if (!strncmp("### ",line,4)) {
+    }
+    else if (!strncmp("### ", line, 4)) {
       // Heading H3
       next_paragraph();
-      current_font = FONT_H3;      
+      current_font = FONT_H3;
       text_colour = 1;   // white text for headings
       attributes = 0x80; // underline for headings
       emit_text(&line[4]);
       next_paragraph();
-    } else if (line[0] == '\n' || line[0] == '\r') {
+    }
+    else if (line[0] == '\n' || line[0] == '\r') {
       // Blank line = paragraph break
       next_paragraph();
     }
@@ -1400,7 +1461,7 @@ int do_pass(char **argv, struct tile_set *ts)
   // Number of screen lines
   header[10] = screen_y & 0xff;
   header[11] = screen_y >> 8;
-  
+
   // Screen colours
   header[12] = 0x06;
   header[13] = 0x06;
@@ -1578,7 +1639,8 @@ int do_pass(char **argv, struct tile_set *ts)
   // the sequence number, I'm going to disconnect RIGHT NOW!" means we need even
   // more empty space here, until I fix that bug.
   bzero(screen_ram, 1500);
-  for(int i=0;i<32;i++) fwrite(screen_ram, 1500, 1, outfile);
+  for (int i = 0; i < 32; i++)
+    fwrite(screen_ram, 1500, 1, outfile);
 
   if (outfile != NULL) {
     fclose(outfile);
@@ -1598,23 +1660,24 @@ int main(int argc, char **argv)
   }
 
   // Default to all fonts using MEGA65 ASCII font
-  for(int i=0;i<MAX_TYPEFACES;i++) type_faces[i]=NULL;
-  
+  for (int i = 0; i < MAX_TYPEFACES; i++)
+    type_faces[i] = NULL;
+
   // Setup TTF handling library
-  error = FT_Init_FreeType( &library );              /* initialize library */
+  error = FT_Init_FreeType(&library); /* initialize library */
 
   current_font = FONT_PARAGRAPH;
-  
+
   // Allow upto 128KB of tiles (for both graphics and font glyphs)
   ts = new_tileset(128 * 1024 / 64);
   palette_c64_init(ts);
 
-  do_pass(argv,ts);
+  do_pass(argv, ts);
   pass_num = 2;
   if (second_pass_required) {
     fprintf(stderr, "Quantising colours for 2nd pass.\n");
     quantise_colours(ts);
     fprintf(stderr, "Running 2nd pass.\n");
-    do_pass(argv,ts);
+    do_pass(argv, ts);
   }
 }

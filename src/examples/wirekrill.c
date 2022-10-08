@@ -108,12 +108,12 @@ unsigned short mdio_read_register(unsigned char addr, unsigned char reg)
 
 unsigned short mdio_write_register(unsigned char addr, unsigned char reg, unsigned short val)
 {
-    POKE(0xD6e6L, (reg & 0x1f) + ((addr & 7) << 5));
-    POKE(0xD6E8L, val>>8);
-    POKE(0xD6E7L, val>>0);
-    // Allow write to finish before scheduling the read
-    wait_1ms();
-    return mdio_read_register(addr,reg);
+  POKE(0xD6e6L, (reg & 0x1f) + ((addr & 7) << 5));
+  POKE(0xD6E8L, val >> 8);
+  POKE(0xD6E7L, val >> 0);
+  // Allow write to finish before scheduling the read
+  wait_1ms();
+  return mdio_read_register(addr, reg);
 }
 
 #define TEST(reg, v, bit, desc)                                                                                             \
@@ -132,16 +132,16 @@ char msg[160 + 1];
 
 unsigned short i;
 
-unsigned char loopback_mode=0;
-unsigned char good_loop_frames=0;
-unsigned int total_loop_frames=0;
-unsigned int bad_loop_frames=0;
-unsigned int missed_loop_frames=0;
-unsigned char skip_frame=0;
-unsigned char saw_loop_frame=0;
-unsigned char send_loop_frame=0;
+unsigned char loopback_mode = 0;
+unsigned char good_loop_frames = 0;
+unsigned int total_loop_frames = 0;
+unsigned int bad_loop_frames = 0;
+unsigned int missed_loop_frames = 0;
+unsigned char skip_frame = 0;
+unsigned char saw_loop_frame = 0;
+unsigned char send_loop_frame = 0;
 unsigned char error_map[1024];
-unsigned char icmp_only=0;
+unsigned char icmp_only = 0;
 
 unsigned char loop_data[256];
 
@@ -310,60 +310,51 @@ unsigned char phy, last_frame_num = 0, show_hex = 0, last_d6ef = 0;
 
 void errata_ksz8081rnd(void)
 {
-  /* 
+  /*
      None of the errata work-arounds are required at this time.
    */
-  
 }
 
 void clear_rx_queue(void)
 {
   // Clear queued packets
-  for(i=0;i<255;i++) {
+  for (i = 0; i < 255; i++) {
     if (PEEK(0xD6E1) & 0x20) // Packet received
-      {
-	// Pop a frame from the buffer list
-	POKE(0xD6E1, 0x01);
-	POKE(0xD6E1, 0x03);
-	POKE(0xD6E1, 0x01);
-      }
+    {
+      // Pop a frame from the buffer list
+      POKE(0xD6E1, 0x01);
+      POKE(0xD6E1, 0x03);
+      POKE(0xD6E1, 0x01);
+    }
   }
 }
-
 
 void eth_reset(void)
 {
   // Datasheet requires at least 500usec held low, then at least 100usec after release,
   // before anything else is done to it.
   POKE(0xd6e0, 0);
-  for(i=0;i<20;i++) wait_10ms();
+  for (i = 0; i < 20; i++)
+    wait_10ms();
   POKE(0xd6e0, 3);
-  for(i=0;i<20;i++) wait_10ms();
+  for (i = 0; i < 20; i++)
+    wait_10ms();
   POKE(0xd6e1, 3);
   POKE(0xd6e1, 0);
 
   clear_rx_queue();
-  
 }
 
 void mdio_dump(void)
 {
   unsigned char i;
-  for(i=0;i<32;i+=8) {
-    snprintf(msg, 160, "  MDIO: %02x: %04x %04x %04x %04x %04x %04x %04x %04x",
-	     i,
-	     mdio_read_register(phy,i+0),
-	     mdio_read_register(phy,i+1),
-	     mdio_read_register(phy,i+2),
-	     mdio_read_register(phy,i+3),
-	     mdio_read_register(phy,i+4),
-	     mdio_read_register(phy,i+5),
-	     mdio_read_register(phy,i+6),
-	     mdio_read_register(phy,i+7)
-	     );
+  for (i = 0; i < 32; i += 8) {
+    snprintf(msg, 160, "  MDIO: %02x: %04x %04x %04x %04x %04x %04x %04x %04x", i, mdio_read_register(phy, i + 0),
+        mdio_read_register(phy, i + 1), mdio_read_register(phy, i + 2), mdio_read_register(phy, i + 3),
+        mdio_read_register(phy, i + 4), mdio_read_register(phy, i + 5), mdio_read_register(phy, i + 6),
+        mdio_read_register(phy, i + 7));
     println_text80(7, msg);
   }
-
 }
 
 #ifdef NATIVE_TEST
@@ -380,7 +371,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "ERROR: Failed to open PCAP capture file '%s'\nPCAP said: %s\n", argv[1], errbuf);
     exit(-1);
   }
-  
+
 #else
 void main(void)
 {
@@ -402,7 +393,6 @@ void main(void)
   println_text80(1, "WireKrill 0.0.1 Network Analyser.");
   println_text80(1, "(C) Paul Gardner-Stephen, 2020-2022.");
 
-  
   // No promiscuous mode, ignore corrupt packets, accept broadcast and multicast
   // default RX and TX phase adjust.
   POKE(0xD6E5, 0x30);
@@ -410,11 +400,11 @@ void main(void)
   // Reset ethernet
   eth_reset();
 
-  POKE(0xD6E5,0x32); // enable buff ID peeking via CRC-disable bit
-  snprintf(msg, 160, "Initial buffer status: [CPU=$%02x, ETH=$%02x]", PEEK(0xD6EC),PEEK(0xD6EE));
-  POKE(0xD6E5,0x30); // enable buff ID peeking via CRC-disable bit
+  POKE(0xD6E5, 0x32); // enable buff ID peeking via CRC-disable bit
+  snprintf(msg, 160, "Initial buffer status: [CPU=$%02x, ETH=$%02x]", PEEK(0xD6EC), PEEK(0xD6EE));
+  POKE(0xD6E5, 0x30); // enable buff ID peeking via CRC-disable bit
   println_text80(1, msg);
-  
+
   // Accept broadcast and multicast frames, and enable promiscuous mode
   POKE(0xD6E5, 0x30);
 
@@ -465,9 +455,9 @@ void main(void)
 #endif
 
   mdio_dump();
-  
+
   clear_rx_queue();
-    
+
   // Apply KSZ8081RND errata
   errata_ksz8081rnd();
 
@@ -477,116 +467,130 @@ void main(void)
 #endif
 
   // Get initial value of MDIO register 1 for monitoring link status changes
-  last_mdio1 = mdio_read_register(phy,0x01);
+  last_mdio1 = mdio_read_register(phy, 0x01);
 
   while (1) {
 
-    switch(PEEK(0xD610)) {
-    case 0x52: case 0x72:
+    switch (PEEK(0xD610)) {
+    case 0x52:
+    case 0x72:
       eth_reset();
-      POKE(0xD610,0);
-      println_text80(7,"Resetting Ethernet PHY");
-      break;      
+      POKE(0xD610, 0);
+      println_text80(7, "Resetting Ethernet PHY");
+      break;
     case 0x31:
     case 0x32:
-    case 0x33:           
+    case 0x33:
       // Adjust REFCLK pad delay. According to the errata for the ethernet PHY.
       // This register is not documented in the main datasheet, however.
-      i=mdio_read_register(phy,0x19);
-      i&=0x0fff;
+      i = mdio_read_register(phy, 0x19);
+      i &= 0x0fff;
       // Select -0.6ns (|=0x0000), 0ns (|=0x7000) or +0.6ns (|=0xf000) for REFCLK
       // pad delay.
-      switch(PEEK(0xD610)) {
-      case 0x31: i=0x0000; break;
-      case 0x32: i=0x7777; break;
-      case 0x33: i=0xffff; break;
+      switch (PEEK(0xD610)) {
+      case 0x31:
+        i = 0x0000;
+        break;
+      case 0x32:
+        i = 0x7777;
+        break;
+      case 0x33:
+        i = 0xffff;
+        break;
       }
-      mdio_write_register(phy,0x19,i);
-      mdio_write_register(phy,0x1a,i);
-      snprintf(msg,80,"Setting register $19 to $%04x\n",i);
-      println_text80(7,msg);
-      
-      POKE(0xD610,0);
+      mdio_write_register(phy, 0x19, i);
+      mdio_write_register(phy, 0x1a, i);
+      snprintf(msg, 80, "Setting register $19 to $%04x\n", i);
+      println_text80(7, msg);
+
+      POKE(0xD610, 0);
       break;
     case 0x34:
       // default drive current
-      mdio_write_register(phy,0x11,0x0000);
-      POKE(0xD610,0);
-      break;      
+      mdio_write_register(phy, 0x11, 0x0000);
+      POKE(0xD610, 0);
+      break;
     case 0x35:
       // 8mA drive current
-      mdio_write_register(phy,0x11,0x8000);
-      POKE(0xD610,0);
-      break;      
+      mdio_write_register(phy, 0x11, 0x8000);
+      POKE(0xD610, 0);
+      break;
     case 0x36:
       // 8mA drive current
-      mdio_write_register(phy,0x11,0xA000);
-      POKE(0xD610,0);
-      break;      
+      mdio_write_register(phy, 0x11, 0xA000);
+      POKE(0xD610, 0);
+      break;
     case 0x37:
       // 14mA drive current
-      mdio_write_register(phy,0x11,0xC000);
-      POKE(0xD610,0);
-      break;      
+      mdio_write_register(phy, 0x11, 0xC000);
+      POKE(0xD610, 0);
+      break;
     case 0x38:
       // 10mA drive current
-      mdio_write_register(phy,0x11,0xE000);
-      POKE(0xD610,0);
-      break;      
+      mdio_write_register(phy, 0x11, 0xE000);
+      POKE(0xD610, 0);
+      break;
 
-    case 0x4d: case 0x6d:
+    case 0x4d:
+    case 0x6d:
       // Show MDIO registers
       mdio_dump();
-      POKE(0xD610,0);      
+      POKE(0xD610, 0);
       break;
-    case 0x4c: case 0x6c:
+    case 0x4c:
+    case 0x6c:
       // Send a single loop-back frame for testing
-      send_loop_frame=1;
-      POKE(0xD610,0);      
+      send_loop_frame = 1;
+      POKE(0xD610, 0);
       break;
-    case 0x49: case 0x69:
-      icmp_only^=1;
-      if (icmp_only) println_text80(7,"Will report only ICMP frames.");
-      else println_text80(7,"ICMP filter disactivated.");
-      POKE(0xD610,0);      
+    case 0x49:
+    case 0x69:
+      icmp_only ^= 1;
+      if (icmp_only)
+        println_text80(7, "Will report only ICMP frames.");
+      else
+        println_text80(7, "ICMP filter disactivated.");
+      POKE(0xD610, 0);
       break;
-    case 0x44: case 0x64:
-      // Digital loopback test      
+    case 0x44:
+    case 0x64:
+      // Digital loopback test
 
       clear_rx_queue();
-      
-      total_loop_frames=0;
-      bad_loop_frames=0;
-      missed_loop_frames=0;      
-      for(i=0;i<1024;i++) error_map[i]=0;
-      
-      // Enable digital loopback mode
-      mdio_write_register(phy,0x00,0x6100);
 
-      loopback_mode=1;
+      total_loop_frames = 0;
+      bad_loop_frames = 0;
+      missed_loop_frames = 0;
+      for (i = 0; i < 1024; i++)
+        error_map[i] = 0;
+
+      // Enable digital loopback mode
+      mdio_write_register(phy, 0x00, 0x6100);
+
+      loopback_mode = 1;
 
       println_text80(7, "Activated digital loopback test mode.");
 
-      POKE(0xD610,0);
+      POKE(0xD610, 0);
       break;
     case 0x03:
 
       // Cancel digital loopback mode, if it was selected
-      mdio_write_register(phy,0x00,0x0100);
+      mdio_write_register(phy, 0x00, 0x0100);
 
-      loopback_mode=0;
+      loopback_mode = 0;
 
       println_text80(7, "Ending loopback test mode.");
-      
-      POKE(0xD610,0);
+
+      POKE(0xD610, 0);
       break;
     case 0x00:
       break;
     default:
       // Eat unsupported characters
-      POKE(0xD610,0);
+      POKE(0xD610, 0);
     }
-    
+
 #if 0
     if (PEEK(0xD6EF) != last_d6ef) {
       last_d6ef = PEEK(0xD6EF);
@@ -595,7 +599,7 @@ void main(void)
       println_text80(1, msg);
     }
 #endif
-    
+
     // Check for new packets
     if (PEEK(0xD6E1) & 0x20) // Packet received
     {
@@ -607,288 +611,316 @@ void main(void)
       lfill((long)msg, 0, 160);
       len = frame_buffer[0] + ((frame_buffer[1] & 0xf) << 8);
 
-      skip_frame=0;
-      
+      skip_frame = 0;
+
       // Check if its a loop-back debug frame: If so, report only success or failure
-      if ((frame_buffer[8]==0x01)&&(frame_buffer[9]==0x02)&&(frame_buffer[10]==0x03)&&
-	  (frame_buffer[11]==0x40)&&(frame_buffer[12]==0x50)&&(frame_buffer[13]==0x60)) {
+      if ((frame_buffer[8] == 0x01) && (frame_buffer[9] == 0x02) && (frame_buffer[10] == 0x03) && (frame_buffer[11] == 0x40)
+          && (frame_buffer[12] == 0x50) && (frame_buffer[13] == 0x60)) {
 
-	unsigned int loop_frame_num=frame_buffer[16+0]+(frame_buffer[16+1]<<8);
-	
-	// It's a loopback frame
-	saw_loop_frame=1;
+        unsigned int loop_frame_num = frame_buffer[16 + 0] + (frame_buffer[16 + 1] << 8);
 
-	if (total_loop_frames!=loop_frame_num) {
-	  snprintf(msg,80,"ERROR: Expected loopback frame #%d, but saw #%d",total_loop_frames,loop_frame_num);
-	  println_text80(2, msg);
-	  for(i=0;i<100;i++) wait_10ms();
-	}
-	
-	for(i=0;i<256;i++) {
-	  if (frame_buffer[16+i]!=loop_data[i]) break;	  
-	}
-	total_loop_frames++;
-	if (i==256) {
-	  //	  println_text80(1,"Good loop back frame");
-	  // skip_frame=1;
-	  show_hex = 1;      
-	  good_loop_frames++;
-	  if (good_loop_frames==50) {
-	    println_text80(1, "50 consecutive loop-back frames received without error.");	    
-	    good_loop_frames=0;
-	  }
-	}
-	else {
+        // It's a loopback frame
+        saw_loop_frame = 1;
 
-	  bad_loop_frames++;
-	  snprintf(msg,80,"Error in loop-back frame detected after %d good frames (position %d).",good_loop_frames,i);	    
-	  println_text80(2, msg);
-	  good_loop_frames=0;
-	  // Show the bad frame
-	  //	  skip_frame=0;
+        if (total_loop_frames != loop_frame_num) {
+          snprintf(msg, 80, "ERROR: Expected loopback frame #%d, but saw #%d", total_loop_frames, loop_frame_num);
+          println_text80(2, msg);
+          for (i = 0; i < 100; i++)
+            wait_10ms();
+        }
 
-	  for(i=0;i<1024;i++) {
-	    unsigned char mask=0xc0 >> ((i&3) << 1);
-	    if ((frame_buffer[16+(i>>2)]&mask)!=(loop_data[i>>2]&mask)) {
-	      POKE(0xc002,0x21);
-	      if (error_map[i]<9) {
-		error_map[i]++;
-	      } else {
-		// Clear screen before displaying loop-back error report
-		lfill(0xc000,0x20,4000);
+        for (i = 0; i < 256; i++) {
+          if (frame_buffer[16 + i] != loop_data[i])
+            break;
+        }
+        total_loop_frames++;
+        if (i == 256) {
+          //	  println_text80(1,"Good loop back frame");
+          // skip_frame=1;
+          show_hex = 1;
+          good_loop_frames++;
+          if (good_loop_frames == 50) {
+            println_text80(1, "50 consecutive loop-back frames received without error.");
+            good_loop_frames = 0;
+          }
+        }
+        else {
 
-		println_text80(7,"Loop-back test complete. Error map at top of screen.");
-		snprintf(msg,80,"  %d frames sent, of which %d had errors, and %d were not received",
-			 total_loop_frames,bad_loop_frames,missed_loop_frames);
-		println_text80(1,msg);
+          bad_loop_frames++;
+          snprintf(msg, 80, "Error in loop-back frame detected after %d good frames (position %d).", good_loop_frames, i);
+          println_text80(2, msg);
+          good_loop_frames = 0;
+          // Show the bad frame
+          //	  skip_frame=0;
 
-		// Show info about errata workaround mode
-		i=mdio_read_register(phy,0x19);
-		snprintf(msg,80,"  REFCLK pad skew = 0x%04x",i);
-		println_text80(1,msg);
-		i=mdio_read_register(phy,0x11);
-		snprintf(msg,80,"  Drive current select = 0x%04x",i);
-		println_text80(1,msg);
-		
-		// Display loopback error map density after a while
-		for(i=0;i<1024;i++) {
-		  // Convert map to numeric values, with . meaning no errors
-		  if (error_map[i]==0) error_map[i]='.';
-		  else error_map[i]+=0x30;
-		}
-		lcopy(error_map,0xC000,0x0400);
-		for(i=0;i<1024;i++)
-		  if (error_map[i]!='.') {
-		    switch(i&7) {
-		    case 0: lpoke(0xff80000L+i,0x05); break;
-		    case 1: lpoke(0xff80000L+i,0x04); break;
-		    case 2: lpoke(0xff80000L+i,0x03); break;
-		    case 3: lpoke(0xff80000L+i,0x07); break;
-		    case 4: lpoke(0xff80000L+i,0x25); break;
-		    case 5: lpoke(0xff80000L+i,0x24); break;
-		    case 6: lpoke(0xff80000L+i,0x23); break;
-		    case 7: lpoke(0xff80000L+i,0x27); break;
-		    }
-		  } else {
-		    // light blue for all positions without errors
-		    if (i&4) lpoke(0xff80000L+i,0x2e);
-		    else lpoke(0xff80000L+i,0x0e);
-		  }
-		// Wait for key press and reset accumulation
-		while(!PEEK(0xD610)) continue;
-		POKE(0xD610,0);
-		lfill(error_map,0,1024);
-		// And cancel loop-back mode
-		loopback_mode=0;
-		// Cancel digital loopback mode, if it was selected
-		mdio_write_register(phy,0x00,0x0100);
-		total_loop_frames=0;
-		bad_loop_frames=0;
-		missed_loop_frames=0;
-	      }		
-	    } else POKE(0xc002,0x2e);
-	  }	  
-	}
+          for (i = 0; i < 1024; i++) {
+            unsigned char mask = 0xc0 >> ((i & 3) << 1);
+            if ((frame_buffer[16 + (i >> 2)] & mask) != (loop_data[i >> 2] & mask)) {
+              POKE(0xc002, 0x21);
+              if (error_map[i] < 9) {
+                error_map[i]++;
+              }
+              else {
+                // Clear screen before displaying loop-back error report
+                lfill(0xc000, 0x20, 4000);
 
+                println_text80(7, "Loop-back test complete. Error map at top of screen.");
+                snprintf(msg, 80, "  %d frames sent, of which %d had errors, and %d were not received", total_loop_frames,
+                    bad_loop_frames, missed_loop_frames);
+                println_text80(1, msg);
+
+                // Show info about errata workaround mode
+                i = mdio_read_register(phy, 0x19);
+                snprintf(msg, 80, "  REFCLK pad skew = 0x%04x", i);
+                println_text80(1, msg);
+                i = mdio_read_register(phy, 0x11);
+                snprintf(msg, 80, "  Drive current select = 0x%04x", i);
+                println_text80(1, msg);
+
+                // Display loopback error map density after a while
+                for (i = 0; i < 1024; i++) {
+                  // Convert map to numeric values, with . meaning no errors
+                  if (error_map[i] == 0)
+                    error_map[i] = '.';
+                  else
+                    error_map[i] += 0x30;
+                }
+                lcopy(error_map, 0xC000, 0x0400);
+                for (i = 0; i < 1024; i++)
+                  if (error_map[i] != '.') {
+                    switch (i & 7) {
+                    case 0:
+                      lpoke(0xff80000L + i, 0x05);
+                      break;
+                    case 1:
+                      lpoke(0xff80000L + i, 0x04);
+                      break;
+                    case 2:
+                      lpoke(0xff80000L + i, 0x03);
+                      break;
+                    case 3:
+                      lpoke(0xff80000L + i, 0x07);
+                      break;
+                    case 4:
+                      lpoke(0xff80000L + i, 0x25);
+                      break;
+                    case 5:
+                      lpoke(0xff80000L + i, 0x24);
+                      break;
+                    case 6:
+                      lpoke(0xff80000L + i, 0x23);
+                      break;
+                    case 7:
+                      lpoke(0xff80000L + i, 0x27);
+                      break;
+                    }
+                  }
+                  else {
+                    // light blue for all positions without errors
+                    if (i & 4)
+                      lpoke(0xff80000L + i, 0x2e);
+                    else
+                      lpoke(0xff80000L + i, 0x0e);
+                  }
+                // Wait for key press and reset accumulation
+                while (!PEEK(0xD610))
+                  continue;
+                POKE(0xD610, 0);
+                lfill(error_map, 0, 1024);
+                // And cancel loop-back mode
+                loopback_mode = 0;
+                // Cancel digital loopback mode, if it was selected
+                mdio_write_register(phy, 0x00, 0x0100);
+                total_loop_frames = 0;
+                bad_loop_frames = 0;
+                missed_loop_frames = 0;
+              }
+            }
+            else
+              POKE(0xc002, 0x2e);
+          }
+        }
       }
 
       if (!skip_frame) {
 
-	if (!icmp_only) {
+        if (!icmp_only) {
 
-	  POKE(0xD6E5,0x32); // enable buff ID peeking via CRC-disable bit
-	  snprintf(msg, 160, "#$%02x : Ethernet Frame #%d [CPU=$%02x, ETH=$%02x]", PEEK(0xD7FA), ++frame_count,
-		   PEEK(0xD6EC),PEEK(0xD6EE));
-	  POKE(0xD6E5,0x30); // enable buff ID peeking via CRC-disable bit
-	  println_text80(1, msg);
-	  
-	  snprintf(msg, 160, "  %02x:%02x:%02x:%02x:%02x:%02x > %02x:%02x:%02x:%02x:%02x:%02x : len=%d($%x), rxerr=%c",
-		   frame_buffer[8], frame_buffer[9], frame_buffer[10], frame_buffer[11], frame_buffer[12], frame_buffer[13],
-		   frame_buffer[2], frame_buffer[3], frame_buffer[4], frame_buffer[5], frame_buffer[6], frame_buffer[7], len, len,
-		   (frame_buffer[1] & 0x80) ? 'Y' : 'N');
-	  println_text80(13, msg);
-	  show_hex = 1;
-	} else show_hex=0;
-	
-	if (frame_buffer[16] == 0x45) {
-	  // IPv4
-	  start_of_protocol_header = 36;
-	  snprintf(msg, 160, "  IPv4: %d.%d.%d.%d -> %d.%d.%d.%d", frame_buffer[2 + 14 + 12 + 0], frame_buffer[28 + 1],
-		   frame_buffer[28 + 2], frame_buffer[28 + 3], frame_buffer[32 + 0], frame_buffer[32 + 1], frame_buffer[32 + 2],
-		   frame_buffer[32 + 3]);
-	  println_text80(13, msg);
-	  if (frame_buffer[16 + 9] == 0x01) {
-	    // ICMP
-	    if (frame_buffer[16 + 20] == 0x08) {
-	      // PING
-	      snprintf(msg, 160, "  ICMP: Echo request, id=%d, seq=%d",
-		       frame_buffer[16 + 20 + 5] + (frame_buffer[16 + 20 + 4] << 8),
-		       frame_buffer[16 + 20 + 7] + (frame_buffer[16 + 20 + 6] << 8));
-	      println_text80(13, msg);
-	      show_hex=0;
-	    }
-	    else if (frame_buffer[16 + 20] == 0x03) // DESTINATION UNREACHABLE
-	      {
-		printf("  ICMP: Destination Unreachable, code=%d, nexthopMTU=%d", frame_buffer[start_of_protocol_header + 1],
-		       to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
-	      }
-	    else if (frame_buffer[16 + 20] == 0x05) // redirect
-	      {
-		printf("  ICMP: Redirect, code=%d, ipaddress=%d.%d.%d.%d,", frame_buffer[start_of_protocol_header + 1],
-		       frame_buffer[start_of_protocol_header + 4], frame_buffer[start_of_protocol_header + 5],
-		       frame_buffer[start_of_protocol_header + 6], frame_buffer[start_of_protocol_header + 7]);
-	      }
-	  }
-	  else if (icmp_only) {
-	    show_hex=0;
-	  }
-	  else if (frame_buffer[16 + 9] == 0x06) // TCP
-	    {
-	      printf("  TCP Protocol:\n");
-	      printf("    source port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 0], 2));
-	      printf("    destination port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 2], 2));
-	      printf("    sequence number is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 4], 4));
-	      printf("    ackknowledement number is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 8], 4));
-	      printf("    data offset is %d\n", frame_buffer[start_of_protocol_header + 12] >> 4);
-	      printf("    flags: ");
-	      if (frame_buffer[start_of_protocol_header + 12] & 1) {
-		printf("NS ");
-	      }
-	      if ((frame_buffer[start_of_protocol_header + 13] >> 7) & 1) {
-		printf("CWR ");
-	      }
-	      if ((frame_buffer[start_of_protocol_header + 13] >> 6) & 1) {
-		printf("ECE ");
-	      }
-	      if ((frame_buffer[start_of_protocol_header + 13] >> 5) & 1) {
-		printf("URG ");
-	      }
-	      if ((frame_buffer[start_of_protocol_header + 13] >> 4) & 1) {
-		printf("ACK ");
-	      }
-	      if ((frame_buffer[start_of_protocol_header + 13] >> 3) & 1) {
-		printf("PSH ");
-	      }
-	      if ((frame_buffer[start_of_protocol_header + 13] >> 2) & 1) {
-		printf("RST ");
-	      }
-	      if ((frame_buffer[start_of_protocol_header + 13] >> 1) & 1) {
-		printf("SYN ");
-	      }
-	      if ((frame_buffer[start_of_protocol_header + 13] >> 0) & 1) {
-		printf("FIN ");
-	      }
-	      printf("\n");
-	      printf("    window size is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 14], 2));
-	      printf("    checksum is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 16], 2));
-	      printf("    urgent pointer is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 18], 2));
-	      
-	      // data offset gives us the sie of the tcp header in 32 bit words,
-	      // ie to get to the payload we increment by dataoffset * 4 bytes
-	      start_of_protocol_header += ((frame_buffer[start_of_protocol_header + 12] >> 4) * 4);
-	      
-	      // HTTP tests
-	      // evaulate the payload
-	      if (frame_buffer[start_of_protocol_header + 0] == 'P' && frame_buffer[start_of_protocol_header + 1] == 'O'
-		  && frame_buffer[start_of_protocol_header + 2] == 'S' && frame_buffer[start_of_protocol_header + 3] == 'T') {
-		printf("HTTP: Post\n");
-		for (i = 5; frame_buffer[start_of_protocol_header + i] != ' '; i++) {
-		  putchar(frame_buffer[start_of_protocol_header + i]);
-		}
-		putchar('\n');
-	      }
-	      else if (frame_buffer[start_of_protocol_header + 0] == 'G' && frame_buffer[start_of_protocol_header + 1] == 'E'
-		       && frame_buffer[start_of_protocol_header + 2] == 'T') {
-		printf("HTTP: Get\n");
-		for (i = 4; frame_buffer[start_of_protocol_header + i] != ' '; i++) {
-		  putchar(frame_buffer[start_of_protocol_header + i]);
-		}
-		putchar('\n');
-	      }
-	    }
-	  else if (frame_buffer[16 + 9] == 0x11) // UDP
-	    {
-	      printf("  UDP Protocol:\n");
-	      // udp contains a source port
-	      printf("    source port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 0], 2));
-	      // a destination port
-	      printf("    destination port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 2], 2));
-	      // length
-	      printf("    length is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 4], 2));
-	      // checksum
-	      printf("    checksum is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
-	    }
-	}
-	else if (frame_buffer[15] == 0x06) // ARP
-	  {
-	    start_of_protocol_header = 16;
-	    printf("  ARP protocol:\n");
-	    printf("    Hardware type: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 0], 2));
-	    printf("    Protocol type: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 2], 2));
-	    printf("    Hardware address length: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 4], 1));
-	    printf("    Protocol address length: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 5], 1));
-	    printf("    Opcode: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
-	    printf("    Sender Hardware Address: %02x:%02x:%02x:%02x:%02x:%02x\n", frame_buffer[start_of_protocol_header + 8],
-		   frame_buffer[start_of_protocol_header + 9], frame_buffer[start_of_protocol_header + 10],
-		   frame_buffer[start_of_protocol_header + 11], frame_buffer[start_of_protocol_header + 12],
-		   frame_buffer[start_of_protocol_header + 13]);
-	    printf("    Sender IP address: %d.%d.%d.%d\n", frame_buffer[start_of_protocol_header + 14],
-		   frame_buffer[start_of_protocol_header + 15], frame_buffer[start_of_protocol_header + 16],
-		   frame_buffer[start_of_protocol_header + 17]);
-	    printf("    Target Hardware Address: %02x:%02x:%02x:%02x:%02x:%02x\n", frame_buffer[start_of_protocol_header + 18],
-		   frame_buffer[start_of_protocol_header + 19], frame_buffer[start_of_protocol_header + 20],
-		   frame_buffer[start_of_protocol_header + 21], frame_buffer[start_of_protocol_header + 22],
-		   frame_buffer[start_of_protocol_header + 23]);
-	    printf("    Target IP address: %d.%d.%d.%d\n", frame_buffer[start_of_protocol_header + 24],
-		   frame_buffer[start_of_protocol_header + 25], frame_buffer[start_of_protocol_header + 26],
-		   frame_buffer[start_of_protocol_header + 27]);
-	  }
-	if (show_hex) {
-	  for (i = 0; i < 256 && i < len; i += 16) {
-	    lfill((long)msg, 0, 160);
-	    snprintf(msg, 160,
-		     "       %04x: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x  "
-		     "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",
-		     i, frame_buffer[14 + i], frame_buffer[15 + i], frame_buffer[16 + i], frame_buffer[17 + i],
-		     frame_buffer[18 + i], frame_buffer[19 + i], frame_buffer[20 + i], frame_buffer[21 + i], frame_buffer[22 + i],
-		     frame_buffer[23 + i], frame_buffer[24 + i], frame_buffer[25 + i], frame_buffer[26 + i], frame_buffer[27 + i],
-		     frame_buffer[28 + i], frame_buffer[29 + i],
-		     
-		     safe_char(frame_buffer[14 + i]), safe_char(frame_buffer[15 + i]), safe_char(frame_buffer[16 + i]),
-		     safe_char(frame_buffer[17 + i]), safe_char(frame_buffer[18 + i]), safe_char(frame_buffer[19 + i]),
-		     safe_char(frame_buffer[20 + i]), safe_char(frame_buffer[21 + i]), safe_char(frame_buffer[22 + i]),
-		     safe_char(frame_buffer[23 + i]), safe_char(frame_buffer[24 + i]), safe_char(frame_buffer[25 + i]),
-		     safe_char(frame_buffer[26 + i]), safe_char(frame_buffer[27 + i]), safe_char(frame_buffer[28 + i]),
-		     safe_char(frame_buffer[29 + i]));
-	    println_text80(14, msg);
-	  }
-	}
+          POKE(0xD6E5, 0x32); // enable buff ID peeking via CRC-disable bit
+          snprintf(msg, 160, "#$%02x : Ethernet Frame #%d [CPU=$%02x, ETH=$%02x]", PEEK(0xD7FA), ++frame_count, PEEK(0xD6EC),
+              PEEK(0xD6EE));
+          POKE(0xD6E5, 0x30); // enable buff ID peeking via CRC-disable bit
+          println_text80(1, msg);
+
+          snprintf(msg, 160, "  %02x:%02x:%02x:%02x:%02x:%02x > %02x:%02x:%02x:%02x:%02x:%02x : len=%d($%x), rxerr=%c",
+              frame_buffer[8], frame_buffer[9], frame_buffer[10], frame_buffer[11], frame_buffer[12], frame_buffer[13],
+              frame_buffer[2], frame_buffer[3], frame_buffer[4], frame_buffer[5], frame_buffer[6], frame_buffer[7], len, len,
+              (frame_buffer[1] & 0x80) ? 'Y' : 'N');
+          println_text80(13, msg);
+          show_hex = 1;
+        }
+        else
+          show_hex = 0;
+
+        if (frame_buffer[16] == 0x45) {
+          // IPv4
+          start_of_protocol_header = 36;
+          snprintf(msg, 160, "  IPv4: %d.%d.%d.%d -> %d.%d.%d.%d", frame_buffer[2 + 14 + 12 + 0], frame_buffer[28 + 1],
+              frame_buffer[28 + 2], frame_buffer[28 + 3], frame_buffer[32 + 0], frame_buffer[32 + 1], frame_buffer[32 + 2],
+              frame_buffer[32 + 3]);
+          println_text80(13, msg);
+          if (frame_buffer[16 + 9] == 0x01) {
+            // ICMP
+            if (frame_buffer[16 + 20] == 0x08) {
+              // PING
+              snprintf(msg, 160, "  ICMP: Echo request, id=%d, seq=%d",
+                  frame_buffer[16 + 20 + 5] + (frame_buffer[16 + 20 + 4] << 8),
+                  frame_buffer[16 + 20 + 7] + (frame_buffer[16 + 20 + 6] << 8));
+              println_text80(13, msg);
+              show_hex = 0;
+            }
+            else if (frame_buffer[16 + 20] == 0x03) // DESTINATION UNREACHABLE
+            {
+              printf("  ICMP: Destination Unreachable, code=%d, nexthopMTU=%d", frame_buffer[start_of_protocol_header + 1],
+                  to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
+            }
+            else if (frame_buffer[16 + 20] == 0x05) // redirect
+            {
+              printf("  ICMP: Redirect, code=%d, ipaddress=%d.%d.%d.%d,", frame_buffer[start_of_protocol_header + 1],
+                  frame_buffer[start_of_protocol_header + 4], frame_buffer[start_of_protocol_header + 5],
+                  frame_buffer[start_of_protocol_header + 6], frame_buffer[start_of_protocol_header + 7]);
+            }
+          }
+          else if (icmp_only) {
+            show_hex = 0;
+          }
+          else if (frame_buffer[16 + 9] == 0x06) // TCP
+          {
+            printf("  TCP Protocol:\n");
+            printf("    source port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 0], 2));
+            printf("    destination port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 2], 2));
+            printf("    sequence number is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 4], 4));
+            printf("    ackknowledement number is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 8], 4));
+            printf("    data offset is %d\n", frame_buffer[start_of_protocol_header + 12] >> 4);
+            printf("    flags: ");
+            if (frame_buffer[start_of_protocol_header + 12] & 1) {
+              printf("NS ");
+            }
+            if ((frame_buffer[start_of_protocol_header + 13] >> 7) & 1) {
+              printf("CWR ");
+            }
+            if ((frame_buffer[start_of_protocol_header + 13] >> 6) & 1) {
+              printf("ECE ");
+            }
+            if ((frame_buffer[start_of_protocol_header + 13] >> 5) & 1) {
+              printf("URG ");
+            }
+            if ((frame_buffer[start_of_protocol_header + 13] >> 4) & 1) {
+              printf("ACK ");
+            }
+            if ((frame_buffer[start_of_protocol_header + 13] >> 3) & 1) {
+              printf("PSH ");
+            }
+            if ((frame_buffer[start_of_protocol_header + 13] >> 2) & 1) {
+              printf("RST ");
+            }
+            if ((frame_buffer[start_of_protocol_header + 13] >> 1) & 1) {
+              printf("SYN ");
+            }
+            if ((frame_buffer[start_of_protocol_header + 13] >> 0) & 1) {
+              printf("FIN ");
+            }
+            printf("\n");
+            printf("    window size is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 14], 2));
+            printf("    checksum is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 16], 2));
+            printf("    urgent pointer is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 18], 2));
+
+            // data offset gives us the sie of the tcp header in 32 bit words,
+            // ie to get to the payload we increment by dataoffset * 4 bytes
+            start_of_protocol_header += ((frame_buffer[start_of_protocol_header + 12] >> 4) * 4);
+
+            // HTTP tests
+            // evaulate the payload
+            if (frame_buffer[start_of_protocol_header + 0] == 'P' && frame_buffer[start_of_protocol_header + 1] == 'O'
+                && frame_buffer[start_of_protocol_header + 2] == 'S' && frame_buffer[start_of_protocol_header + 3] == 'T') {
+              printf("HTTP: Post\n");
+              for (i = 5; frame_buffer[start_of_protocol_header + i] != ' '; i++) {
+                putchar(frame_buffer[start_of_protocol_header + i]);
+              }
+              putchar('\n');
+            }
+            else if (frame_buffer[start_of_protocol_header + 0] == 'G' && frame_buffer[start_of_protocol_header + 1] == 'E'
+                     && frame_buffer[start_of_protocol_header + 2] == 'T') {
+              printf("HTTP: Get\n");
+              for (i = 4; frame_buffer[start_of_protocol_header + i] != ' '; i++) {
+                putchar(frame_buffer[start_of_protocol_header + i]);
+              }
+              putchar('\n');
+            }
+          }
+          else if (frame_buffer[16 + 9] == 0x11) // UDP
+          {
+            printf("  UDP Protocol:\n");
+            // udp contains a source port
+            printf("    source port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 0], 2));
+            // a destination port
+            printf("    destination port is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 2], 2));
+            // length
+            printf("    length is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 4], 2));
+            // checksum
+            printf("    checksum is %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
+          }
+        }
+        else if (frame_buffer[15] == 0x06) // ARP
+        {
+          start_of_protocol_header = 16;
+          printf("  ARP protocol:\n");
+          printf("    Hardware type: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 0], 2));
+          printf("    Protocol type: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 2], 2));
+          printf("    Hardware address length: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 4], 1));
+          printf("    Protocol address length: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 5], 1));
+          printf("    Opcode: %d\n", to_decimal(&frame_buffer[start_of_protocol_header + 6], 2));
+          printf("    Sender Hardware Address: %02x:%02x:%02x:%02x:%02x:%02x\n", frame_buffer[start_of_protocol_header + 8],
+              frame_buffer[start_of_protocol_header + 9], frame_buffer[start_of_protocol_header + 10],
+              frame_buffer[start_of_protocol_header + 11], frame_buffer[start_of_protocol_header + 12],
+              frame_buffer[start_of_protocol_header + 13]);
+          printf("    Sender IP address: %d.%d.%d.%d\n", frame_buffer[start_of_protocol_header + 14],
+              frame_buffer[start_of_protocol_header + 15], frame_buffer[start_of_protocol_header + 16],
+              frame_buffer[start_of_protocol_header + 17]);
+          printf("    Target Hardware Address: %02x:%02x:%02x:%02x:%02x:%02x\n", frame_buffer[start_of_protocol_header + 18],
+              frame_buffer[start_of_protocol_header + 19], frame_buffer[start_of_protocol_header + 20],
+              frame_buffer[start_of_protocol_header + 21], frame_buffer[start_of_protocol_header + 22],
+              frame_buffer[start_of_protocol_header + 23]);
+          printf("    Target IP address: %d.%d.%d.%d\n", frame_buffer[start_of_protocol_header + 24],
+              frame_buffer[start_of_protocol_header + 25], frame_buffer[start_of_protocol_header + 26],
+              frame_buffer[start_of_protocol_header + 27]);
+        }
+        if (show_hex) {
+          for (i = 0; i < 256 && i < len; i += 16) {
+            lfill((long)msg, 0, 160);
+            snprintf(msg, 160,
+                "       %04x: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x  "
+                "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",
+                i, frame_buffer[14 + i], frame_buffer[15 + i], frame_buffer[16 + i], frame_buffer[17 + i],
+                frame_buffer[18 + i], frame_buffer[19 + i], frame_buffer[20 + i], frame_buffer[21 + i], frame_buffer[22 + i],
+                frame_buffer[23 + i], frame_buffer[24 + i], frame_buffer[25 + i], frame_buffer[26 + i], frame_buffer[27 + i],
+                frame_buffer[28 + i], frame_buffer[29 + i],
+
+                safe_char(frame_buffer[14 + i]), safe_char(frame_buffer[15 + i]), safe_char(frame_buffer[16 + i]),
+                safe_char(frame_buffer[17 + i]), safe_char(frame_buffer[18 + i]), safe_char(frame_buffer[19 + i]),
+                safe_char(frame_buffer[20 + i]), safe_char(frame_buffer[21 + i]), safe_char(frame_buffer[22 + i]),
+                safe_char(frame_buffer[23 + i]), safe_char(frame_buffer[24 + i]), safe_char(frame_buffer[25 + i]),
+                safe_char(frame_buffer[26 + i]), safe_char(frame_buffer[27 + i]), safe_char(frame_buffer[28 + i]),
+                safe_char(frame_buffer[29 + i]));
+            println_text80(14, msg);
+          }
+        }
 
 #if 0
 	// Wait for a key between each frame
 	while(!PEEK(0xD610)) POKE(0xD020,PEEK(0xD020)+1);
 	POKE(0xD610,0);
-#endif	
+#endif
       }
     }
 
@@ -896,88 +928,94 @@ void main(void)
     if (PEEK(0xD7FA) != last_frame_num) {
 
       // If in loopback mode, send a frame
-      if (loopback_mode||send_loop_frame) {
-	if (!saw_loop_frame) {
-	  missed_loop_frames++;
-	  println_text80(8,"Missed loopback frame. CRC error?");
-	}
-	// DST=broadcast
-	for(i=0;i<6;i++) frame_buffer[i]=0xff;
-	// SRC=01:02:03:40:50:60
-	for(i=6;i<12;i++) frame_buffer[i]=(i-5)<<((i>8)?4:0);
-	// TYPE=0x1234
-	frame_buffer[12]=0x12;
-	frame_buffer[13]=0x34;
-	// 256 bytes of data in the frame
+      if (loopback_mode || send_loop_frame) {
+        if (!saw_loop_frame) {
+          missed_loop_frames++;
+          println_text80(8, "Missed loopback frame. CRC error?");
+        }
+        // DST=broadcast
+        for (i = 0; i < 6; i++)
+          frame_buffer[i] = 0xff;
+        // SRC=01:02:03:40:50:60
+        for (i = 6; i < 12; i++)
+          frame_buffer[i] = (i - 5) << ((i > 8) ? 4 : 0);
+        // TYPE=0x1234
+        frame_buffer[12] = 0x12;
+        frame_buffer[13] = 0x34;
+        // 256 bytes of data in the frame
 
-	switch(last_frame_num&3) {
-	case 0:
-	  // Ascending values
-	  for(i=0;i<256;i++) loop_data[i]=i;      
-	  break;
-	case 1:
-	  // All zeroes
-	  for(i=0;i<256;i++) loop_data[i]=0;      
-	  break;
-	case 2:
-	  // All $FF
-	  for(i=0;i<256;i++) loop_data[i]=0xff;      
-	  break;
-	case 3:
-	  // Pseudo-random data
-	  for(i=0;i<256;i++) loop_data[i]=PEEK(256*(last_frame_num>>2));      
-	  break;
-	}
+        switch (last_frame_num & 3) {
+        case 0:
+          // Ascending values
+          for (i = 0; i < 256; i++)
+            loop_data[i] = i;
+          break;
+        case 1:
+          // All zeroes
+          for (i = 0; i < 256; i++)
+            loop_data[i] = 0;
+          break;
+        case 2:
+          // All $FF
+          for (i = 0; i < 256; i++)
+            loop_data[i] = 0xff;
+          break;
+        case 3:
+          // Pseudo-random data
+          for (i = 0; i < 256; i++)
+            loop_data[i] = PEEK(256 * (last_frame_num >> 2));
+          break;
+        }
 
-	loop_data[0]=total_loop_frames;
-	loop_data[1]=total_loop_frames>>8;
-	
-	for(i=0;i<256;i++) frame_buffer[14+i]=loop_data[i];
-	// Copy to eth frame buffer and TX frame of 14+256 bytes
-	lcopy((unsigned long)frame_buffer,0xffde800,14+256);
-	// Set frame length to 14 + 1*256
-	POKE(0xD6E2,14);
-	POKE(0xD6E3,1);
-	// TX frame
-	POKE(0xD6E4,0x01);
-	saw_loop_frame=0;
-	send_loop_frame=0;
+        loop_data[0] = total_loop_frames;
+        loop_data[1] = total_loop_frames >> 8;
+
+        for (i = 0; i < 256; i++)
+          frame_buffer[14 + i] = loop_data[i];
+        // Copy to eth frame buffer and TX frame of 14+256 bytes
+        lcopy((unsigned long)frame_buffer, 0xffde800, 14 + 256);
+        // Set frame length to 14 + 1*256
+        POKE(0xD6E2, 14);
+        POKE(0xD6E3, 1);
+        // TX frame
+        POKE(0xD6E4, 0x01);
+        saw_loop_frame = 0;
+        send_loop_frame = 0;
       }
 
       // Report MDIO changes
-      mdio1 = mdio_read_register(phy,0x01);
+      mdio1 = mdio_read_register(phy, 0x01);
       // Also ignore bung reads where it reads back as 0xffff
-      if ((mdio1 != last_mdio1)&& (mdio1 !=0xffff)) {
-	
-	snprintf(msg,80,"MDIO register 1 = $%04x, was $%04x",mdio1,last_mdio1);
-	println_text80(7,msg);
-	mdio_dump();
-	// And re-prime to read register 1 again after dumping the registers
-	POKE(0xD6E6L, 1);
-	
-	if ((mdio1 ^ last_mdio1) & (1 << 5)) {
-	  if (mdio1 & (1 << 5))
-	    println_text80(5, "PHY: Auto-negotiation complete");
-	  else
-	    println_text80(7, "PHY: Auto-negotiation in progress");
-	}
-	if ((mdio1 ^ last_mdio1) & (1 << 2)) {
-	  if (mdio1 & (1 << 2))
-	    println_text80(5, "PHY: Link is up");
-	  else
-	    println_text80(2, "PHY: Link DOWN");
-	}
-	
-	TEST(1, mdio1, 4, "Remote fault");
-	TEST(1, mdio1, 1, "Jabber detected");
-	
-	last_mdio1 = mdio1;
+      if ((mdio1 != last_mdio1) && (mdio1 != 0xffff)) {
+
+        snprintf(msg, 80, "MDIO register 1 = $%04x, was $%04x", mdio1, last_mdio1);
+        println_text80(7, msg);
+        mdio_dump();
+        // And re-prime to read register 1 again after dumping the registers
+        POKE(0xD6E6L, 1);
+
+        if ((mdio1 ^ last_mdio1) & (1 << 5)) {
+          if (mdio1 & (1 << 5))
+            println_text80(5, "PHY: Auto-negotiation complete");
+          else
+            println_text80(7, "PHY: Auto-negotiation in progress");
+        }
+        if ((mdio1 ^ last_mdio1) & (1 << 2)) {
+          if (mdio1 & (1 << 2))
+            println_text80(5, "PHY: Link is up");
+          else
+            println_text80(2, "PHY: Link DOWN");
+        }
+
+        TEST(1, mdio1, 4, "Remote fault");
+        TEST(1, mdio1, 1, "Jabber detected");
+
+        last_mdio1 = mdio1;
       }
 
       // Schedule next read
       last_frame_num = PEEK(0xD7FA);
     }
-
   }
 
 #ifdef NATIVE_TEST
