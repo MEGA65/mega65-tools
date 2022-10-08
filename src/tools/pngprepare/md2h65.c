@@ -955,13 +955,12 @@ int render_codepoint(int code_point)
 	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=card_number>>0;
 	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(trim_pixels<<5);
 	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
-	if (y==(MAX_LINE_HEIGHT-1)) {
+	if (!y) {
 	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
 	} else {
 	  // Do not apply underline to other than the base row
 	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
 	}
-	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
 	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
       }
     accword_len++;
