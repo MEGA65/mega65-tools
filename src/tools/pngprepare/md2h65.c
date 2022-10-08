@@ -852,6 +852,18 @@ int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set
     + (0x40000 / 0x40);
 }
 
+struct tile blank_tile = {
+  { {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0}
+  }   
+};
+
 int render_codepoint(int code_point)
 {
   glyph_slot = type_faces[current_font]->glyph;
@@ -917,6 +929,24 @@ int render_codepoint(int code_point)
     }
     if (char_rows > accword_height) accword_height = char_rows;
     if (under_rows > accword_depth) accword_depth = under_rows;
+
+    // Blank out entire column, so that we avoid alignment issues with variable character heights
+    int blank_card = tile_lookup(ts, &blank_tile);
+    blank_card += (0x40000 / 0x40);
+    
+    fprintf(stderr,"DEBUG: blank_card=$%04x\n",blank_card);
+    for(y=0;y<MAX_LINE_LENGTH;y++) {
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=blank_card>>0;
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(blank_card>>8)+(trim_pixels<<5);
+	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+	if (y==(MAX_LINE_HEIGHT-1)) {
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
+	} else {
+	  // Do not apply underline to other than the base row
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
+	}
+	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
+    }
     for(y=char_rows-1;y>=-under_rows;y--)
       {
 	int card_number=encode_glyph_card(glyph_slot,x,y,ts);
@@ -925,6 +955,12 @@ int render_codepoint(int code_point)
 	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=card_number>>0;
 	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(trim_pixels<<5);
 	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+	if (y==(MAX_LINE_HEIGHT-1)) {
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
+	} else {
+	  // Do not apply underline to other than the base row
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
+	}
 	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
 	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
       }
