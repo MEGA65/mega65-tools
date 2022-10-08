@@ -625,7 +625,7 @@ int attribute_count = 0;
 
 void parse_attributes(char *in)
 {
-  fprintf(stderr, "Parsing attribute string '%s'\n", in);
+  printf("INFO: Parsing attribute string '%s'\n", in);
   attribute_count = 0;
   char key[1024];
   char value[1024];
@@ -681,7 +681,7 @@ void parse_attributes(char *in)
   if (state == 1) {
     strcpy(attribute_keys[attribute_count], key);
     strcpy(attribute_values[attribute_count++], value);
-    fprintf(stderr, "Attrib tag: '%s'='%s'\n", key, value);
+    printf("INFO: Attrib tag: '%s'='%s'\n", key, value);
   }
 }
 
@@ -938,14 +938,35 @@ int render_codepoint(int code_point)
     // Blank out entire column, so that we avoid alignment issues with variable character heights
     int blank_card = tile_lookup(ts, &blank_tile);
     blank_card += (0x40000 / 0x40);
-
-    fprintf(stderr, "DEBUG: blank_card=$%04x\n", blank_card);
-    for (y = 0; y < MAX_LINE_LENGTH; y++) {
-      accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] = blank_card >> 0;
-      accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (blank_card >> 8) + (trim_pixels << 5);
-      accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] = 0x20 + 0x08; // ALPHA + NCM glyph
-      if (y == (MAX_LINE_HEIGHT - 1)) {
-        accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = text_colour + attributes;
+    
+    printf("DEBUG: blank_card=$%04x\n",blank_card);
+    for(y=0;y<MAX_LINE_LENGTH;y++) {
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=blank_card>>0;
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(blank_card>>8)+(trim_pixels<<5);
+	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+	if (y==(MAX_LINE_HEIGHT-1)) {
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
+	} else {
+	  // Do not apply underline to other than the base row
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
+	}
+	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
+    }
+    for(y=char_rows-1;y>=-under_rows;y--)
+      {
+	int card_number=encode_glyph_card(glyph_slot,x,y,ts);
+	printf("  encoding tile (%d,%d) using card $%04x\n",x,y,card_number);   
+	// Write tile details into accline_screen_ram and accline_colour_ram
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=card_number>>0;
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(trim_pixels<<5);
+	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+	if (!y) {
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
+	} else {
+	  // Do not apply underline to other than the base row
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
+	}
+	if (trim_pixels&8) accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
       }
       else {
         // Do not apply underline to other than the base row
@@ -978,9 +999,9 @@ int render_codepoint(int code_point)
 
 int emit_rendered_word(void)
 {
-  if ((accline_len + accword_len) > MAX_LINE_LENGTH) {
-    fprintf(stderr, "WARNING: Line too long, truncating.\n");
-    accword_len = MAX_LINE_LENGTH - accline_len;
+  if ((accline_len+accword_len)>MAX_LINE_LENGTH) {
+    printf("WARNING: Line too long, truncating.\n");
+    accword_len=MAX_LINE_LENGTH-accline_len;
   }
   for (int i = 0; i < accword_len * 2; i++) {
     for (int j = 0; j < MAX_LINE_HEIGHT; j++) {
@@ -988,12 +1009,10 @@ int emit_rendered_word(void)
       accline_colour_ram[j][accline_len * 2 + i] = accword_colour_ram[j][i];
     }
   }
-  accline_len += accword_len;
-  fprintf(stderr, "DEBUG: Appended %d columns to accline. accline_len=%d\n", accword_len, accline_len);
-  if (accword_height > accline_height)
-    accline_height = accword_height;
-  if (accword_depth > accline_depth)
-    accline_depth = accword_depth;
+  accline_len+=accword_len;
+  printf("DEBUG: Appended %d columns to accline. accline_len=%d\n",accword_len,accline_len);
+  if (accword_height>accline_height) accline_height=accword_height;
+  if (accword_depth>accline_depth) accline_depth=accword_depth;
 
   accword_height = 1;
   accword_depth = 0;
@@ -1259,10 +1278,12 @@ void emit_text(char *text)
         register_box(url_id, screen_x, screen_y, screen_x + s->width - 1, screen_y + s->height - 1);
       }
 
-      fprintf(stderr, "INFO: Drawing image of %dx%d tiles\n", s->width, s->height);
-
+      printf("INFO: Drawing image of %dx%d tiles\n",
+	      s->width,s->height);
+      
       if (s->width > 80 || (s->height + screen_y) > max_lines) {
-        fprintf(stderr, "WARNING: Not enough space left on page to fit image '%s'\n", imgname);
+        fprintf(stderr, "ERROR: Not enough space left on page to fit image '%s'\n", imgname);
+	exit(-1);
       }
       else {
         // Make sure we are on a fresh line before displaying an image,
@@ -1393,9 +1414,9 @@ int do_pass(char **argv, struct tile_set *ts)
         exit(-1);
       }
       glyph_slot = type_faces[font_id]->glyph;
-      fprintf(stderr, "INFO: Loaded font: %s as %s, size %d\n", font_id_str, font_file, font_size);
-    }
-    else if (!strncmp("# ", line, 2)) {
+      printf("INFO: Loaded font: %s as %s, size %d\n",font_id_str,font_file,font_size);
+      
+    } else if (!strncmp("# ",line,2)) {
       // Heading H1
       printf("[in_para=%d]\n", in_paragraph);
       next_paragraph();
@@ -1581,7 +1602,7 @@ int do_pass(char **argv, struct tile_set *ts)
      XXX - We use all 32KB regardless of how much we need, which
      increases file size unnecessarily.
   */
-  fprintf(stderr, "File contains %d link bounding boxes, pointing to %d URLs.\n", link_count, url_count);
+  printf("File contains %d link bounding boxes, pointing to %d URLs.\n", link_count, url_count);
   if (link_count) {
     unsigned char url_data[30 * 1024];
     bzero(url_data, 30 * 1024);
