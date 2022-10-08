@@ -874,6 +874,8 @@ int render_codepoints(int *code_points,int num)
     int glyph_display_width=/* glyph_slot->bitmap_left+ */ glyph_slot->bitmap.width;
     if (glyph_display_width==0) {
       glyph_display_width=(glyph_slot->metrics.horiAdvance/64);
+      printf("INFO: Adding %dpx inter-word gap.\n",glyph_display_width);
+      total_width+=glyph_display_width;
     } else {
       // Copy glyph into the bitmap
       int y_start=BITMAP_BASELINE-glyph_slot->bitmap_top;
@@ -906,7 +908,7 @@ int render_codepoints(int *code_points,int num)
 		max_height,max_under);
   int x,y;
     
-  printf("y range = %d..%d\n",char_rows-1,-under_rows);
+  printf("y range = %d..%d, width=%d\n",char_rows-1,-under_rows,total_width);
     
   printf("total width of glyph(s) = %d\n",total_width);
     
