@@ -1219,11 +1219,11 @@ void emit_text(char *text)
       break;
     case 2: // Toggle bold
       if (current_font == FONT_PARAGRAPH) {
-        current_font = FONT_PARAGRAPH_BOLD;
-        attributes = 0x20; // Reverse text for bold
-      }
-      else
-        paragraph_font();
+	current_font = FONT_PARAGRAPH_BOLD;
+	if (!type_faces[current_font]) {
+	  attributes = 0x20; // Reverse text for bold
+	}
+      } else paragraph_font();
       break;
     case 3: // Toggle bold+italic
       if (current_font == FONT_PARAGRAPH) {
