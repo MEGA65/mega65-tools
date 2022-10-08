@@ -710,8 +710,8 @@ void emit_accumulated_line(void)
 	exit(-1);
       }
 
-      memcpy(&screen_ram[screen_y * (MAX_LINE_LENGTH * 2)], accline_screen_ram[row], accline_len * 2);
-      memcpy(&colour_ram[screen_y * (MAX_LINE_LENGTH * 2)], accline_colour_ram[row], accline_len * 2);
+      memcpy(&screen_ram[screen_y * (MAX_LINE_LENGTH*2)],accline_screen_ram[row],accline_len*2);
+      memcpy(&colour_ram[screen_y * (MAX_LINE_LENGTH*2)],accline_colour_ram[row],accline_len*2);
       screen_y++;
     }
 
@@ -949,7 +949,7 @@ int render_codepoint(int code_point)
 	  accword_colour_ram[y][accword_len*2+1]=text_colour + attributes;
 	} else {
 	  // Do not apply underline to other than the base row
-	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
+	  accword_colour_ram[y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
 	}
 	if (trim_pixels&8) accword_colour_ram[y][accword_len*2+0]|=0x04; // Trim 8 more pixels
     }
@@ -1007,10 +1007,14 @@ int emit_rendered_word(void)
   }
   for(int j=0;j<MAX_LINE_HEIGHT+MAX_LINE_DEPTH;j++) {
     int show=0;
+    //    if ((j>=(MAX_LINE_HEIGHT-accword_height))&&(j<(MAX_LINE_HEIGHT+accword_depth))) show=1;
+    //    if (show) printf("DEBUG: copy row %d: ",j);
     for(int i=0;i<accword_len*2;i++) {
+      //      if (show) printf("%02x",accword_screen_ram[j][i]);
       accline_screen_ram[j][accline_len*2+i]=accword_screen_ram[j][i];
       accline_colour_ram[j][accline_len*2+i]=accword_colour_ram[j][i];
     }
+    //    if (show) printf("\n");
   }
   accline_len+=accword_len;
   printf("DEBUG: Appended %d columns to accline. accline_len=%d, accword_h=%d,_d=%d\n",
