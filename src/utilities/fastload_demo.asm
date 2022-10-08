@@ -158,6 +158,9 @@ fastload_address:
 fastload_request:	
 	;; Start with seeking to track 0
 	!byte 4
+	;; Remember the state that requested a sector read
+fastload_request_stashed:	
+	!byte 0
 
 fl_current_track:	!byte 0
 	
@@ -202,7 +205,7 @@ fl_jumptable:
 	!16 fl_directory_scan
 	!16 fl_read_file_block
 	!16 fl_seek_track_0
-	!16 fl_step_track
+	!16 fl_reading_sector
 
 fl_idle:
 	rts
@@ -358,10 +361,71 @@ fl_load_next_dir_sector:
 	rts
 
 fl_read_sector:
-	;; XXX - Check if we are already on the correct track/side
+	;; Remember the state that we need to return to
+	lda fastload_request
+	sta fastload_request_stashed
+	;; and then set ourselves to the track stepping/sector reading state
+	lda #5
+	sta fastload_request
+	;; FALLTHROUGH
+	
+fl_reading_sector:
+	;; Check if we are already on the correct track/side
 	;; and if not, select/step as required
+
+	lda fl_current_track
+	sta $0418
+	lda $d084
+	sta $0419
+	cmp fl_current_track
+	beq fl_on_correct_track
+	bcc fl_step_in
+fl_step_out:
+	inc $0410
+	;; We need to step first
+	lda #$18
+	sta $d081
+	inc fl_current_track
+	rts
+fl_step_in:
+	inc $0411
+	;; We need to step first
+	lda #$10
+	sta $d081
+	dec fl_current_track
+	rts
+	
+fl_on_correct_track:	
 	lda #$40
 	sta $d081
+
+	;; Now that we are finally reading the sector,
+	;; restore the stashed state ID
+	lda fastload_request_stashed
+	sta fastload_request
+
+	lda #$52
+	jsr $ffd2
+	sei
+	lda #0
+	ldx $d084
+	jsr $bdcd
+	lda #$2c
+	jsr $ffd2
+	sei
+	lda #0
+	ldx $d085
+	jsr $bdcd
+	lda #$2c
+	jsr $ffd2
+	sei
+	lda #0
+	ldx $d086
+	jsr $bdcd
+	lda #$0d
+	jsr $ffd2
+	sei
+	
 	rts
 
 fl_step_track:
@@ -377,30 +441,6 @@ fl_read_next_sector:
 fl_not_end_of_file:	
 	;; Read next sector of file
 	jsr fl_logical_to_physical_sector
-
-	lda fl_current_track
-	lda $d084
-	cmp fl_current_track
-	beq fl_on_correct_track
-	bcc fl_step_in
-fl_step_out:
-	;; We need to step first
-	lda #$18
-	sta $d081
-	inc fl_current_track
-	lda #5
-	sta fastload_request
-	rts
-fl_step_in:
-	;; We need to step first
-	lda #$10
-	sta $d081
-	dec fl_current_track
-	lda #5
-	sta fastload_request
-	rts
-	
-fl_on_correct_track:	
 	jsr fl_read_sector
 	rts
 
