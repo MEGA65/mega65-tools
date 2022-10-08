@@ -663,8 +663,6 @@ void paint_screen_shot(void)
 	    
             if (glyph_4bit) {
 
-	      fprintf(stderr,"DEBUG: NCM: bg RGB=#%02x%02x%02x\n",r,g,b);
-	      
               // 16-colour 4 bits per pixel
               int c = glyph_data[((int)xx) / 2];
               if (((int)xx) & 1)
@@ -672,20 +670,14 @@ void paint_screen_shot(void)
               else
                 c = c & 0xf;
 
-	      fprintf(stderr,"DEBUG: NCM: fg RGB=#%02x%02x%02x\n",
-		      mega65_rgb(c, 0, glyph_altpalette),
-		      mega65_rgb(c, 1, glyph_altpalette),
-		      mega65_rgb(c, 2, glyph_altpalette)
-		      );
-	      
               if (glyph_with_alpha) {
                 // Alpha blended pixels:
                 // Here we blend the foreground and background colours we already know
                 // according to the alpha value
                 int a = c;	    
-                r = (mega65_rgb(foreground_colour, 0, glyph_altpalette) * a + r * (15 - a)) >> 4;
-                g = (mega65_rgb(foreground_colour, 1, glyph_altpalette) * a + g * (15 - a)) >> 4;
-                b = (mega65_rgb(foreground_colour, 2, glyph_altpalette) * a + b * (15 - a)) >> 4;
+                r = (mega65_rgb(foreground_colour, 0, glyph_altpalette) * a + r * (15 - a)) / 15;
+                g = (mega65_rgb(foreground_colour, 1, glyph_altpalette) * a + g * (15 - a)) / 15;
+                b = (mega65_rgb(foreground_colour, 2, glyph_altpalette) * a + b * (15 - a)) / 15;
               }
               else {
 		switch(c) {
