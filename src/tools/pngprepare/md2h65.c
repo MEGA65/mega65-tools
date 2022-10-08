@@ -854,10 +854,13 @@ int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set
 
 int render_codepoint(int code_point)
 {
+  glyph_slot = type_faces[current_font]->glyph;
+
   int glyph_index = FT_Get_Char_Index( type_faces[current_font], code_point );
   error = FT_Load_Glyph( type_faces[current_font], glyph_index, FT_LOAD_RENDER );
   if (error) {
     fprintf(stderr,"ERROR: Could not find glyph for Unicode Point 0x%x in font.\n",code_point);
+    exit(-1);
   }
   int glyph_display_width=glyph_slot->bitmap_left+glyph_slot->bitmap.width;
   if (glyph_display_width==0)
