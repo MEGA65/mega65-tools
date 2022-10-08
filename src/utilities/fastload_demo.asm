@@ -75,12 +75,12 @@ endofname:
 	stx fastload_filename_len
 	
 	;; Set load address (32-bit)
-	;; = $40000 = BANK 4
-	lda #$00
+	;; = $07ff ($0801 - 2 bytes for BASIC header)
+	lda #$ff
 	sta fastload_address+0
-	lda #$00
+	lda #$07
 	sta fastload_address+1
-	lda #$04
+	lda #$00
 	sta fastload_address+2
 	lda #$00
 	sta fastload_address+3
@@ -111,7 +111,12 @@ error
 	inc $042f
 	jmp error
 
-done
+done:
+	;; Clear basic header from loadaddr - 2
+	lda #0
+	sta $7ff
+	sta $800
+	
 	inc $d020
 	inc $0400
 	jmp done
@@ -289,8 +294,9 @@ fl_buffaddr:
 	iny
 	cpy #$10
 	bne fl_check_loop_inner
-	;; Filename matches
 
+	;; Filename matches
+fl_found_file:	
 	txa
 	sec
 	sbc #$12
@@ -303,7 +309,7 @@ fl_buffaddr:
 	tay
 	lda fastload_sector_buffer+1,x
 	jmp fl_got_file_track_and_sector
-fl_file_in_2nd_logical_sector:	
+fl_file_in_2nd_logical_sector:
 	;; Y=Track, A=Sector
 	lda fastload_sector_buffer+$100,x
 	tay
@@ -312,11 +318,13 @@ fl_got_file_track_and_sector:
 	;; Store track and sector of file
 	sty fl_file_next_track
 	sta fl_file_next_sector
-	;; Request reading of next track and sector
-	jsr fl_read_next_sector
+
 	;; Advance to next state
 	lda #3
 	sta fastload_request
+	
+	;; Request reading of next track and sector
+	jsr fl_read_next_sector
 	rts
 	
 fl_filename_differs:
@@ -395,7 +403,8 @@ fl_step_in:
 	dec fl_current_track
 	rts
 	
-fl_on_correct_track:	
+fl_on_correct_track:
+	inc $044f
 	lda #$40
 	sta $d081
 
@@ -447,6 +456,9 @@ fl_not_end_of_file:
 	
 fl_logical_to_physical_sector:
 
+	lda #$4c
+	jsr $ffd2
+	sei
 	;; Display track and sector asked for
 	ldx fl_file_next_track
 	lda #0
@@ -459,22 +471,10 @@ fl_logical_to_physical_sector:
 	lda #0
 	jsr $bdcd
 	;; XXX - $FFD2 does CLI somewhere
-	lda #$0d
+	lda #$20
 	jsr $ffd2
 	sei
 
-	;; Wait for key press after each sector
-xcv:	
-	lda $d610
-	beq foop
-	sta $d610
-	jmp xcv
-foop:
-	inc $d020
-	lda $d610
-	beq foop
-	sta $d610
-	
 	;; Convert 1581 sector numbers to physical ones on the disk.
 	;; Track = Track - 1
 	;; Sector = 1 + (Sector/2)
@@ -635,17 +635,6 @@ fl_copy_sector_to_buffer:
 	sta $d701
 	lda #<fl_sector_read_dmalist
 	sta $d705
-
-	;; DEBUG: Show sector loaded
-	ldx #0
-dfg:	
-	lda fastload_sector_buffer,x
-	sta $0500,x
-	lda fastload_sector_buffer+$100,x
-	sta $0600,x
-	dex
-	bne dfg
-
 	
 	rts
 
