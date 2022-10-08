@@ -3,14 +3,11 @@
 
 	;; XXX - Doesn't seek to tracks yet, so will not work with real disks
 	;; until implemented. Won't be hard to implement.
-	
-basic_header
-	;; Auto-detect C64/C65 mode and either way jump into the assembly
-	!byte 0x10,0x08,<2021,>2021,0x9e
-	!pet "2061"
-	!byte 0x00,0x00,0x00
-	
 
+	!byte $00,$c0
+	*=$c000
+	
+	
 program_start:	
 
 	;; Select MEGA65 IO mode
@@ -78,12 +75,12 @@ endofname:
 	stx fastload_filename_len
 	
 	;; Set load address (32-bit)
-	;; = $40000 = BANK 4
-	lda #$00
+	;; = $07ff ($0801 - 2 bytes for BASIC header)
+	lda #$ff
 	sta fastload_address+0
-	lda #$00
+	lda #$07
 	sta fastload_address+1
-	lda #$04
+	lda #$00
 	sta fastload_address+2
 	lda #$00
 	sta fastload_address+3
@@ -109,12 +106,35 @@ waiting
 	beq done
 	
 error
-	inc $042f
+	inc $d020
 	jmp error
 
-done
-	inc $d020
-	jmp done
+done:
+	;; Clear basic header from loadaddr - 2
+	lda #0
+	sta $7ff
+	sta $800
+
+	;; Restore IRQ and return to basic
+	sei
+	lda #$31
+	sta $0314
+	lda #$ea
+	sta $0315
+	;; Disable raster IRQ
+	lda #$00
+	sta $d01a
+	;; Re-enable CIA interrupt
+	lda #$81
+	sta $dc0d
+	cli
+
+	;; Revert to 1MHz
+	lda #64
+	sta 0
+	
+	rts
+	
 	
 irq_handler
 	;; Here is our nice minimalistic IRQ handler that calls the fastload IRQ
@@ -132,8 +152,13 @@ irq_handler
 	jmp $ea81
 
 filename:
+	;; AMIGA-BALL for testing
+	!byte $41,$4d,$49,$47,$41,$2d,$42,$41
+	!byte $4c,$4c,$a0,$a0,$a0,$a0,$a0,$a0
+
+filename_foo:
 	;; GYRRUS for testing
-	!byte $47,$59,$52,$52,$55,$53,$a0,$a0
+	!byte $47,$59,$52,$52,$55,$53,$a0,$a0 
 	!byte $a0,$a0,$a0,$a0,$a0,$a0,$a0,$a0
 
 	
@@ -153,11 +178,17 @@ fastload_address:
 fastload_request:	
 	;; Start with seeking to track 0
 	!byte 4
+	;; Remember the state that requested a sector read
+fastload_request_stashed:	
+	!byte 0
 
 fl_current_track:	!byte 0
 	
 fl_file_next_track:	!byte 0
 fl_file_next_sector:	!byte 0
+prev_track:	!byte 0
+prev_sector:	!byte 0
+prev_side:	!byte 0
 	
 fastload_sector_buffer:
 	*=*+512
@@ -197,7 +228,7 @@ fl_jumptable:
 	!16 fl_directory_scan
 	!16 fl_read_file_block
 	!16 fl_seek_track_0
-	!16 fl_step_track
+	!16 fl_reading_sector
 
 fl_idle:
 	rts
@@ -205,7 +236,7 @@ fl_idle:
 fl_seek_track_0:
 	lda $d082
 	and #$01
-	bne fl_not_on_track_0
+	beq fl_not_on_track_0
 	lda #$00
 	sta fastload_request
 	sta fl_current_track
@@ -215,6 +246,23 @@ fl_not_on_track_0:
 	lda #$10
 	sta $d081
 	rts
+
+fl_select_side1:	
+	lda #$01
+	sta $d086 		; requested side
+	;; Sides are inverted on the 1581
+	lda #$60
+	sta $d080 		; physical side selected of mechanical drive
+	rts
+
+fl_select_side0:	
+	lda #$00
+	sta $d086 		; requested side
+	;; Sides are inverted on the 1581
+	lda #$68
+	sta $d080 		; physical side selected of mechanical drive
+	rts
+	
 	
 fl_new_request:
 	;; Acknowledge fastload request
@@ -229,13 +277,14 @@ fl_new_request:
 	sta $d084
 	lda #(3/2)+1
 	sta $d085
-	lda #$00
-	sta $d086 		; side
+	jsr fl_select_side0
+
 	;; Request read
 	jsr fl_read_sector
 	rts
 	
 fl_directory_scan:
+	
 	;; Check if our filename we want is in this sector
 	jsr fl_copy_sector_to_buffer
 
@@ -263,7 +312,9 @@ fl_buffaddr:
 	iny
 	cpy #$10
 	bne fl_check_loop_inner
+
 	;; Filename matches
+fl_found_file:	
 	txa
 	sec
 	sbc #$12
@@ -276,7 +327,7 @@ fl_buffaddr:
 	tay
 	lda fastload_sector_buffer+1,x
 	jmp fl_got_file_track_and_sector
-fl_file_in_2nd_logical_sector:	
+fl_file_in_2nd_logical_sector:
 	;; Y=Track, A=Sector
 	lda fastload_sector_buffer+$100,x
 	tay
@@ -285,11 +336,13 @@ fl_got_file_track_and_sector:
 	;; Store track and sector of file
 	sty fl_file_next_track
 	sta fl_file_next_sector
-	;; Request reading of next track and sector
-	jsr fl_read_next_sector
+
 	;; Advance to next state
 	lda #3
 	sta fastload_request
+	
+	;; Request reading of next track and sector
+	jsr fl_read_next_sector
 	rts
 	
 fl_filename_differs:
@@ -334,10 +387,64 @@ fl_load_next_dir_sector:
 	rts
 
 fl_read_sector:
-	;; XXX - Check if we are already on the correct track/side
+	;; Remember the state that we need to return to
+	lda fastload_request
+	sta fastload_request_stashed
+	;; and then set ourselves to the track stepping/sector reading state
+	lda #5
+	sta fastload_request
+	;; FALLTHROUGH
+	
+fl_reading_sector:
+	;; Check if we are already on the correct track/side
 	;; and if not, select/step as required
+
+	lda fl_current_track
+	lda $d084
+	cmp fl_current_track
+	beq fl_on_correct_track
+	bcc fl_step_in
+fl_step_out:
+	;; We need to step first
+	lda #$18
+	sta $d081
+	inc fl_current_track
+	rts
+fl_step_in:
+	;; We need to step first
+	lda #$10
+	sta $d081
+	dec fl_current_track
+	rts
+	
+fl_on_correct_track:
+
+	lda $d084
+	cmp prev_track
+	bne fl_not_prev_sector
+	lda $d086
+	cmp prev_track
+	bne fl_not_prev_sector
+	lda $d085
+	eor prev_sector
+	and #$fe
+	bne fl_not_prev_sector
+
+	;; We are being asked to read the sector we already have in the buffer
+	;; Jump immediately to the correct routine
+	lda fastload_request_stashed
+	sta fastload_request
+	jmp fl_fdc_not_busy
+
+fl_not_prev_sector:	
 	lda #$40
 	sta $d081
+
+	;; Now that we are finally reading the sector,
+	;; restore the stashed state ID
+	lda fastload_request_stashed
+	sta fastload_request
+
 	rts
 
 fl_step_track:
@@ -351,73 +458,48 @@ fl_read_next_sector:
 	bne fl_not_end_of_file
 	rts
 fl_not_end_of_file:	
-	;; Read next sector of file
+	;; Read next sector of file	
 	jsr fl_logical_to_physical_sector
-
-	lda fl_current_track
-	lda $d084
-	cmp fl_current_track
-	beq fl_on_correct_track
-	bcc fl_step_in
-fl_step_out:
-	;; We need to step first
-	lda #$18
-	sta $d081
-	inc fl_current_track
-	lda #5
-	sta fastload_request
-	rts
-fl_step_in:
-	;; We need to step first
-	lda #$10
-	sta $d081
-	dec fl_current_track
-	lda #5
-	sta fastload_request
-	rts
-	
-fl_on_correct_track:	
 	jsr fl_read_sector
 	rts
 
 	
 fl_logical_to_physical_sector:
+
+	;; Remember current loaded sector, so that we can optimise when asked
+	;; to read other half of same physical sector
+	lda $d084
+	sta prev_track
+	lda $d085
+	sta prev_sector
+	lda $d086
+	sta prev_side
+	
 	;; Convert 1581 sector numbers to physical ones on the disk.
 	;; Track = Track - 1
 	;; Sector = 1 + (Sector/2)
 	;; Side = 0
 	;; If sector > 10, then sector=sector-10, side=1
-	lda #$00 		; side 0
-	sta $d086
+	;; but sides are inverted
+	jsr fl_select_side0
 	lda fl_file_next_track
 	dec
 	sta $d084
 	lda fl_file_next_sector
 	lsr
 	inc
-	cmp #10
+	cmp #11
 	bcs fl_on_second_side
 	sta $d085
-	jmp fl_set_fdc_head
+	rts
 	
 fl_on_second_side:
 	sec
 	sbc #10
 	sta $d085
-	lda #1
-	sta $d086
-
-	;; FALL THROUGH
-fl_set_fdc_head:
-	;; Select correct side of real disk drive
-	lda $d086
-	asl
-	asl
-	asl
-	and #$08
-	ora #$60
-	sta $d080
+	jsr fl_select_side1
 	rts
+	
 	
 fl_read_file_block:
 	;; We have a sector from the floppy drive.
@@ -438,6 +520,7 @@ fl_read_file_block:
 fl_read_from_first_half:
 	lda #(>fastload_sector_buffer)+0
 	sta fl_read_dma_page
+
 	lda fastload_sector_buffer+1
 	sta fl_file_next_sector
 	lda fastload_sector_buffer+0
@@ -553,6 +636,7 @@ fl_copy_sector_to_buffer:
 	sta $d701
 	lda #<fl_sector_read_dmalist
 	sta $d705
+	
 	rts
 
 fl_sector_read_dmalist:
