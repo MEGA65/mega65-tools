@@ -786,7 +786,7 @@ int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set
 {
   int min_x=slot->bitmap_left;
   if (min_x<0) min_x=0;
-  int max_x=slot->bitmap.width+min_x;
+  int max_x=slot->bitmap.width-1+min_x;
   
   int max_y=slot->bitmap_top-1;
   int min_y=slot->bitmap_top-1-slot->bitmap.rows;
@@ -805,8 +805,8 @@ int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set
         {
           int x_pos=x*2+base_x-min_x;
           int y_pos=slot->bitmap_top-((7-y)+base_y);
-          //      printf("pixel (%d,%d) will be in bitmap (%d,%d)\n",
-          //             x,y,x_pos,y_pos);
+	   //      printf("pixel (%d,%d) will be in bitmap (%d,%d)\n",
+	   //             x,y,x_pos,y_pos);
           if ((x_pos>=0&&x_pos<slot->bitmap.width)
               &&(y_pos>=0&&y_pos<slot->bitmap.rows)) {
             // Pixel is in bitmap
@@ -814,6 +814,8 @@ int encode_glyph_card(FT_GlyphSlot  slot,int card_x, int card_y, struct tile_set
 					y_pos*slot->bitmap.width];
 	    int hi=slot->bitmap.buffer[x_pos+1+
 					y_pos*slot->bitmap.width];
+	    // Don't draw rubbish in the high nybl of odd-width glyphs
+	    if ((x_pos+1)>=slot->bitmap.width) hi=0;
 	    low=(low>>4)&0xf;
 	    hi=hi&0xf0;
             t.bytes[x][y]=hi+low;
@@ -987,7 +989,7 @@ int emit_accumulated_word(void)
 	     (int)glyph_slot->metrics.horiAdvance,char_columns);
     
       // Record number of pixels to trim from right-most tile
-      int trim_pixels=15-(glyph_display_width&15);
+      int trim_pixels=16-(glyph_display_width&15);
       if (!(glyph_display_width&15)) trim_pixels=0;
       printf("glyph_display_width=%d, trim_pixels=%d\n",
 	     glyph_display_width,trim_pixels);
@@ -1006,9 +1008,10 @@ int emit_accumulated_word(void)
 	    printf("  encoding tile (%d,%d) using card $%04x\n",x,y,card_number);   
 	    // Write tile details into accline_screen_ram and accline_colour_ram
 	    accline_screen_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+0]=card_number>>0;
-	    accline_screen_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+1]=card_number>>8;
+	    accline_screen_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+1]=(card_number>>8)+(trim_pixels<<5);
 	    accline_colour_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
 	    accline_colour_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+1]=text_colour + attributes;
+	    if (trim_pixels&8) accline_colour_ram[MAX_LINE_HEIGHT-1-y][accline_len*2+0]|=0x04; // Trim 8 more pixels
           }
 	accline_len++;
       }
