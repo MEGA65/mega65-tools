@@ -77,8 +77,9 @@ usr:
     ;
 
     jsr $7f00           ; facc -> int
-    ldx $66             ; get integer
-    ldy $67             ; 
+
+    ldx $64             ; get integer
+    ldy $65             ; 
     ldz #$00
     stx currentIssue    ; save for later
     sty currentIssue+1  
@@ -161,9 +162,9 @@ bye:
 
 sendtoken:              ; send test token in A
     pha
-    lda currentIssue+1
-    jsr sendbyte
     lda currentIssue
+    jsr sendbyte
+    lda currentIssue+1
     jsr sendbyte
     lda subIssue
     jsr sendbyte
