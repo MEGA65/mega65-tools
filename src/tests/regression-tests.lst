@@ -3,12 +3,12 @@
 # only list tests that utilise the unit test framework correctly!
 #
 # Format:
-# TESTNAME TIMEOUT
+# TESTNAME TIMEOUT  PLATFORM
 # TIMEOUT is used as parameter to m65 -u
 #
-test_332.prg    10
-test_454.prg    10
-test_468.prg    10
-test_585.prg    20
-test_604.prg    10
+test_332.prg    10  all
+test_454.prg    10  all
+test_468.prg    10  all
+test_585.prg    20  mega65r3,mega65r2
+test_604.prg    10  all
 # END OF FILE

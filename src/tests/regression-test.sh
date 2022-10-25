@@ -21,6 +21,7 @@ DEFAULT_TIMEOUT=60
 
 BITSTREAM=$1
 LOGPATH=$2
+MODEL=${BITSTREAM%%-*}
 DEVICE=
 if [[ $# -eq 3 ]]; then
     if [[ ! -e $3 ]]; then
@@ -96,9 +97,12 @@ main () {
     echo "  ${BITSTREAM}"
     echo
 
-    while read -r test timeout; do
+    while read -r test timeout validmodel; do
         # skip comments and empty lines
         if [[ $test =~ ^# || -z $test ]]; then
+            continue
+        fi
+        if [[ ! ( $validmodel == "all" || $validmodel =~ ${MODEL} ) ]]; then
             continue
         fi
         # check if timeout is an number or use default timeout
