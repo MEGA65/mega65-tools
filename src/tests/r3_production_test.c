@@ -33,14 +33,14 @@ void get_interval(void)
 
 void graphics_clear_screen(void)
 {
-  lfill(0x40000, 0, 32768);
-  lfill(0x48000, 0, 32768);
+  lfill(0x40000l, 0, 32768l);
+  lfill(0x48000l, 0, 32768l);
 }
 
 void graphics_clear_double_buffer(void)
 {
-  lfill(0x50000, 0, 32768);
-  lfill(0x58000, 0, 32768);
+  lfill(0x50000l, 0, 32768l);
+  lfill(0x58000l, 0, 32768l);
 }
 
 void graphics_mode(void)
@@ -56,7 +56,7 @@ void graphics_mode(void)
   // 640x200 16bits per char, 16 pixels wide per char
   // = 640/16 x 16 bits = 80 bytes per row
   POKE(0xD058, 80);
-  POKE(0xD059, 80 / 256);
+  POKE(0xD059, 80 >> 8);
   // Draw 40 (double-wide) chars per row
   POKE(0xD05E, 40);
   // Put 2KB screen at $C000
@@ -141,7 +141,6 @@ unsigned char floppy_active = 0;
 unsigned char eth_pass = 0;
 unsigned char iec_pass = 0, v, y;
 unsigned int x;
-unsigned char colours[10] = { 0, 2, 5, 6, 0, 11, 12, 15, 1, 0 };
 struct m65_tm tm, tm2;
 char msg[80];
 
@@ -301,7 +300,7 @@ unsigned char joy_test(
   while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f)
     POKE(0xD020, PEEK(0xD020) + 1);
   // Allow for de-bounce
-  usleep(50000);
+  usleep(50000l);
 
   while ((PEEK(0xDC00 + port) & 0x1f) == 0x1f)
     POKE(0xD020, PEEK(0xD020) + 1);
@@ -316,7 +315,7 @@ unsigned char joy_test(
   while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f)
     POKE(0xD020, PEEK(0xD020) + 1);
   // Allow for de-bounce
-  usleep(50000);
+  usleep(50000l);
 
   return res;
 }
@@ -334,8 +333,8 @@ void test_rtc(void)
   rtc_bad = 1;
   unit_test_set_current_name("rtc ticks");
   while (rtc_bad) {
-    //      snprintf(msg,80,"%d frames, %d vs %d seconds.   ",frame_count,tm.tm_sec,tm2.tm_sec);
-    //      print_text(0, 13, 1, msg);
+    // snprintf(msg,80,"%d frames, %d vs %d seconds.   ",frame_count,tm.tm_sec,tm2.tm_sec);
+    // print_text(0, 13, 1, msg);
 
     frame_num = PEEK(0xD7FA);
     if (frame_num != frame_prev)
@@ -363,6 +362,8 @@ void test_rtc(void)
 
 void main(void)
 {
+  unsigned char fails = 0;
+
   // Fast CPU, M65 IO
   POKE(0, 65);
   POKE(0xD02F, 0x47);
@@ -370,6 +371,17 @@ void main(void)
 
   // PAL mode for 50Hz video
   POKE(0xD06F, 0x00);
+  POKE(0xD072, 0x00);
+  POKE(0xD048, 0x68);
+  POKE(0xD049, 0x0 | (PEEK(0xD049) & 0xf0));
+  POKE(0xD04A, 0xF8);
+  POKE(0xD04B, 0x1 | (PEEK(0xD04B) & 0xf0));
+  POKE(0xD04E, 0x68);
+  POKE(0xD04F, 0x0 | (PEEK(0xD04F) & 0xf0));
+  POKE(0xD072, 0);
+  // switch CIA TOD 50/60
+  POKE(0xDD0E, PEEK(0xDC0E) | 0x80);
+  POKE(0xDD0E, PEEK(0xDD0E) | 0x80);
 
   // Floppy motor on
   POKE(0xD080, 0x60);
@@ -391,7 +403,7 @@ void main(void)
   graphics_mode();
   graphics_clear_double_buffer();
 
-  print_text(0, 0, 1, "MEGA65 R3 PCB Production Test programme V2");
+  print_text(0, 0, 1, "MEGA65 R3 PCB Production Test V2");
   snprintf(msg, 80, "Hardware model = %d", detect_target());
   print_text(0, 15, 1, msg);
 
@@ -402,7 +414,7 @@ void main(void)
   // Draw colour bars
   for (x = 0; x < 640; x++) {
     for (y = 150; y < 200; y++) {
-      plot_pixel(x, y, colours[x >> 6]);
+      plot_pixel(x, y, (x >> 5) & 0xf);
     }
   }
   activate_double_buffer();
@@ -412,6 +424,7 @@ void main(void)
   if (setup_hyperram()) {
     print_text(0, 6, 2, "FAIL HyperRAM Probe");
     unit_test_report(2, 1, TEST_FAIL);
+    fails++;
   }
   else {
     print_text(0, 5, 5, "PASS HyperRAM Probe");
@@ -426,11 +439,15 @@ void main(void)
   if (!floppy_active) {
     print_text(0, 2, 2, "FAIL Floppy (is a disk inserted?)");
     unit_test_report(3, 1, TEST_FAIL);
+    fails++;
   }
   else {
     print_text(0, 2, 5, "PASS Floppy                          ");
     unit_test_report(3, 1, TEST_PASS);
   }
+
+  // Floppy motor off
+  POKE(0xD080, 0x0);
 
   // Try toggling the IEC lines to make sure we can pull CLK and DATA low.
   // (ATN can't be read.)
@@ -455,6 +472,7 @@ void main(void)
         else {
           print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK+DATA)");
           unit_test_report(4, 1, TEST_FAIL);
+          fails++;
         }
         unit_test_set_current_name("iec c+d clk");
         unit_test_report(4, 2, TEST_PASS);
@@ -462,6 +480,7 @@ void main(void)
       else {
         unit_test_set_current_name("iec c+d clk");
         unit_test_report(4, 2, TEST_FAIL);
+        fails++;
         print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK)");
       }
       unit_test_set_current_name("iec c+d data");
@@ -470,6 +489,7 @@ void main(void)
     else {
       unit_test_set_current_name("iec c+d data");
       unit_test_report(4, 3, TEST_FAIL);
+      fails++;
       print_text(0, 3, 2, "FAIL IEC CLK+DATA (DATA)");
     }
     unit_test_set_current_name("iec c+d float");
@@ -478,6 +498,7 @@ void main(void)
   else {
     snprintf(msg, 80, "iec c+d fl-$%02x", v);
     unit_test_report(4, 4, TEST_FAIL);
+    fails++;
     snprintf(msg, 80, "FAIL IEC CLK+DATA (float $%02x)", v);
     print_text(0, 3, 2, msg);
   }
@@ -488,6 +509,7 @@ void main(void)
   }
   else {
     unit_test_report(4, 5, TEST_FAIL);
+    fails++;
   }
 
   // Real-time clock
@@ -510,7 +532,7 @@ void main(void)
 
     // Now wait a couple of seconds and try again
     for (a = 0; a < 50; a++)
-      usleep(50000);
+      usleep(50000l);
 
     POKE(0xD020, 6);
     test_rtc();
@@ -523,6 +545,7 @@ void main(void)
     }
     else {
       unit_test_report(5, 1, TEST_FAIL);
+      fails++;
       print_text(0, 4, 2, "FAIL RTC Not running             ");
     }
   }
@@ -549,6 +572,7 @@ void main(void)
   default:
     unit_test_report(6, 1, TEST_FAIL);
     print_text(0, 6, 2, "FAIL Left speaker                ");
+    fails++;
   }
   POKE(0xD610, 0);
 
@@ -567,12 +591,19 @@ void main(void)
   default:
     unit_test_report(6, 2, TEST_FAIL);
     print_text(0, 7, 2, "FAIL Right speaker                ");
+    fails++;
   }
   POKE(0xD610, 0);
 
   // Turn off sound after
   play_sine(0, 1);
   play_sine(3, 1);
+
+  // Stop all DMA audio first
+  POKE(0xD720, 0);
+  POKE(0xD730, 0);
+  POKE(0xD740, 0);
+  POKE(0xD750, 0);
 
   errs += joy_test(1, 7, 1, 0x1b, 8, "LEFT ", "l");
   errs += joy_test(1, 7, 2, 0x17, 8, "RIGHT", "r");
@@ -591,6 +622,7 @@ void main(void)
   if (errs) {
     snprintf(msg, 80, "FAIL Joysticks (%d errors)      ", errs);
     print_text(0, 8, 2, msg);
+    fails++;
   }
   else {
     snprintf(msg, 80, "PASS Joysticks                 ", errs);
@@ -614,7 +646,7 @@ void main(void)
   unit_test_set_current_name("r3prodtest");
   unit_test_report(10, 1, TEST_DONEALL);
 
-  print_text(0, 17, 1, "ALL TESTS COMPLETE");
+  print_text(0, 17, fails>0?2:5, "ALL TESTS COMPLETE");
 
   while (1)
     continue;
