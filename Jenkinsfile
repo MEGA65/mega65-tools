@@ -1,6 +1,6 @@
 pipeline {
     agent {
-        docker { image 'ubuntu:focal' }
+        docker { image 'megabuild' }
     }
     stages {
         stage('Setup') {
