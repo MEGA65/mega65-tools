@@ -5,7 +5,16 @@ pipeline {
     stages {
         stage('Build linux') {
             steps {
-                sh 'make USE_LOCAL_CC65=0'
+                sh 'make USE_LOCAL_CC65=0 allunix'
+            }
+        }
+        stage('Build windows') {
+            steps {
+                sh 'make USE_LOCAL_CC65=0 allwin'
+            }
+        }
+        stage('Test build') {
+            steps {
                 sh 'make USE_LOCAL_CC65=0 test'
             }
         }
