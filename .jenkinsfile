@@ -26,6 +26,7 @@ pipeline {
         stage('Publish') {
             steps {
                 sh 'gh release list'
+                sh 'gh release view CI-refactor-latest'
             }
         }
     }
