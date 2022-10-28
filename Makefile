@@ -184,7 +184,7 @@ clean:	cleantest
 
 cleanall:	clean
 	for path in `git submodule | awk '{ print "./" $$2 }'`; do \
-		make -C $$path clean; \
+		if [[ -e $$path/Makefile ]]; then make -C $$path clean; fi; \
 	done
 
 cleantest:
