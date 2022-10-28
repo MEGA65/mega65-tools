@@ -23,5 +23,13 @@ pipeline {
                 sh 'make USE_LOCAL_CC65=0 test'
             }
         }
+        stage('Publish') {
+            steps {
+                sh 'gh release list'
+            }
+        }
+    }
+    environment {
+        GH_TOKEN = credentials('mega65-github-api')
     }
 }
