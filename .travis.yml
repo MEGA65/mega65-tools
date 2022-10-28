@@ -5,6 +5,7 @@ branches:
   except:
     - CI-latest
     - CI-refactor-latest
+    - jenkins_test
 
 matrix:
   include:
