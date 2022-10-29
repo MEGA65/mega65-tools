@@ -1,6 +1,6 @@
 pipeline {
     agent {
-        docker { image 'megabuild' }
+        docker { image 'megawin' }
     }
     stages {
         stage('Cleanup') {
