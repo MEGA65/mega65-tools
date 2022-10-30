@@ -64,8 +64,34 @@ char dma_load_routine[128 + 1024] = {
 #define DATA_OFFSET (0x80 - 0x2c)
 };
 
+unsigned char colour_ram[1000];
+unsigned char progress_screen[1000];
+
 int sockfd;
 struct sockaddr_in servaddr;
+
+int progress_print(int x,int y, char *msg)
+{
+  int ofs=y*40+x;
+  for(int i=0;msg[i];i++) {
+    if (msg[i]>='A'&&msg[i]<='Z') progress_screen[ofs]=msg[i]-0x40;
+    else if (msg[i]>='a'&&msg[i]<='z') progress_screen[ofs]=msg[i]-0x60;
+    else progress_screen[ofs]=msg[i];
+    ofs++;
+    if (ofs>999) ofs=999;
+  }
+  return 0;
+}
+
+int progress_line(int x,int y,int len)
+{
+  int ofs=y*40+x;
+  for(int i=0;i<len;i++) {
+    progress_screen[ofs]=67;    
+    ofs++;
+    if (ofs>999) ofs=999;
+  }
+}
 
 int send_mem(unsigned int address,unsigned char *buffer,int bytes)
 {
@@ -77,10 +103,15 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   // Copy data into packet
   memcpy(&dma_load_routine[DATA_OFFSET], buffer, bytes);
   
-  printf("Sending $%07X, len = %d\n",address,bytes);
+  //  printf("Sending $%07X, len = %d\n",address,bytes);
+
+  // XXX - Assumes no packet loss, otherwise pieces will be missing from memory!
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
   // Allow enough time for the MEGA65 to receive and process the packet
+  // 1KB every 1.5ms = ~600KB/sec
+  // XXX - If we implemented a proper protocol with responses and acknowledgments etc, we could go much faster,
+  // by allowing some window of un-acked frames. But this will do for now.
   usleep(1500);
   
   dma_load_routine[PACKET_NUMBER_OFFSET]++;
@@ -98,6 +129,8 @@ int main(int argc, char **argv)
   int broadcastEnable = 1;
   setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, (char *)&broadcastEnable, sizeof(broadcastEnable));
 
+  fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, NULL) | O_NONBLOCK);
+  
   memset(&servaddr, 0, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
   servaddr.sin_addr.s_addr = inet_addr(argv[1]);
@@ -119,37 +152,48 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
+  char msg[80];
+  
   int address = buffer[0] + 256 * buffer[1];
   printf("Load address of programme is $%04x\n", address);
 
+  int start_addr=address;
+
+  memset(colour_ram,0x01,1000);
+  send_mem(0xffd8000,colour_ram,1000);
+
+  memset(progress_screen,0x20,1000);
+  progress_line(0,0,40);
+  snprintf(msg,40,"Loading \"%s\" at $%04X",argv[2],address);
+  progress_print(0,1,msg);
+  progress_line(0,2,40);
+  
   while ((bytes = read(fd, buffer, 1024)) != 0) {
     printf("Read %d bytes at offset %d\n", bytes, offset);
     offset += bytes;
 
+    // Send screen with current loading state
+  progress_line(0,10,40);
+  snprintf(msg,40,"Loading block @ $%04X",address);
+  progress_print(0,11,msg);
+  progress_line(0,12,40);
+    
+    send_mem(0x0400,progress_screen,1000);
+    
     send_mem(address,buffer,bytes);
     
     address += bytes;
   }
 
+  memset(progress_screen,0x20,1000);
+  send_mem(0x0400,progress_screen,1000);
+  
   // print out debug info
   printf("Sent %s to %s on port %d.\n\n", argv[2], inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
 
-  if (1) {
-
-    printf("Now tell MEGA65 that we are all done");
-
-    int i;
-    for (i = 0; i < 10; i++) {
-
-      printf(".");
-
-      sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-
-      usleep(150);
-    }
-
-    printf("\n");
-  }
-
+  printf("Now tell MEGA65 that we are all done.\n");
+  
+  sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  
   return 0;
 }
