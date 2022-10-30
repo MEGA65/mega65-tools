@@ -186,6 +186,10 @@ int main(int argc, char **argv)
   }
 
   memset(progress_screen,0x20,1000);
+  snprintf(msg,40,"Loaded $%04X - $%04X",start_addr,address);
+  progress_line(0,15,40);
+  progress_print(0,16,msg);
+  progress_line(0,17,40);
   send_mem(0x0400,progress_screen,1000);
   
   // print out debug info
