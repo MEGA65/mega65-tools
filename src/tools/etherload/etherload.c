@@ -34,40 +34,60 @@ char dma_load_routine[128 + 1024] = {
   // Routine that copies packet contents by DMA
   0xa9,0x00, // Dummy LDA #$xx for signature detection
   0x8d, 0x07, 0xd7, // STA $D707 to trigger in-line DMA
+
   // SRC MB is $FF
   0x80,0xff,
+#define DESTINATION_MB_OFFSET 0x08
+  // Destination MB 
+  0x81, 0x00,  
   // DMA end of option list
   0x00,
+  
   // DMA list begins at offset $0030
   0x00, // DMA command ($0030)
-#define BYTE_COUNT_OFFSET 0x07
+#define BYTE_COUNT_OFFSET 0x0B
   0x00, 0x04,       // DMA byte count ($0031-$0032)
   0x80, 0xe8, 0x8d, // DMA source address (points to data in packet)
-#define DESTINATION_ADDRESS_OFFSET 0x0E
+#define DESTINATION_ADDRESS_OFFSET 0x10
   0x00, 0x10, // DMA Destination address (bottom 16 bits)
-#define DESTINATION_BANK_OFFSET 0x10
+#define DESTINATION_BANK_OFFSET 0x12
   0x00,       // DMA Destination bank
   0x00, // DMA Sub command
   0x00, 0x00, // DMA modulo (ignored)
+  
   // Code resumes after DMA list here
   0x60, // RTS 
   
 // Packet ID number at offset $003B
-#define PACKET_NUMBER_OFFSET 0x13
-  0x30,
-#define DESTINATION_MB_OFFSET 0x15
-  // Destination MB at $003C
-  0x00, 0x00, 0x00, 0x00
+#define PACKET_NUMBER_OFFSET 0x17
+  0x30,0x00,
 #define DATA_OFFSET (0x80 - 0x2c)
 };
 
-// Test routine to increment border colour
-char test_routine[64] = { 0xa9, 0x00, 0xee, 0x21, 0xd0, 0x60 };
+int sockfd;
+struct sockaddr_in servaddr;
+
+int send_mem(unsigned int address,unsigned char *buffer,int bytes)
+{
+  // Set load address of packet
+  dma_load_routine[DESTINATION_ADDRESS_OFFSET] = address & 0xff;
+  dma_load_routine[DESTINATION_ADDRESS_OFFSET + 1] = (address >> 8) & 0xff;
+  dma_load_routine[DESTINATION_BANK_OFFSET] = (address>>16)&0x03;
+  
+  // Copy data into packet
+  memcpy(&dma_load_routine[DATA_OFFSET], buffer, bytes);
+  
+  printf("Sending $%07X, len = %d\n",address,bytes);
+  sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+
+  // Allow enough time for the MEGA65 to receive and process the packet
+  usleep(1500);
+  
+  dma_load_routine[PACKET_NUMBER_OFFSET]++;
+}
 
 int main(int argc, char **argv)
 {
-  int sockfd;
-  struct sockaddr_in servaddr;
 
   if (argc != 3) {
     printf("usage: %s <IP address> <programme>\n", argv[0]);
@@ -106,18 +126,8 @@ int main(int argc, char **argv)
     printf("Read %d bytes at offset %d\n", bytes, offset);
     offset += bytes;
 
-    // Set load address of packet
-    dma_load_routine[DESTINATION_ADDRESS_OFFSET] = address & 0xff;
-    dma_load_routine[DESTINATION_ADDRESS_OFFSET + 1] = (address >> 8) & 0xff;
-
-    // Copy data into packet
-    memcpy(&dma_load_routine[DATA_OFFSET], buffer, bytes);
-
-    printf("Sending\n");
-    sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    usleep(150);
-
-    dma_load_routine[PACKET_NUMBER_OFFSET]++;
+    send_mem(address,buffer,bytes);
+    
     address += bytes;
   }
 
