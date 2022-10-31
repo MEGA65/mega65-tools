@@ -7,6 +7,7 @@ pipeline {
             steps {
                 sh 'make USE_LOCAL_CC65=0 cleanall'
                 sh 'git rev-parse --abbrev-ref HEAD'
+                sh 'printenv'
             }
         }
         stage('Build linux') {
