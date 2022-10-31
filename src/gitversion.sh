@@ -1,9 +1,11 @@
 #!/bin/bash
 
 # status of branch in short format
-# work around travis doing things differently
+# work around travis and jenkins doing things differently
 if [[ -n $TRAVIS_BRANCH ]]; then
     branch=$TRAVIS_BRANCH
+elif [[ -n $BRANCH_NAME ]]; then
+    branch=$BRANCH_NAME
 else
     branch=$(git rev-parse --abbrev-ref HEAD)
 fi
@@ -15,4 +17,4 @@ version=$(git describe --always --abbrev=7 --dirty=~)
 datetime=$(date +%Y%m%d.%H)
 
 stringout="${datetime}-${branch2}-${version}"
-echo $stringout
+echo "Generated Version string: $stringout"
