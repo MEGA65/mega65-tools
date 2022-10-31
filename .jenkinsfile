@@ -6,6 +6,7 @@ pipeline {
         stage('Cleanup') {
             steps {
                 sh 'make USE_LOCAL_CC65=0 cleanall'
+                sh 'git rev-parse --abbrev-ref HEAD'
             }
         }
         stage('Build linux') {
