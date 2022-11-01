@@ -91,6 +91,27 @@ int progress_line(int x,int y,int len)
     ofs++;
     if (ofs>999) ofs=999;
   }
+  return 0;
+}
+
+unsigned char hyperrupt_trigger[128];
+unsigned char magic_string[12]={
+  0x65,0x47,0x53, // 65 G S
+  0x4b,0x45,0x59, // KEY
+  0x43,0x4f,0x44,0x45, // CODE
+  0xff,0x1f  // Key code bottom 13 bits all 1s
+};
+
+
+int trigger_eth_hyperrupt(void)
+{
+  for(int offset=100;offset>=0;offset--) {
+    printf("offset=%d\n",offset);
+    memcpy(&hyperrupt_trigger[offset],magic_string,12);
+    sendto(sockfd, hyperrupt_trigger, sizeof hyperrupt_trigger, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    usleep(10000);
+  }
+  return 0;
 }
 
 int send_mem(unsigned int address,unsigned char *buffer,int bytes)
@@ -115,6 +136,7 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   usleep(1500);
   
   dma_load_routine[PACKET_NUMBER_OFFSET]++;
+  return 0;
 }
 
 int main(int argc, char **argv)
@@ -140,6 +162,9 @@ int main(int argc, char **argv)
   printf("Using dst-addr: %s\n", inet_ntoa(servaddr.sin_addr));
   printf("Using src-port: %d\n", ntohs(servaddr.sin_port));
 
+  // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
+  trigger_eth_hyperrupt();
+  
   int fd = open(argv[2], O_RDWR);
   unsigned char buffer[1024];
   int offset = 0;
