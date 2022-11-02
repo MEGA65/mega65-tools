@@ -53,9 +53,11 @@ char all_done_routine[128] = {
   0xa3, 0x00,
   0x5c,
   0xea,
+  // 4. CLI
+  0x18,
   // JMP 2061
-#define JMP_OFFSET 54
-  0x4c,0x12,0x08
+#define JMP_OFFSET 55
+  0x4c,0x0d,0x08
 };
 
 char dma_load_routine[128 + 1024] = {
@@ -265,7 +267,7 @@ int main(int argc, char **argv)
   printf("Now tell MEGA65 that we are all done.\n");
   
 
-  all_done_routine[JMP_OFFSET+1]=0x12;
+  all_done_routine[JMP_OFFSET+1]=0x0d;
   all_done_routine[JMP_OFFSET+2]=0x08;
   sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   
