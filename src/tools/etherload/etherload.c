@@ -171,6 +171,7 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   //  printf("Sending $%07X, len = %d\n",address,bytes);
 
   // XXX - Assumes no packet loss, otherwise pieces will be missing from memory!
+  // So for now we crudely send each packet 3x
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
   // Allow enough time for the MEGA65 to receive and process the packet
