@@ -136,10 +136,28 @@ char dma_load_routine[256 + 1024] = {
 
   // Set source IP last byte to 65
   0xa9,0x41,
+  //  0xa9,0xff, // XXX DEBUG - set it to broadcast to avoid IP/UDP header crc changes
   0x8d,0x1d,0x68,
   // Set dest IP last byte to that of sender
   0xad,0x1f,0x68,
   0x8d,0x21,0x68,
+
+  // Patch IP checksum from changing *.255 to *.65 = add $BE to low byte
+  0xad,0x1b,0x68,
+  0x18,
+  0x69,0xbe,
+  0x8d,0x19,0x68,
+  0xad,0x1a,0x68,
+  0x69,0x00,
+  0x8d,0x18,0x68,
+  // Patch UDP checksum from changing *.255 to *.65 = add $BE to low byte
+  0xad,0x2b,0x68,
+  0x18,
+  0x69,0xbe,
+  0x8d,0x29,0x68,
+  0xad,0x2a,0x68,
+  0x69,0x00,
+  0x8d,0x28,0x68,
   
   // 5. TX packet
   0xa9,0x01,
@@ -214,9 +232,19 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   //  printf("Sending $%07X, len = %d\n",address,bytes);
 
   // XXX - Assumes no packet loss, otherwise pieces will be missing from memory!
-  // So for now we crudely send each packet 3x
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
+#if 1
+  while(1) {
+    unsigned char ackbuf[8192];
+    int r=recv(sockfd,ackbuf,sizeof(ackbuf),MSG_DONTWAIT);
+    printf("r=%d\n",r);
+    perror("recv()");
+  sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    usleep(500000);
+  }
+#endif
+  
   // Allow enough time for the MEGA65 to receive and process the packet
   // 1KB every 1.5ms = ~600KB/sec
   // XXX - If we implemented a proper protocol with responses and acknowledgments etc, we could go much faster,
