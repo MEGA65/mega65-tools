@@ -61,35 +61,86 @@ char all_done_routine[128] = {
 };
 
 char dma_load_routine[128 + 1024] = {
+
   // Routine that copies packet contents by DMA
   0xa9,0x00, // Dummy LDA #$xx for signature detection
   0x8d, 0x07, 0xd7, // STA $D707 to trigger in-line DMA
-
+  
+  
+#define DMALIST_OFFSET (2+3)
   // SRC MB is $FF
   0x80,0xff,
-#define DESTINATION_MB_OFFSET 0x08
+#define DESTINATION_MB_OFFSET (DMALIST_OFFSET+3)
   // Destination MB 
   0x81, 0x00,  
   // DMA end of option list
   0x00,
   
-  // DMA list begins at offset $0030
-  0x00, // DMA command ($0030)
-#define BYTE_COUNT_OFFSET 0x0B
+  0x04, 
+#define BYTE_COUNT_OFFSET (DMALIST_OFFSET+6)
   0x00, 0x04,       // DMA byte count ($0031-$0032)
   0x80, 0xe8, 0x8d, // DMA source address (points to data in packet)
-#define DESTINATION_ADDRESS_OFFSET 0x10
+#define DESTINATION_ADDRESS_OFFSET (DMALIST_OFFSET+11)
   0x00, 0x10, // DMA Destination address (bottom 16 bits)
-#define DESTINATION_BANK_OFFSET 0x12
+#define DESTINATION_BANK_OFFSET (DMALIST_OFFSET+13)
   0x00,       // DMA Destination bank
   0x00, // DMA Sub command
   0x00, 0x00, // DMA modulo (ignored)
+
+  // Use chained DMA to copy packet to TX buffer, and then send it
+  // so that we can get what will effectively be an ACK to each
+  // packet received by the MEGA65.
+  // 1. Copy source eth to dest eth
+  // 2. Copy dest eth to source eth
+  // 3. Copy packet body
+  // 4. Set packet len
+  // 5. Trigger ethernet TX
+
+  // 1. Copy source eth to dest eth  
+  0x80, 0xff,        // SRC MB is $FF  
+  0x81, 0xff,        // Destination MB is $FF
+  0x00,              // DMA end of option list
+  0x04,              // Chained DMA copy
+  0x06, 0x00,        // DMA byte count 
+  0x08, 0xe8, 0x8d,  // DMA source address
+  0x00, 0xe0, 0x8d,  // DMA destination address
+  0x00,              // DMA Sub command
+  0x00, 0x00,        // DMA modulo (ignored)
+
+  // 2. Copy dest eth to source eth
+  0x00,              // DMA end of option list
+  0x04,              // Chained DMA copy
+  0x06, 0x00,        // DMA byte count 
+  0x02, 0xe8, 0x8d,  // DMA source address
+  0x06, 0xe0, 0x8d,  // DMA destination address
+  0x00,              // DMA Sub command
+  0x00, 0x00,        // DMA modulo (ignored)
+
+  // 3. Copy packet body
+  0x00,              // DMA end of option list
+  0x00,              // DMA copy, end of chain
+  0x00, 0x05,        // DMA byte count 
+  0x0e, 0xe8, 0x8d,  // DMA source address
+  0x0c, 0xe0, 0x8d,  // DMA destination address
+  0x00,              // DMA Sub command
+  0x00, 0x00,        // DMA modulo (ignored)
   
   // Code resumes after DMA list here
+  // 4. Set packet len
+  //  0xa9,0x00, (A already loaded to zero earlier)
+  0x8d,0xe2,0xd6,
+  0xa9,0x05,
+  0x8d,0xe3,0xd6,
+
+  // 5. TX packet
+  0xa9,0x01,
+  0x8d,0xe4,0xd6,
+
+  // Return to packet wait loop
   0x60, // RTS 
   
 // Packet ID number at offset $003B
-#define PACKET_NUMBER_OFFSET 0x17
+#define PACKET_NUMBER_OFFSET 0x7e
   0x30,0x00,
 #define DATA_OFFSET (0x80 - 0x2c)
 };
