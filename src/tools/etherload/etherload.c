@@ -195,23 +195,9 @@ int trigger_eth_hyperrupt(void)
   int offset=0x38;
   memcpy(&hyperrupt_trigger[offset],magic_string,12);
 
-  while(1) {
-    // Release 3 key
-    magic_string[10]=0x26; magic_string[11]=0x10; 
-    sendto(sockfd, hyperrupt_trigger, sizeof hyperrupt_trigger, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    usleep(10000);
-    return 0;
-  }
-  return 0;
-  
-  magic_string[10]=0x26;
-  magic_string[11]=0x00;
   sendto(sockfd, hyperrupt_trigger, sizeof hyperrupt_trigger, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-  usleep(500000);
-  magic_string[11]=0x10;
-  sendto(sockfd, hyperrupt_trigger, sizeof hyperrupt_trigger, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-  
-  usleep(500000);
+  usleep(10000);
+
   return 0;
 }
 
