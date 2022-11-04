@@ -266,8 +266,11 @@ int frame_unacked[MAX_UNACKED_FRAMES]={0};
 long frame_load_addrs[MAX_UNACKED_FRAMES]={-1};
 unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1280];
 
+int ack_interval=1000;
+
 int check_if_ack(unsigned char *b)
 {
+
 #if 1
   printf("Pending acks:\n");  
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
@@ -290,6 +293,7 @@ int check_if_ack(unsigned char *b)
       if (ack_addr==frame_load_addrs[i]) {
         frame_unacked[i]=0;
 	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
+	ack_interval=ack_interval/2;
 	return 1;
       }
     }
@@ -412,15 +416,16 @@ void maybe_send_ack(void)
   for(i=0;i<MAX_UNACKED_FRAMES;i++) if (frame_unacked[i]) unackd[ucount++]=i;
   
   if (ucount) {
-    if ((gettime_us()-last_resend_time)>1000) {
+    if ((gettime_us()-last_resend_time)>ack_interval) {
+
+      if (ack_interval<500000) ack_interval*=2;
+      
       resend_frame++;
       if (resend_frame>=ucount) resend_frame=0; 
       int id=unackd[resend_frame];
-      if (0)
-	printf("Resending addr=$%lx @ %d (%d unacked: %d %d %d %d)\n",
-	       frame_load_addrs[id],id,ucount,
-	       unackd[0],unackd[1],unackd[2],unackd[3]
-	       );
+      if (1)
+	printf("Resending addr=$%lx @ %d (%d unacked)\n",
+	       frame_load_addrs[id],id,ucount);
       printf(">"); fflush(stdout);
       sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
       last_resend_time=gettime_us();
@@ -578,7 +583,9 @@ int main(int argc, char **argv)
   printf("Now tell MEGA65 that we are all done.\n");
 
   wait_all_acks();
-  
+
+  // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
+  // XXX - We should make it ACK as well.
   all_done_routine[JMP_OFFSET+1]=0x0d;
   all_done_routine[JMP_OFFSET+2]=0x08;
   sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
