@@ -67,9 +67,27 @@ unsigned char dma_load_routine[1280] = {
   // Routine that copies packet contents by DMA
   0xa9,0x00, // Dummy LDA #$xx for signature detection
   0xee,0x00,0x04, // Draw a marker on the screen to indicate frames loaded
+
+#ifdef ETH_TX_IRQ_VHDL_BUG_FIXED
+#define BYTE_COUNT (3+2+2)
+  // 5a. Wait for TX ready
+  0xad,0xe1,0xd6,
+  0x29,0x10,
+  0xf0,0xf9,
+#else
+  // 5. If we don't have reliable setting of eth_tx_irq, just wait >=200 usec to
+  // ensure that we aren't already sending a packet
+  // 4 raster lines = 250usec, so we can just count rasters
+#define BYTE_COUNT (3+2+3+2)
+  0xad,0x12,0xd0,
+  0x69,0x04,
+  0xcd,0x12,0xd0,
+  0xd0,0xfb,
+#endif  
+  
   0x8d, 0x07, 0xd7, // STA $D707 to trigger in-line DMA
-    
-#define DMALIST_OFFSET (2+3+3)
+  
+#define DMALIST_OFFSET (2+3+BYTE_COUNT+3)
   // SRC MB is $FF
   0x80,0xff,
 #define DESTINATION_MB_OFFSET (DMALIST_OFFSET+3)
@@ -163,21 +181,6 @@ unsigned char dma_load_routine[1280] = {
   0x69,0x00,
   0x8d,0x28,0x68,
 
-#ifdef ETH_TX_IRQ_VHDL_BUG_FIXED
-  // 5a. Wait for TX ready
-  0xad,0xe1,0xd6,
-  0x29,0x10,
-  0xf0,0xf9,
-#else
-  // 5. If we don't have reliable setting of eth_tx_irq, just wait >=200 usec to
-  // ensure that we aren't already sending a packet
-  // 4 raster lines = 250usec, so we can just count rasters
-  0xad,0x12,0xd0,
-  0x69,0x04,
-  0xcd,0x12,0xd0,
-  0xd0,0xfb,
-#endif
-  
   // 5. TX packet
   0xa9,0x01,
   0x8d,0xe4,0xd6,
@@ -320,6 +323,8 @@ long long gettime_us()
   return retVal;
 }
 
+int resend_frame=0;
+
 int expect_ack(long load_addr,unsigned char *b)
 {
   while(1) {
@@ -355,24 +360,8 @@ int expect_ack(long load_addr,unsigned char *b)
     }
     // And re-send the first unacked frame from our list
     // (if there are still any unacked frames)
-    int i=0;
-    int unackd[MAX_UNACKED_FRAMES];
-    int ucount=0;
-    for(i=0;i<MAX_UNACKED_FRAMES;i++) if (frame_unacked[i]) unackd[ucount++]=i;
-    int resend_frame=unackd[random()%ucount];
+    maybe_send_ack();
 
-    if (ucount) {
-      if ((gettime_us()-last_resend_time)>1000) {
-	printf("Resending addr=$%lx @ %d\n",frame_load_addrs[resend_frame],i);
-	sendto(sockfd, unacked_frame_payloads[resend_frame], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-	last_resend_time=gettime_us();
-      }
-      break;
-    }
-    if (!ucount) {
-      printf("No unacked frames\n");
-      break;
-    }
     // Finally wait a short period of time, that should be slightly
     // longer than the time it takes to send a 1280 byte UDP frame.
     // On-wire frame will be ~1400 bytes = 11,200 bits = ~112 usec
@@ -394,6 +383,33 @@ int no_pending_ack(int addr)
     return 1;
 }
 
+void maybe_send_ack(void)
+{
+  int i=0;
+  int unackd[MAX_UNACKED_FRAMES];
+  int ucount=0;
+  for(i=0;i<MAX_UNACKED_FRAMES;i++) if (frame_unacked[i]) unackd[ucount++]=i;
+  
+  if (ucount) {
+    if ((gettime_us()-last_resend_time)>1000) {
+      resend_frame++;
+      if (resend_frame>=ucount) resend_frame=0; 
+      int id=unackd[resend_frame];
+      printf("Resending addr=$%lx @ %d (%d unacked: %d %d %d %d)\n",
+	     frame_load_addrs[id],id,ucount,
+	     unackd[0],unackd[1],unackd[2],unackd[3]
+	     );
+      sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+      last_resend_time=gettime_us();
+    }
+    return;
+  }
+  if (!ucount) {
+    printf("No unacked frames\n");
+    return;
+  }
+}
+  
 int wait_all_acks(void)
 {
   while(1) {
@@ -411,19 +427,9 @@ int wait_all_acks(void)
       r=recv(sockfd,ackbuf,sizeof(ackbuf),MSG_DONTWAIT);
       if (r==1280) check_if_ack(ackbuf);
     }
-    // And re-send the first unacked frame from our list
-    // (if there are still any unacked frames)
-    int i=0;
-    for(i=0;i<MAX_UNACKED_FRAMES;i++)
-      if (frame_unacked[i]) {
-	printf("Resending addr=$%lx @ %d\n",frame_load_addrs[i],i);
-	sendto(sockfd, unacked_frame_payloads[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-	break;
-      }
-    if (i==MAX_UNACKED_FRAMES) {
-      printf("No unacked frames\n");
-      return 0;
-    }
+
+    maybe_send_ack();
+
     // Finally wait a short period of time, that should be slightly
     // longer than the time it takes to send a 1280 byte UDP frame.
     // On-wire frame will be ~1400 bytes = 11,200 bits = ~112 usec
