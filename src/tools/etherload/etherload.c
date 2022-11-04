@@ -60,7 +60,7 @@ char all_done_routine[128] = {
   0x4c,0x0d,0x08
 };
 
-char dma_load_routine[256 + 1024] = {
+char dma_load_routine[1280] = {
 
   // Routine that copies packet contents by DMA
   0xa9,0x00, // Dummy LDA #$xx for signature detection
@@ -247,12 +247,29 @@ unsigned char unacked_frames[MAX_UNACKED_FRAMES][1280];
 
 int check_if_ack(unsigned char *b)
 {
+#if 0
+  printf("Pending acks:\n");  
+  for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
+    if (frame_unacked[i]) printf("  Frame ID #%d : addr=$%x\n",i,frame_load_addrs[i]);
+  }
+#endif
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
     if (frame_unacked[i]) {
       if (!memcmp(unacked_frames[i],b,1280)) {
         frame_unacked[i]=0;
 	printf("ACK addr=$%x\n",frame_load_addrs[i]);
 	return 1;
+      } else {
+#if 0
+	for(int j=0;j<1280;j++) {
+	  if (unacked_frames[i][j]!=b[j]) {
+	    printf("Mismatch frame id #%d offset %d : $%02x vs $%02x\n",
+		   i,j,unacked_frames[i][j],b[j]);
+	    dump_bytes("unacked",unacked_frames[i],128);
+	    break;
+	  }
+	}
+#endif
       }
     }
   }
@@ -274,6 +291,7 @@ int expect_ack(long load_addr,unsigned char *b)
       // We have a free slot to put this frame, and it doesn't
       // duplicate the address of another frame.
       // Thus we can safely just note this one
+      printf("Expecting ack of addr=$%x @ %d\n",load_addr,free_slot);
       memcpy(unacked_frames[free_slot],b,1280);
       frame_unacked[free_slot]=1;
       frame_load_addrs[free_slot]=load_addr;
@@ -302,6 +320,7 @@ int expect_ack(long load_addr,unsigned char *b)
       }
     if (i==MAX_UNACKED_FRAMES) {
       printf("No unacked frames\n");
+      break;
     }
     // Finally wait a short period of time, that should be slightly
     // longer than the time it takes to send a 1280 byte UDP frame.
@@ -328,27 +347,23 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   // XXX - Assumes no packet loss, otherwise pieces will be missing from memory!
   int frame_id=expect_ack(address,dma_load_routine);
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-  
-#if 1
+
+  // Wait until we have this frame acked
   while(1) {
     unsigned char ackbuf[8192];
     int r=recv(sockfd,ackbuf,sizeof(ackbuf),MSG_DONTWAIT);
-    if (r<0) {
-      sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    } else if (r==1280) {
-      //      dump_bytes("Returned frame",ackbuf,1280);
+    if (r==1280) {
+      printf("."); fflush(stdout);
+      //      dump_bytes("rx",ackbuf,128);
       check_if_ack(ackbuf);
-      if (!frame_unacked[frame_id]) break;
     }
-    usleep(1000);
+    if (frame_unacked[frame_id]) {
+      //      printf("Resending addr=$%x\n",address);
+      sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    } else
+      break;
+    usleep(10000);
   }
-#endif
-  
-  // Allow enough time for the MEGA65 to receive and process the packet
-  // 1KB every 1.5ms = ~600KB/sec
-  // XXX - If we implemented a proper protocol with responses and acknowledgments etc, we could go much faster,
-  // by allowing some window of un-acked frames. But this will do for now.
-  usleep(1500);
   
   return 0;
 }
