@@ -66,10 +66,10 @@ unsigned char dma_load_routine[1280] = {
 
   // Routine that copies packet contents by DMA
   0xa9,0x00, // Dummy LDA #$xx for signature detection
-  0xce,0x00,0x04, // Draw a marker on the screen to indicate frames loaded
+  0xee,0x00,0x04, // Draw a marker on the screen to indicate frames loaded
   0x8d, 0x07, 0xd7, // STA $D707 to trigger in-line DMA
     
-#define DMALIST_OFFSET (2+3)
+#define DMALIST_OFFSET (2+3+3)
   // SRC MB is $FF
   0x80,0xff,
 #define DESTINATION_MB_OFFSET (DMALIST_OFFSET+3)
@@ -500,11 +500,13 @@ int main(int argc, char **argv)
   int start_addr=address;
 
   // Clear screen first
+  printf("Clearing screen\n");
   memset(colour_ram,0x01,1000);
-  send_mem(0xffd8000,colour_ram,1000);
   memset(progress_screen,0x20,1000);
+  send_mem(0xffd8000,colour_ram,1000);
   send_mem(0x0400,progress_screen,1000);
   wait_all_acks();
+  printf("Screen cleared.\n");
   
   progress_line(0,0,40);
   snprintf(msg,40,"Loading \"%s\" at $%04X",argv[2],address);
