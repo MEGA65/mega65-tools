@@ -356,16 +356,20 @@ int expect_ack(long load_addr,unsigned char *b)
     // And re-send the first unacked frame from our list
     // (if there are still any unacked frames)
     int i=0;
-    for(i=0;i<MAX_UNACKED_FRAMES;i++)
-      if (frame_unacked[i]) {
-	if ((gettime_us()-last_resend_time)>1000000) {
-	  printf("Resending addr=$%lx @ %d\n",frame_load_addrs[i],i);
-	  sendto(sockfd, unacked_frame_payloads[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-	  last_resend_time=gettime_us();
-	}
-	break;
+    int unackd[MAX_UNACKED_FRAMES];
+    int ucount=0;
+    for(i=0;i<MAX_UNACKED_FRAMES;i++) if (frame_unacked[i]) unackd[ucount++]=i;
+    int resend_frame=unackd[random()%ucount];
+
+    if (ucount) {
+      if ((gettime_us()-last_resend_time)>1000) {
+	printf("Resending addr=$%lx @ %d\n",frame_load_addrs[resend_frame],i);
+	sendto(sockfd, unacked_frame_payloads[resend_frame], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+	last_resend_time=gettime_us();
       }
-    if (i==MAX_UNACKED_FRAMES) {
+      break;
+    }
+    if (!ucount) {
       printf("No unacked frames\n");
       break;
     }
