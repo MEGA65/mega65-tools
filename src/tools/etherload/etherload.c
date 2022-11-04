@@ -268,13 +268,33 @@ unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1280];
 
 int check_if_ack(unsigned char *b)
 {
-  printf(">"); fflush(stdout);
-#if 0
+#if 1
   printf("Pending acks:\n");  
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
     if (frame_unacked[i]) printf("  Frame ID #%d : addr=$%x\n",i,frame_load_addrs[i]);
   }
 #endif
+
+  long ack_addr=
+    (b[DESTINATION_MB_OFFSET]<<20)
+    +((b[DESTINATION_BANK_OFFSET]&0xf)<<16)
+    +(b[DESTINATION_ADDRESS_OFFSET+1]<<8)
+    +(b[DESTINATION_ADDRESS_OFFSET+0]<<0);
+  
+  printf("RXd frame addr=$%lx\n",ack_addr);
+
+#define CHECK_ADDR_ONLY
+#ifdef CHECK_ADDR_ONLY
+  for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
+    if (frame_unacked[i]) {
+      if (ack_addr==frame_load_addrs[i]) {
+        frame_unacked[i]=0;
+	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
+	return 1;
+      }
+    }
+  }
+#else
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
     if (frame_unacked[i]) {
       if (!memcmp(unacked_frame_payloads[i],b,1280)) {
@@ -295,6 +315,7 @@ int check_if_ack(unsigned char *b)
       }
     }
   }
+#endif
   return 0;
 }
 
@@ -395,10 +416,12 @@ void maybe_send_ack(void)
       resend_frame++;
       if (resend_frame>=ucount) resend_frame=0; 
       int id=unackd[resend_frame];
-      printf("Resending addr=$%lx @ %d (%d unacked: %d %d %d %d)\n",
-	     frame_load_addrs[id],id,ucount,
-	     unackd[0],unackd[1],unackd[2],unackd[3]
-	     );
+      if (0)
+	printf("Resending addr=$%lx @ %d (%d unacked: %d %d %d %d)\n",
+	       frame_load_addrs[id],id,ucount,
+	       unackd[0],unackd[1],unackd[2],unackd[3]
+	       );
+      printf(">"); fflush(stdout);
       sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
       last_resend_time=gettime_us();
     }
@@ -450,7 +473,8 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   // Set load address of packet
   dma_load_routine[DESTINATION_ADDRESS_OFFSET] = address & 0xff;
   dma_load_routine[DESTINATION_ADDRESS_OFFSET + 1] = (address >> 8) & 0xff;
-  dma_load_routine[DESTINATION_BANK_OFFSET] = (address>>16)&0x03;
+  dma_load_routine[DESTINATION_BANK_OFFSET] = (address>>16)&0x0f;
+  dma_load_routine[DESTINATION_MB_OFFSET] = (address>>20);
   
   // Copy data into packet
   memcpy(&dma_load_routine[DATA_OFFSET], buffer, bytes);
