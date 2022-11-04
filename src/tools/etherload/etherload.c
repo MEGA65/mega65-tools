@@ -150,6 +150,7 @@ char dma_load_routine[256 + 1024] = {
   0xad,0x1a,0x68,
   0x69,0x00,
   0x8d,0x18,0x68,
+ 
   // Patch UDP checksum from changing *.255 to *.65 = add $BE to low byte
   0xad,0x2b,0x68,
   0x18,
@@ -219,6 +220,90 @@ int trigger_eth_hyperrupt(void)
   return 0;
 }
 
+void dump_bytes(char *msg,unsigned char *b,int len)
+{
+  fprintf(stderr,"%s:\n",msg);
+  for(int i=0;i<len;i+=16) {
+    fprintf(stderr,"%04x:",i);
+    int max=16;
+    if ((i+max)>len) max=len=i;
+    for(int j=0;j<max;j++) {
+      fprintf(stderr," %02x",b[i+j]);
+    }
+    for(int j=max;j<16;j++) fprintf(stderr,"   ");
+    fprintf(stderr,"  ");
+    for(int j=0;j<max;j++) {
+      if (b[i+j]>=0x20&&b[i+j]<0x7f) fprintf(stderr,"%c",b[i+j]); else fprintf(stderr,"?");
+    }
+    fprintf(stderr,"\n");
+  }
+  return;
+}
+
+#define MAX_UNACKED_FRAMES 32
+int frame_unacked[MAX_UNACKED_FRAMES]={0};
+long frame_load_addrs[MAX_UNACKED_FRAMES]={-1};
+unsigned char unacked_frames[MAX_UNACKED_FRAMES][1280];
+
+int check_if_ack(unsigned char *b)
+{
+  for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
+    if (frame_unacked[i]) {
+      if (!memcmp(unacked_frames[i],b,1280)) {
+        frame_unacked[i]=0;
+	printf("ACK addr=$%x\n",frame_load_addrs[i]);
+	return 1;
+      }
+    }
+  }
+  return 0;
+}
+
+int expect_ack(long load_addr,unsigned char *b)
+{
+  while(1) {
+    int addr_dup=-1;
+    int free_slot=-1;
+    for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
+      if (frame_load_addrs[i]==load_addr) { addr_dup=i; break; }
+      if (!frame_unacked[i]&&(free_slot==-1)) free_slot=i;
+    }
+    if ((free_slot!=-1)&&(addr_dup==-1)) {
+      // We have a free slot to put this frame, and it doesn't
+      // duplicate the address of another frame.
+      // Thus we can safely just note this one
+      memcpy(unacked_frames[free_slot],b,1280);
+      frame_unacked[free_slot]=1;
+      frame_load_addrs[free_slot]=load_addr;
+      return 0;
+    }
+    // We don't have a free slot, or we have an outstanding
+    // frame with the same address that we need to see an ack
+    // for first.
+
+    // Check for the arrival of any acks
+    unsigned char ackbuf[8192];
+    int count=0;
+    int r=0;
+    while(r>-1&&count<100) {
+      r=recv(sockfd,ackbuf,sizeof(ackbuf),MSG_DONTWAIT);
+      if (r==1280) check_if_ack(ackbuf);
+    }
+    // And re-send the first unacked frame from our list
+    // (if there are still any unacked frames)
+    for(int i=0;i<MAX_UNACKED_FRAMES;i++)
+      if (unacked_frames[i]) {
+	sendto(sockfd, unacked_frames[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+	break;
+      }
+    // Finally wait a short period of time, that should be slightly
+    // longer than the time it takes to send a 1280 byte UDP frame.
+    // On-wire frame will be ~1400 bytes = 11,200 bits = ~112 usec
+    // So we will wait 200 usec.
+    usleep(200);
+  }
+}
+
 int send_mem(unsigned int address,unsigned char *buffer,int bytes)
 {
   // Set load address of packet
@@ -232,16 +317,21 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   //  printf("Sending $%07X, len = %d\n",address,bytes);
 
   // XXX - Assumes no packet loss, otherwise pieces will be missing from memory!
+  int frame_id=expect_ack(address,dma_load_routine);
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-
+  
 #if 1
   while(1) {
     unsigned char ackbuf[8192];
     int r=recv(sockfd,ackbuf,sizeof(ackbuf),MSG_DONTWAIT);
-    printf("r=%d\n",r);
-    perror("recv()");
-  sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    usleep(500000);
+    if (r<0) {
+      sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    } else if (r==1280) {
+      //      dump_bytes("Returned frame",ackbuf,1280);
+      check_if_ack(ackbuf);
+      if (!frame_unacked[frame_id]) break;
+    }
+    usleep(1000);
   }
 #endif
   
