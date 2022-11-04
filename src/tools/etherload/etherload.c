@@ -60,7 +60,7 @@ char all_done_routine[128] = {
   0x4c,0x0d,0x08
 };
 
-char dma_load_routine[1280] = {
+unsigned char dma_load_routine[1280] = {
 
   // Routine that copies packet contents by DMA
   0xa9,0x00, // Dummy LDA #$xx for signature detection
@@ -159,6 +159,11 @@ char dma_load_routine[1280] = {
   0xad,0x2a,0x68,
   0x69,0x00,
   0x8d,0x28,0x68,
+
+  // 5a. Wait for TX ready
+  0xad,0xe1,0xd6,
+  0x29,0x10,
+  0xf0,0xf9,
   
   // 5. TX packet
   0xa9,0x01,
@@ -257,7 +262,7 @@ int check_if_ack(unsigned char *b)
     if (frame_unacked[i]) {
       if (!memcmp(unacked_frames[i],b,1280)) {
         frame_unacked[i]=0;
-	printf("ACK addr=$%x\n",frame_load_addrs[i]);
+	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
 	return 1;
       } else {
 #if 0
@@ -291,7 +296,7 @@ int expect_ack(long load_addr,unsigned char *b)
       // We have a free slot to put this frame, and it doesn't
       // duplicate the address of another frame.
       // Thus we can safely just note this one
-      printf("Expecting ack of addr=$%x @ %d\n",load_addr,free_slot);
+      printf("Expecting ack of addr=$%lx @ %d\n",load_addr,free_slot);
       memcpy(unacked_frames[free_slot],b,1280);
       frame_unacked[free_slot]=1;
       frame_load_addrs[free_slot]=load_addr;
@@ -314,7 +319,7 @@ int expect_ack(long load_addr,unsigned char *b)
     int i=0;
     for(i=0;i<MAX_UNACKED_FRAMES;i++)
       if (unacked_frames[i]) {
-	printf("Resending addr=$%x @ %d\n",frame_load_addrs[i],i);
+	printf("Resending addr=$%lx @ %d\n",frame_load_addrs[i],i);
 	sendto(sockfd, unacked_frames[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 	break;
       }
@@ -330,6 +335,7 @@ int expect_ack(long load_addr,unsigned char *b)
     // XXX DEBUG slow things down
     usleep(10000);
   }
+  return 0;
 }
 
 int no_pending_ack(int addr)
@@ -364,13 +370,13 @@ int wait_all_acks(void)
     int i=0;
     for(i=0;i<MAX_UNACKED_FRAMES;i++)
       if (unacked_frames[i]) {
-	printf("Resending addr=$%x @ %d\n",frame_load_addrs[i],i);
+	printf("Resending addr=$%lx @ %d\n",frame_load_addrs[i],i);
 	sendto(sockfd, unacked_frames[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 	break;
       }
     if (i==MAX_UNACKED_FRAMES) {
       printf("No unacked frames\n");
-      break;
+      return 0;
     }
     // Finally wait a short period of time, that should be slightly
     // longer than the time it takes to send a 1280 byte UDP frame.
@@ -380,6 +386,7 @@ int wait_all_acks(void)
     // XXX DEBUG slow things down
     usleep(10000);
   }
+  return 0;
 }
 
 
@@ -392,11 +399,11 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   
   // Copy data into packet
   memcpy(&dma_load_routine[DATA_OFFSET], buffer, bytes);
-  
-  //  printf("Sending $%07X, len = %d\n",address,bytes);
 
-  // XXX - Assumes no packet loss, otherwise pieces will be missing from memory!
-  int frame_id=expect_ack(address,dma_load_routine);
+  // Add to queue of packets with pending ACKs
+  expect_ack(address,dma_load_routine);
+
+  // Send the packet initially
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
   return 0;
