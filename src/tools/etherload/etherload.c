@@ -160,10 +160,20 @@ unsigned char dma_load_routine[1280] = {
   0x69,0x00,
   0x8d,0x28,0x68,
 
+#ifdef ETH_TX_IRQ_VHDL_BUG_FIXED
   // 5a. Wait for TX ready
   0xad,0xe1,0xd6,
   0x29,0x10,
   0xf0,0xf9,
+#else
+  // 5. If we don't have reliable setting of eth_tx_irq, just wait >=200 usec to
+  // ensure that we aren't already sending a packet
+  // 4 raster lines = 250usec, so we can just count rasters
+  0xad,0x12,0xd0,
+  0x69,0x04,
+  0xcd,0x12,0xd0,
+  0xd0,0xfb,
+#endif
   
   // 5. TX packet
   0xa9,0x01,
