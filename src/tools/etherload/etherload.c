@@ -15,6 +15,8 @@
 #include <strings.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <time.h>
+#include <sys/time.h>
 
 #define PORTNUM 4510
 
@@ -64,6 +66,7 @@ unsigned char dma_load_routine[1280] = {
 
   // Routine that copies packet contents by DMA
   0xa9,0x00, // Dummy LDA #$xx for signature detection
+  0xce,0x00,0x04, // Draw a marker on the screen to indicate frames loaded
   0x8d, 0x07, 0xd7, // STA $D707 to trigger in-line DMA
     
 #define DMALIST_OFFSET (2+3)
@@ -258,10 +261,11 @@ void dump_bytes(char *msg,unsigned char *b,int len)
 #define MAX_UNACKED_FRAMES 32
 int frame_unacked[MAX_UNACKED_FRAMES]={0};
 long frame_load_addrs[MAX_UNACKED_FRAMES]={-1};
-unsigned char unacked_frames[MAX_UNACKED_FRAMES][1280];
+unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1280];
 
 int check_if_ack(unsigned char *b)
 {
+  printf(">"); fflush(stdout);
 #if 0
   printf("Pending acks:\n");  
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
@@ -270,17 +274,17 @@ int check_if_ack(unsigned char *b)
 #endif
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
     if (frame_unacked[i]) {
-      if (!memcmp(unacked_frames[i],b,1280)) {
+      if (!memcmp(unacked_frame_payloads[i],b,1280)) {
         frame_unacked[i]=0;
 	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
 	return 1;
       } else {
 #if 0
 	for(int j=0;j<1280;j++) {
-	  if (unacked_frames[i][j]!=b[j]) {
+	  if (unacked_frame_payloads[i][j]!=b[j]) {
 	    printf("Mismatch frame id #%d offset %d : $%02x vs $%02x\n",
-		   i,j,unacked_frames[i][j],b[j]);
-	    dump_bytes("unacked",unacked_frames[i],128);
+		   i,j,unacked_frame_payloads[i][j],b[j]);
+	    dump_bytes("unacked",unacked_frame_payloads[i],128);
 	    break;
 	  }
 	}
@@ -289,6 +293,31 @@ int check_if_ack(unsigned char *b)
     }
   }
   return 0;
+}
+
+long long last_resend_time=0;
+
+// From os.c in serval-dna
+long long gettime_us()
+{
+  long long retVal = -1;
+
+  do {
+    struct timeval nowtv;
+
+    // If gettimeofday() fails or returns an invalid value, all else is lost!
+    if (gettimeofday(&nowtv, NULL) == -1) {
+      break;
+    }
+
+    if (nowtv.tv_sec < 0 || nowtv.tv_usec < 0 || nowtv.tv_usec >= 1000000) {
+      break;
+    }
+
+    retVal = nowtv.tv_sec * 1000000LL + nowtv.tv_usec;
+  } while (0);
+
+  return retVal;
 }
 
 int expect_ack(long load_addr,unsigned char *b)
@@ -300,14 +329,14 @@ int expect_ack(long load_addr,unsigned char *b)
       if (frame_unacked[i]) {
 	if (frame_load_addrs[i]==load_addr) { addr_dup=i; break; }
       }
-      if (!frame_unacked[i]&&(free_slot==-1)) free_slot=i;
+      if ((!frame_unacked[i])&&(free_slot==-1)) free_slot=i;
     }
     if ((free_slot!=-1)&&(addr_dup==-1)) {
       // We have a free slot to put this frame, and it doesn't
       // duplicate the address of another frame.
       // Thus we can safely just note this one
       printf("Expecting ack of addr=$%lx @ %d\n",load_addr,free_slot);
-      memcpy(unacked_frames[free_slot],b,1280);
+      memcpy(unacked_frame_payloads[free_slot],b,1280);
       frame_unacked[free_slot]=1;
       frame_load_addrs[free_slot]=load_addr;
       return 0;
@@ -328,9 +357,12 @@ int expect_ack(long load_addr,unsigned char *b)
     // (if there are still any unacked frames)
     int i=0;
     for(i=0;i<MAX_UNACKED_FRAMES;i++)
-      if (unacked_frames[i]) {
-	printf("Resending addr=$%lx @ %d\n",frame_load_addrs[i],i);
-	sendto(sockfd, unacked_frames[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+      if (frame_unacked[i]) {
+	if ((gettime_us()-last_resend_time)>1000000) {
+	  printf("Resending addr=$%lx @ %d\n",frame_load_addrs[i],i);
+	  sendto(sockfd, unacked_frame_payloads[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+	  last_resend_time=gettime_us();
+	}
 	break;
       }
     if (i==MAX_UNACKED_FRAMES) {
@@ -343,7 +375,7 @@ int expect_ack(long load_addr,unsigned char *b)
     // So we will wait 200 usec.
     usleep(200);
     // XXX DEBUG slow things down
-    usleep(10000);
+    //    usleep(10000);
   }
   return 0;
 }
@@ -379,9 +411,9 @@ int wait_all_acks(void)
     // (if there are still any unacked frames)
     int i=0;
     for(i=0;i<MAX_UNACKED_FRAMES;i++)
-      if (unacked_frames[i]) {
+      if (frame_unacked[i]) {
 	printf("Resending addr=$%lx @ %d\n",frame_load_addrs[i],i);
-	sendto(sockfd, unacked_frames[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+	sendto(sockfd, unacked_frame_payloads[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 	break;
       }
     if (i==MAX_UNACKED_FRAMES) {
@@ -402,6 +434,9 @@ int wait_all_acks(void)
 
 int send_mem(unsigned int address,unsigned char *buffer,int bytes)
 {
+  // Set position of marker to draw in 1KB units
+  dma_load_routine[3]=address>>10;
+  
   // Set load address of packet
   dma_load_routine[DESTINATION_ADDRESS_OFFSET] = address & 0xff;
   dma_load_routine[DESTINATION_ADDRESS_OFFSET + 1] = (address >> 8) & 0xff;
@@ -484,7 +519,7 @@ int main(int argc, char **argv)
     progress_line(0,12,40);
 
     // Update screen, but only if we are not still waiting for a previous update
-    if (no_pending_ack(0x0400)) send_mem(0x0400,progress_screen,1000);
+    if (no_pending_ack(0x0400)) send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
     
     send_mem(address,buffer,bytes);
     
@@ -496,7 +531,7 @@ int main(int argc, char **argv)
   progress_line(0,15,40);
   progress_print(0,16,msg);
   progress_line(0,17,40);
-  send_mem(0x0400,progress_screen,1000);
+  send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
   
   // print out debug info
   printf("Sent %s to %s on port %d.\n\n", argv[2], inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
