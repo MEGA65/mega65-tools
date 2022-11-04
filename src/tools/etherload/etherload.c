@@ -332,6 +332,57 @@ int expect_ack(long load_addr,unsigned char *b)
   }
 }
 
+int no_pending_ack(int addr)
+{
+    for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
+      if (frame_unacked[i]) {
+	if (frame_load_addrs[i]==addr) return 0;
+      }
+    }
+    return 1;
+}
+
+int wait_all_acks(void)
+{
+  while(1) {
+    int unacked=0;
+    for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
+      if (frame_unacked[i]) { unacked=i; break; }
+    }
+    if (!unacked) return 0;
+
+    // Check for the arrival of any acks
+    unsigned char ackbuf[8192];
+    int count=0;
+    int r=0;
+    while(r>-1&&count<100) {
+      r=recv(sockfd,ackbuf,sizeof(ackbuf),MSG_DONTWAIT);
+      if (r==1280) check_if_ack(ackbuf);
+    }
+    // And re-send the first unacked frame from our list
+    // (if there are still any unacked frames)
+    int i=0;
+    for(i=0;i<MAX_UNACKED_FRAMES;i++)
+      if (unacked_frames[i]) {
+	printf("Resending addr=$%x @ %d\n",frame_load_addrs[i],i);
+	sendto(sockfd, unacked_frames[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+	break;
+      }
+    if (i==MAX_UNACKED_FRAMES) {
+      printf("No unacked frames\n");
+      break;
+    }
+    // Finally wait a short period of time, that should be slightly
+    // longer than the time it takes to send a 1280 byte UDP frame.
+    // On-wire frame will be ~1400 bytes = 11,200 bits = ~112 usec
+    // So we will wait 200 usec.
+    usleep(200);
+    // XXX DEBUG slow things down
+    usleep(10000);
+  }
+}
+
+
 int send_mem(unsigned int address,unsigned char *buffer,int bytes)
 {
   // Set load address of packet
@@ -348,23 +399,6 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   int frame_id=expect_ack(address,dma_load_routine);
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
-  // Wait until we have this frame acked
-  while(1) {
-    unsigned char ackbuf[8192];
-    int r=recv(sockfd,ackbuf,sizeof(ackbuf),MSG_DONTWAIT);
-    if (r==1280) {
-      printf("."); fflush(stdout);
-      //      dump_bytes("rx",ackbuf,128);
-      check_if_ack(ackbuf);
-    }
-    if (frame_unacked[frame_id]) {
-      //      printf("Resending addr=$%x\n",address);
-      sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    } else
-      break;
-    usleep(10000);
-  }
-  
   return 0;
 }
 
@@ -427,12 +461,13 @@ int main(int argc, char **argv)
     offset += bytes;
 
     // Send screen with current loading state
-  progress_line(0,10,40);
-  snprintf(msg,40,"Loading block @ $%04X",address);
-  progress_print(0,11,msg);
-  progress_line(0,12,40);
-    
-    send_mem(0x0400,progress_screen,1000);
+    progress_line(0,10,40);
+    snprintf(msg,40,"Loading block @ $%04X",address);
+    progress_print(0,11,msg);
+    progress_line(0,12,40);
+
+    // Update screen, but only if we are not still waiting for a previous update
+    if (no_pending_ack(0x0400)) send_mem(0x0400,progress_screen,1000);
     
     send_mem(address,buffer,bytes);
     
@@ -450,8 +485,9 @@ int main(int argc, char **argv)
   printf("Sent %s to %s on port %d.\n\n", argv[2], inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
 
   printf("Now tell MEGA65 that we are all done.\n");
-  
 
+  wait_all_acks();
+  
   all_done_routine[JMP_OFFSET+1]=0x0d;
   all_done_routine[JMP_OFFSET+2]=0x08;
   sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
