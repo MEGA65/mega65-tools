@@ -393,11 +393,11 @@ int no_pending_ack(int addr)
 int wait_all_acks(void)
 {
   while(1) {
-    int unacked=0;
+    int unacked=-1;
     for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
       if (frame_unacked[i]) { unacked=i; break; }
     }
-    if (!unacked) return 0;
+    if (unacked==-1) return 0;
 
     // Check for the arrival of any acks
     unsigned char ackbuf[8192];
@@ -499,10 +499,13 @@ int main(int argc, char **argv)
 
   int start_addr=address;
 
+  // Clear screen first
   memset(colour_ram,0x01,1000);
   send_mem(0xffd8000,colour_ram,1000);
-
   memset(progress_screen,0x20,1000);
+  send_mem(0x0400,progress_screen,1000);
+  wait_all_acks();
+  
   progress_line(0,0,40);
   snprintf(msg,40,"Loading \"%s\" at $%04X",argv[2],address);
   progress_print(0,1,msg);
