@@ -265,7 +265,9 @@ int expect_ack(long load_addr,unsigned char *b)
     int addr_dup=-1;
     int free_slot=-1;
     for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
-      if (frame_load_addrs[i]==load_addr) { addr_dup=i; break; }
+      if (frame_unacked[i]) {
+	if (frame_load_addrs[i]==load_addr) { addr_dup=i; break; }
+      }
       if (!frame_unacked[i]&&(free_slot==-1)) free_slot=i;
     }
     if ((free_slot!=-1)&&(addr_dup==-1)) {
@@ -291,16 +293,23 @@ int expect_ack(long load_addr,unsigned char *b)
     }
     // And re-send the first unacked frame from our list
     // (if there are still any unacked frames)
-    for(int i=0;i<MAX_UNACKED_FRAMES;i++)
+    int i=0;
+    for(i=0;i<MAX_UNACKED_FRAMES;i++)
       if (unacked_frames[i]) {
+	printf("Resending addr=$%x @ %d\n",frame_load_addrs[i],i);
 	sendto(sockfd, unacked_frames[i], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 	break;
       }
+    if (i==MAX_UNACKED_FRAMES) {
+      printf("No unacked frames\n");
+    }
     // Finally wait a short period of time, that should be slightly
     // longer than the time it takes to send a 1280 byte UDP frame.
     // On-wire frame will be ~1400 bytes = 11,200 bits = ~112 usec
     // So we will wait 200 usec.
     usleep(200);
+    // XXX DEBUG slow things down
+    usleep(10000);
   }
 }
 
