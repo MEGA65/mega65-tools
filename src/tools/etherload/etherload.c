@@ -418,7 +418,7 @@ void maybe_send_ack(void)
   if (ucount) {
     if ((gettime_us()-last_resend_time)>ack_interval) {
 
-      if (ack_interval<500000) ack_interval*=2;
+      if (ack_interval<500000) ack_interval*=8;
       
       resend_frame++;
       if (resend_frame>=ucount) resend_frame=0; 
