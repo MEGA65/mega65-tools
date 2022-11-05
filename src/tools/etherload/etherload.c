@@ -29,10 +29,10 @@ int packet_seq=0;
 
 char all_done_routine[128] = {
   // Dummy inc $d020 jmp *-3 routine for debugging
-  //  0xa9, 0x00, 0xee, 0x20, 0xd0, 0x4c, 0x2c, 0x68,
+  0xa9, 0x00, 0xee, 0x20, 0xd0, 0x4c, 0x2c, 0x68,
 
-  // 0xa9, 0x00, 0xee, 0x20, 0xd0, 0x4c, 0x2e, 0x68,
-  0xa9, 0x00, 0xea, 0xea, 0xea, 0xea, 0xea, 0xea,
+  // Production routine that skips the jmp *-3 loop
+  //  0xa9, 0x00, 0xea, 0xea, 0xea, 0xea, 0xea, 0xea,
 
   // Copy routine to $0340
   0xa2, 0x00,
@@ -64,8 +64,11 @@ char all_done_routine[128] = {
   0xea,
   // 4. CLI
   0x18,
+
+  // JMP_OFFSET=55 if nothing follows here
+    
   // JMP 2061
-#define JMP_OFFSET 55
+#define JMP_OFFSET (55)
   0x4c,0x0d,0x08
 };
 
@@ -75,35 +78,33 @@ unsigned char dma_load_routine[1280] = {
   0xa9,0x00, // Dummy LDA #$xx for signature detection
   0xee,0x00,0x04, // Draw a marker on the screen to indicate frames loaded
 
-#ifdef ETH_TX_IRQ_VHDL_BUG_FIXED
-#define BYTE_COUNT (3+2+2)
+// #define DEBUG_WAIT_FOR_KEY_ON_EACH_DATA_FRAME
+#ifdef DEBUG_WAIT_FOR_KEY_ON_EACH_DATA_FRAME
+  // Wait for $d610 press
+  0xee,0x27,0x04,
+  0xad,0x10,0xd6,
+  0xf0,0xf8,
+  0x8d,0x10,0xd6,
+
+#define EXTRA_BYTES (3+3+2+3)
+#else
+#define EXTRA_BYTES 0
+#endif
+
+#define BYTE_COUNT (3+2+2 +EXTRA_BYTES)
   // 5a. Wait for TX ready
   0xad,0xe1,0xd6,
   0x29,0x10,
   0xf0,0xf9,
-#else
-  // 5. If we don't have reliable setting of eth_tx_irq, just wait >=200 usec to
-  // ensure that we aren't already sending a packet
-  // 4 raster lines = 250usec, so we can just count rasters
-#define BYTE_COUNT (3+2+3+2)
-  0xad,0x12,0xd0,
-  0x69,0x04,
-  0xcd,0x12,0xd0,
-  0xd0,0xfb,
-#endif  
   
   0x8d, 0x07, 0xd7, // STA $D707 to trigger in-line DMA
   
-#define DMALIST_OFFSET (2+3+BYTE_COUNT+3)
-  // SRC MB is $FF
-  0x80,0xff,
+#define DMALIST_OFFSET (2+3+BYTE_COUNT+3)  
+  0x80,0xff, // SRC MB is $FF
 #define DESTINATION_MB_OFFSET (DMALIST_OFFSET+3)
-  // Destination MB 
-  0x81, 0x00,  
-  // DMA end of option list
-  0x00,
-  
-  0x04, 
+  0x81, 0x00,   // Destination MB 
+  0x00,    // DMA end of option list
+  0x04, // copy + chained
 #define BYTE_COUNT_OFFSET (DMALIST_OFFSET+6)
   0x00, 0x04,       // DMA byte count
   0x00, 0xe9, 0x8d, // DMA source address (points to data in packet)
@@ -120,12 +121,30 @@ unsigned char dma_load_routine[1280] = {
   0x80,0xff,
   0x81,0xff,
   0x00,              // DMA end of option list
-  0x00,              // DMA copy, end of chain
+  0x04,              // DMA copy, chained
   0x00, 0x06,        // DMA byte count 
   0x02, 0xe8, 0x8d,  // DMA source address
   0x00, 0xe8, 0x8d,  // DMA destination address
   0x00,              // DMA Sub command
   0x00, 0x00,        // DMA modulo (ignored)
+
+  // Use DMA to swap MAC addresses
+  0x00,              // DMA end of option list
+  0x04,              // DMA copy, chained
+  0x06, 0x00,        // DMA byte count 
+  0x08, 0xe8, 0x8d,  // DMA source address
+  0x00, 0xe8, 0x8d,  // DMA destination address
+  0x00,              // DMA Sub command
+  0x00, 0x00,        // DMA modulo (ignored)
+
+  0x00,              // DMA end of option list
+  0x00,              // DMA copy, end of chain
+  0x06, 0x00,        // DMA byte count 
+  0xe9, 0x36, 0x8d,  // DMA source address
+  0x06, 0xe8, 0x8d,  // DMA destination address
+  0x00,              // DMA Sub command
+  0x00, 0x00,        // DMA modulo (ignored)
+  
   
   // Code resumes after DMA list here
 
@@ -140,22 +159,6 @@ unsigned char dma_load_routine[1280] = {
   0xad,0x27,0x68,
   0x8d,0x23,0x68,
 
-  // Copy source MAC to dest MAC
-  0xad,0x08,0x68,0x8d,0x00,0x68,
-  0xad,0x09,0x68,0x8d,0x01,0x68,
-  0xad,0x0a,0x68,0x8d,0x02,0x68,
-  0xad,0x0b,0x68,0x8d,0x03,0x68,
-  0xad,0x0c,0x68,0x8d,0x04,0x68,
-  0xad,0x0d,0x68,0x8d,0x05,0x68,
-  
-  // Set our MAC address
-  0xad,0xe9,0xd6,0x8d,0x06,0x68,
-  0xad,0xea,0xd6,0x8d,0x07,0x68,
-  0xad,0xeb,0xd6,0x8d,0x08,0x68,
-  0xad,0xec,0xd6,0x8d,0x09,0x68,
-  0xad,0xed,0xd6,0x8d,0x0a,0x68,
-  0xad,0xee,0xd6,0x8d,0x0b,0x68,
-  
   // Set packet len
   0xa9,0x2a, 
   0x8d,0xe2,0xd6,
@@ -297,7 +300,8 @@ int check_if_ack(unsigned char *b)
 	 b[254]+(b[255]<<8),packet_seq
 	 );
   // Set retry interval based on number of outstanding packets
-  retx_interval=1000*(packet_seq-(b[254]+(b[255]<<8)));
+  int seq_gap=(packet_seq-(b[254]+(b[255]<<8)));
+  retx_interval=10000*seq_gap;
   if (retx_interval<1000) retx_interval=1000;
   if (retx_interval>500000) retx_interval=500000;
   
@@ -309,9 +313,6 @@ int check_if_ack(unsigned char *b)
       if (ack_addr==frame_load_addrs[i]) {
         frame_unacked[i]=0;
 	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
-	retx_interval=retx_interval/2;
-	// But always atleast 1ms between retransmissions
-	if (retx_interval<1000) retx_interval=1000;
 	return 1;
       }
     }
@@ -432,7 +433,7 @@ void maybe_send_ack(void)
   int unackd[MAX_UNACKED_FRAMES];
   int ucount=0;
   for(i=0;i<MAX_UNACKED_FRAMES;i++) if (frame_unacked[i]) unackd[ucount++]=i;
-  
+
   if (ucount) {
     if ((gettime_us()-last_resend_time)>retx_interval) {
 
@@ -442,13 +443,28 @@ void maybe_send_ack(void)
       if (resend_frame>=ucount) resend_frame=0; 
       int id=unackd[resend_frame];
       if (1)
-	printf("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x\n",
+	printf("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x\n",
 	       gettime_us()-start_time,	       
-	       frame_load_addrs[id],id,ucount,packet_seq);
-      printf(">"); fflush(stdout);
+	       frame_load_addrs[id],id,ucount,packet_seq,
+	       unacked_frame_payloads[id][DATA_OFFSET+0],
+	       unacked_frame_payloads[id][DATA_OFFSET+1]
+	       );
+
+      long ack_addr=
+	(unacked_frame_payloads[id][DESTINATION_MB_OFFSET]<<20)
+	+((unacked_frame_payloads[id][DESTINATION_BANK_OFFSET]&0xf)<<16)
+	+(unacked_frame_payloads[id][DESTINATION_ADDRESS_OFFSET+1]<<8)
+	+(unacked_frame_payloads[id][DESTINATION_ADDRESS_OFFSET+0]<<0);
+
+      if (ack_addr!=frame_load_addrs[id]) {
+	fprintf(stderr,"ERROR: Resending frame with incorrect load address: expected=$%lx, saw=$%lx\n",
+		frame_load_addrs[id],ack_addr);
+	exit(-1);
+      }
+      
       unacked_frame_payloads[id][254]=packet_seq;
       unacked_frame_payloads[id][255]=packet_seq>>8;
-      packet_seq++;
+      packet_seq++;      
       sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
       last_resend_time=gettime_us();
     }
@@ -485,8 +501,6 @@ int wait_all_acks(void)
     // On-wire frame will be ~1400 bytes = 11,200 bits = ~112 usec
     // So we will wait 200 usec.
     usleep(200);
-    // XXX DEBUG slow things down
-    usleep(10000);
   }
   return 0;
 }
@@ -502,6 +516,8 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   dma_load_routine[DESTINATION_ADDRESS_OFFSET + 1] = (address >> 8) & 0xff;
   dma_load_routine[DESTINATION_BANK_OFFSET] = (address>>16)&0x0f;
   dma_load_routine[DESTINATION_MB_OFFSET] = (address>>20);
+  dma_load_routine[BYTE_COUNT_OFFSET] = bytes;
+  dma_load_routine[BYTE_COUNT_OFFSET+1] = bytes>>8;
   
   // Copy data into packet
   memcpy(&dma_load_routine[DATA_OFFSET], buffer, bytes);
@@ -510,9 +526,11 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   expect_ack(address,dma_load_routine);
 
   // Send the packet initially
-  printf("T+%lld : TX addr=$%x, seq=$%04x\n",
+  printf("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...\n",
 	 gettime_us()-start_time,
-	 address,packet_seq);
+	 address,packet_seq,
+	 dma_load_routine[DATA_OFFSET],dma_load_routine[DATA_OFFSET+1]
+	 );
   dma_load_routine[254]=packet_seq;
   dma_load_routine[255]=packet_seq>>8;
   packet_seq++;
@@ -593,7 +611,8 @@ int main(int argc, char **argv)
     progress_line(0,12,40);
 
     // Update screen, but only if we are not still waiting for a previous update
-    if (no_pending_ack(0x0400+4*40)) send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
+    //    if (no_pending_ack(0x0400+4*40))
+      send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
     
     send_mem(address,buffer,bytes);
     
@@ -619,7 +638,7 @@ int main(int argc, char **argv)
   all_done_routine[JMP_OFFSET+1]=0x0d;
   all_done_routine[JMP_OFFSET+2]=0x08;
   if (1)
-  for(int i=0;i<10;i++) {
+  for(int i=0;i<1;i++) {
     sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
     usleep(10000);
   }
