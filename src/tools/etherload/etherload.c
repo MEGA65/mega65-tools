@@ -26,13 +26,14 @@ long long gettime_us(void);
 long long start_time;
 
 int packet_seq=0;
+int last_rx_seq=0;
 
 char all_done_routine[128] = {
   // Dummy inc $d020 jmp *-3 routine for debugging
-  0xa9, 0x00, 0xee, 0x20, 0xd0, 0x4c, 0x2c, 0x68,
+  //  0xa9, 0x00, 0xee, 0x20, 0xd0, 0x4c, 0x2c, 0x68,
 
   // Production routine that skips the jmp *-3 loop
-  //  0xa9, 0x00, 0xea, 0xea, 0xea, 0xea, 0xea, 0xea,
+  0xa9, 0x00, 0xea, 0xea, 0xea, 0xea, 0xea, 0xea,
 
   // Copy routine to $0340
   0xa2, 0x00,
@@ -199,6 +200,7 @@ unsigned char dma_load_routine[1280] = {
   0x60, // RTS 
   
 #define DATA_OFFSET (0x100 - 0x2c)
+#define SEQ_NUM_OFFSET (DATA_OFFSET - 2)
 };
 
 unsigned char colour_ram[1000];
@@ -278,6 +280,17 @@ unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1280];
 
 int retx_interval=1000;
 
+void update_retx_interval(void)
+{
+  int seq_gap=(packet_seq-last_rx_seq);
+  retx_interval=10000*seq_gap;
+  if (retx_interval<1000) retx_interval=1000;
+  if (retx_interval>500000) retx_interval=500000;
+  printf("  retx interval=%dusec (%d vs %d)\n",retx_interval,packet_seq,last_rx_seq);
+}
+
+
+
 int check_if_ack(unsigned char *b)
 {
 
@@ -294,18 +307,16 @@ int check_if_ack(unsigned char *b)
     +(b[DESTINATION_ADDRESS_OFFSET+1]<<8)
     +(b[DESTINATION_ADDRESS_OFFSET+0]<<0);
   
+  // Set retry interval based on number of outstanding packets
+  last_rx_seq = (b[SEQ_NUM_OFFSET]+(b[SEQ_NUM_OFFSET+1]<<8));
+  update_retx_interval();
+
   printf("T+%lld : RXd frame addr=$%lx, rx seq=$%04x, tx seq=$%04x\n",
 	 gettime_us()-start_time,
 	 ack_addr,
-	 b[254]+(b[255]<<8),packet_seq
+	 last_rx_seq,packet_seq
 	 );
-  // Set retry interval based on number of outstanding packets
-  int seq_gap=(packet_seq-(b[254]+(b[255]<<8)));
-  retx_interval=10000*seq_gap;
-  if (retx_interval<1000) retx_interval=1000;
-  if (retx_interval>500000) retx_interval=500000;
   
-
 #define CHECK_ADDR_ONLY
 #ifdef CHECK_ADDR_ONLY
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
@@ -462,9 +473,10 @@ void maybe_send_ack(void)
 	exit(-1);
       }
       
-      unacked_frame_payloads[id][254]=packet_seq;
-      unacked_frame_payloads[id][255]=packet_seq>>8;
+      unacked_frame_payloads[id][SEQ_NUM_OFFSET]=packet_seq;
+      unacked_frame_payloads[id][SEQ_NUM_OFFSET+1]=packet_seq>>8;
       packet_seq++;      
+      update_retx_interval();
       sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
       last_resend_time=gettime_us();
     }
@@ -531,9 +543,10 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
 	 address,packet_seq,
 	 dma_load_routine[DATA_OFFSET],dma_load_routine[DATA_OFFSET+1]
 	 );
-  dma_load_routine[254]=packet_seq;
-  dma_load_routine[255]=packet_seq>>8;
+  dma_load_routine[SEQ_NUM_OFFSET]=packet_seq;
+  dma_load_routine[SEQ_NUM_OFFSET+1]=packet_seq>>8;
   packet_seq++;
+  update_retx_interval();
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
   return 0;
