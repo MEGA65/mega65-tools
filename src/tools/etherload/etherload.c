@@ -18,6 +18,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <math.h>
+#include <ctype.h>
 
 #define PORTNUM 4510
 
@@ -29,7 +30,7 @@ long long start_time;
 int packet_seq=0;
 int last_rx_seq=0;
 
-char c64_loram[1024]={
+unsigned char c64_loram[1024]={
   0x00, 0xaa, 0xb1, 0x91, 0xb3, 0x22, 0x22, 0x00, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x19, 0x16, 0x00, 0x0a, 0x76, 0xa3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x76, 0xa3, 0xb3, 0xbd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x08, 0x03, 0x08, 0x03, 0x08, 0x03,
@@ -354,7 +355,7 @@ void update_retx_interval(void)
   retx_interval=2000*seq_gap;
   if (retx_interval<1000) retx_interval=1000;
   if (retx_interval>500000) retx_interval=500000;
-  printf("  retx interval=%dusec (%d vs %d)\n",retx_interval,packet_seq,last_rx_seq);
+  // printf("  retx interval=%dusec (%d vs %d)\n",retx_interval,packet_seq,last_rx_seq);
 }
 
 
@@ -362,7 +363,7 @@ void update_retx_interval(void)
 int check_if_ack(unsigned char *b)
 {
 
-#if 1
+#if 0
   printf("Pending acks:\n");  
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
     if (frame_unacked[i]) printf("  Frame ID #%d : addr=$%lx\n",i,frame_load_addrs[i]);
@@ -379,11 +380,13 @@ int check_if_ack(unsigned char *b)
   last_rx_seq = (b[SEQ_NUM_OFFSET]+(b[SEQ_NUM_OFFSET+1]<<8));
   update_retx_interval();
 
+#if 0
   printf("T+%lld : RXd frame addr=$%lx, rx seq=$%04x, tx seq=$%04x\n",
 	 gettime_us()-start_time,
 	 ack_addr,
 	 last_rx_seq,packet_seq
 	 );
+#endif
   
 #define CHECK_ADDR_ONLY
 #ifdef CHECK_ADDR_ONLY
@@ -391,7 +394,7 @@ int check_if_ack(unsigned char *b)
     if (frame_unacked[i]) {
       if (ack_addr==frame_load_addrs[i]) {
         frame_unacked[i]=0;
-	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
+	//	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
 	return 1;
       }
     }
@@ -463,7 +466,7 @@ int expect_ack(long load_addr,unsigned char *b)
       // We have a free slot to put this frame, and it doesn't
       // duplicate the address of another frame.
       // Thus we can safely just note this one
-      printf("Expecting ack of addr=$%lx @ %d\n",load_addr,free_slot);
+      //      printf("Expecting ack of addr=$%lx @ %d\n",load_addr,free_slot);
       memcpy(unacked_frame_payloads[free_slot],b,1280);
       frame_unacked[free_slot]=1;
       frame_load_addrs[free_slot]=load_addr;
@@ -521,7 +524,7 @@ void maybe_send_ack(void)
       resend_frame++;
       if (resend_frame>=ucount) resend_frame=0; 
       int id=unackd[resend_frame];
-      if (1)
+      if (0)
 	printf("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x\n",
 	       gettime_us()-start_time,	       
 	       frame_load_addrs[id],id,ucount,packet_seq,
@@ -551,7 +554,7 @@ void maybe_send_ack(void)
     return;
   }
   if (!ucount) {
-    printf("No unacked frames\n");
+    //    printf("No unacked frames\n");
     return;
   }
 }
@@ -606,11 +609,12 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   expect_ack(address,dma_load_routine);
 
   // Send the packet initially
-  printf("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...\n",
-	 gettime_us()-start_time,
-	 address,packet_seq,
-	 dma_load_routine[DATA_OFFSET],dma_load_routine[DATA_OFFSET+1]
-	 );
+  if (0)
+    printf("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...\n",
+	   gettime_us()-start_time,
+	   address,packet_seq,
+	   dma_load_routine[DATA_OFFSET],dma_load_routine[DATA_OFFSET+1]
+	   );
   dma_load_routine[SEQ_NUM_OFFSET]=packet_seq;
   dma_load_routine[SEQ_NUM_OFFSET+1]=packet_seq>>8;
   packet_seq++;
@@ -642,9 +646,11 @@ int main(int argc, char **argv)
   servaddr.sin_port = htons(PORTNUM);
 
   // print out debug info
+#if 0
   printf("Using dst-addr: %s\n", inet_ntoa(servaddr.sin_addr));
   printf("Using src-port: %d\n", ntohs(servaddr.sin_port));
-
+#endif
+  
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();
 
@@ -668,13 +674,13 @@ int main(int argc, char **argv)
   int start_addr=address;
 
   // Clear screen first
-  printf("Clearing screen\n");
+  //  printf("Clearing screen\n");
   memset(colour_ram,0x01,1000);
   memset(progress_screen,0x20,1000);
-  send_mem(0xffd8000,colour_ram,1000);
+  send_mem(0x1f800,colour_ram,1000);
   send_mem(0x0400,progress_screen,1000);
   wait_all_acks();
-  printf("Screen cleared.\n");
+  //  printf("Screen cleared.\n");
 
   // Load C64 low memory, so that we can run C64 mode programs
   // even if the machine was in C65 mode or some random state first
@@ -690,7 +696,7 @@ int main(int argc, char **argv)
   int entry_point=0x080d;
   
   while ((bytes = read(fd, buffer, 1024)) != 0) {
-    printf("Read %d bytes at offset %d\n", bytes, offset);
+    //    printf("Read %d bytes at offset %d\n", bytes, offset);
 
     if (!offset) {
       for(int i=0;i<255;i++) if (buffer[i]==0x9e) {
@@ -708,7 +714,7 @@ int main(int argc, char **argv)
 	    if (buffer[ofs]==':') break;
 	  }
 	  entry_point=mult*val;
-	  printf("Program entry point via SYS %d\n",entry_point);
+	  //	  printf("Program entry point via SYS %d\n",entry_point);
 	  break;
 	}
     }
@@ -738,9 +744,9 @@ int main(int argc, char **argv)
   send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
   
   // print out debug info
-  printf("Sent %s to %s on port %d.\n\n", argv[2], inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
+  printf("Sent %s to %s on port %d.\n", argv[2], inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
 
-  printf("Now tell MEGA65 that we are all done.\n");
+  printf("Now telling MEGA65 that we are all done...\n");
 
   wait_all_acks();
 
