@@ -132,13 +132,22 @@ char all_done_routine[128] = {
   0xa3, 0x00,
   0x5c,
   0xea,
+
+  // Set CPU to 1MHz or 40MHz
+#define CPU_SPEED_OFFSET (53)
+  0xa9,0x40,
+  0x85,0x00,
+
+  // VIC-II IO mode
+  0x8d,0x2f,0xd0,  
+  
   // 4. CLI
   0x18,
 
   // JMP_OFFSET=55 if nothing follows here
     
   // JMP 2061
-#define JMP_OFFSET (55)
+#define JMP_OFFSET (62)
   0x4c,0x0d,0x08
 };
 
@@ -342,7 +351,7 @@ void dump_bytes(char *msg,unsigned char *b,int len)
   return;
 }
 
-#define MAX_UNACKED_FRAMES 32
+#define MAX_UNACKED_FRAMES 256
 int frame_unacked[MAX_UNACKED_FRAMES]={0};
 long frame_load_addrs[MAX_UNACKED_FRAMES]={-1};
 unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1280];
@@ -352,10 +361,10 @@ int retx_interval=1000;
 void update_retx_interval(void)
 {
   int seq_gap=(packet_seq-last_rx_seq);
-  retx_interval=2000*seq_gap;
+  retx_interval=2000+10000*seq_gap;
   if (retx_interval<1000) retx_interval=1000;
   if (retx_interval>500000) retx_interval=500000;
-  // printf("  retx interval=%dusec (%d vs %d)\n",retx_interval,packet_seq,last_rx_seq);
+  //  printf("  retx interval=%dusec (%d vs %d)\n",retx_interval,packet_seq,last_rx_seq);
 }
 
 
@@ -728,6 +737,7 @@ int main(int argc, char **argv)
     progress_line(0,12,40);
 
     // Update screen, but only if we are not still waiting for a previous update
+    // so that we don't get stuck in lock-step
     if (no_pending_ack(0x0400+4*40))
       send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
     
