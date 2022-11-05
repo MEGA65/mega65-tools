@@ -134,7 +134,7 @@ char all_done_routine[128] = {
   0xea,
 
   // Set CPU to 1MHz or 40MHz
-#define CPU_SPEED_OFFSET (53)
+#define CPU_SPEED_OFFSET (54)
   0xa9,0x40,
   0x85,0x00,
 
@@ -765,6 +765,16 @@ int main(int argc, char **argv)
   printf("Program entry point via SYS %d\n",entry_point);
   all_done_routine[JMP_OFFSET+1]=entry_point;
   all_done_routine[JMP_OFFSET+2]=entry_point>>8;
+
+  if (entry_point<8192) {
+    // Probably C64 mode, so 1MHz CPU
+    all_done_routine[CPU_SPEED_OFFSET+1]=64;
+  } else {
+    // Probably C65 mode, so 40MHz CPU, and don't stomp IO mode
+    all_done_routine[CPU_SPEED_OFFSET+1]=65;
+    all_done_routine[CPU_SPEED_OFFSET+4]=0xad; // turn STA $D02F into LDA $D02F
+  }
+  
   // Instead, we just send it 10 times to make sure
   for(int i=0;i<10;i++) {
     sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
