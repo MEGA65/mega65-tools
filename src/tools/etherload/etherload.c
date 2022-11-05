@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/time.h>
+#include <math.h>
 
 #define PORTNUM 4510
 
@@ -685,9 +686,33 @@ int main(int argc, char **argv)
   snprintf(msg,40,"Loading \"%s\" at $%04X",argv[2],address);
   progress_print(0,1,msg);
   progress_line(0,2,40);
+
+  int entry_point=0x080d;
   
   while ((bytes = read(fd, buffer, 1024)) != 0) {
     printf("Read %d bytes at offset %d\n", bytes, offset);
+
+    if (!offset) {
+      for(int i=0;i<255;i++) if (buffer[i]==0x9e) {
+	  // Found SYS command -- try to work out the address
+	  int ofs=i+1;
+	  float mult=1;
+	  int val=0;
+	  if (buffer[ofs]==0xff&&buffer[ofs+1]==0xac) { mult=3.14159265; ofs+=2; }
+	  while(buffer[ofs]) {
+	    if (isdigit(buffer[ofs])) {
+	      val*=10;
+	      val+=buffer[ofs]-'0';
+	    }
+	    ofs++;
+	    if (buffer[ofs]==':') break;
+	  }
+	  entry_point=mult*val;
+	  printf("Program entry point via SYS %d\n",entry_point);
+	  break;
+	}
+    }
+    
     offset += bytes;
 
     // Send screen with current loading state
@@ -721,12 +746,12 @@ int main(int argc, char **argv)
 
   // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
   // XXX - We should make it ACK as well.
-  all_done_routine[JMP_OFFSET+1]=0x0d;
-  all_done_routine[JMP_OFFSET+2]=0x08;
-  if (1)
-  for(int i=0;i<1;i++) {
+  printf("Program entry point via SYS %d\n",entry_point);
+  all_done_routine[JMP_OFFSET+1]=entry_point;
+  all_done_routine[JMP_OFFSET+2]=entry_point>>8;
+  // Instead, we just send it 10 times to make sure
+  for(int i=0;i<10;i++) {
     sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    usleep(10000);
   }
   
   return 0;

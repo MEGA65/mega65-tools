@@ -467,7 +467,7 @@ $(BINDIR)/ethermon:	$(TOOLDIR)/ethermon.c
 	$(CC) $(COPT) -o $(BINDIR)/ethermon $(TOOLDIR)/ethermon.c -I/usr/local/include -lpcap
 
 $(BINDIR)/etherload:	$(TOOLDIR)/etherload/etherload.c
-	$(CC) $(COPT) -o $(BINDIR)/etherload $(TOOLDIR)/etherload/etherload.c -I/usr/local/include
+	$(CC) $(COPT) -o $(BINDIR)/etherload $(TOOLDIR)/etherload/etherload.c -I/usr/local/include -lm
 
 $(BINDIR)/videoproxy:	$(TOOLDIR)/videoproxy.c
 	$(CC) $(COPT) -o $(BINDIR)/videoproxy $(TOOLDIR)/videoproxy.c -I/usr/local/include -lpcap
