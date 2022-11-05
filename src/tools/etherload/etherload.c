@@ -20,6 +20,13 @@
 
 #define PORTNUM 4510
 
+void maybe_send_ack(void);
+long long gettime_us(void);
+
+long long start_time;
+
+int packet_seq=0;
+
 char all_done_routine[128] = {
   // Dummy inc $d020 jmp *-3 routine for debugging
   //  0xa9, 0x00, 0xee, 0x20, 0xd0, 0x4c, 0x2c, 0x68,
@@ -266,7 +273,7 @@ int frame_unacked[MAX_UNACKED_FRAMES]={0};
 long frame_load_addrs[MAX_UNACKED_FRAMES]={-1};
 unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1280];
 
-int ack_interval=1000;
+int retx_interval=1000;
 
 int check_if_ack(unsigned char *b)
 {
@@ -274,7 +281,7 @@ int check_if_ack(unsigned char *b)
 #if 1
   printf("Pending acks:\n");  
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
-    if (frame_unacked[i]) printf("  Frame ID #%d : addr=$%x\n",i,frame_load_addrs[i]);
+    if (frame_unacked[i]) printf("  Frame ID #%d : addr=$%lx\n",i,frame_load_addrs[i]);
   }
 #endif
 
@@ -284,7 +291,16 @@ int check_if_ack(unsigned char *b)
     +(b[DESTINATION_ADDRESS_OFFSET+1]<<8)
     +(b[DESTINATION_ADDRESS_OFFSET+0]<<0);
   
-  printf("RXd frame addr=$%lx\n",ack_addr);
+  printf("T+%lld : RXd frame addr=$%lx, rx seq=$%04x, tx seq=$%04x\n",
+	 gettime_us()-start_time,
+	 ack_addr,
+	 b[254]+(b[255]<<8),packet_seq
+	 );
+  // Set retry interval based on number of outstanding packets
+  retx_interval=1000*(packet_seq-(b[254]+(b[255]<<8)));
+  if (retx_interval<1000) retx_interval=1000;
+  if (retx_interval>500000) retx_interval=500000;
+  
 
 #define CHECK_ADDR_ONLY
 #ifdef CHECK_ADDR_ONLY
@@ -293,7 +309,9 @@ int check_if_ack(unsigned char *b)
       if (ack_addr==frame_load_addrs[i]) {
         frame_unacked[i]=0;
 	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
-	ack_interval=ack_interval/2;
+	retx_interval=retx_interval/2;
+	// But always atleast 1ms between retransmissions
+	if (retx_interval<1000) retx_interval=1000;
 	return 1;
       }
     }
@@ -326,7 +344,7 @@ int check_if_ack(unsigned char *b)
 long long last_resend_time=0;
 
 // From os.c in serval-dna
-long long gettime_us()
+long long gettime_us(void)
 {
   long long retVal = -1;
 
@@ -416,17 +434,21 @@ void maybe_send_ack(void)
   for(i=0;i<MAX_UNACKED_FRAMES;i++) if (frame_unacked[i]) unackd[ucount++]=i;
   
   if (ucount) {
-    if ((gettime_us()-last_resend_time)>ack_interval) {
+    if ((gettime_us()-last_resend_time)>retx_interval) {
 
-      if (ack_interval<500000) ack_interval*=8;
+      //      if (retx_interval<500000) retx_interval*=2;
       
       resend_frame++;
       if (resend_frame>=ucount) resend_frame=0; 
       int id=unackd[resend_frame];
       if (1)
-	printf("Resending addr=$%lx @ %d (%d unacked)\n",
-	       frame_load_addrs[id],id,ucount);
+	printf("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x\n",
+	       gettime_us()-start_time,	       
+	       frame_load_addrs[id],id,ucount,packet_seq);
       printf(">"); fflush(stdout);
+      unacked_frame_payloads[id][254]=packet_seq;
+      unacked_frame_payloads[id][255]=packet_seq>>8;
+      packet_seq++;
       sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
       last_resend_time=gettime_us();
     }
@@ -488,6 +510,12 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   expect_ack(address,dma_load_routine);
 
   // Send the packet initially
+  printf("T+%lld : TX addr=$%x, seq=$%04x\n",
+	 gettime_us()-start_time,
+	 address,packet_seq);
+  dma_load_routine[254]=packet_seq;
+  dma_load_routine[255]=packet_seq>>8;
+  packet_seq++;
   sendto(sockfd, dma_load_routine, sizeof dma_load_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
   return 0;
@@ -496,6 +524,8 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
 int main(int argc, char **argv)
 {
 
+  start_time=gettime_us();
+  
   if (argc != 3) {
     printf("usage: %s <IP address> <programme>\n", argv[0]);
     exit(1);
@@ -563,7 +593,7 @@ int main(int argc, char **argv)
     progress_line(0,12,40);
 
     // Update screen, but only if we are not still waiting for a previous update
-    if (no_pending_ack(0x0400)) send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
+    if (no_pending_ack(0x0400+4*40)) send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
     
     send_mem(address,buffer,bytes);
     
@@ -588,7 +618,11 @@ int main(int argc, char **argv)
   // XXX - We should make it ACK as well.
   all_done_routine[JMP_OFFSET+1]=0x0d;
   all_done_routine[JMP_OFFSET+2]=0x08;
-  sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  if (1)
+  for(int i=0;i<10;i++) {
+    sendto(sockfd, all_done_routine, sizeof all_done_routine, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    usleep(10000);
+  }
   
   return 0;
 }
