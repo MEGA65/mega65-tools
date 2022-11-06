@@ -263,7 +263,7 @@ $(SDCARD_DIR)/M65TESTS.D81:	$(CBMCONVERT) $(TESTS)
 %.bin:	%.a65 $(OPHIS)
 	$(info =============================================================)
 	$(info ~~~~~~~~~~~~~~~~> Making: $@)
-	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
+	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.bin
 
 %.o:	%.s $(CC65)
 	$(CA65) $< -l $*.list
@@ -465,6 +465,9 @@ $(TOOLDIR)/frame2png:	$(TOOLDIR)/frame2png.c
 
 $(BINDIR)/ethermon:	$(TOOLDIR)/ethermon.c
 	$(CC) $(COPT) -o $(BINDIR)/ethermon $(TOOLDIR)/ethermon.c -I/usr/local/include -lpcap
+
+$(TOOLDIR)/etherload/helper_%.c:	$(TOOLDIR)/etherload/helper_%.bin $(TOOLDIR)/bin2c
+	$(TOOLDIR)/bin2c $(TOOLDIR)/etherload/helper_$*.bin $* $(TOOLDIR)/etherload/helper_$*.c
 
 $(BINDIR)/etherload:	$(TOOLDIR)/etherload/etherload.c
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(TOOLDIR)/etherload/etherload.c -I/usr/local/include -lm

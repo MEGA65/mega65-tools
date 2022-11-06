@@ -460,6 +460,8 @@ long long gettime_us(void)
 
 int resend_frame=0;
 
+void maybe_send_ack(void);
+
 int expect_ack(long load_addr,unsigned char *b)
 {
   while(1) {
@@ -642,6 +644,8 @@ int main(int argc, char **argv)
     printf("usage: %s <IP address> <programme>\n", argv[0]);
     exit(1);
   }
+  const char* ipAddress = argv[1];
+  const char* programmePath = argv[2];
 
   sockfd = socket(AF_INET, SOCK_DGRAM, 0);
   int broadcastEnable = 1;
@@ -651,7 +655,7 @@ int main(int argc, char **argv)
   
   memset(&servaddr, 0, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
-  servaddr.sin_addr.s_addr = inet_addr(argv[1]);
+  servaddr.sin_addr.s_addr = inet_addr(ipAddress);
   servaddr.sin_port = htons(PORTNUM);
 
   // print out debug info
@@ -663,7 +667,7 @@ int main(int argc, char **argv)
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();
 
-  int fd = open(argv[2], O_RDWR);
+  int fd = open(programmePath, O_RDWR);
   unsigned char buffer[1024];
   int offset = 0;
   int bytes;
@@ -671,7 +675,7 @@ int main(int argc, char **argv)
   // Read 2 byte load address
   bytes = read(fd, buffer, 2);
   if (bytes < 2) {
-    fprintf(stderr, "Failed to read load address from file '%s'\n", argv[2]);
+    fprintf(stderr, "Failed to read load address from file '%s'\n", programmePath);
     exit(-1);
   }
 
@@ -681,6 +685,8 @@ int main(int argc, char **argv)
   printf("Load address of programme is $%04x\n", address);
 
   int start_addr=address;
+
+  last_resend_time=gettime_us();
 
   // Clear screen first
   //  printf("Clearing screen\n");
@@ -698,7 +704,7 @@ int main(int argc, char **argv)
   send_mem(0x0200,&c64_loram[0x1fe],0x200);
   
   progress_line(0,0,40);
-  snprintf(msg,40,"Loading \"%s\" at $%04X",argv[2],address);
+  snprintf(msg,40,"Loading \"%s\" at $%04X",programmePath,address);
   progress_print(0,1,msg);
   progress_line(0,2,40);
 
@@ -754,7 +760,7 @@ int main(int argc, char **argv)
   send_mem(0x0400+4*40,&progress_screen[4*40],1000-4*40);
   
   // print out debug info
-  printf("Sent %s to %s on port %d.\n", argv[2], inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
+  printf("Sent %s to %s on port %d.\n", path, inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
 
   printf("Now telling MEGA65 that we are all done...\n");
 
