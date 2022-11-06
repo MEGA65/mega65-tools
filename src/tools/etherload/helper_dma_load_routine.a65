@@ -84,6 +84,8 @@ offset_dest_bank:
 	; Code resumes after DMA list here
 
 	; Reverse port numbers
+	; Note that reading is accessing rx buffer (starts at 6802), while writing
+	; accesses the tx buffer (starts at 6800).
 	lda $6824
 	sta $6824
 	lda $6825
