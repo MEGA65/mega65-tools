@@ -260,7 +260,7 @@ $(SDCARD_DIR)/M65TESTS.D81:	$(CBMCONVERT) $(TESTS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 
-%.bin:	%.a65 $(OPHIS)
+%.bin %.map %.list:	%.a65 $(OPHIS)
 	$(info =============================================================)
 	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.bin
@@ -466,12 +466,6 @@ $(TOOLDIR)/frame2png:	$(TOOLDIR)/frame2png.c
 $(BINDIR)/ethermon:	$(TOOLDIR)/ethermon.c
 	$(CC) $(COPT) -o $(BINDIR)/ethermon $(TOOLDIR)/ethermon.c -I/usr/local/include -lpcap
 
-$(TOOLDIR)/etherload/helper_%.c:	$(TOOLDIR)/etherload/helper_%.bin $(TOOLDIR)/bin2c
-	$(TOOLDIR)/bin2c $(TOOLDIR)/etherload/helper_$*.bin $* $(TOOLDIR)/etherload/helper_$*.c
-
-$(BINDIR)/etherload:	$(TOOLDIR)/etherload/etherload.c
-	$(CC) $(COPT) -o $(BINDIR)/etherload $(TOOLDIR)/etherload/etherload.c -I/usr/local/include -lm
-
 $(BINDIR)/videoproxy:	$(TOOLDIR)/videoproxy.c
 	$(CC) $(COPT) -o $(BINDIR)/videoproxy $(TOOLDIR)/videoproxy.c -I/usr/local/include -lpcap
 
@@ -610,3 +604,24 @@ $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
 
 #-----------------------------------------------------------------------------
+
+##
+## ========== etherload ==========
+##
+ETHERLOAD_SOURCES = $(TOOLDIR)/etherload/etherload.c \
+		$(TOOLDIR)/etherload/loram.c \
+		$(TOOLDIR)/etherload/helper_dma_load_routine.c \
+		$(TOOLDIR)/etherload/helper_all_done_routine.c
+ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/helper_dma_load_routine_map.h \
+		$(TOOLDIR)/etherload/helper_all_done_routine_map.h
+ETHERLOAD_INCLUDES = -I/usr/local/include
+ETHERLOAD_LIBRARIES = -lm
+
+$(TOOLDIR)/etherload/helper_%.c:	$(TOOLDIR)/etherload/helper_%.bin $(TOOLDIR)/bin2c
+	$(TOOLDIR)/bin2c $(TOOLDIR)/etherload/helper_$*.bin $* $(TOOLDIR)/etherload/helper_$*.c
+
+$(TOOLDIR)/etherload/helper_%_map.h:	$(TOOLDIR)/etherload/helper_%.map $(TOOLDIR)/map2c
+	$(TOOLDIR)/map2c $(TOOLDIR)/etherload/helper_$*.map $* $(TOOLDIR)/etherload/helper_$*_map.h
+
+$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES)
+	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)

@@ -3,10 +3,138 @@
 
 	; Routine sits at beginning of UDP payload in the Ethernet buffer
 	; mapped at $6800
+  ; Packet size:      2 bytes
 	; Ethernet header: 14 bytes
 	; IPv4 header:     20 bytes
 	; UDP header:       8 bytes
-	.org $6800 + 14 + 20 + 8
+	.org $6800 + 2 + 14 + 20 + 8
 
 entry:
-	jmp $6800
+  ; Routine that copies packet contents by DMA
+  lda #$00 ; Dummy LDA #$xx for signature detection
+	inc $0400 ; Draw a marker on the screen to indicate frames loaded
+
+	; Debug: wait for $d610 key press on each data frame
+;*
+;	inc $0427
+;	lda $d610
+;	beq -
+;	sta $d610
+
+  ; 5a. Wait for TX ready
+*
+  lda $d6e1
+	and #$10
+	beq -
+
+	sta $d707 ; trigger in-line DMA
+	.byte $80, $ff ; SRC MB is $FF
+	.byte $81
+offset_dest_mb:
+	.byte $00      ; Destination MB
+	.byte $00      ; DMA end of option list
+	.byte $04      ; copy + chained
+offset_byte_count:
+  .word $0400    ; DMA byte count
+	.word $e900    ; DMA source address (bottom 16 bits)
+	.byte $8d      ; DMA source bank and flags ($8x = enable I/O)
+offset_dest_address:
+  .word $1000    ; DMA destination address (bottom 16 bits)
+offset_dest_bank:
+	.byte $00      ; DMA destination bank
+	.byte $00      ; DMA sub command
+	.word $0000    ; DMA modulo (ignored)
+
+  ; Use chained DMA to copy packet to TX buffer, and then send it
+  ; so that we can get what will effectively be an ACK to each
+  ; packet received by the MEGA65.
+  .byte $80, $ff
+  .byte $81, $ff
+  .byte $00      ; DMA end of option list
+  .byte $04      ; DMA copy, chained
+  .word $0600    ; DMA byte count 
+  .word $e802    ; DMA source address (bottom 16 bits) 
+	.byte $8d      ; DMA source bank and flags ($8x = I/O enabled)
+  .word $e800    ; DMA destination address (bottom 16 bits)
+	.byte $8d      ; DMA destination bank and flags
+  .byte $00      ; DMA sub command
+  .word $0000    ; DMA modulo (ignored)
+
+  ; Use DMA to swap MAC addresses
+  .byte $00      ; DMA end of option list
+  .byte $04      ; DMA copy, chained
+  .word $0006    ; DMA byte count 
+  .word $e808    ; DMA source address (bottom 16 bits) 
+	.byte $8d      ; DMA source bank and flags ($8x = I/O enabled)
+  .word $e800    ; DMA destination address (bottom 16 bits)
+	.byte $8d      ; DMA destination bank and flags
+  .byte $00      ; DMA sub command
+  .word $0000    ; DMA modulo (ignored)
+
+  .byte $00      ; DMA end of option list
+  .byte $04      ; DMA copy, end of chain
+  .word $0006    ; DMA byte count 
+  .word $36e9    ; DMA source address (bottom 16 bits), ffd36e9 = MACADDRx registers
+	.byte $8d      ; DMA source bank and flags ($8x = I/O enabled)
+  .word $e806    ; DMA destination address (bottom 16 bits)
+	.byte $8d      ; DMA destination bank and flags
+  .byte $00      ; DMA sub command
+  .word $0000    ; DMA modulo (ignored)
+  
+  ; Code resumes after DMA list here
+
+  ; Reverse port numbers
+	lda $6824
+	sta $6824
+	lda $6825
+	sta $6825
+
+	lda $6826
+	sta $6822
+	lda $6827
+	sta $6823
+
+  ; Set packet len
+	lda #$2a
+	sta $d6e2
+	lda #$05
+	sta $d6e3
+
+  ; Set source IP last byte to 65
+  lda #$41
+;	lda #$ff ; XXX DEBUG - set it to broadcast to avoid IP/UDP header crc changes
+	sta $681d
+  ; Set dest IP last byte to that of sender
+  lda $681f
+	sta $6821
+
+  ; Patch IP checksum from changing *.255 to *.65 = add $BE to low byte
+  lda $681b
+	clc
+	adc #$be
+	sta $6819
+	lda $681a
+	adc #$00
+	sta $6818
+ 
+  ; Patch UDP checksum from changing *.255 to *.65 = add $BE to low byte
+  lda $682b
+	clc
+	adc #$be
+	sta $6829
+	lda $682a
+	adc #$00
+	sta $6828
+
+  ; 5. TX packet
+  lda #$01
+	sta $d6e4
+
+  ; Return to packet wait loop
+  rts
+
+	.advance $68fe, $00
+offset_seq_num:
+	.advance $6900, $00
+offset_data:
+	.advance $6d2c, $00 ; packet is $500 (1280) bytes + $2c bytes headers

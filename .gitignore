@@ -16,6 +16,7 @@ bin/trenzm65powercontrol
 
 src/tools/version.c
 src/tools/bin2c
+src/tools/map2c
 src/tools/ftphelper.c
 src/tools/ascii_font.c
 
@@ -24,6 +25,7 @@ gtest/bin/*
 *~
 #*#
 .#*
+.DS_Store
 *.bin
 *.gz
 *.o
