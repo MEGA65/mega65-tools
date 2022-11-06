@@ -120,7 +120,10 @@ TOOLSUNX=	$(BINDIR)/etherload \
 		$(BINDIR)/m65ftp_test \
 		$(BINDIR)/mfm-decode \
 		$(BINDIR)/bit2core \
-		$(BINDIR)/bit2mcs
+		$(BINDIR)/bit2mcs \
+		$(BINDIR)/bin2c \
+		$(BINDIR)/map2c
+
 
 TOOLSWIN=	$(BINDIR)/m65.exe \
 		$(BINDIR)/mega65_ftp.exe \
@@ -499,6 +502,10 @@ $(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c
 
 $(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2mcs, $(TOOLDIR)/bit2mcs.c Makefile))
 
+$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bin2c, $(TOOLDIR)/bin2c.c Makefile))
+
+$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/map2c, $(TOOLDIR)/map2c.c Makefile))
+
 $(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
 	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
 
@@ -617,11 +624,11 @@ ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/helper_dma_load_routine_map.h \
 ETHERLOAD_INCLUDES = -I/usr/local/include
 ETHERLOAD_LIBRARIES = -lm
 
-$(TOOLDIR)/etherload/helper_%.c:	$(TOOLDIR)/etherload/helper_%.bin $(TOOLDIR)/bin2c
-	$(TOOLDIR)/bin2c $(TOOLDIR)/etherload/helper_$*.bin $* $(TOOLDIR)/etherload/helper_$*.c
+$(TOOLDIR)/etherload/helper_%.c:	$(TOOLDIR)/etherload/helper_%.bin $(BINDIR)/bin2c
+	$(BINDIR)/bin2c $(TOOLDIR)/etherload/helper_$*.bin $* $(TOOLDIR)/etherload/helper_$*.c
 
-$(TOOLDIR)/etherload/helper_%_map.h:	$(TOOLDIR)/etherload/helper_%.map $(TOOLDIR)/map2c
-	$(TOOLDIR)/map2c $(TOOLDIR)/etherload/helper_$*.map $* $(TOOLDIR)/etherload/helper_$*_map.h
+$(TOOLDIR)/etherload/helper_%_map.h:	$(TOOLDIR)/etherload/helper_%.map $(BINDIR)/map2c
+	$(BINDIR)/map2c $(TOOLDIR)/etherload/helper_$*.map $* $(TOOLDIR)/etherload/helper_$*_map.h
 
-$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES)
+$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
