@@ -122,7 +122,7 @@ TOOLSUNX=	$(BINDIR)/etherload \
 		$(BINDIR)/bit2core \
 		$(BINDIR)/bit2mcs \
 		$(BINDIR)/bin2c \
-		$(BINDIR)/map2c
+		$(BINDIR)/map2h
 
 
 TOOLSWIN=	$(BINDIR)/m65.exe \
@@ -504,7 +504,7 @@ $(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2mcs, $(TOOLDIR)/bit2mcs.c M
 
 $(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bin2c, $(TOOLDIR)/bin2c.c Makefile))
 
-$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/map2c, $(TOOLDIR)/map2c.c Makefile))
+$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/map2h, $(TOOLDIR)/map2h.c Makefile))
 
 $(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
 	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
@@ -627,8 +627,8 @@ ETHERLOAD_LIBRARIES = -lm
 $(TOOLDIR)/etherload/helper_%.c:	$(TOOLDIR)/etherload/helper_%.bin $(BINDIR)/bin2c
 	$(BINDIR)/bin2c $(TOOLDIR)/etherload/helper_$*.bin $* $(TOOLDIR)/etherload/helper_$*.c
 
-$(TOOLDIR)/etherload/helper_%_map.h:	$(TOOLDIR)/etherload/helper_%.map $(BINDIR)/map2c
-	$(BINDIR)/map2c $(TOOLDIR)/etherload/helper_$*.map $* $(TOOLDIR)/etherload/helper_$*_map.h
+$(TOOLDIR)/etherload/helper_%_map.h:	$(TOOLDIR)/etherload/helper_%.map $(BINDIR)/map2h
+	$(BINDIR)/map2h $(TOOLDIR)/etherload/helper_$*.map $* $(TOOLDIR)/etherload/helper_$*_map.h
 
 $(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
