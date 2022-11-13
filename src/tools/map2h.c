@@ -9,9 +9,15 @@ int main(int argc, char **argv)
 
   static const int maxLen = 1023;
   char line[maxLen + 1];
-  line[maxLen] = '\0';
+  char entryAddress[maxLen + 1];
   char* address;
   char* label;
+
+  line[maxLen] = '\0';
+  entryAddress[0] = '\0';
+  entryAddress[maxLen] = '\0';
+
+  fprintf(out, "#pragma once\n\n");
 
   while (fgets(line, maxLen, in) ) {
     address = 0;
@@ -34,7 +40,13 @@ int main(int argc, char **argv)
         tmp++;
       }
       if (strcmp(label, "*")) {
-        fprintf(out, "static const int %s_%s=0x%s;\n", prefix, label, address);
+        fprintf(out, "static const int %s_%s = 0x%s;\n", prefix, label, address);
+        if (strcmp(label, "entry") == 0) {
+          strncpy(entryAddress, address, maxLen);
+        }
+        else if (entryAddress[0] != '\0') {
+          fprintf(out, "static const int %s_offset_%s = 0x%s - 0x%s;\n", prefix, label, address, entryAddress);
+        }
       }
     }
   }

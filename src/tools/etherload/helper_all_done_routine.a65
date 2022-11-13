@@ -59,7 +59,7 @@ main:
 	eom
 
 	; Set CPU to 1MHz or 40MHz
-offset_cpuspeed:
+cpuspeed:
 	lda #$40
 	sta $00
 
@@ -69,6 +69,6 @@ offset_cpuspeed:
 	; 4. CLI
 	cli
 
-offset_jump:
+jump:
 ;	jmp 2061
 	jmp $080d

@@ -34,20 +34,10 @@ int packet_seq=0;
 int last_rx_seq=0;
 
 extern unsigned char c64_loram[1024];
-
 extern char all_done_routine[];
 extern int all_done_routine_len;
-static const int cpuSpeedOffset = all_done_routine_offset_cpuspeed - all_done_routine_entry;
-static const int jmpOffset = all_done_routine_offset_jump - all_done_routine_entry;
-
 extern char dma_load_routine[];
 extern int dma_load_routine_len;
-static const int destMbOffset      = dma_load_routine_offset_dest_mb      - dma_load_routine_entry;
-static const int destAddressOffset = dma_load_routine_offset_dest_address - dma_load_routine_entry;
-static const int destBankOffset    = dma_load_routine_offset_dest_bank    - dma_load_routine_entry;
-static const int byteCountOffset   = dma_load_routine_offset_byte_count   - dma_load_routine_entry;
-static const int seqNumOffset      = dma_load_routine_offset_seq_num      - dma_load_routine_entry;
-static const int dataOffset        = dma_load_routine_offset_data         - dma_load_routine_entry;
 
 unsigned char colour_ram[1000];
 unsigned char progress_screen[1000];
@@ -148,7 +138,7 @@ int check_if_ack(unsigned char *b)
 #endif
 
   // Set retry interval based on number of outstanding packets
-  last_rx_seq = (b[seqNumOffset]+(b[seqNumOffset+1]<<8));
+  last_rx_seq = (b[dma_load_routine_offset_seq_num]+(b[dma_load_routine_offset_seq_num+1]<<8));
   update_retx_interval();
 
 #if 0
@@ -162,10 +152,10 @@ int check_if_ack(unsigned char *b)
 //#define CHECK_ADDR_ONLY
 #ifdef CHECK_ADDR_ONLY
   long ack_addr=
-    (b[destMbOffset]<<20)
-    +((b[destBankOffset]&0xf)<<16)
-    +(b[destAddressOffset+1]<<8)
-    +(b[destAddressOffset+0]<<0);
+    (b[dma_load_routine_offset_dest_mb]<<20)
+    +((b[dma_load_routine_offset_dest_bank]&0xf)<<16)
+    +(b[dma_load_routine_offset_dest_address+1]<<8)
+    +(b[dma_load_routine_offset_dest_address+0]<<0);
   for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
     if (frame_unacked[i]) {
       if (ack_addr==frame_load_addrs[i]) {
@@ -306,15 +296,15 @@ void maybe_send_ack(void)
 	printf("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x\n",
 	       gettime_us()-start_time,	       
 	       frame_load_addrs[id],id,ucount,packet_seq,
-	       unacked_frame_payloads[id][dataOffset+0],
-	       unacked_frame_payloads[id][dataOffset+1]
+	       unacked_frame_payloads[id][dma_load_routine_offset_data+0],
+	       unacked_frame_payloads[id][dma_load_routine_offset_data+1]
 	       );
 
       long ack_addr=
-	(unacked_frame_payloads[id][destMbOffset]<<20)
-	+((unacked_frame_payloads[id][destBankOffset]&0xf)<<16)
-	+(unacked_frame_payloads[id][destAddressOffset+1]<<8)
-	+(unacked_frame_payloads[id][destAddressOffset+0]<<0);
+	(unacked_frame_payloads[id][dma_load_routine_offset_dest_mb]<<20)
+	+((unacked_frame_payloads[id][dma_load_routine_offset_dest_bank]&0xf)<<16)
+	+(unacked_frame_payloads[id][dma_load_routine_offset_dest_address+1]<<8)
+	+(unacked_frame_payloads[id][dma_load_routine_offset_dest_address+0]<<0);
 
       if (ack_addr!=frame_load_addrs[id]) {
 	fprintf(stderr,"ERROR: Resending frame with incorrect load address: expected=$%lx, saw=$%lx\n",
@@ -322,8 +312,8 @@ void maybe_send_ack(void)
 	exit(-1);
       }
       
-      unacked_frame_payloads[id][seqNumOffset]=packet_seq;
-      unacked_frame_payloads[id][seqNumOffset+1]=packet_seq>>8;
+      unacked_frame_payloads[id][dma_load_routine_offset_seq_num]=packet_seq;
+      unacked_frame_payloads[id][dma_load_routine_offset_seq_num+1]=packet_seq>>8;
       packet_seq++;      
       update_retx_interval();
       sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
@@ -373,15 +363,15 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
   dma_load_routine[3]=address>>10;
   
   // Set load address of packet
-  dma_load_routine[destAddressOffset] = address & 0xff;
-  dma_load_routine[destAddressOffset + 1] = (address >> 8) & 0xff;
-  dma_load_routine[destBankOffset] = (address>>16)&0x0f;
-  dma_load_routine[destMbOffset] = (address>>20);
-  dma_load_routine[byteCountOffset] = bytes;
-  dma_load_routine[byteCountOffset+1] = bytes>>8;
+  dma_load_routine[dma_load_routine_offset_dest_address] = address & 0xff;
+  dma_load_routine[dma_load_routine_offset_dest_address + 1] = (address >> 8) & 0xff;
+  dma_load_routine[dma_load_routine_offset_dest_bank] = (address>>16)&0x0f;
+  dma_load_routine[dma_load_routine_offset_dest_mb] = (address>>20);
+  dma_load_routine[dma_load_routine_offset_byte_count] = bytes;
+  dma_load_routine[dma_load_routine_offset_byte_count+1] = bytes>>8;
   
   // Copy data into packet
-  memcpy(&dma_load_routine[dataOffset], buffer, bytes);
+  memcpy(&dma_load_routine[dma_load_routine_offset_data], buffer, bytes);
 
   // Add to queue of packets with pending ACKs
   expect_ack(address,dma_load_routine);
@@ -391,10 +381,10 @@ int send_mem(unsigned int address,unsigned char *buffer,int bytes)
     printf("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...\n",
 	   gettime_us()-start_time,
 	   address,packet_seq,
-	   dma_load_routine[dataOffset],dma_load_routine[dataOffset+1]
+	   dma_load_routine[dma_load_routine_offset_data],dma_load_routine[dma_load_routine_offset_data+1]
 	   );
-  dma_load_routine[seqNumOffset]=packet_seq;
-  dma_load_routine[seqNumOffset+1]=packet_seq>>8;
+  dma_load_routine[dma_load_routine_offset_seq_num]=packet_seq;
+  dma_load_routine[dma_load_routine_offset_seq_num+1]=packet_seq>>8;
   packet_seq++;
   update_retx_interval();
   sendto(sockfd, dma_load_routine, dma_load_routine_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
@@ -536,16 +526,16 @@ int main(int argc, char **argv)
   // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
   // XXX - We should make it ACK as well.
   printf("Program entry point via SYS %d\n",entry_point);
-  all_done_routine[jmpOffset+1]=entry_point;
-  all_done_routine[jmpOffset+2]=entry_point>>8;
+  all_done_routine[all_done_routine_offset_jump+1]=entry_point;
+  all_done_routine[all_done_routine_offset_jump+2]=entry_point>>8;
 
   if (entry_point<8192) {
     // Probably C64 mode, so 1MHz CPU
-    all_done_routine[cpuSpeedOffset+1]=64;
+    all_done_routine[all_done_routine_offset_cpuspeed+1]=64;
   } else {
     // Probably C65 mode, so 40MHz CPU, and don't stomp IO mode
-    all_done_routine[cpuSpeedOffset+1]=65;
-    all_done_routine[cpuSpeedOffset+4]=0xad; // turn STA $D02F into LDA $D02F
+    all_done_routine[all_done_routine_offset_cpuspeed+1]=65;
+    all_done_routine[all_done_routine_offset_cpuspeed+4]=0xad; // turn STA $D02F into LDA $D02F
   }
   
   // Instead, we just send it 10 times to make sure

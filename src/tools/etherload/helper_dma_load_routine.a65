@@ -30,17 +30,17 @@ entry:
 	sta $d707 ; trigger in-line DMA
 	.byte $80, $ff ; SRC MB is $FF
 	.byte $81
-offset_dest_mb:
+dest_mb:
 	.byte $00      ; Destination MB
 	.byte $00      ; DMA end of option list
 	.byte $04      ; copy + chained
-offset_byte_count:
+byte_count:
 	.word $0400    ; DMA byte count
 	.word $e900    ; DMA source address (bottom 16 bits)
 	.byte $8d      ; DMA source bank and flags ($8x = enable I/O)
-offset_dest_address:
+dest_address:
 	.word $1000    ; DMA destination address (bottom 16 bits)
-offset_dest_bank:
+dest_bank:
 	.byte $00      ; DMA destination bank
 	.byte $00      ; DMA sub command
 	.word $0000    ; DMA modulo (ignored)
@@ -136,7 +136,7 @@ offset_dest_bank:
 	rts
 
 	.advance $68fe, $00
-offset_seq_num:
+seq_num:
 	.advance $6900, $00
-offset_data:
+data:
 	.advance $6d2c, $00 ; packet is $500 (1280) bytes + $2c bytes headers
