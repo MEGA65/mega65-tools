@@ -32,17 +32,16 @@ entry:
 	lda #$53
 	sta $d02f 
 
-        ldx #$0b
-*
-        lda romfilename,x
-        sta $0200,x
-        dex
-        bpl -
+	ldx #$0b
+*	lda romfilename,x
+	sta $0200,x
+	dex
+	bpl -
 
 	; Disable C65 ROM write protection via Hypervisor trap
 	lda #$02
 	sta $d641
-        clv
+	clv
 
 	; close all hyppo file descriptors
 	lda #$22
@@ -82,40 +81,40 @@ entry:
 	; 32 bit address for rom access
 	; backup basic irq vector
 	ldz #$00
-	; ldq [<BasicIrqPointer],z
+	; ldq [<basic_irq_pointer],z
 	neg
 	neg
 	nop
-	lda (<BasicIrqPointer),z
-	; stq BasicIrqBackup
+	lda (<basic_irq_pointer),z
+	; stq basic_irq_backup
 	neg
 	neg
-	sta BasicIrqBackup
+	sta basic_irq_backup
 
 	; backup first two bytes of basic program (will be zeroized by basic reset)
 	ldz #$00
-	; ldq [<BasicProgramStartPointer],z
+	; ldq [<basic_program_start_pointer],z
 	neg
 	neg
 	nop
-	lda (<BasicProgramStartPointer),z
+	lda (<basic_program_start_pointer),z
 	
-	; stq BasicProgramStartBackup
+	; stq basic_program_start_backup
 	neg
 	neg
-	sta BasicProgramStartBackup
+	sta basic_program_start_backup
 
 	; patch basic irq vector at $32007 to jump into our autostart code
-	lda #<AutostartEntry
+	lda #<autostart_entry
 	ldz #$00
-	; sta ((<BasicIrqPointer)),z
+	; sta ((<basic_irq_pointer)),z
 	nop
-	sta (<BasicIrqPointer),z
+	sta (<basic_irq_pointer),z
 	inz
-	lda #>AutostartEntry
-	; sta ((<BasicIrqPointer)),z
+	lda #>autostart_entry
+	; sta ((<basic_irq_pointer)),z
 	nop
-	sta (<BasicIrqPointer),z
+	sta (<basic_irq_pointer),z
 
 	; bp=zp
 	lda #$00
@@ -167,7 +166,7 @@ entry:
 	; only use 8-bit stack
 	see
 
-	jmp ResetMega65
+	jmp reset_mega65
 
 romfilename:
 	.byte "MEGA65.ROM", 0
@@ -181,18 +180,20 @@ autostart:
 
 autostart_target:
 
-FileSize:
-        .word $0000
-BasicIrqPointer:
+filesize:
+	.word $0000
+do_run:
+        .byte $00
+basic_irq_pointer:
 	.dword $00032007
-BasicIrqBackup:
+basic_irq_backup:
 	.dword $00000000
-BasicProgramStartPointer:
+basic_program_start_pointer:
 	.dword $00002001
-BasicProgramStartBackup:
+basic_program_start_backup:
 	.dword $00000000
 
-ResetMega65:
+reset_mega65:
 	lda #$00
 	ldx #$0f
 	ldy #$00
@@ -209,31 +210,31 @@ ResetMega65:
 
 	jmp ($fffc)
 
-AutostartEntry:
+autostart_entry:
 	sei
 	lda #>autostart_target
 	tab
 	; restore basic start bytes
-	; ldq BasicProgramStartBackup
+	; ldq basic_program_start_backup
 	neg
 	neg
-	lda BasicProgramStartBackup
-	; stq ((<BasicProgramStartPointer))
+	lda basic_program_start_backup
+	; stq ((<basic_program_start_pointer))
 	neg
 	neg
 	nop
-	sta (<BasicProgramStartPointer),z
+	sta (<basic_program_start_pointer),z
 
 	; restore basic irq vector
-	; ldq BasicIrqBackup
+	; ldq basic_irq_backup
 	neg
 	neg
-	lda BasicIrqBackup
-	; stq ((<BasicIrqPointer))
+	lda basic_irq_backup
+	; stq ((<basic_irq_pointer))
 	neg
 	neg
 	nop
-	sta (<BasicIrqPointer),z
+	sta (<basic_irq_pointer),z
 
 	; restore rom write protection
 	lda #$00
@@ -243,11 +244,14 @@ AutostartEntry:
 	lda #$00
 	tab
 
-        ; set top of basic text pointer
-        lda FileSize
-        sta $82
-        lda FileSize+1
-        sta $83
+	; set top of basic text pointer
+	lda filesize
+	sta $82
+	lda filesize+1
+	sta $83
+
+        bit do_run
+        beq back_to_basic
 
 	; simulate RUN<cr>
 	lda #$52
@@ -261,8 +265,8 @@ AutostartEntry:
 	lda #$04
 	sta $d0
 
+back_to_basic:
 	cli
 	jmp $2007
 
 autostart_end:
-

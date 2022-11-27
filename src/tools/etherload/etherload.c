@@ -11,6 +11,8 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/tty.h>
+#include <sys/ioctl.h>
 #endif
 
 #include <stdlib.h>
@@ -23,6 +25,9 @@
 #include <sys/time.h>
 #include <math.h>
 #include <ctype.h>
+#include <getopt.h>
+
+#include <logging.h>
 
 #define PORTNUM 4510
 
@@ -47,6 +52,158 @@ unsigned char progress_screen[1000];
 
 int sockfd;
 struct sockaddr_in servaddr;
+
+#define MAX_TERM_WIDTH 100 // for help only currently
+
+#define TOOLNAME "MEGA65 Ethernet Loading Tool"
+#if defined(WINDOWS)
+#define PROGNAME "etherload.exe"
+#elif defined(__APPLE__)
+#define PROGNAME "etherload.osx"
+#else
+#define PROGNAME "etherload"
+#endif
+
+extern const char *version_string;
+
+#define MAX_CMD_OPTS 50
+int cmd_count = 0, cmd_log_start = -1, cmd_log_end = -1;
+char *cmd_desc[MAX_CMD_OPTS];
+char *cmd_arg[MAX_CMD_OPTS];
+struct option cmd_opts[MAX_CMD_OPTS];
+#define CMD_OPTION(Oname, Ohas, Oflag, Oval, Oarg, Odesc)                                                                   \
+  cmd_opts[cmd_count].name = Oname;                                                                                         \
+  cmd_opts[cmd_count].has_arg = Ohas;                                                                                       \
+  cmd_opts[cmd_count].flag = Oflag;                                                                                         \
+  cmd_opts[cmd_count].val = Oval;                                                                                           \
+  cmd_arg[cmd_count] = Oarg;                                                                                                \
+  cmd_desc[cmd_count++] = Odesc
+
+int loglevel = LOG_NOTE;
+int do_go64 = 0;
+int do_run = 0;
+char *ip_address = NULL;
+char *filename = NULL;
+
+int get_terminal_size(int max_width)
+{
+  int width = 80;
+#ifndef WINDOWS
+  struct winsize w;
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) != -1)
+    width = w.ws_col;
+#else
+  CONSOLE_SCREEN_BUFFER_INFO csbi;
+  if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+    width = csbi.dwSize.X;
+#endif
+  return max_width > 0 && width > max_width ? max_width : width;
+}
+
+char *wrap_line(const char *line, int wrap, int *offset)
+{
+  int pos;
+  char *buffer;
+
+  if (strlen(line) <= wrap) {
+    *offset = -1;
+    return strdup(line);
+  }
+
+  for (pos = wrap; line[pos] != ' '; pos--)
+    ;
+  buffer = malloc(pos + 1);
+  if (buffer != NULL) {
+    strncpy(buffer, line, pos);
+    buffer[pos] = 0;
+  }
+  *offset = pos + 1;
+
+  return buffer;
+}
+
+int check_file_access(char *file, char *purpose)
+{
+  FILE *f = fopen(file, "rb");
+  if (!f) {
+    log_crit("cannot access %s file '%s'", purpose, file);
+    exit(-1);
+  }
+  fclose(f);
+
+  return 0;
+}
+
+void usage(int exitcode, char *message)
+{
+  char optstr[MAX_TERM_WIDTH + 1], *argstr, *temp;
+  int optlen, offset = 0, first, width = get_terminal_size(MAX_TERM_WIDTH) - 1;
+
+  fprintf(stderr, TOOLNAME "\n");
+  fprintf(stderr, "Version: %s\n\n", version_string);
+
+  fprintf(stderr, PROGNAME ": [options] [prgname]\n");
+
+  for (int i = 0; i < cmd_count; i++) {
+    if (cmd_opts[i].val && !cmd_opts[i].flag && cmd_opts[i].val < 0x80) {
+      if (cmd_opts[i].has_arg == 2)
+        snprintf(optstr, width, "-%c[<%s>] | --%s", cmd_opts[i].val, cmd_arg[i], cmd_opts[i].name);
+      else
+        snprintf(optstr, width, "-%c|--%s", cmd_opts[i].val, cmd_opts[i].name);
+    }
+    else
+      snprintf(optstr, width, "--%s", cmd_opts[i].name);
+
+    optlen = strlen(optstr);
+    argstr = optstr + optlen;
+    if (cmd_opts[i].has_arg == 2)
+      snprintf(argstr, width - optlen - 5, "[=<%s>]", cmd_arg[i]);
+    else if (cmd_opts[i].has_arg == 1)
+      snprintf(argstr, width - optlen - 5, " <%s>", cmd_arg[i]);
+
+    fprintf(stderr, "  %-15s ", optstr);
+    if (strlen(optstr) > 15)
+      fprintf(stderr, "\n                  ");
+
+    first = 1;
+    argstr = cmd_desc[i];
+    while (1) {
+      temp = wrap_line(argstr, width - 20, &offset);
+      if (!first)
+        fprintf(stderr, "                  ");
+      else
+        first = 0;
+      fprintf(stderr, "%s\n", temp);
+      free(temp);
+      if (offset == -1)
+        break;
+      argstr += offset;
+    }
+  }
+  fprintf(stderr, "\n");
+
+  if (message != NULL)
+    fprintf(stderr, "%s\n", message);
+
+  exit(exitcode);
+}
+
+void init_cmd_options(void)
+{
+  // clang-format off
+  CMD_OPTION("help",      0, 0,         'h', "",       "Display help and exit.");
+  cmd_log_start = cmd_count;
+  CMD_OPTION("quiet",     0, &loglevel, 1,   "",       "Only display errors or critical errors.");
+  CMD_OPTION("verbose",   0, &loglevel, 4,   "",       "More verbose logging.");
+  CMD_OPTION("debug",     0, &loglevel, 5,   "",       "Enable debug logging.");
+  cmd_log_end = cmd_count;
+  CMD_OPTION("log",       1, 0,         '0', "level",  "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
+
+  CMD_OPTION("ip",        1, 0,         'i', "ipaddr", "Set IPv4 broadcast address of the subnet where MEGA65 is connected (eg. 192.168.1.255).");
+  CMD_OPTION("run",       0, 0,         'r', "",       "Automatically RUN programme after loading.");
+  CMD_OPTION("c64mode",   0, 0,         '4', "",       "Switch to C64 mode.");
+  // clang-format on
+}
 
 int progress_print(int x, int y, char *msg)
 {
@@ -141,35 +298,28 @@ void update_retx_interval(void)
 
 int check_if_ack(unsigned char *b)
 {
-
-#if 0
-  printf("Pending acks:\n");  
-  for(int i=0;i<MAX_UNACKED_FRAMES;i++) {
-    if (frame_unacked[i]) printf("  Frame ID #%d : addr=$%lx\n",i,frame_load_addrs[i]);
+  log_debug("Pending acks:");
+  for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
+    if (frame_unacked[i])
+      log_debug("  Frame ID #%d : addr=$%lx", i, frame_load_addrs[i]);
   }
-#endif
 
   // Set retry interval based on number of outstanding packets
   last_rx_seq = (b[dma_load_routine_offset_seq_num] + (b[dma_load_routine_offset_seq_num + 1] << 8));
   update_retx_interval();
 
-#if 0
-  printf("T+%lld : RXd frame addr=$%lx, rx seq=$%04x, tx seq=$%04x\n",
-	 gettime_us()-start_time,
-	 ack_addr,
-	 last_rx_seq,packet_seq
-	 );
-#endif
-
-//#define CHECK_ADDR_ONLY
-#ifdef CHECK_ADDR_ONLY
   long ack_addr = (b[dma_load_routine_offset_dest_mb] << 20) + ((b[dma_load_routine_offset_dest_bank] & 0xf) << 16)
                 + (b[dma_load_routine_offset_dest_address + 1] << 8) + (b[dma_load_routine_offset_dest_address + 0] << 0);
+  log_debug("T+%lld : RXd frame addr=$%lx, rx seq=$%04x, tx seq=$%04x", gettime_us() - start_time, ack_addr, last_rx_seq,
+      packet_seq);
+
+// #define CHECK_ADDR_ONLY
+#ifdef CHECK_ADDR_ONLY
   for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
     if (frame_unacked[i]) {
       if (ack_addr == frame_load_addrs[i]) {
         frame_unacked[i] = 0;
-        //	printf("ACK addr=$%lx\n",frame_load_addrs[i]);
+        log_debug("ACK addr=$%lx", frame_load_addrs[i]);
         return 1;
       }
     }
@@ -179,14 +329,14 @@ int check_if_ack(unsigned char *b)
     if (frame_unacked[i]) {
       if (!memcmp(unacked_frame_payloads[i], b, 1280)) {
         frame_unacked[i] = 0;
-        printf("ACK addr=$%lx\n", frame_load_addrs[i]);
+        log_debug("ACK addr=$%lx", frame_load_addrs[i]);
         return 1;
       }
       else {
 #if 0
 	for(int j=0;j<1280;j++) {
 	  if (unacked_frame_payloads[i][j]!=b[j]) {
-	    printf("Mismatch frame id #%d offset %d : $%02x vs $%02x\n",
+	    log_debug("Mismatch frame id #%d offset %d : $%02x vs $%02x",
 		   i,j,unacked_frame_payloads[i][j],b[j]);
 	    dump_bytes("unacked",unacked_frame_payloads[i],128);
 	    break;
@@ -248,7 +398,7 @@ int expect_ack(long load_addr, char *b)
       // We have a free slot to put this frame, and it doesn't
       // duplicate the address of another frame.
       // Thus we can safely just note this one
-      //      printf("Expecting ack of addr=$%lx @ %d\n",load_addr,free_slot);
+      log_debug("Expecting ack of addr=$%lx @ %d", load_addr, free_slot);
       memcpy(unacked_frame_payloads[free_slot], b, 1280);
       frame_unacked[free_slot] = 1;
       frame_load_addrs[free_slot] = load_addr;
@@ -312,7 +462,7 @@ void maybe_send_ack(void)
         resend_frame = 0;
       int id = unackd[resend_frame];
       if (0)
-        printf("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x\n", gettime_us() - start_time,
+        log_warn("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x", gettime_us() - start_time,
             frame_load_addrs[id], id, ucount, packet_seq, unacked_frame_payloads[id][dma_load_routine_offset_data + 0],
             unacked_frame_payloads[id][dma_load_routine_offset_data + 1]);
 
@@ -322,8 +472,7 @@ void maybe_send_ack(void)
                     + (unacked_frame_payloads[id][dma_load_routine_offset_dest_address + 0] << 0);
 
       if (ack_addr != frame_load_addrs[id]) {
-        fprintf(stderr, "ERROR: Resending frame with incorrect load address: expected=$%lx, saw=$%lx\n",
-            frame_load_addrs[id], ack_addr);
+        log_crit("Resending frame with incorrect load address: expected=$%lx, saw=$%lx", frame_load_addrs[id], ack_addr);
         exit(-1);
       }
 
@@ -337,7 +486,7 @@ void maybe_send_ack(void)
     return;
   }
   if (!ucount) {
-    //    printf("No unacked frames\n");
+    log_debug("No unacked frames");
     return;
   }
 }
@@ -397,7 +546,7 @@ int send_mem(unsigned int address, unsigned char *buffer, int bytes)
 
   // Send the packet initially
   if (0)
-    printf("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...\n", gettime_us() - start_time, address, packet_seq,
+    log_info("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...", gettime_us() - start_time, address, packet_seq,
         dma_load_routine[dma_load_routine_offset_data], dma_load_routine[dma_load_routine_offset_data + 1]);
   dma_load_routine[dma_load_routine_offset_seq_num] = packet_seq;
   dma_load_routine[dma_load_routine_offset_seq_num + 1] = packet_seq >> 8;
@@ -410,15 +559,66 @@ int send_mem(unsigned int address, unsigned char *buffer, int bytes)
 
 int main(int argc, char **argv)
 {
-
+  int opt_index;
   start_time = gettime_us();
 
-  if (argc != 3) {
-    printf("usage: %s <IP address> <programme>\n", argv[0]);
+  init_cmd_options();
+
+  // so we can see errors while parsing args
+  log_setup(stderr, LOG_NOTE);
+
+  if (argc == 1)
+    usage(-3, "No arguments given!");
+
+  int opt;
+  while ((opt = getopt_long(argc, argv, "4rh0:", cmd_opts, &opt_index)) != -1) {
+    if (opt == 0) {
+      if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
+        log_setup(stderr, loglevel);
+      continue;
+    }
+    // fprintf(stderr, "got %02x %p %d\n", opt, optarg, opt_index);
+    switch (opt) {
+    case '0':
+      loglevel = log_parse_level(optarg);
+      if (loglevel == -1)
+        log_warn("failed to parse log level!");
+      else
+        log_setup(stderr, loglevel);
+      break;
+    case 'h':
+      usage(0, NULL);
+    case 'i':
+      ip_address = strdup(optarg);
+      break;
+    case '4':
+      do_go64 = 1;
+      break;
+    case 'r':
+      do_run = 1;
+      break;
+    default: // can not happen?
+      usage(-3, "Unknown option.");
+    }
+  }
+
+  if (argv[optind]) {
+    filename = strdup(argv[optind]);
+    check_file_access(filename, "programme");
+  }
+
+  if (argc - optind > 1)
+    usage(-3, "Unexpected extra commandline arguments.");
+
+  log_debug("parameter parsing done");
+
+  log_note("%s %s", TOOLNAME, version_string);
+
+  // check if init_fpgajtag did totally fail
+  if (ip_address == NULL) {
+    log_crit("broadcast ip address not specified, aborting.");
     exit(1);
   }
-  const char *ipAddress = argv[1];
-  const char *programmePath = argv[2];
 
   sockfd = socket(AF_INET, SOCK_DGRAM, 0);
   int broadcastEnable = 1;
@@ -428,19 +628,16 @@ int main(int argc, char **argv)
 
   memset(&servaddr, 0, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
-  servaddr.sin_addr.s_addr = inet_addr(ipAddress);
+  servaddr.sin_addr.s_addr = inet_addr(ip_address);
   servaddr.sin_port = htons(PORTNUM);
 
-  // print out debug info
-#if 0
-  printf("Using dst-addr: %s\n", inet_ntoa(servaddr.sin_addr));
-  printf("Using src-port: %d\n", ntohs(servaddr.sin_port));
-#endif
+  log_debug("Using dst-addr: %s", inet_ntoa(servaddr.sin_addr));
+  log_debug("Using src-port: %d", ntohs(servaddr.sin_port));
 
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();
 
-  int fd = open(programmePath, O_RDWR);
+  int fd = open(filename, O_RDWR);
   unsigned char buffer[1024];
   int offset = 0;
   int bytes;
@@ -448,69 +645,41 @@ int main(int argc, char **argv)
   // Read 2 byte load address
   bytes = read(fd, buffer, 2);
   if (bytes < 2) {
-    fprintf(stderr, "Failed to read load address from file '%s'\n", programmePath);
+    log_crit("Failed to read load address from file '%s'", filename);
     exit(-1);
   }
 
   char msg[80];
 
   int address = buffer[0] + 256 * buffer[1];
-  printf("Load address of programme is $%04x\n", address);
+  log_info("Load address of programme is $%04x", address);
 
   int start_addr = address;
 
   last_resend_time = gettime_us();
 
   // Clear screen first
-  //  printf("Clearing screen\n");
+  log_debug("Clearing screen");
   memset(colour_ram, 0x01, 1000);
   memset(progress_screen, 0x20, 1000);
   send_mem(0x1f800, colour_ram, 1000);
   send_mem(0x0400, progress_screen, 1000);
   wait_all_acks();
-  //  printf("Screen cleared.\n");
+  log_debug("Screen cleared.");
 
   // Load C64 low memory, so that we can run C64 mode programs
   // even if the machine was in C65 mode or some random state first
   // (its probably the IRQ vectors etc that are important here)
-  //send_mem(0x0002, &c64_loram[0], 0xfe);
-  //send_mem(0x0200, &c64_loram[0x1fe], 0x200);
+  // send_mem(0x0002, &c64_loram[0], 0xfe);
+  // send_mem(0x0200, &c64_loram[0x1fe], 0x200);
 
   progress_line(0, 0, 40);
-  snprintf(msg, 40, "Loading \"%s\" at $%04X", programmePath, address);
+  snprintf(msg, 40, "Loading \"%s\" at $%04X", filename, address);
   progress_print(0, 1, msg);
   progress_line(0, 2, 40);
 
-  int entry_point = 0x080d;
-
   while ((bytes = read(fd, buffer, 1024)) != 0) {
-    //    printf("Read %d bytes at offset %d\n", bytes, offset);
-
-    if (!offset) {
-      for (int i = 0; i < 255; i++)
-        if (buffer[i] == 0x9e) {
-          // Found SYS command -- try to work out the address
-          int ofs = i + 1;
-          float mult = 1;
-          int val = 0;
-          if (buffer[ofs] == 0xff && buffer[ofs + 1] == 0xac) {
-            mult = 3.14159265;
-            ofs += 2;
-          }
-          while (buffer[ofs]) {
-            if (isdigit(buffer[ofs])) {
-              val *= 10;
-              val += buffer[ofs] - '0';
-            }
-            ofs++;
-            if (buffer[ofs] == ':')
-              break;
-          }
-          entry_point = mult * val;
-          //	  printf("Program entry point via SYS %d\n",entry_point);
-          break;
-        }
-    }
+    log_debug("Read %d bytes at offset %d", bytes, offset);
 
     offset += bytes;
 
@@ -537,42 +706,35 @@ int main(int argc, char **argv)
   progress_line(0, 17, 40);
   send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
 
-  // print out debug info
-  printf("Sent %s to %s on port %d.\n", programmePath, inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
+  log_note("Sent %s to %s on port %d.", filename, inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
 
   wait_all_acks();
 
-  printf("Now telling MEGA65 that we are all done...\n");
+  log_info("Now telling MEGA65 that we are all done...");
 
   // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
   // XXX - We should make it ACK as well.
-  printf("Program entry point via SYS %d\n", entry_point);
-  //all_done_routine[all_done_routine_offset_jump + 1] = entry_point;
-  //all_done_routine[all_done_routine_offset_jump + 2] = entry_point >> 8;
 
-  int num_bytes = address - start_addr;
-  all_done_routine_basic65[all_done_routine_basic65_offset_autostart] = num_bytes & 0xff;
-  all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 1] = num_bytes >> 8;
-
-  printf("MEGA65 routine - size = %d\n", num_bytes);
-  sendto(sockfd, all_done_routine_basic65, all_done_routine_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-  return 0;
-
-  if (entry_point < 8192) {
+  if (do_go64) {
     // Probably C64 mode, so 1MHz CPU
-    all_done_routine[all_done_routine_offset_cpuspeed+1]=64;
+    // all_done_routine[all_done_routine_offset_cpuspeed+1]=64;
     // Instead, we just send it 10 times to make sure
-    for(int i=0;i<10;i++) {
-      sendto(sockfd, all_done_routine, all_done_routine_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    }
-  } else {
-    // Probably C65 mode
-    for(int i=0;i<10;i++) {
-      printf("MEGA65 routine\n");
-      sendto(sockfd, all_done_routine_basic65, all_done_routine_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    }
+    // for(int i=0;i<10;i++) {
+    //  sendto(sockfd, all_done_routine, all_done_routine_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    //}
   }
-  
-  
+  else {
+    // patch in size
+    int num_bytes = address - start_addr;
+    all_done_routine_basic65[all_done_routine_basic65_offset_autostart] = num_bytes & 0xff;
+    all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 1] = num_bytes >> 8;
+
+    // patch in do_run
+    all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 2] = do_run;
+
+    sendto(
+        sockfd, all_done_routine_basic65, all_done_routine_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  }
+
   return 0;
 }
