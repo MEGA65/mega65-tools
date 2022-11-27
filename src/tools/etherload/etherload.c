@@ -3,6 +3,7 @@
 
 #include "helper_dma_load_routine_map.h"
 #include "helper_all_done_routine_map.h"
+#include "helper_all_done_routine_basic65_map.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -34,10 +35,12 @@ int packet_seq=0;
 int last_rx_seq=0;
 
 extern unsigned char c64_loram[1024];
-extern char all_done_routine[];
-extern int all_done_routine_len;
 extern char dma_load_routine[];
 extern int dma_load_routine_len;
+extern char all_done_routine[];
+extern int all_done_routine_len;
+extern char all_done_routine_basic65[];
+extern int all_done_routine_basic65_len;
 
 unsigned char colour_ram[1000];
 unsigned char progress_screen[1000];
@@ -532,16 +535,17 @@ int main(int argc, char **argv)
   if (entry_point<8192) {
     // Probably C64 mode, so 1MHz CPU
     all_done_routine[all_done_routine_offset_cpuspeed+1]=64;
+    // Instead, we just send it 10 times to make sure
+    for(int i=0;i<10;i++) {
+      sendto(sockfd, all_done_routine, all_done_routine_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    }
   } else {
-    // Probably C65 mode, so 40MHz CPU, and don't stomp IO mode
-    all_done_routine[all_done_routine_offset_cpuspeed+1]=65;
-    all_done_routine[all_done_routine_offset_cpuspeed+4]=0xad; // turn STA $D02F into LDA $D02F
+    // Probably C65 mode
+    for(int i=0;i<10;i++) {
+      sendto(sockfd, all_done_routine_basic65, all_done_routine_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    }
   }
   
-  // Instead, we just send it 10 times to make sure
-  for(int i=0;i<10;i++) {
-    sendto(sockfd, all_done_routine, all_done_routine_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-  }
   
   return 0;
 }

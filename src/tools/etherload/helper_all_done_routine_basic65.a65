@@ -1,0 +1,255 @@
+; This little helper contains the code to be transferred in the Ethernet
+; packet after data has been transferred via the dma_load_routine.
+
+	; Routine sits at beginning of UDP payload in the Ethernet buffer
+	; mapped at $6800
+	; Packet size:	  2 bytes
+	; Ethernet header: 14 bytes
+	; IPv4 header:	 20 bytes
+	; UDP header:	   8 bytes
+	.org $6800 + 2 + 14 + 20 + 8
+
+entry:
+
+	; Dummy inc $d020 jmp *-3 routine for debugging
+;	lda #$00
+;	inc $d020
+;*
+;	jmp -
+
+	; Production routine that skips the jmp *-3 loop
+	lda #$00
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+	; Enable mega65 I/O personality
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $d02f 
+
+	; Disable C65 ROM write protection via Hypervisor trap
+	lda #$02
+	sta $d641
+        clv
+
+	; close all hyppo file descriptors
+	lda #$22
+	sta $d640
+	clv
+	; chdir root
+	lda #$3e
+	sta $d643
+	clv
+	; set rom filename
+	ldy #>RomFilename
+	lda #$2e
+	sta $d640
+	clv
+	; load rom file to $20000
+	lda #$00
+	tax
+	tay
+	ldz #$02
+	lda #$36
+	sta $d640
+	clv
+
+	; map $c000 interface rom
+	lda #$20
+	sta $d030
+
+	; copy autostart routine to $c700
+	ldx #autostart_end - autostart_target
+*	lda autostart-1,x
+	sta autostart_target-1,x
+	dex
+	bne -
+
+	lda #>autostart_target
+	tab
+	; 32 bit address for rom access
+	; backup basic irq vector
+	ldz #$00
+	; ldq [<BasicIrqPointer],z
+	neg
+	neg
+	nop
+	lda (<BasicIrqPointer),z
+	; stq BasicIrqBackup
+	neg
+	neg
+	sta BasicIrqBackup
+
+	; backup first two bytes of basic program (will be zeroized by basic reset)
+	ldz #$00
+	; ldq [<BasicProgramStartPointer],z
+	neg
+	neg
+	nop
+	lda (<BasicProgramStartPointer),z
+	
+	; stq BasicProgramStartBackup
+	neg
+	neg
+	sta BasicProgramStartBackup
+
+	; patch basic irq vector at $32007 to jump into our autostart code
+	lda #<AutostartEntry
+	ldz #$00
+	; sta ((<BasicIrqPointer)),z
+	nop
+	sta (<BasicIrqPointer),z
+	inz
+	lda #>AutostartEntry
+	; sta ((<BasicIrqPointer)),z
+	nop
+	sta (<BasicIrqPointer),z
+
+	; bp=zp
+	lda #$00
+	tab
+
+	; unmap SD sector buffer
+	lda #$82
+	sta $d680
+
+	; unmap 2nd KB colour RAM
+	lda #$01
+	trb $d030
+
+	; disable 
+	lda #$d7
+	trb $d054	
+
+	; 40 column mode normal C64 screen
+	lda #$20
+	sta $d030
+	lda #$00
+	sta $d031
+	lda #%00000011
+	tsb $dd00
+	lda #$c0    ; also enable raster delay to match rendering with interrupts more correctly
+	sta $d05d
+	lda #$1b
+	sta $d011
+	lda #$c8
+	sta $d016
+	lda #$14
+	sta $d018
+
+	; reset I/O to C64 mode
+	lda #$00
+	sta $d02f
+
+	; default C64 banking
+	lda #$3f
+	sta $00
+	sta $01
+	;cli
+
+	; default stack location
+	ldx #$ff
+	ldy #$01
+	txs
+	tys
+
+	; only use 8-bit stack
+	see
+
+	jmp ResetMega65
+
+.advance $6900
+romfilename:
+	.byte "MEGA65.ROM", 0
+
+
+
+autostart:
+; autostart routine called in irq after bootup of kernal and basic is complete.
+; will be copied and run from rom at $2c000, mapped to $c000
+.org $c700
+
+autostart_target:
+
+BasicIrqPointer:
+	.dword $00032007
+BasicIrqBackup:
+	.dword $00000000
+BasicProgramStartPointer:
+	.dword $00002001
+BasicProgramStartBackup:
+	.dword $00000000
+
+ResetMega65:
+	lda #$00
+	ldx #$0f
+	ldy #$00
+	ldz #$00
+	map
+	eom
+
+	lda #$00
+	ldx #$00
+	ldy #$00
+	ldz #$00
+	map
+	eom
+
+	jmp ($fffc)
+
+AutostartEntry:
+	sei
+	lda #>autostart_target
+	tab
+	; restore basic start bytes
+	; ldq BasicProgramStartBackup
+	neg
+	neg
+	lda BasicProgramStartBackup
+	; stq ((<BasicProgramStartPointer))
+	neg
+	neg
+	nop
+	sta (<BasicProgramStartPointer),z
+
+	; restore basic irq vector
+	; ldq BasicIrqBackup
+	neg
+	neg
+	lda BasicIrqBackup
+	; stq ((<BasicIrqPointer))
+	neg
+	neg
+	nop
+	sta (<BasicIrqPointer),z
+
+	; restore rom write protection
+	lda #$00
+	sta $d641
+        clv
+
+	lda #$00
+	tab
+
+	; simulate RUN<cr>
+	lda #$52
+	sta $2b0
+	lda #$55
+	sta $2b1
+	lda #$4e
+	sta $2b2
+	lda #$0d
+	sta $2b3
+	lda #$04
+	sta $d0
+
+	cli
+	rts
+
+autostart_end:
+

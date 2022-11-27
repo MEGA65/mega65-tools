@@ -131,7 +131,8 @@ TOOLSWIN=	$(BINDIR)/m65.exe \
 		$(BINDIR)/bit2mcs.exe \
 		$(BINDIR)/romdiff.exe
 
-TOOLSMAC=	$(BINDIR)/m65.osx \
+TOOLSMAC=	$(BINDIR)/etherlod.osx \
+		$(BINDIR)/m65.osx \
 		$(BINDIR)/mega65_ftp.osx \
 		$(BINDIR)/romdiff.osx \
 		$(BINDIR)/m65dbg.osx
@@ -618,9 +619,11 @@ $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 ETHERLOAD_SOURCES = $(TOOLDIR)/etherload/etherload.c \
 		$(TOOLDIR)/etherload/loram.c \
 		$(TOOLDIR)/etherload/helper_dma_load_routine.c \
-		$(TOOLDIR)/etherload/helper_all_done_routine.c
+		$(TOOLDIR)/etherload/helper_all_done_routine.c \
+		$(TOOLDIR)/etherload/helper_all_done_routine_basic65.c
 ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/helper_dma_load_routine_map.h \
-		$(TOOLDIR)/etherload/helper_all_done_routine_map.h
+		$(TOOLDIR)/etherload/helper_all_done_routine_map.h \
+		$(TOOLDIR)/etherload/helper_all_done_routine_basic65_map.h
 ETHERLOAD_INCLUDES = -I/usr/local/include
 ETHERLOAD_LIBRARIES = -lm
 
@@ -632,3 +635,6 @@ $(TOOLDIR)/etherload/helper_%_map.h:	$(TOOLDIR)/etherload/helper_%.map $(BINDIR)
 
 $(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
+
+$(BINDIR)/etherload.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+	$(CC) $(MACCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
