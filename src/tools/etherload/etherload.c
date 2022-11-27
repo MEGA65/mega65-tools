@@ -473,8 +473,8 @@ int main(int argc, char **argv)
   // Load C64 low memory, so that we can run C64 mode programs
   // even if the machine was in C65 mode or some random state first
   // (its probably the IRQ vectors etc that are important here)
-  send_mem(0x0002, &c64_loram[0], 0xfe);
-  send_mem(0x0200, &c64_loram[0x1fe], 0x200);
+  //send_mem(0x0002, &c64_loram[0], 0xfe);
+  //send_mem(0x0200, &c64_loram[0x1fe], 0x200);
 
   progress_line(0, 0, 40);
   snprintf(msg, 40, "Loading \"%s\" at $%04X", programmePath, address);
@@ -540,15 +540,23 @@ int main(int argc, char **argv)
   // print out debug info
   printf("Sent %s to %s on port %d.\n", programmePath, inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
 
-  printf("Now telling MEGA65 that we are all done...\n");
-
   wait_all_acks();
+
+  printf("Now telling MEGA65 that we are all done...\n");
 
   // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
   // XXX - We should make it ACK as well.
   printf("Program entry point via SYS %d\n", entry_point);
-  all_done_routine[all_done_routine_offset_jump + 1] = entry_point;
-  all_done_routine[all_done_routine_offset_jump + 2] = entry_point >> 8;
+  //all_done_routine[all_done_routine_offset_jump + 1] = entry_point;
+  //all_done_routine[all_done_routine_offset_jump + 2] = entry_point >> 8;
+
+  int num_bytes = address - start_addr;
+  all_done_routine_basic65[all_done_routine_basic65_offset_autostart] = num_bytes & 0xff;
+  all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 1] = num_bytes >> 8;
+
+  printf("MEGA65 routine - size = %d\n", num_bytes);
+  sendto(sockfd, all_done_routine_basic65, all_done_routine_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  return 0;
 
   if (entry_point < 8192) {
     // Probably C64 mode, so 1MHz CPU
@@ -560,6 +568,7 @@ int main(int argc, char **argv)
   } else {
     // Probably C65 mode
     for(int i=0;i<10;i++) {
+      printf("MEGA65 routine\n");
       sendto(sockfd, all_done_routine_basic65, all_done_routine_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
     }
   }

@@ -32,6 +32,13 @@ entry:
 	lda #$53
 	sta $d02f 
 
+        ldx #$0b
+*
+        lda romfilename,x
+        sta $0200,x
+        dex
+        bpl -
+
 	; Disable C65 ROM write protection via Hypervisor trap
 	lda #$02
 	sta $d641
@@ -46,7 +53,7 @@ entry:
 	sta $d643
 	clv
 	; set rom filename
-	ldy #>RomFilename
+	ldy #$02
 	lda #$2e
 	sta $d640
 	clv
@@ -150,7 +157,6 @@ entry:
 	lda #$3f
 	sta $00
 	sta $01
-	;cli
 
 	; default stack location
 	ldx #$ff
@@ -163,7 +169,6 @@ entry:
 
 	jmp ResetMega65
 
-.advance $6900
 romfilename:
 	.byte "MEGA65.ROM", 0
 
@@ -171,11 +176,13 @@ romfilename:
 
 autostart:
 ; autostart routine called in irq after bootup of kernal and basic is complete.
-; will be copied and run from rom at $2c000, mapped to $c000
+; will be copied and run from rom at $2c700, mapped via $d030 to $c700
 .org $c700
 
 autostart_target:
 
+FileSize:
+        .word $0000
 BasicIrqPointer:
 	.dword $00032007
 BasicIrqBackup:
@@ -189,7 +196,7 @@ ResetMega65:
 	lda #$00
 	ldx #$0f
 	ldy #$00
-	ldz #$00
+	ldz #$0f
 	map
 	eom
 
@@ -231,10 +238,16 @@ AutostartEntry:
 	; restore rom write protection
 	lda #$00
 	sta $d641
-        clv
+	clv
 
 	lda #$00
 	tab
+
+        ; set top of basic text pointer
+        lda FileSize
+        sta $82
+        lda FileSize+1
+        sta $83
 
 	; simulate RUN<cr>
 	lda #$52
@@ -249,7 +262,7 @@ AutostartEntry:
 	sta $d0
 
 	cli
-	rts
+	jmp $2007
 
 autostart_end:
 
