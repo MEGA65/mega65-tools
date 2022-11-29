@@ -128,7 +128,7 @@ entry:
 	lda #$01
 	trb $d030
 
-	; disable 
+	; disable seam
 	lda #$d7
 	trb $d054	
 

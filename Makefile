@@ -621,11 +621,13 @@ ETHERLOAD_SOURCES = $(TOOLDIR)/etherload/etherload.c \
 		$(TOOLDIR)/etherload/helper_dma_load_routine.c \
 		$(TOOLDIR)/etherload/helper_all_done_routine.c \
 		$(TOOLDIR)/etherload/helper_all_done_routine_basic65.c \
+		$(TOOLDIR)/etherload/helper_all_done_routine_basic2.c \
 		$(TOOLDIR)/logging.c \
 		$(TOOLDIR)/version.c
 ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/helper_dma_load_routine_map.h \
 		$(TOOLDIR)/etherload/helper_all_done_routine_map.h \
-		$(TOOLDIR)/etherload/helper_all_done_routine_basic65_map.h
+		$(TOOLDIR)/etherload/helper_all_done_routine_basic65_map.h \
+		$(TOOLDIR)/etherload/helper_all_done_routine_basic2_map.h
 ETHERLOAD_INCLUDES = -I/usr/local/include -Iinclude
 ETHERLOAD_LIBRARIES = -lm
 

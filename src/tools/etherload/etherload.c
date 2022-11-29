@@ -4,6 +4,7 @@
 #include "helper_dma_load_routine_map.h"
 #include "helper_all_done_routine_map.h"
 #include "helper_all_done_routine_basic65_map.h"
+#include "helper_all_done_routine_basic2_map.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -46,6 +47,8 @@ extern char all_done_routine[];
 extern int all_done_routine_len;
 extern char all_done_routine_basic65[];
 extern int all_done_routine_basic65_len;
+extern char all_done_routine_basic2[];
+extern int all_done_routine_basic2_len;
 
 unsigned char colour_ram[1000];
 unsigned char progress_screen[1000];
@@ -714,20 +717,21 @@ int main(int argc, char **argv)
 
   // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
   // XXX - We should make it ACK as well.
+  // Instead, we just send it 10 times to make sure
 
   if (do_go64) {
-    // Probably C64 mode, so 1MHz CPU
-    // all_done_routine[all_done_routine_offset_cpuspeed+1]=64;
-    // Instead, we just send it 10 times to make sure
-    // for(int i=0;i<10;i++) {
-    //  sendto(sockfd, all_done_routine, all_done_routine_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    //}
+    // patch in end address
+    all_done_routine_basic2[all_done_routine_basic2_offset_data_end_address] = address & 0xff;
+    all_done_routine_basic2[all_done_routine_basic2_offset_data_end_address + 1] = address >> 8;
+
+    // patch in do_run
+    all_done_routine_basic2[all_done_routine_basic2_offset_do_run] = do_run;
+    sendto(sockfd, all_done_routine_basic2, all_done_routine_basic2_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   }
   else {
-    // patch in size
-    int num_bytes = address - start_addr;
-    all_done_routine_basic65[all_done_routine_basic65_offset_autostart] = num_bytes & 0xff;
-    all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 1] = num_bytes >> 8;
+    // patch in end address
+    all_done_routine_basic65[all_done_routine_basic65_offset_autostart] = address & 0xff;
+    all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 1] = address >> 8;
 
     // patch in do_run
     all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 2] = do_run;

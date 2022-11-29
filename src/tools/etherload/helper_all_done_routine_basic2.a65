@@ -1,0 +1,386 @@
+; This little helper contains the code to be transferred in the Ethernet
+; packet after data has been transferred via the dma_load_routine.
+
+	; Routine sits at beginning of UDP payload in the Ethernet buffer
+	; mapped at $6800
+	; Packet size:	  2 bytes
+	; Ethernet header: 14 bytes
+	; IPv4 header:	 20 bytes
+	; UDP header:	   8 bytes
+	.org $6800 + 2 + 14 + 20 + 8
+
+        .alias tmpbuffer $334
+
+entry:
+
+	; Dummy inc $d020 jmp *-3 routine for debugging
+;	lda #$00
+;	inc $d020
+;*
+;	jmp -
+
+	; Production routine that skips the jmp *-3 loop
+	lda #$00
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+	; Enable mega65 I/O personality
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $d02f 
+
+	ldx #$0b
+*	lda romfilename,x
+	sta $0200,x
+	dex
+	bpl -
+
+	; Disable C65 ROM write protection via Hypervisor trap
+	lda #$02
+	sta $d641
+	clv
+
+	; close all hyppo file descriptors
+	lda #$22
+	sta $d640
+	clv
+	; chdir root
+	lda #$3e
+	sta $d643
+	clv
+	; set rom filename
+	ldy #$02
+	lda #$2e
+	sta $d640
+	clv
+	; load rom file to $20000
+	lda #$00
+	tax
+	tay
+	ldz #$02
+	lda #$36
+	sta $d640
+	clv
+
+	; copy reset routine to $0334
+	ldx #reset_c64_end - reset_c64
+*	lda reset_c64-1,x
+	sta tmpbuffer-1,x
+	dex
+	bne -
+
+	; copy post reset routine to $7e8
+	ldx #post_reset_remap_end - post_reset_remap
+*	lda post_reset_remap-1,x
+	sta $7e7,x
+	dex
+	bne -
+
+	; bp=zp
+	lda #$00
+	tab
+
+        ; bank in basic rom to be able to write to it
+	lda #$ff
+	ldx #$0f
+	ldy #$00
+	ldz #$0f
+	map
+	eom
+	lda #$80
+	ldx #$8d
+	ldy #$00
+	ldz #$22
+	map
+	eom
+
+	; backup and patch basic cold start vector
+        lda $a000
+        sta basic_cold_start_backup
+        lda $a001
+        sta basic_cold_start_backup+1
+        ; set vector to post reset routine
+        lda #$e8
+        sta $a000
+        lda #$07
+        sta $a001
+
+        ; turn off mapping of upper 32kb region
+	lda #$80
+	ldx #$8d
+	ldy #$00
+	ldz #$00
+	map
+	eom
+
+	; backup first two bytes of basic program (will be zeroized by basic reset)
+        lda $801
+        sta basic_program_start_backup
+        lda $802
+        sta basic_program_start_backup+1
+
+        ; bank out basic rom
+        lda #$01
+        trb $01
+
+        ; backup data byte in ram at $a000 (will be overwritten by ramtest)
+        lda $a000
+        sta basic_program_end_backup
+
+	; unmap SD sector buffer
+	lda #$82
+	sta $d680
+
+	; disable seam
+	lda #$d7
+	trb $d054	
+
+	; 40 column mode normal C64 screen
+	lda #$00
+	sta $d030
+	sta $d031
+	lda #%00000011
+	tsb $dd00
+	lda #$c0    ; also enable raster delay to match rendering with interrupts more correctly
+	sta $d05d
+	lda #$1b
+	sta $d011
+	lda #$c8
+	sta $d016
+	lda #$14
+	sta $d018
+
+        lda #$00
+        sta $d609
+        sta $1102
+        sta $1104
+
+	; reset I/O to C64 mode
+	lda #$00
+	sta $d02f
+
+	; default C64 banking
+	lda #$3f
+	sta $00
+	sta $01
+
+	; default stack location
+	ldx #$ff
+	ldy #$01
+	txs
+	tys
+
+	; only use 8-bit stack
+	see
+
+        ; 1 MHz
+	lda #$40
+	sta $00
+
+        ; jmp to reset_c64 routine
+	jmp tmpbuffer
+
+romfilename:
+	.byte "MEGA65.ROM", 0
+
+; this routine resets all mappings and jumps into the c64 rom reset routine
+; is copied to $334
+reset_c64:
+	lda #$00
+	ldx #$0f
+	tay
+	ldz #$0f
+	map
+	eom
+
+	tax
+        taz
+	map
+	eom
+
+	jmp ($fff6)
+reset_c64_end:
+
+; this routine is installed after screen memory ($7e8) to survive a reset
+post_reset_remap:
+        ; map eth buffer
+	lda #$00
+        tay
+        taz
+        dec
+	ldx #$0f
+	map      ; MAPL: 0fff  MAPH: 0000
+	eom
+	lda #$80
+	ldx #$8d
+	map      ; MAPL: 8d80  MAPH: 0000
+	eom
+        jmp autostart
+post_reset_remap_end:
+        .org $7e8 + post_reset_remap_end - post_reset_remap
+        .space basic_cold_start_backup 2
+        .alias irq_vector_backup basic_cold_start_backup
+        .alias basic_main_vector_backup basic_cold_start_backup
+        .space basic_program_start_backup 2
+        .space basic_program_end_backup 1
+        .checkpc $7ff
+
+        .org post_reset_remap_end
+
+; this routine installs the irq vector and restores patched basic rom bytes
+autostart:
+        sei
+        ; map basic rom via map (to be able to write to it)
+	lda #$80
+        ldx #$8d
+        ldy #$00
+	ldz #$22
+	map
+	eom
+
+        ; restore basic cold start vector
+        lda basic_cold_start_backup
+        sta $a000
+        lda basic_cold_start_backup+1
+        sta $a001
+
+	; copy exit and irq routine to tmpbuffer ($334)
+        ; make sure to add 3 extra data bytes at the beginning
+	ldx #autostart_end - autostart_exit + 3
+*	lda data_end_address-1,x
+	sta tmpbuffer-1,x
+	dex
+	bne -
+
+        ; backup original irq vector
+        lda $314
+        sta irq_vector_backup
+        lda $315
+        sta irq_vector_backup+1
+
+        ; setup irq
+        lda #<autostart_irq
+        sta $314
+        lda #>autostart_irq
+        sta $315
+
+	; Enable mega65 I/O personality
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $d02f 
+
+	; restore rom write protection
+	lda #$00
+	sta $d641
+	clv
+
+	; reset I/O to C64 mode
+	lda #$00
+	sta $d02f
+
+        ; we have patched the irq vector, so exit to basic
+        jmp autostart_exit
+
+
+; resets mappings and exits to basic
+data_end_address:
+        .alias data_end_address_copy tmpbuffer
+	.word $0000
+do_run:
+        .alias do_run_copy tmpbuffer + 2
+        .byte $00
+        
+        .org tmpbuffer + 3
+autostart_exit:
+        ; disable >1mb mapping
+	lda #$00
+	ldx #$0f
+	tay
+	ldz #$0f
+	map
+	eom
+        ; disable all mappings
+   	tax
+	taz
+	map
+	eom     
+
+        ; jump to original basic cold start
+        jmp ($a000)
+
+; this irq routine patches the basic main vector
+autostart_irq:
+        ; vectors are written from back to front
+        ; if we detect $301 to be non-zero, we know
+        ; that $302/$303 contains the correct main vector
+        inc $d020
+        lda $301
+        bne +
+        jmp (irq_vector_backup)
+*
+        ; restore irq vector
+        lda irq_vector_backup
+        sta $314
+        lda irq_vector_backup+1
+        sta $315
+
+        lda $302
+        sta basic_main_vector_backup
+        lda $303
+        sta basic_main_vector_backup+1
+
+        lda #<main
+        sta $302
+        lda #>main
+        sta $303
+
+irq_exit:
+	jmp ($314)
+
+main:
+        ; restore bytes of loaded program
+        lda basic_program_start_backup
+        sta $801
+        lda basic_program_start_backup+1
+        sta $802
+        lda basic_program_end_backup
+        sta $a000      ; will write to ram
+
+	; set top of basic text pointer
+	lda data_end_address_copy
+	sta $2d
+	lda data_end_address_copy+1
+	sta $2e
+
+        bit do_run_copy
+        beq main_exit
+
+	; simulate RUN<cr>
+	lda #$52
+	sta $277
+	lda #$55
+	sta $278
+	lda #$4e
+	sta $279
+	lda #$0d
+	sta $27a
+	lda #$04
+	sta $c6
+
+main_exit:
+        ; restore basic main vector
+        lda basic_main_vector_backup
+        sta $302
+        lda basic_main_vector_backup+1
+        sta $303
+
+        jmp ($302)
+
+autostart_end:
+        .checkpc $400
