@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <sys/tty.h>
+#include <sys/types.h>
 #include <sys/ioctl.h>
 #endif
 
@@ -717,7 +717,6 @@ int main(int argc, char **argv)
 
   // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
   // XXX - We should make it ACK as well.
-  // Instead, we just send it 10 times to make sure
 
   if (do_go64) {
     // patch in end address
