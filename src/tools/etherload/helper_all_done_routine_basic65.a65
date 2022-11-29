@@ -183,7 +183,7 @@ autostart_target:
 filesize:
 	.word $0000
 do_run:
-        .byte $00
+	.byte $00
 basic_irq_pointer:
 	.dword $00032007
 basic_irq_backup:
@@ -250,8 +250,8 @@ autostart_entry:
 	lda filesize+1
 	sta $83
 
-        bit do_run
-        beq back_to_basic
+	bit do_run
+	beq back_to_basic
 
 	; simulate RUN<cr>
 	lda #$52

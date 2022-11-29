@@ -9,7 +9,7 @@
 	; UDP header:	   8 bytes
 	.org $6800 + 2 + 14 + 20 + 8
 
-        .alias tmpbuffer $334
+	.alias tmpbuffer $334
 
 entry:
 
@@ -85,7 +85,7 @@ entry:
 	lda #$00
 	tab
 
-        ; bank in basic rom to be able to write to it
+	; bank in basic rom to be able to write to it
 	lda #$ff
 	ldx #$0f
 	ldy #$00
@@ -100,17 +100,17 @@ entry:
 	eom
 
 	; backup and patch basic cold start vector
-        lda $a000
-        sta basic_cold_start_backup
-        lda $a001
-        sta basic_cold_start_backup+1
-        ; set vector to post reset routine
-        lda #$e8
-        sta $a000
-        lda #$07
-        sta $a001
+	lda $a000
+	sta basic_cold_start_backup
+	lda $a001
+	sta basic_cold_start_backup+1
+	; set vector to post reset routine
+	lda #$e8
+	sta $a000
+	lda #$07
+	sta $a001
 
-        ; turn off mapping of upper 32kb region
+	; turn off mapping of upper 32kb region
 	lda #$80
 	ldx #$8d
 	ldy #$00
@@ -119,18 +119,18 @@ entry:
 	eom
 
 	; backup first two bytes of basic program (will be zeroized by basic reset)
-        lda $801
-        sta basic_program_start_backup
-        lda $802
-        sta basic_program_start_backup+1
+	lda $801
+	sta basic_program_start_backup
+	lda $802
+	sta basic_program_start_backup+1
 
-        ; bank out basic rom
-        lda #$01
-        trb $01
+	; bank out basic rom
+	lda #$01
+	trb $01
 
-        ; backup data byte in ram at $a000 (will be overwritten by ramtest)
-        lda $a000
-        sta basic_program_end_backup
+	; backup data byte in ram at $a000 (will be overwritten by ramtest)
+	lda $a000
+	sta basic_program_end_backup
 
 	; unmap SD sector buffer
 	lda #$82
@@ -173,11 +173,11 @@ entry:
 	; only use 8-bit stack
 	see
 
-        ; 1 MHz
+	; 1 MHz
 	lda #$40
 	sta $00
 
-        ; jmp to reset_c64 routine
+	; jmp to reset_c64 routine
 	jmp tmpbuffer
 
 romfilename:
@@ -194,7 +194,7 @@ reset_c64:
 	eom
 
 	tax
-        taz
+	taz
 	map
 	eom
 
@@ -203,11 +203,11 @@ reset_c64_end:
 
 ; this routine is installed after screen memory ($7e8) to survive a reset
 post_reset_remap:
-        ; map eth buffer
+	; map eth buffer
 	lda #$00
-        tay
-        taz
-        dec
+	tay
+	taz
+	dec
 	ldx #$0f
 	map      ; MAPL: 0fff  MAPH: 0000
 	eom
@@ -215,54 +215,54 @@ post_reset_remap:
 	ldx #$8d
 	map      ; MAPL: 8d80  MAPH: 0000
 	eom
-        jmp autostart
+	jmp autostart
 post_reset_remap_end:
-        .org $7e8 + post_reset_remap_end - post_reset_remap
-        .space basic_cold_start_backup 2
-        .alias irq_vector_backup basic_cold_start_backup
-        .alias basic_main_vector_backup basic_cold_start_backup
-        .space basic_program_start_backup 2
-        .space basic_program_end_backup 1
-        .checkpc $7ff
+	.org $7e8 + post_reset_remap_end - post_reset_remap
+	.space basic_cold_start_backup 2
+	.alias irq_vector_backup basic_cold_start_backup
+	.alias basic_main_vector_backup basic_cold_start_backup
+	.space basic_program_start_backup 2
+	.space basic_program_end_backup 1
+	.checkpc $7ff
 
-        .org post_reset_remap_end
+	.org post_reset_remap_end
 
 ; this routine installs the irq vector and restores patched basic rom bytes
 autostart:
-        sei
-        ; map basic rom via map (to be able to write to it)
+	sei
+	; map basic rom via map (to be able to write to it)
 	lda #$80
-        ldx #$8d
-        ldy #$00
+	ldx #$8d
+	ldy #$00
 	ldz #$22
 	map
 	eom
 
-        ; restore basic cold start vector
-        lda basic_cold_start_backup
-        sta $a000
-        lda basic_cold_start_backup+1
-        sta $a001
+	; restore basic cold start vector
+	lda basic_cold_start_backup
+	sta $a000
+	lda basic_cold_start_backup+1
+	sta $a001
 
 	; copy exit and irq routine to tmpbuffer ($334)
-        ; make sure to add 3 extra data bytes at the beginning
+	; make sure to add 3 extra data bytes at the beginning
 	ldx #autostart_end - autostart_exit + 3
 *	lda data_end_address-1,x
 	sta tmpbuffer-1,x
 	dex
 	bne -
 
-        ; backup original irq vector
-        lda $314
-        sta irq_vector_backup
-        lda $315
-        sta irq_vector_backup+1
+	; backup original irq vector
+	lda $314
+	sta irq_vector_backup
+	lda $315
+	sta irq_vector_backup+1
 
-        ; setup irq
-        lda #<autostart_irq
-        sta $314
-        lda #>autostart_irq
-        sta $315
+	; setup irq
+	lda #<autostart_irq
+	sta $314
+	lda #>autostart_irq
+	sta $315
 
 	; Enable mega65 I/O personality
 	lda #$47
@@ -279,72 +279,72 @@ autostart:
 	lda #$00
 	sta $d02f
 
-        ; we have patched the irq vector, so exit to basic
-        jmp autostart_exit
+	; we have patched the irq vector, so exit to basic
+	jmp autostart_exit
 
 
 ; resets mappings and exits to basic
 data_end_address:
-        .alias data_end_address_copy tmpbuffer
+	.alias data_end_address_copy tmpbuffer
 	.word $0000
 do_run:
-        .alias do_run_copy tmpbuffer + 2
-        .byte $00
-        
-        .org tmpbuffer + 3
+	.alias do_run_copy tmpbuffer + 2
+	.byte $00
+	
+	.org tmpbuffer + 3
 autostart_exit:
-        ; disable >1mb mapping
+	; disable >1mb mapping
 	lda #$00
 	ldx #$0f
 	tay
 	ldz #$0f
 	map
 	eom
-        ; disable all mappings
+	; disable all mappings
    	tax
 	taz
 	map
 	eom     
 
-        ; jump to original basic cold start
-        jmp ($a000)
+	; jump to original basic cold start
+	jmp ($a000)
 
 ; this irq routine patches the basic main vector
 autostart_irq:
-        ; vectors are written from back to front
-        ; if we detect $301 to be non-zero, we know
-        ; that $302/$303 contains the correct main vector
-        lda $301
-        bne +
-        jmp (irq_vector_backup)
+	; vectors are written from back to front
+	; if we detect $301 to be non-zero, we know
+	; that $302/$303 contains the correct main vector
+	lda $301
+	bne +
+	jmp (irq_vector_backup)
 *
-        ; restore irq vector
-        lda irq_vector_backup
-        sta $314
-        lda irq_vector_backup+1
-        sta $315
+	; restore irq vector
+	lda irq_vector_backup
+	sta $314
+	lda irq_vector_backup+1
+	sta $315
 
-        lda $302
-        sta basic_main_vector_backup
-        lda $303
-        sta basic_main_vector_backup+1
+	lda $302
+	sta basic_main_vector_backup
+	lda $303
+	sta basic_main_vector_backup+1
 
-        lda #<main
-        sta $302
-        lda #>main
-        sta $303
+	lda #<main
+	sta $302
+	lda #>main
+	sta $303
 
 irq_exit:
 	jmp ($314)
 
 main:
-        ; restore bytes of loaded program
-        lda basic_program_start_backup
-        sta $801
-        lda basic_program_start_backup+1
-        sta $802
-        lda basic_program_end_backup
-        sta $a000      ; will write to ram
+	; restore bytes of loaded program
+	lda basic_program_start_backup
+	sta $801
+	lda basic_program_start_backup+1
+	sta $802
+	lda basic_program_end_backup
+	sta $a000      ; will write to ram
 
 	; set top of basic text pointer
 	lda data_end_address_copy
@@ -352,8 +352,8 @@ main:
 	lda data_end_address_copy+1
 	sta $2e
 
-        bit do_run_copy
-        beq main_exit
+	bit do_run_copy
+	beq main_exit
 
 	; simulate RUN<cr>
 	lda #$52
@@ -368,13 +368,13 @@ main:
 	sta $c6
 
 main_exit:
-        ; restore basic main vector
-        lda basic_main_vector_backup
-        sta $302
-        lda basic_main_vector_backup+1
-        sta $303
+	; restore basic main vector
+	lda basic_main_vector_backup
+	sta $302
+	lda basic_main_vector_backup+1
+	sta $303
 
-        jmp ($302)
+	jmp ($302)
 
 autostart_end:
-        .checkpc $400
+	.checkpc $400
