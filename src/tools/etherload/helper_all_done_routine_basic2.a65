@@ -155,11 +155,6 @@ entry:
 	lda #$14
 	sta $d018
 
-        lda #$00
-        sta $d609
-        sta $1102
-        sta $1104
-
 	; reset I/O to C64 mode
 	lda #$00
 	sta $d02f
@@ -319,7 +314,6 @@ autostart_irq:
         ; vectors are written from back to front
         ; if we detect $301 to be non-zero, we know
         ; that $302/$303 contains the correct main vector
-        inc $d020
         lda $301
         bne +
         jmp (irq_vector_backup)
