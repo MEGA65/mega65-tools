@@ -511,10 +511,20 @@ int wait_all_acks(void)
     unsigned char ackbuf[8192];
     int count = 0;
     int r = 0;
+    struct sockaddr_in src_address;
+    socklen_t addr_len = sizeof(src_address);
+
     while (r > -1 && count < 100) {
-      r = recv(sockfd, ackbuf, sizeof(ackbuf), MSG_DONTWAIT);
-      if (r == 1280)
-        check_if_ack(ackbuf);
+      r = recvfrom(sockfd, ackbuf, sizeof(ackbuf), 0, (struct sockaddr*) &src_address, &addr_len);
+      if (r > -1) {
+        if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr ||
+            src_address.sin_port != htons(PORTNUM)) {
+          log_debug("Dropping unexpected packet from %s:%d", inet_ntoa(src_address.sin_addr), ntohs(src_address.sin_port));
+          continue;
+        }
+        if (r == 1280)
+          check_if_ack(ackbuf);
+      }
     }
 
     maybe_send_ack();
@@ -639,6 +649,10 @@ int main(int argc, char **argv)
 
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();
+
+  // Adapt ip address (modify last byte to use ip x.y.z.65 as dest address)
+  servaddr.sin_addr.s_addr &= 0x00ffffff;
+  servaddr.sin_addr.s_addr |= (65 << 24);
 
   int fd = open(filename, O_RDWR);
   unsigned char buffer[1024];

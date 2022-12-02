@@ -111,22 +111,22 @@ dest_bank:
 	sta $6821
 
 	; Patch IP checksum from changing *.255 to *.65 = add $BE to low byte
-	lda $681b
-	clc
-	adc #$be
-	sta $6819
-	lda $681a
-	adc #$00
-	sta $6818
- 
+	;lda $681b
+	;clc
+	;adc #$be
+	;sta $6819
+	;lda $681a
+	;adc #$00
+	;sta $6818
+
 	; Patch UDP checksum from changing *.255 to *.65 = add $BE to low byte
-	lda $682b
-	clc
-	adc #$be
-	sta $6829
-	lda $682a
-	adc #$00
-	sta $6828
+	;lda $682b
+	;clc
+	;adc #$be
+	;sta $6829
+	;lda $682a
+	;adc #$00
+	;sta $6828
 
 	; 5. TX packet
 	lda #$01

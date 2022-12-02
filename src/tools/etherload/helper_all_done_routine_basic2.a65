@@ -352,9 +352,10 @@ main:
 	lda data_end_address_copy+1
 	sta $2e
 
-	bit do_run_copy
+	lda do_run_copy
 	beq main_exit
 
+        sei
 	; simulate RUN<cr>
 	lda #$52
 	sta $277
@@ -366,6 +367,7 @@ main:
 	sta $27a
 	lda #$04
 	sta $c6
+        cli
 
 main_exit:
 	; restore basic main vector
