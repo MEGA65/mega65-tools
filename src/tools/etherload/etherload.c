@@ -85,6 +85,7 @@ struct option cmd_opts[MAX_CMD_OPTS];
 int loglevel = LOG_NOTE;
 int do_go64 = 0;
 int do_run = 0;
+int cart_detect = 0;
 char *ip_address = NULL;
 char *filename = NULL;
 
@@ -194,17 +195,18 @@ void usage(int exitcode, char *message)
 void init_cmd_options(void)
 {
   // clang-format off
-  CMD_OPTION("help",      0, 0,         'h', "",       "Display help and exit.");
+  CMD_OPTION("help",        no_argument,       0,            'h', "",       "Display help and exit.");
   cmd_log_start = cmd_count;
-  CMD_OPTION("quiet",     0, &loglevel, 1,   "",       "Only display errors or critical errors.");
-  CMD_OPTION("verbose",   0, &loglevel, 4,   "",       "More verbose logging.");
-  CMD_OPTION("debug",     0, &loglevel, 5,   "",       "Enable debug logging.");
+  CMD_OPTION("quiet",       no_argument,       &loglevel,    1,   "",       "Only display errors or critical errors.");
+  CMD_OPTION("verbose",     no_argument,       &loglevel,    4,   "",       "More verbose logging.");
+  CMD_OPTION("debug",       no_argument,       &loglevel,    5,   "",       "Enable debug logging.");
   cmd_log_end = cmd_count;
-  CMD_OPTION("log",       1, 0,         '0', "level",  "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
+  CMD_OPTION("log",         required_argument, 0,            '0', "level",  "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
-  CMD_OPTION("ip",        1, 0,         'i', "ipaddr", "Set IPv4 broadcast address of the subnet where MEGA65 is connected (eg. 192.168.1.255).");
-  CMD_OPTION("run",       0, 0,         'r', "",       "Automatically RUN programme after loading.");
-  CMD_OPTION("c64mode",   0, 0,         '4', "",       "Switch to C64 mode.");
+  CMD_OPTION("ip",          required_argument, 0,            'i', "ipaddr", "Set IPv4 broadcast address of the subnet where MEGA65 is connected (eg. 192.168.1.255).");
+  CMD_OPTION("run",         no_argument,       0,            'r',   "",     "Automatically RUN programme after loading.");
+  CMD_OPTION("c64mode",     no_argument,       0,            '4',   "",     "Switch to C64 mode.");
+  CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
   // clang-format on
 }
 
@@ -515,10 +517,9 @@ int wait_all_acks(void)
     socklen_t addr_len = sizeof(src_address);
 
     while (r > -1 && count < 100) {
-      r = recvfrom(sockfd, ackbuf, sizeof(ackbuf), 0, (struct sockaddr*) &src_address, &addr_len);
+      r = recvfrom(sockfd, ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
       if (r > -1) {
-        if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr ||
-            src_address.sin_port != htons(PORTNUM)) {
+        if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
           log_debug("Dropping unexpected packet from %s:%d", inet_ntoa(src_address.sin_addr), ntohs(src_address.sin_port));
           continue;
         }
@@ -584,7 +585,7 @@ int main(int argc, char **argv)
     usage(-3, "No arguments given!");
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "4rh0:", cmd_opts, &opt_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "i:r4h0:", cmd_opts, &opt_index)) != -1) {
     if (opt == 0) {
       if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
         log_setup(stderr, loglevel);
@@ -739,6 +740,10 @@ int main(int argc, char **argv)
 
     // patch in do_run
     all_done_routine_basic2[all_done_routine_basic2_offset_do_run] = do_run;
+
+    // patch in cartridge signature enable
+    all_done_routine_basic2[all_done_routine_basic2_offset_enable_cart_signature] = cart_detect;
+
     sendto(sockfd, all_done_routine_basic2, all_done_routine_basic2_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   }
   else {
@@ -748,6 +753,9 @@ int main(int argc, char **argv)
 
     // patch in do_run
     all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 2] = do_run;
+
+    // patch in cartridge signature enable
+    all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 3] = cart_detect;
 
     sendto(
         sockfd, all_done_routine_basic65, all_done_routine_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));

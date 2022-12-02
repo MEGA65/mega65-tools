@@ -3,10 +3,10 @@
 
 	; Routine sits at beginning of UDP payload in the Ethernet buffer
 	; mapped at $6800
-	; Packet size:	  2 bytes
+	; Packet size:      2 bytes
 	; Ethernet header: 14 bytes
-	; IPv4 header:	 20 bytes
-	; UDP header:	   8 bytes
+	; IPv4 header:     20 bytes
+	; UDP header:       8 bytes
 	.org $6800 + 2 + 14 + 20 + 8
 
 entry:
@@ -30,7 +30,7 @@ entry:
 	lda #$47
 	sta $d02f
 	lda #$53
-	sta $d02f 
+	sta $d02f
 
 	ldx #$0b
 *	lda romfilename,x
@@ -98,7 +98,7 @@ entry:
 	neg
 	nop
 	lda (<basic_program_start_pointer),z
-	
+
 	; stq basic_program_start_backup
 	neg
 	neg
@@ -124,17 +124,11 @@ entry:
 	lda #$82
 	sta $d680
 
-	; unmap 2nd KB colour RAM
-	lda #$01
-	trb $d030
-
 	; disable seam
 	lda #$d7
-	trb $d054	
+	trb $d054
 
 	; 40 column mode normal C64 screen
-	lda #$20
-	sta $d030
 	lda #$00
 	sta $d031
 	lda #%00000011
@@ -184,6 +178,8 @@ filesize:
 	.word $0000
 do_run:
 	.byte $00
+enable_cart_signature:
+	.byte $00
 basic_irq_pointer:
 	.dword $00032007
 basic_irq_backup:
@@ -192,6 +188,8 @@ basic_program_start_pointer:
 	.dword $00002001
 basic_program_start_backup:
 	.dword $00000000
+cartridge_backup:
+	.byte $00
 
 reset_mega65:
 	lda #$00
@@ -208,6 +206,14 @@ reset_mega65:
 	map
 	eom
 
+	; backup cartridge signature byte
+	lda $8004
+	sta cartridge_backup
+	lda enable_cart_signature
+	bne +
+	lda #$00
+	sta $8004
+*
 	jmp ($fffc)
 
 autostart_entry:
@@ -224,6 +230,10 @@ autostart_entry:
 	neg
 	nop
 	sta (<basic_program_start_pointer),z
+
+	; restore cartridge signature byte
+	lda cartridge_backup
+	sta $8004
 
 	; restore basic irq vector
 	; ldq basic_irq_backup

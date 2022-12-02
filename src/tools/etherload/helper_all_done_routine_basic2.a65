@@ -3,10 +3,10 @@
 
 	; Routine sits at beginning of UDP payload in the Ethernet buffer
 	; mapped at $6800
-	; Packet size:	  2 bytes
+	; Packet size:      2 bytes
 	; Ethernet header: 14 bytes
-	; IPv4 header:	 20 bytes
-	; UDP header:	   8 bytes
+	; IPv4 header:     20 bytes
+	; UDP header:       8 bytes
 	.org $6800 + 2 + 14 + 20 + 8
 
 	.alias tmpbuffer $334
@@ -32,7 +32,7 @@ entry:
 	lda #$47
 	sta $d02f
 	lda #$53
-	sta $d02f 
+	sta $d02f
 
 	ldx #$0b
 *	lda romfilename,x
@@ -132,13 +132,21 @@ entry:
 	lda $a000
 	sta basic_program_end_backup
 
+	; backup data byte at $8004
+	lda $8004
+	sta cartridge_backup
+	lda enable_cart_signature
+	bne +
+	lda #$00
+	sta $8004
+*
 	; unmap SD sector buffer
 	lda #$82
 	sta $d680
 
 	; disable seam
 	lda #$d7
-	trb $d054	
+	trb $d054
 
 	; 40 column mode normal C64 screen
 	lda #$00
@@ -181,7 +189,10 @@ entry:
 	jmp tmpbuffer
 
 romfilename:
-	.byte "MEGA65.ROM", 0
+	.byte "MEGA65.ROM", $00
+
+enable_cart_signature:
+	.byte $00
 
 ; this routine resets all mappings and jumps into the c64 rom reset routine
 ; is copied to $334
@@ -223,7 +234,8 @@ post_reset_remap_end:
 	.alias basic_main_vector_backup basic_cold_start_backup
 	.space basic_program_start_backup 2
 	.space basic_program_end_backup 1
-	.checkpc $7ff
+	.space cartridge_backup 1
+	.checkpc $800
 
 	.org post_reset_remap_end
 
@@ -237,6 +249,10 @@ autostart:
 	ldz #$22
 	map
 	eom
+
+	; restore $8004 signature byte
+	lda cartridge_backup
+	sta $8004
 
 	; restore basic cold start vector
 	lda basic_cold_start_backup
@@ -268,7 +284,7 @@ autostart:
 	lda #$47
 	sta $d02f
 	lda #$53
-	sta $d02f 
+	sta $d02f
 
 	; restore rom write protection
 	lda #$00
@@ -290,7 +306,7 @@ data_end_address:
 do_run:
 	.alias do_run_copy tmpbuffer + 2
 	.byte $00
-	
+
 	.org tmpbuffer + 3
 autostart_exit:
 	; disable >1mb mapping
@@ -304,7 +320,7 @@ autostart_exit:
    	tax
 	taz
 	map
-	eom     
+	eom
 
 	; jump to original basic cold start
 	jmp ($a000)
@@ -355,7 +371,7 @@ main:
 	lda do_run_copy
 	beq main_exit
 
-        sei
+	sei
 	; simulate RUN<cr>
 	lda #$52
 	sta $277
@@ -367,7 +383,7 @@ main:
 	sta $27a
 	lda #$04
 	sta $c6
-        cli
+	cli
 
 main_exit:
 	; restore basic main vector
