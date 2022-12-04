@@ -423,7 +423,7 @@ fl_on_correct_track:
 	cmp prev_track
 	bne fl_not_prev_sector
 	lda $d086
-	cmp prev_track
+	cmp prev_side
 	bne fl_not_prev_sector
 	lda $d085
 	eor prev_sector
