@@ -14,7 +14,7 @@ bin/mfm-decode
 bin/md2h65
 bin/trenzm65powercontrol
 bin/bin2c
-bin/map2c
+bin/map2h
 
 src/tools/version.c
 src/tools/bin2c

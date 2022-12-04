@@ -617,25 +617,24 @@ $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 ## ========== etherload ==========
 ##
 ETHERLOAD_SOURCES = $(TOOLDIR)/etherload/etherload.c \
-		$(TOOLDIR)/etherload/loram.c \
-		$(TOOLDIR)/etherload/helper_dma_load_routine.c \
-		$(TOOLDIR)/etherload/helper_all_done_routine.c \
-		$(TOOLDIR)/etherload/helper_all_done_routine_basic65.c \
-		$(TOOLDIR)/etherload/helper_all_done_routine_basic2.c \
+		$(TOOLDIR)/etherload/ethlet_dma_load.c \
+		$(TOOLDIR)/etherload/ethlet_all_done.c \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic65.c \
 		$(TOOLDIR)/logging.c \
 		$(TOOLDIR)/version.c
-ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/helper_dma_load_routine_map.h \
-		$(TOOLDIR)/etherload/helper_all_done_routine_map.h \
-		$(TOOLDIR)/etherload/helper_all_done_routine_basic65_map.h \
-		$(TOOLDIR)/etherload/helper_all_done_routine_basic2_map.h
+ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/ethlet_dma_load_map.h \
+		$(TOOLDIR)/etherload/ethlet_all_done_map.h \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic65_map.h \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h
 ETHERLOAD_INCLUDES = -I/usr/local/include -Iinclude
 ETHERLOAD_LIBRARIES = -lm
 
-$(TOOLDIR)/etherload/helper_%.c:	$(TOOLDIR)/etherload/helper_%.bin $(BINDIR)/bin2c
-	$(BINDIR)/bin2c $(TOOLDIR)/etherload/helper_$*.bin $* $(TOOLDIR)/etherload/helper_$*.c
+$(TOOLDIR)/etherload/ethlet_%.c:	$(TOOLDIR)/etherload/ethlet_%.bin $(BINDIR)/bin2c
+	$(BINDIR)/bin2c $(TOOLDIR)/etherload/ethlet_$*.bin ethlet_$* $(TOOLDIR)/etherload/ethlet_$*.c
 
-$(TOOLDIR)/etherload/helper_%_map.h:	$(TOOLDIR)/etherload/helper_%.map $(BINDIR)/map2h
-	$(BINDIR)/map2h $(TOOLDIR)/etherload/helper_$*.map $* $(TOOLDIR)/etherload/helper_$*_map.h
+$(TOOLDIR)/etherload/%_map.h:	$(TOOLDIR)/etherload/%.map $(BINDIR)/map2h
+	$(BINDIR)/map2h $(TOOLDIR)/etherload/$*.map $* $(TOOLDIR)/etherload/$*_map.h
 
 $(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)

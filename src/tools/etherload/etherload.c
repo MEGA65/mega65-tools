@@ -1,10 +1,10 @@
 
 /* Sample UDP client */
 
-#include "helper_dma_load_routine_map.h"
-#include "helper_all_done_routine_map.h"
-#include "helper_all_done_routine_basic65_map.h"
-#include "helper_all_done_routine_basic2_map.h"
+#include "ethlet_dma_load_map.h"
+#include "ethlet_all_done_map.h"
+#include "ethlet_all_done_basic65_map.h"
+#include "ethlet_all_done_basic2_map.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -41,14 +41,14 @@ int packet_seq = 0;
 int last_rx_seq = 0;
 
 extern unsigned char c64_loram[1024];
-extern char dma_load_routine[];
-extern int dma_load_routine_len;
-extern char all_done_routine[];
-extern int all_done_routine_len;
-extern char all_done_routine_basic65[];
-extern int all_done_routine_basic65_len;
-extern char all_done_routine_basic2[];
-extern int all_done_routine_basic2_len;
+extern char ethlet_dma_load[];
+extern int ethlet_dma_load_len;
+extern char ethlet_all_done[];
+extern int ethlet_all_done_len;
+extern char ethlet_all_done_basic65[];
+extern int ethlet_all_done_basic65_len;
+extern char ethlet_all_done_basic2[];
+extern int ethlet_all_done_basic2_len;
 
 unsigned char colour_ram[1000];
 unsigned char progress_screen[1000];
@@ -310,11 +310,11 @@ int check_if_ack(unsigned char *b)
   }
 
   // Set retry interval based on number of outstanding packets
-  last_rx_seq = (b[dma_load_routine_offset_seq_num] + (b[dma_load_routine_offset_seq_num + 1] << 8));
+  last_rx_seq = (b[ethlet_dma_load_offset_seq_num] + (b[ethlet_dma_load_offset_seq_num + 1] << 8));
   update_retx_interval();
 
-  long ack_addr = (b[dma_load_routine_offset_dest_mb] << 20) + ((b[dma_load_routine_offset_dest_bank] & 0xf) << 16)
-                + (b[dma_load_routine_offset_dest_address + 1] << 8) + (b[dma_load_routine_offset_dest_address + 0] << 0);
+  long ack_addr = (b[ethlet_dma_load_offset_dest_mb] << 20) + ((b[ethlet_dma_load_offset_dest_bank] & 0xf) << 16)
+                + (b[ethlet_dma_load_offset_dest_address + 1] << 8) + (b[ethlet_dma_load_offset_dest_address + 0] << 0);
   log_debug("T+%lld : RXd frame addr=$%lx, rx seq=$%04x, tx seq=$%04x", gettime_us() - start_time, ack_addr, last_rx_seq,
       packet_seq);
 
@@ -468,21 +468,21 @@ void maybe_send_ack(void)
       int id = unackd[resend_frame];
       if (0)
         log_warn("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x", gettime_us() - start_time,
-            frame_load_addrs[id], id, ucount, packet_seq, unacked_frame_payloads[id][dma_load_routine_offset_data + 0],
-            unacked_frame_payloads[id][dma_load_routine_offset_data + 1]);
+            frame_load_addrs[id], id, ucount, packet_seq, unacked_frame_payloads[id][ethlet_dma_load_offset_data + 0],
+            unacked_frame_payloads[id][ethlet_dma_load_offset_data + 1]);
 
-      long ack_addr = (unacked_frame_payloads[id][dma_load_routine_offset_dest_mb] << 20)
-                    + ((unacked_frame_payloads[id][dma_load_routine_offset_dest_bank] & 0xf) << 16)
-                    + (unacked_frame_payloads[id][dma_load_routine_offset_dest_address + 1] << 8)
-                    + (unacked_frame_payloads[id][dma_load_routine_offset_dest_address + 0] << 0);
+      long ack_addr = (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_mb] << 20)
+                    + ((unacked_frame_payloads[id][ethlet_dma_load_offset_dest_bank] & 0xf) << 16)
+                    + (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_address + 1] << 8)
+                    + (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_address + 0] << 0);
 
       if (ack_addr != frame_load_addrs[id]) {
         log_crit("Resending frame with incorrect load address: expected=$%lx, saw=$%lx", frame_load_addrs[id], ack_addr);
         exit(-1);
       }
 
-      unacked_frame_payloads[id][dma_load_routine_offset_seq_num] = packet_seq;
-      unacked_frame_payloads[id][dma_load_routine_offset_seq_num + 1] = packet_seq >> 8;
+      unacked_frame_payloads[id][ethlet_dma_load_offset_seq_num] = packet_seq;
+      unacked_frame_payloads[id][ethlet_dma_load_offset_seq_num + 1] = packet_seq >> 8;
       packet_seq++;
       update_retx_interval();
       sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
@@ -542,31 +542,31 @@ int wait_all_acks(void)
 int send_mem(unsigned int address, unsigned char *buffer, int bytes)
 {
   // Set position of marker to draw in 1KB units
-  dma_load_routine[3] = address >> 10;
+  ethlet_dma_load[3] = address >> 10;
 
   // Set load address of packet
-  dma_load_routine[dma_load_routine_offset_dest_address] = address & 0xff;
-  dma_load_routine[dma_load_routine_offset_dest_address + 1] = (address >> 8) & 0xff;
-  dma_load_routine[dma_load_routine_offset_dest_bank] = (address >> 16) & 0x0f;
-  dma_load_routine[dma_load_routine_offset_dest_mb] = (address >> 20);
-  dma_load_routine[dma_load_routine_offset_byte_count] = bytes;
-  dma_load_routine[dma_load_routine_offset_byte_count + 1] = bytes >> 8;
+  ethlet_dma_load[ethlet_dma_load_offset_dest_address] = address & 0xff;
+  ethlet_dma_load[ethlet_dma_load_offset_dest_address + 1] = (address >> 8) & 0xff;
+  ethlet_dma_load[ethlet_dma_load_offset_dest_bank] = (address >> 16) & 0x0f;
+  ethlet_dma_load[ethlet_dma_load_offset_dest_mb] = (address >> 20);
+  ethlet_dma_load[ethlet_dma_load_offset_byte_count] = bytes;
+  ethlet_dma_load[ethlet_dma_load_offset_byte_count + 1] = bytes >> 8;
 
   // Copy data into packet
-  memcpy(&dma_load_routine[dma_load_routine_offset_data], buffer, bytes);
+  memcpy(&ethlet_dma_load[ethlet_dma_load_offset_data], buffer, bytes);
 
   // Add to queue of packets with pending ACKs
-  expect_ack(address, dma_load_routine);
+  expect_ack(address, ethlet_dma_load);
 
   // Send the packet initially
   if (0)
     log_info("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...", gettime_us() - start_time, address, packet_seq,
-        dma_load_routine[dma_load_routine_offset_data], dma_load_routine[dma_load_routine_offset_data + 1]);
-  dma_load_routine[dma_load_routine_offset_seq_num] = packet_seq;
-  dma_load_routine[dma_load_routine_offset_seq_num + 1] = packet_seq >> 8;
+        ethlet_dma_load[ethlet_dma_load_offset_data], ethlet_dma_load[ethlet_dma_load_offset_data + 1]);
+  ethlet_dma_load[ethlet_dma_load_offset_seq_num] = packet_seq;
+  ethlet_dma_load[ethlet_dma_load_offset_seq_num + 1] = packet_seq >> 8;
   packet_seq++;
   update_retx_interval();
-  sendto(sockfd, dma_load_routine, dma_load_routine_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  sendto(sockfd, ethlet_dma_load, ethlet_dma_load_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
   return 0;
 }
@@ -685,12 +685,6 @@ int main(int argc, char **argv)
   wait_all_acks();
   log_debug("Screen cleared.");
 
-  // Load C64 low memory, so that we can run C64 mode programs
-  // even if the machine was in C65 mode or some random state first
-  // (its probably the IRQ vectors etc that are important here)
-  // send_mem(0x0002, &c64_loram[0], 0xfe);
-  // send_mem(0x0200, &c64_loram[0x1fe], 0x200);
-
   progress_line(0, 0, 40);
   snprintf(msg, 40, "Loading \"%s\" at $%04X", filename, address);
   progress_print(0, 1, msg);
@@ -735,30 +729,30 @@ int main(int argc, char **argv)
 
   if (do_go64) {
     // patch in end address
-    all_done_routine_basic2[all_done_routine_basic2_offset_data_end_address] = address & 0xff;
-    all_done_routine_basic2[all_done_routine_basic2_offset_data_end_address + 1] = address >> 8;
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address] = address & 0xff;
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address + 1] = address >> 8;
 
     // patch in do_run
-    all_done_routine_basic2[all_done_routine_basic2_offset_do_run] = do_run;
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_do_run] = do_run;
 
     // patch in cartridge signature enable
-    all_done_routine_basic2[all_done_routine_basic2_offset_enable_cart_signature] = cart_detect;
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_enable_cart_signature] = cart_detect;
 
-    sendto(sockfd, all_done_routine_basic2, all_done_routine_basic2_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    sendto(sockfd, ethlet_all_done_basic2, ethlet_all_done_basic2_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   }
   else {
     // patch in end address
-    all_done_routine_basic65[all_done_routine_basic65_offset_autostart] = address & 0xff;
-    all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 1] = address >> 8;
+    ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart] = address & 0xff;
+    ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 1] = address >> 8;
 
     // patch in do_run
-    all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 2] = do_run;
+    ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 2] = do_run;
 
     // patch in cartridge signature enable
-    all_done_routine_basic65[all_done_routine_basic65_offset_autostart + 3] = cart_detect;
+    ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 3] = cart_detect;
 
     sendto(
-        sockfd, all_done_routine_basic65, all_done_routine_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+        sockfd, ethlet_all_done_basic65, ethlet_all_done_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   }
 
   return 0;
