@@ -426,8 +426,7 @@ fl_on_correct_track:
 	cmp prev_side
 	bne fl_not_prev_sector
 	lda $d085
-	eor prev_sector
-	and #$fe
+	cmp prev_sector
 	bne fl_not_prev_sector
 
 	;; We are being asked to read the sector we already have in the buffer
