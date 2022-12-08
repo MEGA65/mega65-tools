@@ -2,12 +2,13 @@
 /* Sample UDP client */
 
 #include "ethlet_dma_load_map.h"
-#include "ethlet_all_done_map.h"
 #include "ethlet_all_done_basic65_map.h"
 #include "ethlet_all_done_basic2_map.h"
+#include "ethlet_all_done_jump_map.h"
 
-#ifdef _WIN32
+#ifdef WINDOWS
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -43,12 +44,12 @@ int last_rx_seq = 0;
 extern unsigned char c64_loram[1024];
 extern char ethlet_dma_load[];
 extern int ethlet_dma_load_len;
-extern char ethlet_all_done[];
-extern int ethlet_all_done_len;
-extern char ethlet_all_done_basic65[];
-extern int ethlet_all_done_basic65_len;
 extern char ethlet_all_done_basic2[];
 extern int ethlet_all_done_basic2_len;
+extern char ethlet_all_done_basic65[];
+extern int ethlet_all_done_basic65_len;
+extern char ethlet_all_done_jump[];
+extern int ethlet_all_done_jump_len;
 
 unsigned char colour_ram[1000];
 unsigned char progress_screen[1000];
@@ -83,9 +84,15 @@ struct option cmd_opts[MAX_CMD_OPTS];
   cmd_desc[cmd_count++] = Odesc
 
 int loglevel = LOG_NOTE;
-int do_go64 = 0;
+int reset64 = 0;
+int reset65 = 0;
 int do_run = 0;
 int cart_detect = 0;
+int halt = 0;
+int do_jump = 0;
+int jump_addr = 0;
+int use_binary = 0;
+int bin_load_addr = 0;
 char *ip_address = NULL;
 char *filename = NULL;
 
@@ -204,8 +211,12 @@ void init_cmd_options(void)
   CMD_OPTION("log",         required_argument, 0,            '0', "level",  "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
   CMD_OPTION("ip",          required_argument, 0,            'i', "ipaddr", "Set IPv4 broadcast address of the subnet where MEGA65 is connected (eg. 192.168.1.255).");
-  CMD_OPTION("run",         no_argument,       0,            'r',   "",     "Automatically RUN programme after loading.");
-  CMD_OPTION("c64mode",     no_argument,       0,            '4',   "",     "Switch to C64 mode.");
+  CMD_OPTION("run",         no_argument,       0,            'r',   "",     "Automatically RUN programme after loading (will implicitly enable reset after loading).");
+  CMD_OPTION("c64mode",     no_argument,       0,            '4',   "",     "Reset to C64 mode after transfer.");
+  CMD_OPTION("m65mode",     no_argument,       0,            '5',   "",     "Reset to MEGA65 mode after transfer.");
+  CMD_OPTION("halt",        no_argument,       &halt,        1,     "",     "Halt and wait for next transfer after completion.");
+  CMD_OPTION("jump",        required_argument, 0,            'j', "addr",   "Jump to provided address <addr> after loading (hex notation).");
+  CMD_OPTION("bin",         required_argument, 0,            'b', "addr",   "Treat <prgname> as binary file and load at address <addr>.");
   CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
   // clang-format on
 }
@@ -252,7 +263,7 @@ int trigger_eth_hyperrupt(void)
   int offset = 0x38;
   memcpy(&hyperrupt_trigger[offset], magic_string, 12);
 
-  sendto(sockfd, hyperrupt_trigger, sizeof hyperrupt_trigger, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  sendto(sockfd, (void *)hyperrupt_trigger, sizeof hyperrupt_trigger, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   usleep(10000);
 
   return 0;
@@ -418,7 +429,7 @@ int expect_ack(long load_addr, char *b)
     int count = 0;
     int r = 0;
     while (r > -1 && count < 100) {
-      r = recv(sockfd, ackbuf, sizeof(ackbuf), MSG_DONTWAIT);
+      r = recv(sockfd, (void *)ackbuf, sizeof(ackbuf), 0);
       if (r == 1280)
         check_if_ack(ackbuf);
     }
@@ -485,7 +496,7 @@ void maybe_send_ack(void)
       unacked_frame_payloads[id][ethlet_dma_load_offset_seq_num + 1] = packet_seq >> 8;
       packet_seq++;
       update_retx_interval();
-      sendto(sockfd, unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+      sendto(sockfd, (void *)unacked_frame_payloads[id], 1280, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
       last_resend_time = gettime_us();
     }
     return;
@@ -517,7 +528,7 @@ int wait_all_acks(void)
     socklen_t addr_len = sizeof(src_address);
 
     while (r > -1 && count < 100) {
-      r = recvfrom(sockfd, ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
+      r = recvfrom(sockfd, (void *)ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
       if (r > -1) {
         if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
           log_debug("Dropping unexpected packet from %s:%d", inet_ntoa(src_address.sin_addr), ntohs(src_address.sin_port));
@@ -585,7 +596,7 @@ int main(int argc, char **argv)
     usage(-3, "No arguments given!");
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "i:r4h0:", cmd_opts, &opt_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "i:r45hj:b:0:", cmd_opts, &opt_index)) != -1) {
     if (opt == 0) {
       if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
         log_setup(stderr, loglevel);
@@ -605,8 +616,25 @@ int main(int argc, char **argv)
     case 'i':
       ip_address = strdup(optarg);
       break;
+    case 'j':
+      do_jump = 1;
+      if (sscanf(optarg, "%x", &jump_addr) != 1) {
+        log_crit("-j option needs hex addr");
+        exit(-1);
+      }
+      break;
+    case 'b':
+      use_binary = 1;
+      if (sscanf(optarg, "%x", &bin_load_addr) != 1) {
+        log_crit("-b option needs hex addr");
+        exit(-1);
+      }
+      break;
     case '4':
-      do_go64 = 1;
+      reset64 = 1;
+      break;
+    case '5':
+      reset65 = 1;
       break;
     case 'r':
       do_run = 1;
@@ -616,10 +644,12 @@ int main(int argc, char **argv)
     }
   }
 
-  if (argv[optind]) {
-    filename = strdup(argv[optind]);
-    check_file_access(filename, "programme");
+  if (!argv[optind]) {
+    usage(-3, "Filename for upload not specified, aborting.");
   }
+
+  filename = strdup(argv[optind]);
+  check_file_access(filename, "programme");
 
   if (argc - optind > 1)
     usage(-3, "Unexpected extra commandline arguments.");
@@ -634,11 +664,59 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-  int broadcastEnable = 1;
-  setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, (char *)&broadcastEnable, sizeof(broadcastEnable));
+  // check reset options
+  if (halt) {
+    if (do_run) {
+      log_crit("options --halt and --run can't be specified together, aborting.");
+      exit(1);
+    }
+    if (do_jump) {
+      log_crit("options --halt and --jump can't be specified together, aborting.");
+      exit(1);
+    }
+    if (reset64 || reset65) {
+      log_crit("option --halt can't be specified together with reset options, aborting.");
+      exit(1);
+    }
+  }
+  else if (do_jump) {
+    if (do_run) {
+      log_crit("options --jump and --run can't be specified together, aborting.");
+      exit(1);
+    }
+    if (reset64 || reset65) {
+      log_crit("option --jump can't be specified together with reset options, aborting.");
+      exit(1);
+    }
+  }
+  else {
+    if (reset64 && reset65) {
+      log_crit("both reset options --c64mode and --m65mode specified, aborting.");
+      exit(1);
+    }
+  }
 
+#ifdef WINDOWS
+  WSADATA wsa_data;
+  if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
+    log_crit("unable to start-up Winsock v2.2");
+    exit(-1);
+  }
+#endif
+
+  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  int broadcast_enable = 1;
+  setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, (char *)&broadcast_enable, sizeof(broadcast_enable));
+
+#ifdef WINDOWS
+  u_long non_blocking = 1;
+  if (ioctlsocket(sockfd, FIONBIO, &non_blocking) != NO_ERROR) {
+    log_crit("unable to set non-blocking socket operation");
+    exit(-1);
+  }
+#else
   fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, NULL) | O_NONBLOCK);
+#endif
 
   memset(&servaddr, 0, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
@@ -648,6 +726,49 @@ int main(int argc, char **argv)
   log_debug("Using dst-addr: %s", inet_ntoa(servaddr.sin_addr));
   log_debug("Using src-port: %d", ntohs(servaddr.sin_port));
 
+  int fd = open(filename, O_RDWR|O_BINARY);
+  unsigned char buffer[1024];
+  int offset = 0;
+  int bytes;
+
+  int address;
+  int start_addr;
+
+  if (!use_binary) {
+    // Read 2 byte load address
+    bytes = read(fd, buffer, 2);
+    if (bytes < 2) {
+      log_crit("Failed to read load address from file '%s'", filename);
+      exit(-1);
+    }
+    address = buffer[0] + 256 * buffer[1];
+    start_addr = address;
+    log_info("Load address of programme is $%04x", start_addr);
+  }
+  else {
+    start_addr = bin_load_addr;
+    address = start_addr;
+    log_info("Load address of file is $%04x", start_addr);
+  }
+  
+
+  if (!halt && !do_jump && !reset64 && !reset65) {
+    // Try to automatically determine reset mode (c64 vs. m65)
+    if (start_addr == 0x801) {
+      log_note("PRG is C64 @0801");
+      reset64 = 1;
+    }
+    else if (start_addr == 0x2001) {
+      log_note("PRG is MEGA65 @2001");
+      reset65 = 1;
+    }
+    else
+    {
+      log_crit("can't determine reset mode (c64/m65) from programme load address $%04x", start_addr);
+      exit(-1);
+    }
+  }
+
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();
 
@@ -655,24 +776,7 @@ int main(int argc, char **argv)
   servaddr.sin_addr.s_addr &= 0x00ffffff;
   servaddr.sin_addr.s_addr |= (65 << 24);
 
-  int fd = open(filename, O_RDWR);
-  unsigned char buffer[1024];
-  int offset = 0;
-  int bytes;
-
-  // Read 2 byte load address
-  bytes = read(fd, buffer, 2);
-  if (bytes < 2) {
-    log_crit("Failed to read load address from file '%s'", filename);
-    exit(-1);
-  }
-
   char msg[80];
-
-  int address = buffer[0] + 256 * buffer[1];
-  log_info("Load address of programme is $%04x", address);
-
-  int start_addr = address;
 
   last_resend_time = gettime_us();
 
@@ -727,7 +831,8 @@ int main(int argc, char **argv)
   // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
   // XXX - We should make it ACK as well.
 
-  if (do_go64) {
+  if (reset64) {
+    log_note("Reset to C64 mode");
     // patch in end address
     ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address] = address & 0xff;
     ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address + 1] = address >> 8;
@@ -740,7 +845,8 @@ int main(int argc, char **argv)
 
     sendto(sockfd, ethlet_all_done_basic2, ethlet_all_done_basic2_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   }
-  else {
+  else if (reset65) {
+    log_note("Reset to MEGA65 mode");
     // patch in end address
     ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart] = address & 0xff;
     ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 1] = address >> 8;
@@ -751,9 +857,20 @@ int main(int argc, char **argv)
     // patch in cartridge signature enable
     ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 3] = cart_detect;
 
-    sendto(
-        sockfd, ethlet_all_done_basic65, ethlet_all_done_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    sendto(sockfd, ethlet_all_done_basic65, ethlet_all_done_basic65_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   }
+  else if (do_jump) {
+    // patch in jump address
+    log_note("Jumping to address $%04X", jump_addr);
+    ethlet_all_done_jump[ethlet_all_done_jump_offset_jump_addr + 1] = jump_addr & 0xff;
+    ethlet_all_done_jump[ethlet_all_done_jump_offset_jump_addr + 2] = jump_addr >> 8;
+
+    sendto(sockfd, ethlet_all_done_jump, ethlet_all_done_jump_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  }
+
+#ifdef WINDOWS
+  WSACleanup();
+#endif
 
   return 0;
 }

@@ -3,11 +3,13 @@
 
 	; Routine sits at beginning of UDP payload in the Ethernet buffer
 	; mapped at $6800
-	; Packet size:	    2 bytes
+	; Packet size:      2 bytes
 	; Ethernet header: 14 bytes
-	; IPv4 header:	   20 bytes
-	; UDP header:	    8 bytes
+	; IPv4 header:     20 bytes
+	; UDP header:       8 bytes
 	.org $6800 + 2 + 14 + 20 + 8
+
+	.alias tmpbuffer $dbf0
 
 entry:
 
@@ -26,49 +28,35 @@ entry:
 	nop
 	nop
 
-	; Copy routine to $0340
-	ldx #$00
-*
-	lda main,x
-	sta $0340,x
-	inx
-	cpx #$40
-	bne -
-	jmp $0340
-
-main:
-	; All done routine that runs at $0340:
-	; 1. M65 IO mode
+	; Enable mega65 I/O personality
 	lda #$47
 	sta $d02f
 	lda #$53
 	sta $d02f
-	; 2. Clear MB of MAP
+
+	; copy reset routine to tmpbuffer
+	ldx #jump_routine_end - jump_routine
+*	lda jump_routine-1,x
+	sta tmpbuffer-1,x
+	dex
+	bne -
+
+  jmp tmpbuffer
+
+; this routine resets all mappings and jumps into the provided address
+jump_routine:
 	lda #$00
 	ldx #$0f
-	ldy #$00
-	ldz #$00
-	map
-	eom
-	; 3. Clear MAP of ethernet buffer
-	lda #$00
-	ldx #$00
-	ldy #$00
-	ldz #$00
+	tay
+	ldz #$0f
 	map
 	eom
 
-	; Set CPU to 1MHz or 40MHz
-cpuspeed:
-	lda #$40
-	sta $00
+	tax
+	taz
+	map
+	eom
 
-	; VIC-II IO mode
-	sta $d02f
-  
-	; 4. CLI
-	cli
-
-jump:
-;	jmp 2061
-	jmp $080d
+jump_addr:
+	jmp $0000
+jump_routine_end:

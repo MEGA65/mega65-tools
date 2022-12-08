@@ -125,7 +125,8 @@ TOOLSUNX=	$(BINDIR)/etherload \
 		$(BINDIR)/map2h
 
 
-TOOLSWIN=	$(BINDIR)/m65.exe \
+TOOLSWIN=	$(BINDIR)/etherload.exe \
+		$(BINDIR)/m65.exe \
 		$(BINDIR)/mega65_ftp.exe \
 		$(BINDIR)/bit2core.exe \
 		$(BINDIR)/bit2mcs.exe \
@@ -618,15 +619,15 @@ $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 ##
 ETHERLOAD_SOURCES = $(TOOLDIR)/etherload/etherload.c \
 		$(TOOLDIR)/etherload/ethlet_dma_load.c \
-		$(TOOLDIR)/etherload/ethlet_all_done.c \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic65.c \
+		$(TOOLDIR)/etherload/ethlet_all_done_jump.c \
 		$(TOOLDIR)/logging.c \
 		$(TOOLDIR)/version.c
 ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/ethlet_dma_load_map.h \
-		$(TOOLDIR)/etherload/ethlet_all_done_map.h \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic65_map.h \
-		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h
+		$(TOOLDIR)/etherload/ethlet_all_done_jump_map.h
 ETHERLOAD_INCLUDES = -I/usr/local/include -Iinclude
 ETHERLOAD_LIBRARIES = -lm
 
@@ -641,3 +642,6 @@ $(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
 
 $(BINDIR)/etherload.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
 	$(CC) $(MACCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
+
+$(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32
