@@ -1,6 +1,3 @@
-
-/* Sample UDP client */
-
 #include "ethlet_dma_load_map.h"
 #include "ethlet_all_done_basic65_map.h"
 #include "ethlet_all_done_basic2_map.h"
