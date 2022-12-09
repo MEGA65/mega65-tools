@@ -211,7 +211,7 @@ void init_cmd_options(void)
   CMD_OPTION("log",         required_argument, 0,            '0', "level",  "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
   CMD_OPTION("ip",          required_argument, 0,            'i', "ipaddr", "Set IPv4 broadcast address of the subnet where MEGA65 is connected (eg. 192.168.1.255).");
-  CMD_OPTION("run",         no_argument,       0,            'r',   "",     "Automatically RUN programme after loading (will implicitly enable reset after loading).");
+  CMD_OPTION("run",         no_argument,       0,            'r',   "",     "Automatically RUN programme after loading.");
   CMD_OPTION("c64mode",     no_argument,       0,            '4',   "",     "Reset to C64 mode after transfer.");
   CMD_OPTION("m65mode",     no_argument,       0,            '5',   "",     "Reset to MEGA65 mode after transfer.");
   CMD_OPTION("halt",        no_argument,       &halt,        1,     "",     "Halt and wait for next transfer after completion.");
@@ -726,7 +726,11 @@ int main(int argc, char **argv)
   log_debug("Using dst-addr: %s", inet_ntoa(servaddr.sin_addr));
   log_debug("Using src-port: %d", ntohs(servaddr.sin_port));
 
-  int fd = open(filename, O_RDWR|O_BINARY);
+  int open_flags = O_RDONLY;
+#ifdef WINDOWS
+  open_flags |= O_BINARY;
+#endif
+  int fd = open(filename, open_flags);
   unsigned char buffer[1024];
   int offset = 0;
   int bytes;
@@ -750,7 +754,6 @@ int main(int argc, char **argv)
     address = start_addr;
     log_info("Load address of file is $%04x", start_addr);
   }
-  
 
   if (!halt && !do_jump && !reset64 && !reset65) {
     // Try to automatically determine reset mode (c64 vs. m65)
@@ -762,8 +765,7 @@ int main(int argc, char **argv)
       log_note("PRG is MEGA65 @2001");
       reset65 = 1;
     }
-    else
-    {
+    else {
       log_crit("can't determine reset mode (c64/m65) from programme load address $%04x", start_addr);
       exit(-1);
     }
