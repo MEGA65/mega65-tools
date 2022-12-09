@@ -1,0 +1,282 @@
+; This little helper contains the code to be transferred in the Ethernet
+; packet after data has been transferred via the dma_load_routine.
+
+	; Routine sits at beginning of UDP payload in the Ethernet buffer
+	; mapped at $6800
+	; Packet size:      2 bytes
+	; Ethernet header: 14 bytes
+	; IPv4 header:     20 bytes
+	; UDP header:       8 bytes
+	.org $6800 + 2 + 14 + 20 + 8
+
+entry:
+
+	; Dummy inc $d020 jmp *-3 routine for debugging
+;	lda #$00
+;	inc $d020
+;*
+;	jmp -
+
+	; Production routine that skips the jmp *-3 loop
+	lda #$00
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+	; Enable mega65 I/O personality
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $d02f
+
+	ldx #$0b
+*	lda romfilename,x
+	sta $0200,x
+	dex
+	bpl -
+
+	; Disable C65 ROM write protection via Hypervisor trap
+	lda #$02
+	sta $d641
+	clv
+
+	; close all hyppo file descriptors
+	lda #$22
+	sta $d640
+	clv
+	; chdir root
+	lda #$3e
+	sta $d643
+	clv
+	; set rom filename
+	ldy #$02
+	lda #$2e
+	sta $d640
+	clv
+	; load rom file to $20000
+	lda #$00
+	tax
+	tay
+	ldz #$02
+	lda #$36
+	sta $d640
+	clv
+
+	; map $c000 interface rom
+	lda #$20
+	sta $d030
+
+	; copy autostart routine to $c700
+	ldx #autostart_end - autostart_target
+*	lda autostart-1,x
+	sta autostart_target-1,x
+	dex
+	bne -
+
+	lda #>autostart_target
+	tab
+	; 32 bit address for rom access
+	; backup basic irq vector
+	ldz #$00
+	; ldq [<basic_irq_pointer],z
+	neg
+	neg
+	nop
+	lda (<basic_irq_pointer),z
+	; stq basic_irq_backup
+	neg
+	neg
+	sta basic_irq_backup
+
+	; backup first two bytes of basic program (will be zeroized by basic reset)
+	ldz #$00
+	; ldq [<basic_program_start_pointer],z
+	neg
+	neg
+	nop
+	lda (<basic_program_start_pointer),z
+
+	; stq basic_program_start_backup
+	neg
+	neg
+	sta basic_program_start_backup
+
+	; patch basic irq vector at $32007 to jump into our autostart code
+	lda #<autostart_entry
+	ldz #$00
+	; sta ((<basic_irq_pointer)),z
+	nop
+	sta (<basic_irq_pointer),z
+	inz
+	lda #>autostart_entry
+	; sta ((<basic_irq_pointer)),z
+	nop
+	sta (<basic_irq_pointer),z
+
+	; bp=zp
+	lda #$00
+	tab
+
+	; unmap SD sector buffer
+	lda #$82
+	sta $d680
+
+	; disable seam
+	lda #$d7
+	trb $d054
+
+	; 40 column mode normal C64 screen
+	lda #$00
+	sta $d031
+	lda #%00000011
+	tsb $dd00
+	lda #$c0    ; also enable raster delay to match rendering with interrupts more correctly
+	sta $d05d
+	lda #$1b
+	sta $d011
+	lda #$c8
+	sta $d016
+	lda #$14
+	sta $d018
+
+	; reset I/O to C64 mode
+	lda #$00
+	sta $d02f
+
+	; default C64 banking
+	lda #$3f
+	sta $00
+	sta $01
+
+	; default stack location
+	ldx #$ff
+	ldy #$01
+	txs
+	tys
+
+	; only use 8-bit stack
+	see
+
+	jmp reset_mega65
+
+romfilename:
+	.byte "MEGA65.ROM", 0
+
+
+
+autostart:
+; autostart routine called in irq after bootup of kernal and basic is complete.
+; will be copied and run from rom at $2c700, mapped via $d030 to $c700
+.org $c700
+
+autostart_target:
+
+filesize:
+	.word $0000
+do_run:
+	.byte $00
+enable_cart_signature:
+	.byte $00
+basic_irq_pointer:
+	.dword $00032007
+basic_irq_backup:
+	.dword $00000000
+basic_program_start_pointer:
+	.dword $00002001
+basic_program_start_backup:
+	.dword $00000000
+cartridge_backup:
+	.byte $00
+
+reset_mega65:
+	lda #$00
+	ldx #$0f
+	ldy #$00
+	ldz #$0f
+	map
+	eom
+
+	lda #$00
+	ldx #$00
+	ldy #$00
+	ldz #$00
+	map
+	eom
+
+	; backup cartridge signature byte
+	lda $8004
+	sta cartridge_backup
+	lda enable_cart_signature
+	bne +
+	lda #$00
+	sta $8004
+*
+	jmp ($fffc)
+
+autostart_entry:
+	sei
+	lda #>autostart_target
+	tab
+	; restore basic start bytes
+	; ldq basic_program_start_backup
+	neg
+	neg
+	lda basic_program_start_backup
+	; stq ((<basic_program_start_pointer))
+	neg
+	neg
+	nop
+	sta (<basic_program_start_pointer),z
+
+	; restore cartridge signature byte
+	lda cartridge_backup
+	sta $8004
+
+	; restore basic irq vector
+	; ldq basic_irq_backup
+	neg
+	neg
+	lda basic_irq_backup
+	; stq ((<basic_irq_pointer))
+	neg
+	neg
+	nop
+	sta (<basic_irq_pointer),z
+
+	; restore rom write protection
+	lda #$00
+	sta $d641
+	clv
+
+	lda #$00
+	tab
+
+	; set top of basic text pointer
+	lda filesize
+	sta $82
+	lda filesize+1
+	sta $83
+
+	lda do_run
+	beq back_to_basic
+
+	; simulate RUN<cr>
+	lda #$52
+	sta $2b0
+	lda #$55
+	sta $2b1
+	lda #$4e
+	sta $2b2
+	lda #$0d
+	sta $2b3
+	lda #$04
+	sta $d0
+
+back_to_basic:
+	cli
+	jmp $2007
+
+autostart_end:

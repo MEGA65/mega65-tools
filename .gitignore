@@ -13,9 +13,12 @@ bin/bit2mcs
 bin/mfm-decode
 bin/md2h65
 bin/trenzm65powercontrol
+bin/bin2c
+bin/map2h
 
 src/tools/version.c
 src/tools/bin2c
+src/tools/map2c
 src/tools/ftphelper.c
 src/tools/ascii_font.c
 
@@ -24,6 +27,7 @@ gtest/bin/*
 *~
 #*#
 .#*
+.DS_Store
 *.bin
 *.gz
 *.o

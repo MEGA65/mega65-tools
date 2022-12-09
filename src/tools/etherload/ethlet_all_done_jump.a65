@@ -1,0 +1,62 @@
+; This little helper contains the code to be transferred in the Ethernet
+; packet after data has been transferred via the dma_load_routine.
+
+	; Routine sits at beginning of UDP payload in the Ethernet buffer
+	; mapped at $6800
+	; Packet size:      2 bytes
+	; Ethernet header: 14 bytes
+	; IPv4 header:     20 bytes
+	; UDP header:       8 bytes
+	.org $6800 + 2 + 14 + 20 + 8
+
+	.alias tmpbuffer $dbf0
+
+entry:
+
+	; Dummy inc $d020 jmp *-3 routine for debugging
+;	lda #$00
+;	inc $d020
+;*
+;	jmp -
+
+	; Production routine that skips the jmp *-3 loop
+	lda #$00
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+
+	; Enable mega65 I/O personality
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $d02f
+
+	; copy reset routine to tmpbuffer
+	ldx #jump_routine_end - jump_routine
+*	lda jump_routine-1,x
+	sta tmpbuffer-1,x
+	dex
+	bne -
+
+  jmp tmpbuffer
+
+; this routine resets all mappings and jumps into the provided address
+jump_routine:
+	lda #$00
+	ldx #$0f
+	tay
+	ldz #$0f
+	map
+	eom
+
+	tax
+	taz
+	map
+	eom
+
+jump_addr:
+	jmp $0000
+jump_routine_end:

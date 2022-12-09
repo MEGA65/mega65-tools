@@ -9,7 +9,7 @@ CC=	gcc
 CXX=g++
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
-MACCOPT=$(COPT) -mmacosx-version-min=10.14 -framework CoreFoundation -framework IOKit
+MACCOPT=$(COPT) -mmacosx-version-min=10.14 -framework CoreFoundation -framework IOKit -arch x86_64
 
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
@@ -120,15 +120,20 @@ TOOLSUNX=	$(BINDIR)/etherload \
 		$(BINDIR)/m65ftp_test \
 		$(BINDIR)/mfm-decode \
 		$(BINDIR)/bit2core \
-		$(BINDIR)/bit2mcs
+		$(BINDIR)/bit2mcs \
+		$(BINDIR)/bin2c \
+		$(BINDIR)/map2h
 
-TOOLSWIN=	$(BINDIR)/m65.exe \
+
+TOOLSWIN=	$(BINDIR)/etherload.exe \
+		$(BINDIR)/m65.exe \
 		$(BINDIR)/mega65_ftp.exe \
 		$(BINDIR)/bit2core.exe \
 		$(BINDIR)/bit2mcs.exe \
 		$(BINDIR)/romdiff.exe
 
-TOOLSMAC=	$(BINDIR)/m65.osx \
+TOOLSMAC=	$(BINDIR)/etherlod.osx \
+		$(BINDIR)/m65.osx \
 		$(BINDIR)/mega65_ftp.osx \
 		$(BINDIR)/romdiff.osx \
 		$(BINDIR)/m65dbg.osx
@@ -260,10 +265,10 @@ $(SDCARD_DIR)/M65TESTS.D81:	$(CBMCONVERT) $(TESTS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 
-%.bin:	%.a65 $(OPHIS)
+%.bin %.map %.list:	%.a65 $(OPHIS)
 	$(info =============================================================)
 	$(info ~~~~~~~~~~~~~~~~> Making: $@)
-	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
+	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.bin
 
 %.o:	%.s $(CC65)
 	$(CA65) $< -l $*.list
@@ -466,9 +471,6 @@ $(TOOLDIR)/frame2png:	$(TOOLDIR)/frame2png.c
 $(BINDIR)/ethermon:	$(TOOLDIR)/ethermon.c
 	$(CC) $(COPT) -o $(BINDIR)/ethermon $(TOOLDIR)/ethermon.c -I/usr/local/include -lpcap
 
-$(BINDIR)/etherload:	$(TOOLDIR)/etherload/etherload.c
-	$(CC) $(COPT) -o $(BINDIR)/etherload $(TOOLDIR)/etherload/etherload.c -I/usr/local/include -lm
-
 $(BINDIR)/videoproxy:	$(TOOLDIR)/videoproxy.c
 	$(CC) $(COPT) -o $(BINDIR)/videoproxy $(TOOLDIR)/videoproxy.c -I/usr/local/include -lpcap
 
@@ -501,6 +503,10 @@ endef
 $(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c Makefile))
 
 $(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2mcs, $(TOOLDIR)/bit2mcs.c Makefile))
+
+$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bin2c, $(TOOLDIR)/bin2c.c Makefile))
+
+$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/map2h, $(TOOLDIR)/map2h.c Makefile))
 
 $(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
 	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
@@ -575,7 +581,7 @@ $(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Make
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
-	$(CC) $(COPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/mega65_ftp.osx $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 -lz -lpthread -lreadline -DINCLUDE_BIT2MCS
+	$(CC) $(MACCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/mega65_ftp.osx $(MEGA65FTP_SRC) $(TOOLDIR)/version.c $(MACLIBUSBLINK) -lz -lpthread -lreadline -DINCLUDE_BIT2MCS
 
 $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
@@ -607,3 +613,35 @@ $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
 
 #-----------------------------------------------------------------------------
+
+##
+## ========== etherload ==========
+##
+ETHERLOAD_SOURCES = $(TOOLDIR)/etherload/etherload.c \
+		$(TOOLDIR)/etherload/ethlet_dma_load.c \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic65.c \
+		$(TOOLDIR)/etherload/ethlet_all_done_jump.c \
+		$(TOOLDIR)/logging.c \
+		$(TOOLDIR)/version.c
+ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/ethlet_dma_load_map.h \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic65_map.h \
+		$(TOOLDIR)/etherload/ethlet_all_done_jump_map.h
+ETHERLOAD_INCLUDES = -I/usr/local/include -Iinclude
+ETHERLOAD_LIBRARIES = -lm
+
+$(TOOLDIR)/etherload/ethlet_%.c:	$(TOOLDIR)/etherload/ethlet_%.bin $(BINDIR)/bin2c
+	$(BINDIR)/bin2c $(TOOLDIR)/etherload/ethlet_$*.bin ethlet_$* $(TOOLDIR)/etherload/ethlet_$*.c
+
+$(TOOLDIR)/etherload/%_map.h:	$(TOOLDIR)/etherload/%.map $(BINDIR)/map2h
+	$(BINDIR)/map2h $(TOOLDIR)/etherload/$*.map $* $(TOOLDIR)/etherload/$*_map.h
+
+$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
+
+$(BINDIR)/etherload.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+	$(CC) $(MACCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
+
+$(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32
