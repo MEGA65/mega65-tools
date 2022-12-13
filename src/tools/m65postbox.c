@@ -104,9 +104,9 @@ void convert_to_pcfile(const char* src_name)
       c -= 128;
     else if (c == '\r') // petscii EOL?
       c = '\n'; // switch to linux EOL
-    else if (c == 0xa4) // petscii underscore to ascii underscore?
+    else if (c == 0xaf) // petscii underscore (mega+p) to ascii underscore?
       c = '_';
-    else if (c == 145) // petscii up-arrow to ascii-caret?
+    else if (c == 0x5e) // petscii up-arrow to ascii-caret?
       c = '^';
     else if ((c >= 0 && c <= 12) || (c >= 14 && c <= 31) || (c >= 94 && c <=162)) {
       sprintf(str, "{x%X}", c);
