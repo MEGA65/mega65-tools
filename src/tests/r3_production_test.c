@@ -403,6 +403,15 @@ void main(void)
   graphics_mode();
   graphics_clear_double_buffer();
 
+  // set rtc, so it can tick
+  tm.tm_sec = 1;
+  tm.tm_min = 2;
+  tm.tm_hour = 3;
+  tm.tm_mday = 1;
+  tm.tm_mon = 12;
+  tm.tm_year = 2022-1900;
+  setrtc(&tm);
+
   print_text(0, 0, 1, "MEGA65 R3 PCB Production Test V2");
   snprintf(msg, 80, "Hardware model = %d", detect_target());
   print_text(0, 15, 1, msg);
