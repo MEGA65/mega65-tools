@@ -5,10 +5,8 @@ pipeline {
     stages {
         stage('Cleanup') {
             steps {
-                sh 'make USE_LOCAL_CC65=0 cleanall'
-                sh 'git rev-parse --abbrev-ref HEAD'
-                sh 'git status -b -s'
                 sh 'printenv'
+                sh 'make USE_LOCAL_CC65=0 cleanall'
             }
         }
         stage('Build linux') {
