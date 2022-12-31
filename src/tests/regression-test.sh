@@ -21,7 +21,8 @@ DEFAULT_TIMEOUT=60
 
 BITSTREAM=$1
 LOGPATH=$2
-MODEL=${BITSTREAM%%-*}
+BITNAME=${BITSTREAM##*/}
+MODEL=${BITNAME%%-*}
 DEVICE=
 if [[ $# -eq 3 ]]; then
     if [[ ! -e $3 ]]; then
@@ -103,6 +104,7 @@ main () {
             continue
         fi
         if [[ ! ( $validmodel == "all" || $validmodel =~ ${MODEL} ) ]]; then
+            echo "skipping ${test} (${MODEL} not in $validmodel)"
             continue
         fi
         # check if timeout is an number or use default timeout

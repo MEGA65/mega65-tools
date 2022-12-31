@@ -216,7 +216,7 @@ unsigned char *sd_read_buffer = NULL;
 int sd_read_offset = 0;
 
 int file_system_found = 0;
-unsigned int partition_start = 0; // The absolute sector location of the start of the partition (in units of sectors)
+unsigned int partition_start = 0xffffffff; // The absolute sector location of the start of the partition (in units of sectors)
 unsigned int partition_size = 0;
 unsigned char sectors_per_cluster = 0;
 unsigned int sectors_per_fat = 0;
@@ -1498,6 +1498,14 @@ int open_file_system(void)
       }
     }
 
+    if (partition_start == 0xffffffff && direct_sdcard_device) {
+      if (strncmp((const char*)&mbr[0x52], "FAT32", 5) == 0) {
+        partition_start = 0;
+        partition_size = mbr[0x20] + (mbr[0x21] << 8) + (mbr[0x22] << 16) + (mbr[0x23] << 24);
+        printf("Device is FAT32 partition, size=%d MB\n", partition_size / 2048);
+      }
+    }
+
     if (syspart_start && !nosys) {
       // Ok, so we know where the partition starts, so now find the FATs
       if (read_sector(syspart_start, syspart_sector0, CACHE_YES, 0)) {
@@ -1529,7 +1537,7 @@ int open_file_system(void)
       syspart_service_slotdir_sectors = syspart_sector0[0x2e] + (syspart_sector0[0x2f] << 8);
     }
 
-    if (!partition_start) {
+    if (partition_start == 0xffffffff) {
       retVal = -1;
       break;
     }
