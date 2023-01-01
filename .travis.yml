@@ -10,15 +10,17 @@ matrix:
   include:
     - name: MacOS native compilation
       os: osx
-      osx_image: xcode11
+      osx_image: xcode12.5
       addons:
         homebrew:
           packages:
             - libusb
             - libpng
             - zlib
+            - cc65
+            - p7zip
       script:
-      - zip -h
+      - 7z -h
       - make arcmac
       before_deploy:
       - |
