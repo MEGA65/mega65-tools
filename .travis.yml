@@ -20,7 +20,6 @@ matrix:
             - cc65
             - p7zip
       script:
-      - 7z -h
       - make USE_LOCAL_CC65=1 arcmac
       before_deploy:
       - |
