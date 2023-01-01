@@ -9,7 +9,7 @@ CC=	gcc
 CXX=g++
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
-MACCOPT=$(COPT) -mmacosx-version-min=10.14 -framework CoreFoundation -framework IOKit
+MACCOPT=$(COPT) -mmacosx-version-min=11.0 -framework CoreFoundation -framework IOKit
 
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
