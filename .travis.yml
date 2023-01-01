@@ -15,7 +15,7 @@ matrix:
         directories:
           - $HOME/Library/Caches/Homebrew
           - /usr/local/opt
-          - /usr/local/cellar
+          - /usr/local/Cellar
       addons:
         homebrew:
           update: false
