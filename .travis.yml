@@ -21,7 +21,7 @@ matrix:
             - p7zip
       script:
       - 7z -h
-      - make arcmac
+      - make USE_LOCAL_CC65=1 arcmac
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
@@ -31,13 +31,13 @@ matrix:
             export TRAVIS_TAG=CI-latest
           fi
         fi
-      - echo $TRAVIS_TAG
+      - echo "Publishing to $TRAVIS_TAG"
       deploy:
       - provider: releases
         api_key: $GITHUB_API_KEY
         file_glob: true
         file:
-        - $TRAVIS_BUILD_DIR/m65tools-*.zip
+        - $TRAVIS_BUILD_DIR/m65tools-*.7z
         skip_cleanup: true
         prerelease: true
         draft: false
