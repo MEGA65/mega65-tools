@@ -13,6 +13,7 @@ matrix:
       osx_image: xcode13.1
       addons:
         homebrew:
+          update: false
           packages:
             - libusb
             - libpng
