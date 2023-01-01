@@ -17,12 +17,9 @@ matrix:
             - libusb
             - libpng
             - zlib
-            - cc65
-            - p7zip
-            - zip
       script:
-      - make USE_LOCAL_CC65=1 cleanall
-      - make USE_LOCAL_CC65=1 arcmac
+      - zip -h
+      - make arcmac
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
@@ -44,7 +41,7 @@ matrix:
         api_key: $GITHUB_API_KEY
         file_glob: true
         file:
-        - $TRAVIS_BUILD_DIR/mega65-tools-*.7z
+        - $TRAVIS_BUILD_DIR/mega65-tools-*.zip
         skip_cleanup: true
         prerelease: true
         draft: false

@@ -201,7 +201,7 @@ arcmac: allmac
 	ln $(TOOLSMAC) $${arcdir}/bin ; \
 	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
 	ln $(UTILITIES) $${arcdir}/mega65 ; \
-	7z a $${arcdir}.7z $${arcdir} ; \
+	zip -r9 $${arcdir}.zip $${arcdir} ; \
 	rm -rf $${arcdir}
 
 tests: $(TESTS)
@@ -219,7 +219,7 @@ format:
 	find . -type d \( $${submodules:3} \) -prune -false -o \( -iname '*.h' -o -iname '*.c' -o -iname '*.cpp' \) -print | xargs clang-format --style=file -i --verbose
 
 clean:	cleantest
-	rm -f src/tools/version.c $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg $(TESTDIR)/*.o $(EXAMPLEDIR)/*.o m65tools-*.7z
+	rm -f src/tools/version.c $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg $(TESTDIR)/*.o $(EXAMPLEDIR)/*.o m65tools-*.7z m65tools-*.zip
 
 cleanall:	clean
 	for path in `git submodule | awk '{ print "./" $$2 }'`; do \
