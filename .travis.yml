@@ -11,6 +11,9 @@ matrix:
     - name: MacOS native compilation
       os: osx
       osx_image: xcode13.1
+      cache:
+        directories:
+          - $HOME/Library/Caches/Homebrew
       addons:
         homebrew:
           update: false
