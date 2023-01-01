@@ -11,12 +11,12 @@ pipeline {
         }
         stage('Build linux') {
             steps {
-                sh 'make USE_LOCAL_CC65=1 allunix'
+                sh 'make USE_LOCAL_CC65=1 arcunix'
             }
         }
         stage('Build windows') {
             steps {
-                sh 'make USE_LOCAL_CC65=1 allwin'
+                sh 'make USE_LOCAL_CC65=1 arcwin'
             }
         }
         stage('Test build') {
@@ -28,6 +28,13 @@ pipeline {
             steps {
                 sh 'gh release list'
             }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: "m65tools-*.7z",
+                onlyIfSuccessful: true,
+                fingerprint: true
         }
     }
     environment {
