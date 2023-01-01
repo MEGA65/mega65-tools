@@ -6,22 +6,22 @@ pipeline {
         stage('Cleanup') {
             steps {
                 sh 'printenv'
-                sh 'make USE_LOCAL_CC65=0 cleanall'
+                sh 'make USE_LOCAL_CC65=1 cleanall'
             }
         }
         stage('Build linux') {
             steps {
-                sh 'make USE_LOCAL_CC65=0 allunix'
+                sh 'make USE_LOCAL_CC65=1 allunix'
             }
         }
         stage('Build windows') {
             steps {
-                sh 'make USE_LOCAL_CC65=0 allwin'
+                sh 'make USE_LOCAL_CC65=1 allwin'
             }
         }
         stage('Test build') {
             steps {
-                sh 'make USE_LOCAL_CC65=0 test'
+                sh 'make USE_LOCAL_CC65=1 test'
             }
         }
         stage('Publish') {
