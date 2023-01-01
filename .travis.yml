@@ -10,10 +10,9 @@ matrix:
   include:
     - name: MacOS native compilation
       os: osx
-      osx_image: xcode12.5
+      osx_image: xcode13.1
       addons:
         homebrew:
-          update: false
           packages:
             - libusb
             - libpng
