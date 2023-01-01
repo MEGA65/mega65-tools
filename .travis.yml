@@ -1,62 +1,13 @@
 language: minimal
 arch: amd64
 dist: focal
-branches: 
+branches:
   except:
     - CI-latest
     - CI-refactor-latest
-    - jenkins_test
 
 matrix:
   include:
-    - name: Linux native compilation
-      os: linux
-      script:
-      - sudo apt-get install -y libusb-1.0-0-dev
-      - sudo apt-get install -y libgif-dev
-      - sudo apt-get install -y libpng-dev
-      - sudo apt-get install -y mingw-w64-common
-      - sudo apt-get install -y libz-mingw-w64-dev
-      - sudo apt-get install -y libgtest-dev libgmock-dev
-        #- sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F192CFC5C989ADAE
-        #- sudo add-apt-repository "deb http://gurce.net/ubuntu/ bionic main"
-      - sudo apt-get update
-        #- sudo apt install -y libpng-mingw-w64 libusb-1.0-0-mingw-w64
-      - wget gurce.net/ubuntu/pool/main/libp/libpng-mingw-w64/libpng-mingw-w64_1.6.37-1_amd64.deb ; sudo dpkg -i libpng-mingw-w64_1.6.37-1_amd64.deb
-      - wget http://gurce.net/ubuntu/libusb-mingw-w64_1.0.24-1_amd64.deb ; sudo dpkg -i libusb-mingw-w64_1.0.24-1_amd64.deb
-      - sudo apt-get install -y cc65
-      - make USE_LOCAL_CC65=0
-      - make USE_LOCAL_CC65=0 test
-      before_deploy:
-      - |
-        if [[ -z "$TRAVIS_TAG" ]]; then
-          if [[ "$TRAVIS_BRANCH" == "refactor_m65" ]]; then
-            export TRAVIS_TAG=CI-refactor-latest
-          else
-            export TRAVIS_TAG=CI-latest
-          fi
-        fi
-      - echo "MEGA65-TOOLS RELEASE FILES" > bin/RELEASE.txt
-      - echo "Last updated at:" >> bin/RELEASE.txt
-      - date >> bin/RELEASE.txt
-      - echo "" >> bin/RELEASE.txt
-      - git log -1 >> bin/RELEASE.txt
-      - echo "" >> bin/RELEASE.txt
-      - ls -lh bin/ >> bin/RELEASE.txt
-      deploy:
-      - provider: releases
-        api_key: $GITHUB_API_KEY
-        file_glob: true
-        file: 
-        - $TRAVIS_BUILD_DIR/bin/*
-        skip_cleanup: true
-        prerelease: true
-        draft: false
-        overwrite: true
-        on:
-          tags: false
-          all_branches: true
-          condition: $TRAVIS_BRANCH =~ ^(master|refactor_m65)$
     - name: MacOS native compilation
       os: osx
       osx_image: xcode11
@@ -67,16 +18,14 @@ matrix:
             - libpng
             - zlib
             - cc65
+            - p7zip
       script:
-      - make USE_LOCAL_CC65=1 bin/bit2core
-      - mv bin/bit2core bin/bit2core.osx
-      - make USE_LOCAL_CC65=1 bin/m65.osx
-      - make USE_LOCAL_CC65=1 bin/mega65_ftp.osx
-      - make USE_LOCAL_CC65=1 bin/romdiff.osx
+      - make USE_LOCAL_CC65=1 cleanall
+      - make USE_LOCAL_CC65=1 arcmac
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
-          if [[ "$TRAVIS_BRANCH" == "refactor_m65" ]]; then
+          if [[ "$TRAVIS_BRANCH" == "refactor_m65" || "$TRAVIS_BRANCH" == "jenkins_test" ]]; then
             export TRAVIS_TAG=CI-refactor-latest
           else
             export TRAVIS_TAG=CI-latest
@@ -93,8 +42,8 @@ matrix:
       - provider: releases
         api_key: $GITHUB_API_KEY
         file_glob: true
-        file: 
-        - $TRAVIS_BUILD_DIR/bin/*
+        file:
+        - $TRAVIS_BUILD_DIR/mega65-tools-*.7z
         skip_cleanup: true
         prerelease: true
         draft: false
@@ -102,4 +51,4 @@ matrix:
         on:
           tags: false
           all_branches: true
-          condition: $TRAVIS_BRANCH =~ ^(master|refactor_m65)$
+          condition: $TRAVIS_BRANCH =~ ^jenkins_test$

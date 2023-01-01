@@ -74,6 +74,7 @@ UTILITIES=	$(B65DIR)/ethertest.prg \
 		$(B65DIR)/b65support.bin \
 		$(B65DIR)/cartload.prg
 
+# these are BASIC dumped from the MEGA65
 BASICUTILS=	$(BASICUTILDIR)/mega65info.prg \
 		$(BASICUTILDIR)/rtctest.prg
 
@@ -130,6 +131,8 @@ TOOLSWIN=	$(BINDIR)/m65.exe \
 
 TOOLSMAC=	$(BINDIR)/m65.osx \
 		$(BINDIR)/mega65_ftp.osx \
+		$(BINDIR)/bit2core.osx \
+		$(BINDIR)/bit2mcs.osx \
 		$(BINDIR)/romdiff.osx \
 		$(BINDIR)/m65dbg.osx
 
@@ -158,12 +161,48 @@ SUBMODULEUPDATE= \
 ##
 ## Global Rules
 ##
-.PHONY: all allunix allmac allwin tests tools utilities format clean cleanall cleantest
+.PHONY: all allunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
 
 all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
 allmac:	$(SDCARD_FILES) $(TOOLSMAC) $(UTILITIES) $(TESTS)
 allwin:	$(SDCARD_FILES) $(TOOLSWIN) $(UTILITIES) $(TESTS)
 allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(UTILITIES) $(TESTS)
+
+arcunix: allunix
+	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-linux; \
+	if [[ -e $${arcdir} ]]; then \
+		rm -rf $${arcdir} $${arcdir}.7z ; \
+	fi ; \
+	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
+	ln $(TOOLSUNX) $${arcdir}/bin ; \
+	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
+	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	7z a $${arcdir}.7z $${arcdir} ; \
+	rm -rf $${arcdir}
+
+arcwin: allwin
+	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-windows; \
+	if [[ -e $${arcdir} ]]; then \
+		rm -rf $${arcdir} $${arcdir}.7z ; \
+	fi ; \
+	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
+	ln $(TOOLSWIN) $${arcdir}/bin ; \
+	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
+	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	7z a $${arcdir}.7z $${arcdir} ; \
+	rm -rf $${arcdir}
+
+arcmac: allmac
+	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-macos; \
+	if [[ -e $${arcdir} ]]; then \
+		rm -rf $${arcdir} $${arcdir}.7z ; \
+	fi ; \
+	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
+	ln $(TOOLSMAC) $${arcdir}/bin ; \
+	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
+	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	7z a $${arcdir}.7z $${arcdir} ; \
+	rm -rf $${arcdir}
 
 tests: $(TESTS)
 
@@ -487,29 +526,25 @@ $(BINDIR)/readdisk:	$(TOOLDIR)/readdisk.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logg
 # Create targets for binary (linux) and binary.exe (mingw) easily, minimising repetition
 # arg1 = target name (without .exe)
 # arg2 = pre-requisites
-define LINUX_AND_MINGW_TARGETS
-$(1): $(2) $(TOOLDIR)/version.c
+define TRIPLE_TARGET
+$(1): $(2) $(TOOLDIR)/version.c Makefile
 	$$(CC) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
-$(1).exe: $(2) $(TOOLDIR)/version.c
+$(1).exe: $(2) $(TOOLDIR)/version.c Makefile
 	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
+
+$(1).osx: $(2) $(TOOLDIR)/version.c Makefile
+	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 endef
 
 # Creates 2 targets:
 # - bin/bit2core (for linux)
 # - bin/bit2core.exe (for mingw)
-$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c Makefile))
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c))
 
-$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2mcs, $(TOOLDIR)/bit2mcs.c Makefile))
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/bit2mcs, $(TOOLDIR)/bit2mcs.c))
 
-$(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
-	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
-
-$(BINDIR)/romdiff.exe:	$(TOOLDIR)/romdiff.c Makefile
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/romdiff.exe $(TOOLDIR)/romdiff.c $(BUILD_STATIC) -Wl,-Bdynamic
-
-$(BINDIR)/romdiff.osx:	$(TOOLDIR)/romdiff.c Makefile
-	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -o $(BINDIR)/romdiff.osx $(TOOLDIR)/romdiff.c
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/romdiff, $(TOOLDIR)/romdiff.c))
 
 ##
 ## ========== m65 ==========
