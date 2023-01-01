@@ -14,8 +14,7 @@ matrix:
       before_cache:
       - brew cleanup
       cache:
-      - ccache
-      - directories:
+        directories:
           - $HOME/Library/Caches/Homebrew
       addons:
         homebrew:
