@@ -9,14 +9,15 @@ if [[ -n $JENKINS_SERVER_COOKIE ]]; then
 else
     if [[ -n $TRAVIS_BRANCH ]]; then
         branch=$TRAVIS_BRANCH
+        buildnum=$TRAVIS_BUILD_NUMBER
     else
         branch=$(git rev-parse --abbrev-ref HEAD)
+        buildnum=man
     fi
     # we only take the first 6 chars
     branch2=${branch:0:6}
     # get commit (7 chars plus optional ~ for dirty)
     version=$(git describe --always --abbrev=7 --dirty=~)
-    buildnum=man
 fi
 # get date plus hour
 datetime=$(date +%Y%m%d.%H)
