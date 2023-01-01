@@ -11,11 +11,12 @@ matrix:
     - name: MacOS native compilation
       os: osx
       osx_image: xcode13.1
+      before_cache:
+      - brew cleanup
       cache:
-        directories:
+      - ccache
+      - directories:
           - $HOME/Library/Caches/Homebrew
-          - /usr/local/opt
-          - /usr/local/Cellar
       addons:
         homebrew:
           update: false
