@@ -18,11 +18,11 @@ matrix:
             - libpng
             - zlib
             - cc65
-            - sevenzip
-          update: true
+            - p7zip
+            - zip
       script:
-      - make cleanall
-      - make arcmac
+      - make USE_LOCAL_CC65=1 cleanall
+      - make USE_LOCAL_CC65=1 arcmac
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
