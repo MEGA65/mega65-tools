@@ -613,7 +613,7 @@ $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
 
 $(BINDIR)/vcdgraph:	$(TOOLDIR)/vcdgraph.c Makefile
-	$(CC) $(COPT) -I/usr/include/cairo -g -Wall -o $(BINDIR)/vcdgraph $(TOOLDIR)/vcdgraph.c -lcairo
+	$(CC) $(COPT) -I/usr/include/cairo -g -Wall -o $(BINDIR)/vcdgraph $(TOOLDIR)/vcdgraph.c -lcairo -lpng
 
 #-----------------------------------------------------------------------------
 

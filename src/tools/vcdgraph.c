@@ -4,6 +4,9 @@
 #include <string.h>
 #include <strings.h>
 
+#define PNG_DEBUG 3
+#include <png.h>
+
 #include <cairo.h>
 #include <cairo-pdf.h>
 
@@ -28,6 +31,16 @@ char sig_name[1024];
 char sig_designator[1024];
 int sig_firstbit,sig_lastbit,sig_width;
 
+void abort_(const char * s, ...)
+{
+        va_list args;
+        va_start(args, s);
+        vfprintf(stderr, s, args);
+        fprintf(stderr, "\n");
+        va_end(args);
+        abort();
+}
+
 void parse_ts(void)
 {
   // Normalise time units into nsec
@@ -48,6 +61,27 @@ void draw_line(cairo_t *cr, float x1, float y1, float x2, float y2)
   cairo_stroke(cr);
 }  
 
+int raster_len=0;
+int rasters=0;
+
+int set_pixel(png_bytep *png_rows, int x, int y, int r, int g, int b)
+{
+  if (y < 0 || y>=rasters ) {
+    printf("set_pixel: y=%d out of bounds", y);
+    return 1;
+  }
+  if (x < 0 || x > raster_len) {
+    printf("set_pixel: x=%d out of bounds", x);
+    return 1;
+  }
+
+  //  log_debug("Setting pixel at %d,%d to #%02x%02x%02x",x,y,b,g,r);
+  ((unsigned char *)png_rows[y])[x * 3 + 0] = r;
+  ((unsigned char *)png_rows[y])[x * 3 + 1] = g;
+  ((unsigned char *)png_rows[y])[x * 3 + 2] = b;
+
+  return 0;
+}
 
 int main(int argc,char **argv) 
 {
@@ -192,7 +226,8 @@ int main(int argc,char **argv)
 #define ROW_GAP (72.0/16)
   // C64 style PAL is 63usec, although official PAL is 64usec.
   // C64 thus actually runs slightly faster than 50Hz display
-#define RASTER_DURATION 64040.0
+  #define RASTER_DURATION 64040.0
+  //#define RASTER_DURATION 16010.0
   int page_y_margin=72/4;
   int page_x_margin=72/4;
   int page_y=page_y_margin;
@@ -262,5 +297,148 @@ int main(int argc,char **argv)
   cairo_surface_destroy(surface);
   cairo_destroy(cr);
 
+  fprintf(stderr,"Writing raw sample file to samples.raw\n");
+  ts=0.0;
+  // 27MHz apparent sample rate
+  double ts_step = 1000.0/27;  
+  val_num=0;
+  int sample_num=0;
+#define MAX_SAMPLES 8000000
+  unsigned char samples[MAX_SAMPLES];
+  
+  while((val_num<val_count)&&sample_num<MAX_SAMPLES)
+    {
+      ts+=ts_step;
+      
+      // Advance to the next measurement, if required
+      while((val_num<val_count)&&times[val_num+1]<ts) val_num++;
+      val=values[val_num];
+      
+      samples[sample_num++]=val;
+      
+    }
+  
+  
+  f=fopen("samples.raw","wb");
+  fwrite(samples,1,sample_num,f);
+  fclose(f);
+
+  // Now decode the samples into a simple PNG format to visualise
+  printf("Searching through %d samples...\n",sample_num);
+  int sync_hyst[8192];
+  int sync_len_hyst[8192];
+  int best_hyst=0;
+  int best_len_hyst=0;
+  int last_hsync=0;
+  int last_hsync_end=0;
+  for(int i=0;i<8192;i++) sync_hyst[i]=0;
+  for(int i=1;i<sample_num;i++) {
+    if ((samples[i]==0x00)&&(samples[i-1]>0x20)) {
+      // Start of sync
+      sync_hyst[i-last_hsync]++;
+      if (sync_hyst[i-last_hsync]>sync_hyst[best_hyst]) {
+	best_hyst=i-last_hsync;
+      }
+      last_hsync=i;
+    }
+
+    if ((samples[i]>0x20)&&(samples[i-1]==0x00)) {
+      // End of sync
+      sync_len_hyst[i-last_hsync_end]++;
+      if (sync_len_hyst[i-last_hsync_end]>sync_len_hyst[best_len_hyst]) {
+	best_len_hyst=i-last_hsync_end;
+      }
+      last_hsync_end=i;
+    }
+    
+  }
+  printf("Raster length is probably %d samples.\n",best_hyst);
+  printf("Sync length is probably %d samples.\n",best_len_hyst);
+  raster_len=best_hyst;
+  rasters = sample_num/raster_len + 1;
+  
+  png_structp png_ptr;
+  png_infop info_ptr;
+
+  /* create PNG file */
+
+  png_bytep png_rows[rasters];
+  for (int y=0;y<rasters;y++)
+    png_rows[y] = (png_bytep)malloc(3 * raster_len * sizeof(png_byte)); 
+
+  // Grey-scale pixels
+  int y=0;
+  int x=0;
+  int first_sync=0;
+  for(int i=1;i<sample_num;i++) {
+    if (samples[i]==0&&(samples[i-1]>0x20)) {
+      first_sync=i;
+      break;
+    }
+  }
+
+  int last_sync=0;
+  for(int i=first_sync;i<sample_num;i++) {
+    set_pixel(png_rows,x,y,
+	      samples[i],samples[i],samples[i]);
+    x++;
+    if (x>=raster_len) {
+      x=0; y++;
+    } else if (i&&samples[i]==0&&(samples[i-1]>0x20)) {
+      printf("SYNC end after %d px\n",x);
+      if ((i-last_sync)==raster_len-1) {
+	x=0; y++;
+      }
+      last_sync=i;
+    }
+  }
+  
+  char *file_name="rasters.png";
+  FILE *fp = fopen(file_name, "wb");
+  if (!fp)
+    abort_("[write_png_file] File %s could not be opened for writing", file_name);
+  
+  
+  /* initialize stuff */
+  png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  
+  if (!png_ptr)
+    abort_("[write_png_file] png_create_write_struct failed");
+  
+  info_ptr = png_create_info_struct(png_ptr);
+  if (!info_ptr)
+    abort_("[write_png_file] png_create_info_struct failed");
+  
+  if (setjmp(png_jmpbuf(png_ptr)))
+    abort_("[write_png_file] Error during init_io");
+  
+  png_init_io(png_ptr, fp);
+  
+  
+  /* write header */
+  if (setjmp(png_jmpbuf(png_ptr)))
+    abort_("[write_png_file] Error during writing header");
+  
+  png_set_IHDR(png_ptr, info_ptr, raster_len, rasters, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+      PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+  
+  png_write_info(png_ptr, info_ptr);
+  
+  
+  /* write bytes */
+  if (setjmp(png_jmpbuf(png_ptr)))
+    abort_("[write_png_file] Error during writing bytes");
+  
+  png_write_image(png_ptr, png_rows);
+  
+  
+  /* end write */
+  if (setjmp(png_jmpbuf(png_ptr)))
+    abort_("[write_png_file] Error during end of write");
+  
+  png_write_end(png_ptr, NULL);
+  
+  fclose(fp);
+  
   return 0;
 }
