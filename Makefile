@@ -199,7 +199,8 @@ arcmac: allmac
 	fi ; \
 	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
 	for file in $(TOOLSMAC); do \
-		ln $${file} $${arcdir}/bin/$${file%.osx} ; \
+		basename=`basename $$file`; \
+		ln $${file} $${arcdir}/bin/$${basename%.osx} ; \
 	done; \
 	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
 	ln $(UTILITIES) $${arcdir}/mega65 ; \
