@@ -198,10 +198,7 @@ arcmac: allmac
 		rm -rf $${arcdir} $${arcdir}.7z ; \
 	fi ; \
 	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
-	for file in $(TOOLSMAC); do \
-		basename=`basename $$file`; \
-		ln $${file} $${arcdir}/bin/$${basename%.osx} ; \
-	done; \
+	ln $(TOOLSMAC) $${arcdir}/bin ; \
 	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
 	ln $(UTILITIES) $${arcdir}/mega65 ; \
 	7z a $${arcdir}.7z $${arcdir} ; \
@@ -614,7 +611,8 @@ $(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Make
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
-	$(CC) $(MACCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(MACLIBUSBLINK) -o $(BINDIR)/mega65_ftp.osx $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 -lz -lpthread -lreadline -DINCLUDE_BIT2MCS
+	$(CC) $(MACCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/mega65_ftp.osx $(MEGA
+65FTP_SRC) $(TOOLDIR)/version.c $(MACLIBUSBLINK) -lz -lpthread -lreadline -DINCLUDE_BIT2MCS
 
 $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
