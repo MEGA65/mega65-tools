@@ -201,7 +201,7 @@ arcmac: allmac
 	ln $(TOOLSMAC) $${arcdir}/bin ; \
 	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
 	ln $(UTILITIES) $${arcdir}/mega65 ; \
-	7z a $${arcdir}.zip $${arcdir} ; \
+	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
 # all the tests
