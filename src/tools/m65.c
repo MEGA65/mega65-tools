@@ -329,6 +329,7 @@ void init_cmd_options(void)
   CMD_OPTION("halt",      0, 0,         'H', "",      "Halt CPU after loading ROMs and program.");
   CMD_OPTION("nocart",    0, 0,         'N', "",      "Disable a running cartridge, and boot to C64 mode.");
   CMD_OPTION("run",       0, 0,         'r', "",      "Automatically RUN programme after loading.");
+  CMD_OPTION("binary",    0, 0,         '1', "",      "Honor load address specified inside the PRG.");
   CMD_OPTION("break",     1, 0,         'B', "addr",  "set a breakpoint at <addr>ess (hex) on synchronising, and then immediately exit.");
 
   CMD_OPTION("hyppostatus", 0, 0,       'X', "",      "Show a report of current Hypervisor status.");
@@ -2631,12 +2632,33 @@ int main(int argc, char **argv)
       int load_addr = fgetc(f);
       load_addr |= fgetc(f) << 8;
 
-      // give some user feedback
-      snprintf(buffer, 40, "REM M65 INJECTING AT $%04X:\r", load_addr);
+      if ((load_addr != 0x5350) && (load_addr != 0x5352)) {
+        if (!comma_eight_comma_one) {
+          if (saw_c64_mode)
+            load_addr = 0x0801;
+          else
+            load_addr = 0x2001;
+          log_info("forcing load address to $%04X", load_addr);
+        }
+        else {
+          if (saw_c64_mode && load_addr == 0x2001)
+            log_warn("loading BASIC65 PRG in C64 mode!");
+          else if (!saw_c64_mode && load_addr == 0x0801)
+            log_warn("loading C64 BASIC PRG in C65 mode!");
+          log_info("load address is $%04x", load_addr);
+        }
+        snprintf(buffer, 40, "REM M65 INJECTING AT $%04X:\r", load_addr);
+      }
+      else {
+        snprintf(buffer, 40, "REM M65 INJECTING AT $0400 + $%04X:\r", load_addr);
+        is_sid_tune = 1;
+      }
+      // write user feedback to the screen
       stuff_keybuffer(buffer);
       usleep(20000);
       real_stop_cpu();
-      if ((load_addr == 0x5350) || (load_addr == 0x5352)) {
+
+      if (is_sid_tune) {
         // It's probably a SID file
 
         log_info("examining SID file...");
@@ -2740,22 +2762,6 @@ int main(int argc, char **argv)
         slow_write(fd, "sffd302f 53\n", 12);
 
         push_ram(0x0400, b, player);
-
-        is_sid_tune = 1;
-      }
-      else if (!comma_eight_comma_one) {
-        if (saw_c64_mode)
-          load_addr = 0x0801;
-        else
-          load_addr = 0x2001;
-        log_info("forcing load address to $%04X", load_addr);
-      }
-      else {
-        if (saw_c64_mode && load_addr == 0x2001)
-          log_warn("loading BASIC65 PRG in C64 mode!");
-        else if (!saw_c64_mode && load_addr == 0x0801)
-          log_warn("loading C64 BASIC PRG in C65 mode!");
-        log_info("load address is $%04x", load_addr);
       }
 
       unsigned char buf[32768];
