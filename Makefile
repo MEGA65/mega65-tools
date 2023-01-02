@@ -204,6 +204,7 @@ arcmac: allmac
 	7z a $${arcdir}.zip $${arcdir} ; \
 	rm -rf $${arcdir}
 
+# all the tests
 tests: $(TESTS)
 
 # c-programs
