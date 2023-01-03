@@ -2860,7 +2860,7 @@ int main(int argc, char **argv)
       monitor_sync();
 
       // Set end of memory pointer
-      {
+      if (!comma_eight_comma_one) {
         int top_of_mem_ptr_addr = 0x2d;
         if (saw_c65_mode)
           top_of_mem_ptr_addr = 0x82;
