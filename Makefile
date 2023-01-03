@@ -9,7 +9,7 @@ CC=	gcc
 CXX=g++
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
-MACCOPT=$(COPT) -mmacosx-version-min=10.14 -framework CoreFoundation -framework IOKit -arch x86_64
+MACCOPT=$(COPT) -mmacosx-version-min=11.0 -framework CoreFoundation -framework IOKit -arch x86_64
 
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
@@ -135,6 +135,8 @@ TOOLSWIN=	$(BINDIR)/etherload.exe \
 TOOLSMAC=	$(BINDIR)/etherlod.osx \
 		$(BINDIR)/m65.osx \
 		$(BINDIR)/mega65_ftp.osx \
+		$(BINDIR)/bit2core.osx \
+		$(BINDIR)/bit2mcs.osx \
 		$(BINDIR)/romdiff.osx \
 		$(BINDIR)/m65dbg.osx
 
@@ -189,7 +191,7 @@ clean:	cleantest
 
 cleanall:	clean
 	for path in `git submodule | awk '{ print "./" $$2 }'`; do \
-		make -C $$path clean; \
+		if [ -e $$path/Makefile ]; then make -C $$path clean; fi; \
 	done
 
 cleantest:
@@ -486,36 +488,32 @@ $(BINDIR)/trenzm65powercontrol:	$(TOOLDIR)/trenzm65powercontrol.c $(TOOLDIR)/m65
 $(BINDIR)/readdisk:	$(TOOLDIR)/readdisk.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 	$(CC) $(COPT) -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/readdisk $(TOOLDIR)/readdisk.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
 
-# Create targets for binary (linux) and binary.exe (mingw) easily, minimising repetition
+# Create targets for binary (linux), binary.exe (mingw), and binary.osx (osx) easily, minimising repetition
 # arg1 = target name (without .exe)
 # arg2 = pre-requisites
-define LINUX_AND_MINGW_TARGETS
-$(1): $(2) $(TOOLDIR)/version.c
+define TRIPLE_TARGET
+$(1): $(2) $(TOOLDIR)/version.c Makefile
 	$$(CC) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
-$(1).exe: $(2) $(TOOLDIR)/version.c
+$(1).exe: $(2) $(TOOLDIR)/version.c Makefile
 	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
+
+$(1).osx: $(2) $(TOOLDIR)/version.c Makefile
+	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 endef
 
 # Creates 2 targets:
 # - bin/bit2core (for linux)
 # - bin/bit2core.exe (for mingw)
-$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c Makefile))
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/bit2core, $(TOOLDIR)/bit2core.c))
 
-$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bit2mcs, $(TOOLDIR)/bit2mcs.c Makefile))
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/bit2mcs, $(TOOLDIR)/bit2mcs.c))
 
-$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/bin2c, $(TOOLDIR)/bin2c.c Makefile))
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/bin2c, $(TOOLDIR)/bin2c.c))
 
-$(eval $(call LINUX_AND_MINGW_TARGETS, $(BINDIR)/map2h, $(TOOLDIR)/map2h.c Makefile))
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/map2h, $(TOOLDIR)/map2h.c))
 
-$(BINDIR)/romdiff:	$(TOOLDIR)/romdiff.c Makefile
-	$(CC) $(COPT) -O3 -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/romdiff $(TOOLDIR)/romdiff.c
-
-$(BINDIR)/romdiff.exe:	$(TOOLDIR)/romdiff.c Makefile
-	$(WINCC) $(WINCOPT) -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/romdiff.exe $(TOOLDIR)/romdiff.c $(BUILD_STATIC) -Wl,-Bdynamic
-
-$(BINDIR)/romdiff.osx:	$(TOOLDIR)/romdiff.c Makefile
-	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -o $(BINDIR)/romdiff.osx $(TOOLDIR)/romdiff.c
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/romdiff, $(TOOLDIR)/romdiff.c))
 
 ##
 ## ========== m65 ==========
