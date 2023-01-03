@@ -132,7 +132,7 @@ TOOLSWIN=	$(BINDIR)/etherload.exe \
 		$(BINDIR)/bit2mcs.exe \
 		$(BINDIR)/romdiff.exe
 
-TOOLSMAC=	$(BINDIR)/etherlod.osx \
+TOOLSMAC=	$(BINDIR)/etherload.osx \
 		$(BINDIR)/m65.osx \
 		$(BINDIR)/mega65_ftp.osx \
 		$(BINDIR)/bit2core.osx \
