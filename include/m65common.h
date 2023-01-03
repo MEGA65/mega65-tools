@@ -124,5 +124,6 @@ unsigned int get_bitstream_fpgaid(const char *bitstream);
 int get_system_bitstream_version(void);
 char *get_system_rom_version(void);
 char *find_serial_port(const int serial_speed);
+unsigned char wincp1252_to_screen(unsigned char ascii);
 
 #endif // M65COMMON_H
