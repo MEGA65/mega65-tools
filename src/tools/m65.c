@@ -2660,8 +2660,13 @@ int main(int argc, char **argv)
           player_screen[40 * 17 + 4 + i] = released[i];
 
         // convert to screen codes
-        for (int i=0; i < 1000; i++)
+        for (int i=0; i < 920; i++)
           player_screen[i] = wincp1252_to_screen(player_screen[i]) | ((i < 5*40 || i >= 20*40) ? 0x80 : 0x00);
+
+        // hide code on screen (blue on blue)
+        memset(player_screen + 920, 6, 80);
+        push_ram(0xff802d0L, 80, (unsigned char *)player_screen + 920);
+        memset(player_screen + 920, 0xa0, 80);
 
         push_ram(0x0400, 1000, (unsigned char *)player_screen);
 
@@ -2743,7 +2748,7 @@ int main(int argc, char **argv)
         slow_write(fd, "sffd302f 53\n", 12);
 
         // push to tape buffer
-        push_ram(0x0340, 64, player);
+        push_ram(0x06d0, 64, player);
 
         // seek to start of SID prg (after end_of_sid_header + 2 bytes of load_addr)
         fseek(f, end_of_sid_header + 2, SEEK_SET);
@@ -2869,7 +2874,7 @@ int main(int argc, char **argv)
 
       // start the simple SID Player
       if (is_sid_tune) {
-        slow_write(fd, "g0340\r", 6);
+        slow_write(fd, "g06d0\r", 6);
         monitor_sync();
         start_cpu();
         log_note("SID player started");
