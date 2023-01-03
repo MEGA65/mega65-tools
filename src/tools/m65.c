@@ -2679,7 +2679,6 @@ int main(int argc, char **argv)
         log_note("uploading SID play routine");
 
         // clang-format off
-        // this goes into the tape buffer
         /*
                   SEI
                   LDA #$17

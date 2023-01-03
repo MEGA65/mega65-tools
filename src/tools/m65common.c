@@ -2121,6 +2121,7 @@ char *find_serial_port(const int serial_speed)
 #endif
 }
 
+// very lazy conversion from Windows Codepage 1252 to PETSCII screen codes (used by SID mini player)
 unsigned char wincp1252_to_screen(unsigned char ascii)
 {
   // control and latin chars - use raster char
