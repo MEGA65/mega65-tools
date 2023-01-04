@@ -2563,7 +2563,7 @@ int main(int argc, char **argv)
       // seek back just after load address
       fseek(f, 2, SEEK_SET);
 
-      int load_addr = buffer[0] | (buffer[1]<<8);
+      int load_addr = sid_header[0] | (sid_header[1]<<8);
 
       // check for magic SID header, last byte needs to be 1-4, those are the valid versions
       if ((memcmp(sid_header, SIDmagic1, 5) && memcmp(sid_header, SIDmagic2, 5)) || (sid_header[5] < 0 || sid_header[5] > 4)) {
