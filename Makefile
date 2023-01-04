@@ -1,8 +1,11 @@
 .SUFFIXES: .bin .prg
 .PRECIOUS:	%.ngd %.ncd %.twx vivado/%.xpr bin/%.bit bin/%.mcs bin/%.M65 bin/%.BIN
 
+OS := $(shell uname)
+ifeq ($(OS), Darwin)
 include conanbuildinfo_macos_intel.mak
 include conanbuildinfo_macos_arm.mak
+endif
 
 #COPT=	-Wall -g -std=gnu99 -fsanitize=address -fno-omit-frame-pointer -fsanitize-address-use-after-scope
 #CC=	clang
