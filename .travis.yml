@@ -12,6 +12,8 @@ matrix:
       os: osx
       osx_image: xcode13.1
       before_script:
+      - brew config
+      - brew update
       - HOMEBREW_NO_AUTO_UPDATE=1 brew install conan cc65 p7zip
       - conan --version
       script:
