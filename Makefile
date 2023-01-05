@@ -59,8 +59,6 @@ CL65ONLY=  $(CC65_PREFIX)cl65
 CC65_DEPEND=
 
 LIBUSBINC= `pkg-config --cflags libusb-1.0` -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/
-MACLIBUSBLINK= `pkg-config --variable libdir libusb-1.0`/libusb-1.0.a -framework Security
-MACLIBPNGLINK= `pkg-config --variable libdir libpng`/libpng.a
 
 CBMCONVERT=	cbmconvert/cbmconvert
 
