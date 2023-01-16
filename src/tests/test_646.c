@@ -84,7 +84,7 @@ void restore_sectors()
 
 void multi_sector_write()
 {
-  uint8_t data_byte = 0x11;
+  uint8_t data_byte = 0xa1;
   uint8_t batches_left = num_batches;
   uint8_t sectors_left = num_sectors_per_batch;
   uint8_t cmd = 4;
@@ -117,7 +117,7 @@ void multi_sector_write()
 void verify_sectors_written()
 {
   uint16_t i;
-  uint8_t data_byte = 0x11;
+  uint8_t data_byte = 0xa1;
   uint32_t cur_sector = start_sector;
   uint8_t sectors_left = num_batches * num_sectors_per_batch;
   uint8_t *ptr;
@@ -151,10 +151,15 @@ void main(void)
 
   unit_test_setup(ISSUE_NAME, ISSUE_NUM);
 
+  printf("Backing up sectors\n");
   backup_sectors();
+  printf("Writing sectors\n");
   multi_sector_write();
+  printf("Verifing data\n");
   verify_sectors_written();
+  printf("Restoring sectors\n");
   restore_sectors();
+  printf("Done\n");
 
   switch (test_status) {
   case 0:
@@ -162,13 +167,15 @@ void main(void)
     unit_test_ok(msg);
     break;
   case 1:
-    snprintf(msg, 80, "error in multi-sector write");
+    snprintf(msg, 80, "error in multi-sector write operation");
     unit_test_fail(msg);
     break;
   default:
     snprintf(msg, 80, "internal error in test case");
     unit_test_fail(msg);
   }
+
+  printf("\nResult:\n%s\n", msg);
 
   unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);
 }
