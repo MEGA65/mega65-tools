@@ -442,6 +442,11 @@ $(BINDIR)/wirekrill:	$(EXAMPLEDIR)/wirekrill.c
 	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) utilities/$< -l $*.list -m $*.map -o $*.prg
 
+%.bin %.map %.list:	%.a65 $(OPHIS)
+	$(info =============================================================)
+	$(info ~~~~~~~~~~~~~~~~> Making: $@)
+	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.bin
+
 $(UTILDIR)/gmod2-tools.prg:       $(UTILDIR)/gmod2-tools.c $(CC65)
 	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
 
