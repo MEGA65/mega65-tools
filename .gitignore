@@ -38,6 +38,7 @@ graph_info.json
 .#*
 *.bin
 *.gz
+*.7z
 *.o
 *.D81
 *.d81
