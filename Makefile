@@ -541,7 +541,7 @@ $(SDCARD_DIR)/BANNER.M65:	$(BINDIR)/pngprepare $(ASSETS)/mega65_320x64.png /usr/
 	$(BINDIR)/pngprepare logo $(BINDIR)/mega65_320x64_128colour.png $(SDCARD_DIR)/BANNER.M65
 
 ##
-## Unsorted Tools
+## ========== Unsorted Tools ==========
 ##
 $(TOOLDIR)/merge-issue:	$(TOOLDIR)/merge-issue.c
 	$(CC) $(COPT) -o $(TOOLDIR)/merge-issue $(TOOLDIR)/merge-issue.c
@@ -572,6 +572,12 @@ $(BINDIR)/trenzm65powercontrol:	$(TOOLDIR)/trenzm65powercontrol.c $(TOOLDIR)/m65
 
 $(BINDIR)/readdisk:	$(TOOLDIR)/readdisk.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 	$(CC) $(COPT) -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/readdisk $(TOOLDIR)/readdisk.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
+
+$(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
+	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
+
+$(BINDIR)/vcdgraph:	$(TOOLDIR)/vcdgraph.c Makefile
+	$(CC) $(COPT) -I/usr/include/cairo -g -Wall -o $(BINDIR)/vcdgraph $(TOOLDIR)/vcdgraph.c -lcairo
 
 # Create targets for binary (linux), binary.exe (mingw), and binary.osx (osx) easily, minimising repetition
 # arg1 = target name (without .exe)
@@ -685,42 +691,8 @@ $(BINDIR)/mega65_ftp_intel.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.
 $(BINDIR)/mega65_ftp_arm.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
 	$(CC) $(MACARMCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -o $@ -Iinclude $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lpthread -lreadline -DINCLUDE_BIT2MCS
 
-$(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
-	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
-
 $(BINDIR)/m65ftp_test:	$(TESTDIR)/m65ftp_test.c
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/m65ftp_test $(TESTDIR)/m65ftp_test.c
-
-##
-## ========== m65dbg ==========
-##
-TEST:=$(shell test -d /cygdrive && echo cygwin)
-ifneq "$(TEST)" ""
-  M65DEBUG_READLINE=-L/usr/bin -lreadline7
-else
-  M65DEBUG_READLINE=-lreadline
-endif
-
-M65DBG_SOURCES = $(TOOLDIR)/m65dbg/m65dbg.c $(TOOLDIR)/m65dbg/commands.c $(TOOLDIR)/m65dbg/gs4510.c $(TOOLDIR)/m65dbg/serial.c $(TOOLDIR)/logging.c $(TOOLDIR)/m65common.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/version.c
-M65DBG_INCLUDES = -Iinclude $(LIBUSBINC)
-M65DBG_LIBRARIES = -lpng -lpthread -lusb-1.0 -lz $(M65DEBUG_READLINE)
-
-$(BINDIR)/m65dbg:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
-	$(CC) $(COPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
-
-$(BINDIR)/m65dbg_intel.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
-	$(CC) $(MACINTELCOPT) -Iinclude -o $@ $(M65DBG_SOURCES) $(M65DEBUG_READLINE)
-
-$(BINDIR)/m65dbg_arm.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
-	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(M65DBG_SOURCES) $(M65DEBUG_READLINE)
-
-$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
-	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
-
-$(BINDIR)/vcdgraph:	$(TOOLDIR)/vcdgraph.c Makefile
-	$(CC) $(COPT) -I/usr/include/cairo -g -Wall -o $(BINDIR)/vcdgraph $(TOOLDIR)/vcdgraph.c -lcairo
-
-#-----------------------------------------------------------------------------
 
 ##
 ## ========== etherload ==========
