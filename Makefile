@@ -59,7 +59,7 @@ CL65=  $(CC65_PREFIX)cl65 --config src/tests/tests_cl65.cfg
 CL65ONLY=  $(CC65_PREFIX)cl65
 CC65_DEPEND=
 
-LIBUSBINC= `pkg-config --cflags libusb-1.0` -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/
+LIBUSBINC= `pkg-config --cflags libusb-1.0`
 
 CBMCONVERT=	cbmconvert/cbmconvert
 
@@ -130,13 +130,16 @@ TESTS=		$(TESTDIR)/ascii.prg \
 
 TOOLDIR=	$(SRCDIR)/tools
 
+# the stuff that is packaged
 TOOLSUNX=	$(BINDIR)/m65 \
 		$(BINDIR)/mega65_ftp \
 		$(BINDIR)/etherload \
 		$(BINDIR)/bit2core \
 		$(BINDIR)/bit2mcs \
-		$(BINDIR)/romdiff \
-		$(BINDIR)/pngprepare \
+		$(BINDIR)/romdiff
+
+# extra tools you can build, but that don't go into the package
+EXTRAUNX=	$(BINDIR)/pngprepare \
 		$(BINDIR)/giftotiles \
 		$(BINDIR)/m65ftp_test \
 		$(BINDIR)/mfm-decode \
@@ -152,12 +155,16 @@ TOOLSWIN=	$(BINDIR)/m65.exe \
 		$(BINDIR)/bit2mcs.exe \
 		$(BINDIR)/romdiff.exe
 
+EXTRAWIN=	
+
 TOOLSMAC=	$(BINDIR)/m65.osx \
 		$(BINDIR)/mega65_ftp.osx \
 		$(BINDIR)/etherload.osx \
 		$(BINDIR)/bit2core.osx \
 		$(BINDIR)/bit2mcs.osx \
 		$(BINDIR)/romdiff.osx
+
+EXTRAMAC=	
 
 GTESTFILES=	$(GTESTBINDIR)/mega65_ftp.test \
 		$(GTESTBINDIR)/bit2core.test
@@ -170,7 +177,7 @@ MEGA65LIBC= $(wildcard $(SRCDIR)/mega65-libc/cc65/src/*.c) $(wildcard $(SRCDIR)/
 
 # TOOLS omits TOOLSMAC. Linux users can make all. To make Mac binaries, use
 # a Mac to make allmac. See README.md.
-TOOLS=$(TOOLSUNX) $(TOOLSWIN)
+TOOLS=$(TOOLSUNX) $(EXTRAUNX) $(TOOLSWIN) $(EXTRAWIN)
 
 SDCARD_FILES=	$(SDCARD_DIR)/M65UTILS.D81 \
 		$(SDCARD_DIR)/M65TESTS.D81
@@ -184,46 +191,50 @@ SUBMODULEUPDATE= \
 ##
 ## Global Rules
 ##
-.PHONY: all allunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
+.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
 
-all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
-allmac:	$(SDCARD_FILES) $(TOOLSMAC) $(UTILITIES) $(TESTS)
-allwin:	$(SDCARD_FILES) $(TOOLSWIN) $(UTILITIES) $(TESTS)
-allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(UTILITIES) $(TESTS)
+allmac:	$(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
+allwin:	$(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
+allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
 
-arcunix: allunix
+ifeq ($(OS), Darwin)
+all: allmac
+else ifeq ($(OS), Linux)
+all: allunix
+else
+all: allwin
+endif
+
+arcunix: $(TOOLSUNX)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-linux; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
 	fi ; \
-	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
-	ln $(TOOLSUNX) $${arcdir}/bin ; \
-	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
-	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	mkdir -p $${arcdir} ; \
+	ln $(TOOLSUNX) $${arcdir}/ ; \
+	ln $(ASSETS)/README-dev.md $${arcdir}/README.md ; \
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
-arcwin: allwin
+arcwin: $(TOOLSWIN)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-windows; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
 	fi ; \
-	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
-	ln $(TOOLSWIN) $${arcdir}/bin ; \
-	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
-	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	mkdir -p $${arcdir} ; \
+	ln $(TOOLSWIN) $${arcdir} ; \
+	ln $(ASSETS)/README-dev.md $${arcdir}/README.md ; \
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
-arcmac: allmac
+arcmac: $(TOOLSMAC)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-macos; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
 	fi ; \
-	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
-	ln $(TOOLSMAC) $${arcdir}/bin ; \
-	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
-	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	mkdir -p $${arcdir} ; \
+	ln $(TOOLSMAC) $${arcdir}/ ; \
+	ln $(ASSETS)/README-dev.md $${arcdir}/README.md ; \
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
