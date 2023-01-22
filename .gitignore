@@ -18,7 +18,6 @@ bin/md2h65
 bin/trenzm65powercontrol
 bin/bin2c
 bin/map2h
-bin/bitinfo
 bin/vcdgraph
 
 src/tools/version.c
