@@ -130,35 +130,34 @@ TESTS=		$(TESTDIR)/ascii.prg \
 
 TOOLDIR=	$(SRCDIR)/tools
 
-TOOLSUNX=	$(BINDIR)/etherload \
-		$(BINDIR)/m65 \
-		$(BINDIR)/readdisk \
+TOOLSUNX=	$(BINDIR)/m65 \
 		$(BINDIR)/mega65_ftp \
+		$(BINDIR)/etherload \
+		$(BINDIR)/bit2core \
+		$(BINDIR)/bit2mcs \
 		$(BINDIR)/romdiff \
 		$(BINDIR)/pngprepare \
 		$(BINDIR)/giftotiles \
 		$(BINDIR)/m65ftp_test \
 		$(BINDIR)/mfm-decode \
-		$(BINDIR)/bit2core \
-		$(BINDIR)/bit2mcs \
+		$(BINDIR)/readdisk \
 		$(BINDIR)/bin2c \
 		$(BINDIR)/map2h \
 		$(BINDIR)/vcdgraph
 
-TOOLSWIN=	$(BINDIR)/etherload.exe \
-		$(BINDIR)/m65.exe \
+TOOLSWIN=	$(BINDIR)/m65.exe \
 		$(BINDIR)/mega65_ftp.exe \
+		$(BINDIR)/etherload.exe \
 		$(BINDIR)/bit2core.exe \
 		$(BINDIR)/bit2mcs.exe \
 		$(BINDIR)/romdiff.exe
 
-TOOLSMAC=	$(BINDIR)/etherload.osx \
-		$(BINDIR)/m65.osx \
+TOOLSMAC=	$(BINDIR)/m65.osx \
 		$(BINDIR)/mega65_ftp.osx \
+		$(BINDIR)/etherload.osx \
 		$(BINDIR)/bit2core.osx \
 		$(BINDIR)/bit2mcs.osx \
-		$(BINDIR)/romdiff.osx \
-		$(BINDIR)/m65dbg.osx
+		$(BINDIR)/romdiff.osx
 
 GTESTFILES=	$(GTESTBINDIR)/mega65_ftp.test \
 		$(GTESTBINDIR)/bit2core.test
