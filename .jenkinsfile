@@ -1,0 +1,34 @@
+pipeline {
+    agent {
+        docker { image 'megawin' }
+    }
+    stages {
+        stage('Cleanup') {
+            steps {
+                sh 'make USE_LOCAL_CC65=1 cleanall'
+            }
+        }
+        stage('Build linux') {
+            steps {
+                sh 'make USE_LOCAL_CC65=1 arcunix'
+            }
+        }
+        stage('Build windows') {
+            steps {
+                sh 'make USE_LOCAL_CC65=1 arcwin'
+            }
+        }
+        stage('Test build') {
+            steps {
+                sh 'make USE_LOCAL_CC65=1 test'
+            }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: "m65tools-*.7z",
+                onlyIfSuccessful: true,
+                fingerprint: true
+        }
+    }
+}

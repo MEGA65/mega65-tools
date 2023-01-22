@@ -1,0 +1,9 @@
+[requires]
+libusb/1.0.26
+libpng/1.6.39
+
+[options]
+*:shared=False
+
+[generators]
+make

@@ -1,0 +1,5 @@
+[settings]
+os=Macos
+os.version=11.0
+arch=armv8
+build_type=RelWithDebInfo

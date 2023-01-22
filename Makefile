@@ -1,15 +1,33 @@
 .SUFFIXES: .bin .prg
 .PRECIOUS:	%.ngd %.ncd %.twx vivado/%.xpr bin/%.bit bin/%.mcs bin/%.M65 bin/%.BIN
 
+OS := $(shell uname)
+ifeq ($(OS), Darwin)
+include conanbuildinfo_macos_intel.mak
+include conanbuildinfo_macos_arm.mak
+endif
+
 #COPT=	-Wall -g -std=gnu99 -fsanitize=address -fno-omit-frame-pointer -fsanitize-address-use-after-scope
 #CC=	clang
-COPT=	-Wall -g -std=gnu99 `pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3 -march=x86-64
-# -I/usr/local/Cellar/libusb/1.0.23/include/libusb-1.0/ -L/usr/local/Cellar/libusb/1.0.23/lib/libusb-1.0/
+COPT=	-Wall -g -std=gnu99
 CC=	gcc
-CXX=g++
+CXX=	g++
+#MACCOPT=$(COPT) -framework CoreFoundation -framework IOKit
+MACINTELCOPT:=$(COPT) -target x86_64-apple-macos10.14 \
+		      $(addprefix -I, $(MAC_INTEL_CONAN_INCLUDE_DIRS)) \
+		      $(addprefix -D, $(MAC_INTEL_CONAN_DEFINES)) \
+		      $(addprefix -L, $(MAC_INTEL_CONAN_LIB_DIRS)) \
+		      $(addprefix -l, $(MAC_INTEL_CONAN_LIBS)) \
+		      $(addprefix -framework , $(MAC_INTEL_CONAN_FRAMEWORKS))
+MACARMCOPT:=  $(COPT) -target arm64-apple-macos11 \
+		      $(addprefix -I, $(MAC_ARM_CONAN_INCLUDE_DIRS)) \
+		      $(addprefix -D, $(MAC_ARM_CONAN_DEFINES)) \
+		      $(addprefix -L, $(MAC_ARM_CONAN_LIB_DIRS)) \
+		      $(addprefix -l, $(MAC_ARM_CONAN_LIBS)) \
+		      $(addprefix -framework , $(MAC_ARM_CONAN_FRAMEWORKS))
+COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3 -march=x86-64
 WINCC=	x86_64-w64-mingw32-gcc
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
-MACCOPT=$(COPT) -mmacosx-version-min=11.0 -framework CoreFoundation -framework IOKit -arch x86_64
 
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
@@ -40,8 +58,6 @@ CL65ONLY=  $(CC65_PREFIX)cl65
 CC65_DEPEND=
 
 LIBUSBINC= `pkg-config --cflags libusb-1.0` -I/usr/include/libusb-1.0 -I/opt/local/include/libusb-1.0 -I/usr/local/Cellar/libusb/1.0.18/include/libusb-1.0/
-MACLIBUSBLINK= `pkg-config --variable libdir libusb-1.0`/libusb-1.0.a -framework Security
-MACLIBPNGLINK= `pkg-config --variable libdir libpng`/libpng.a
 
 CBMCONVERT=	cbmconvert/cbmconvert
 
@@ -74,6 +90,7 @@ UTILITIES=	$(B65DIR)/ethertest.prg \
 		$(B65DIR)/b65support.bin \
 		$(B65DIR)/cartload.prg
 
+# these are BASIC dumped from the MEGA65
 BASICUTILS=	$(BASICUTILDIR)/mega65info.prg \
 		$(BASICUTILDIR)/rtctest.prg
 
@@ -166,12 +183,48 @@ SUBMODULEUPDATE= \
 ##
 ## Global Rules
 ##
-.PHONY: all allunix allmac allwin tests tools utilities format clean cleanall cleantest
+.PHONY: all allunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
 
 all:	$(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS)
 allmac:	$(SDCARD_FILES) $(TOOLSMAC) $(UTILITIES) $(TESTS)
 allwin:	$(SDCARD_FILES) $(TOOLSWIN) $(UTILITIES) $(TESTS)
 allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(UTILITIES) $(TESTS)
+
+arcunix: allunix
+	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-linux; \
+	if [[ -e $${arcdir} ]]; then \
+		rm -rf $${arcdir} $${arcdir}.7z ; \
+	fi ; \
+	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
+	ln $(TOOLSUNX) $${arcdir}/bin ; \
+	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
+	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	7z a $${arcdir}.7z $${arcdir} ; \
+	rm -rf $${arcdir}
+
+arcwin: allwin
+	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-windows; \
+	if [[ -e $${arcdir} ]]; then \
+		rm -rf $${arcdir} $${arcdir}.7z ; \
+	fi ; \
+	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
+	ln $(TOOLSWIN) $${arcdir}/bin ; \
+	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
+	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	7z a $${arcdir}.7z $${arcdir} ; \
+	rm -rf $${arcdir}
+
+arcmac: allmac
+	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-macos; \
+	if [[ -e $${arcdir} ]]; then \
+		rm -rf $${arcdir} $${arcdir}.7z ; \
+	fi ; \
+	mkdir -p $${arcdir}/bin $${arcdir}/sdcard-files $${arcdir}/mega65 ; \
+	ln $(TOOLSMAC) $${arcdir}/bin ; \
+	ln $(SDCARD_FILES) $${arcdir}/sdcard-files ; \
+	ln $(UTILITIES) $${arcdir}/mega65 ; \
+	7z a $${arcdir}.7z $${arcdir} ; \
+	rm -rf $${arcdir}
 
 tests: $(TESTS)
 
@@ -189,6 +242,9 @@ format:
 
 clean:	cleantest
 	rm -f src/tools/version.c $(SDCARD_FILES) $(TOOLS) $(UTILITIES) $(TESTS) $(UTILDIR)/*.prg $(TESTDIR)/*.o $(EXAMPLEDIR)/*.o
+	rm -f $(BINDIR)/*.osx conanbuildinfo* graph_info.json conan.lock
+	rm -rf $(BINDIR)/*.dSYM
+	rm -f m65tools-*.7z
 
 cleanall:	clean
 	for path in `git submodule | awk '{ print "./" $$2 }'`; do \
@@ -223,6 +279,16 @@ test.exe: $(GTESTFILESEXE)
 ##
 ## Prerequisites
 ##
+conanbuildinfo_macos_intel.mak: conanfile.txt conan/*
+	conan install conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_10.14_intel
+	sed 's/CONAN_/MAC_INTEL_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_intel.mak
+	rm conanbuildinfo.*
+
+conanbuildinfo_macos_arm.mak: conanfile.txt conan/*
+	conan install conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
+	sed 's/CONAN_/MAC_ARM_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_arm.mak
+	rm conanbuildinfo.*
+
 ifndef USE_LOCAL_CC65
 $(CC65):
 	$(SUBMODULEUPDATE)
@@ -268,13 +334,16 @@ $(SDCARD_DIR)/M65TESTS.D81:	$(CBMCONVERT) $(TESTS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 
-%.bin %.map %.list:	%.a65 $(OPHIS)
+%.bin:	%.a65 $(OPHIS)
 	$(info =============================================================)
 	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.bin
 
 %.o:	%.s $(CC65)
 	$(CA65) $< -l $*.list
+
+$(BINDIR)/%.osx:	$(BINDIR)/%_intel.osx $(BINDIR)/%_arm.osx
+	lipo -create -output $@ $(BINDIR)/$*_intel.osx $(BINDIR)/$*_arm.osx
 
 ##
 ## TESTS
@@ -502,8 +571,10 @@ $(1): $(2) $(TOOLDIR)/version.c Makefile
 $(1).exe: $(2) $(TOOLDIR)/version.c Makefile
 	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
-$(1).osx: $(2) $(TOOLDIR)/version.c Makefile
-	$(CC) $(COPT) -D__APPLE__ -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
+$(1)_intel.osx: $(2) $(TOOLDIR)/version.c Makefile
+	$(CC) $(MACINTELCOPT) -Iinclude -o $$@ $$(filter %.c,$$^)
+$(1)_arm.osx: $(2) $(TOOLDIR)/version.c Makefile
+	$(CC) $(MACARMCOPT) -Iinclude -o $$@ $$(filter %.c,$$^)
 endef
 
 # Creates 2 targets:
@@ -522,19 +593,33 @@ $(eval $(call TRIPLE_TARGET, $(BINDIR)/romdiff, $(TOOLDIR)/romdiff.c))
 ##
 ## ========== m65 ==========
 ##
-$(BINDIR)/m65:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c include/*.h Makefile
-	$(CC) $(COPT) -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/m65 $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -lusb-1.0 -lz -lpthread -lpng
+M65_SRC= $(TOOLDIR)/m65.c \
+         $(TOOLDIR)/m65common.c \
+	 $(TOOLDIR)/logging.c \
+	 $(TOOLDIR)/version.c \
+	 $(TOOLDIR)/screen_shot.c \
+	 $(TOOLDIR)/fpgajtag/fpgajtag.c \
+	 $(TOOLDIR)/fpgajtag/util.c \
+	 $(TOOLDIR)/fpgajtag/usbserial.c \
+	 $(TOOLDIR)/fpgajtag/process.c
 
-$(BINDIR)/m65.osx:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
-	$(CC) $(MACCOPT) -D__APPLE__ -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/m65.osx $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c $(MACLIBUSBLINK) -lz -lpthread $(MACLIBPNGLINK)
+$(BINDIR)/m65:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
+	$(CC) $(COPT) -Iinclude $(LIBUSBINC) -o $@ $(M65_SRC) -lusb-1.0 -lz -lpthread -lpng
 
-$(BINDIR)/m65.exe:	$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
-	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
+$(BINDIR)/m65_intel.osx:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
+	$(CC) $(MACINTELCOPT) -Iinclude -o $@ $(M65_SRC) -framework Security
+
+$(BINDIR)/m65_arm.osx:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
+	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(M65_SRC) -framework Security
+
+$(BINDIR)/m65.exe:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
+	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $@ $(M65_SRC) -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
 ## special target for linux static win build even if DO_STATIC is 0
-static_m65_exe:		$(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c include/logging.h $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
-	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/m65.exe $(TOOLDIR)/m65.c $(TOOLDIR)/m65common.c $(TOOLDIR)/logging.c $(TOOLDIR)/version.c $(TOOLDIR)/screen_shot.c $(TOOLDIR)/fpgajtag/fpgajtag.c $(TOOLDIR)/fpgajtag/util.c $(TOOLDIR)/fpgajtag/usbserial.c $(TOOLDIR)/fpgajtag/process.c -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
+static_m65_exe:		$(M65_SRC) $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
+	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $@ $(M65_SRC) -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
+
 ##
 ## ========== mega65_ftp ==========
 ##
@@ -582,8 +667,11 @@ $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h M
 $(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
-	$(CC) $(MACCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -o $(BINDIR)/mega65_ftp.osx $(MEGA65FTP_SRC) $(TOOLDIR)/version.c $(MACLIBUSBLINK) -lz -lpthread -lreadline -DINCLUDE_BIT2MCS
+$(BINDIR)/mega65_ftp_intel.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
+	$(CC) $(MACINTELCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -o $@ -Iinclude $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lpthread -lreadline -DINCLUDE_BIT2MCS
+
+$(BINDIR)/mega65_ftp_arm.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
+	$(CC) $(MACARMCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -o $@ -Iinclude $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lpthread -lreadline -DINCLUDE_BIT2MCS
 
 $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
@@ -608,8 +696,11 @@ M65DBG_LIBRARIES = -lpng -lpthread -lusb-1.0 -lz $(M65DEBUG_READLINE)
 $(BINDIR)/m65dbg:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(CC) $(COPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
 
-$(BINDIR)/m65dbg.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
-	$(CC) $(MACCOPT) -D__APPLE__ $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.osx $(M65DBG_SOURCES) $(M65DBG_LIBRARIES)
+$(BINDIR)/m65dbg_intel.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
+	$(CC) $(MACINTELCOPT) -Iinclude -o $@ $(M65DBG_SOURCES) $(M65DEBUG_READLINE)
+
+$(BINDIR)/m65dbg_arm.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
+	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(M65DBG_SOURCES) $(M65DEBUG_READLINE)
 
 $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
@@ -645,8 +736,11 @@ $(TOOLDIR)/etherload/%_map.h:	$(TOOLDIR)/etherload/%.map $(BINDIR)/map2h
 $(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
-$(BINDIR)/etherload.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
-	$(CC) $(MACCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
+$(BINDIR)/m65dbg_intel.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
+	$(CC) $(MACINTELCOPT) -Iinclude -o $@ $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
+
+$(BINDIR)/m65dbg_arm.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
+	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
 $(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
 	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32

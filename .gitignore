@@ -3,6 +3,9 @@ bin/mega65_ftp*
 bin/m65dbg*
 bin/romdiff*
 
+bin/*.osx
+bin/*.dSYM
+
 bin/etherload
 bin/giftotiles
 bin/pngprepare
@@ -24,10 +27,14 @@ src/tools/ascii_font.c
 
 gtest/bin/*
 
+conan.lock
+conanbuildinfo*
+conaninfo.txt
+graph_info.json
+
 *~
 #*#
 .#*
-.DS_Store
 *.bin
 *.gz
 *.o
