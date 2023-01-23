@@ -791,13 +791,15 @@ $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 ## ========== etherload ==========
 ##
 ETHERLOAD_SOURCES = $(TOOLDIR)/etherload/etherload.c \
+		$(TOOLDIR)/etherload/etherload_common.c \
 		$(TOOLDIR)/etherload/ethlet_dma_load.c \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic65.c \
 		$(TOOLDIR)/etherload/ethlet_all_done_jump.c \
 		$(TOOLDIR)/logging.c \
 		$(TOOLDIR)/version.c
-ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/ethlet_dma_load_map.h \
+ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/etherload_common.h \
+		$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic65_map.h \
 		$(TOOLDIR)/etherload/ethlet_all_done_jump_map.h
