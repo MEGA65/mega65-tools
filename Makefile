@@ -3,17 +3,36 @@ SHELL := /bin/bash
 .SUFFIXES: .bin .prg
 .PRECIOUS:	%.ngd %.ncd %.twx vivado/%.xpr bin/%.bit bin/%.mcs bin/%.M65 bin/%.BIN
 
-OS := $(shell uname)
-ifeq ($(OS), Darwin)
-include conanbuildinfo_macos_intel.mak
-include conanbuildinfo_macos_arm.mak
-endif
 
 #COPT=	-Wall -g -std=gnu99 -fsanitize=address -fno-omit-frame-pointer -fsanitize-address-use-after-scope
 #CC=	clang
 COPT=	-Wall -g -std=gnu99
-CC=	gcc
+CC=	    gcc
 CXX=	g++
+WINCC=  x86_64-w64-mingw32-gcc
+ifeq (, $(shell which $(WINCC)))
+$(info No $(WINCC) in PATH, can't build windows binaries)
+else
+$(shell echo "toolchain=/usr/x86_64-w64-mingw32" > conan/profile_mingw-w64)
+$(shell echo "cc_version=`$(WINCC) -dumpversion | sed 's/-win32//g'`" >> conan/profile_mingw-w64)
+include conanbuildinfo_win.mak
+WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
+WINCOPT+= $(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
+          $(addprefix -D, $(WIN_CONAN_DEFINES)) \
+          $(addprefix -L, $(WIN_CONAN_LIB_DIRS)) \
+          $(addprefix -l, $(WIN_CONAN_LIBS))
+
+conanbuildinfo_win.mak: conanfile.txt conan/profile_linux_to_win
+	conan install conanfile.txt --build=missing -pr:h=default -pr:h=conan/profile_linux_to_win -pr:b=default
+	sed 's/CONAN_/WIN_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_win.mak
+	rm conanbuildinfo.*
+
+endif
+
+OS := $(shell uname)
+ifeq ($(OS), Darwin)
+include conanbuildinfo_macos_intel.mak
+include conanbuildinfo_macos_arm.mak
 #MACCOPT=$(COPT) -framework CoreFoundation -framework IOKit
 MACINTELCOPT:=$(COPT) -target x86_64-apple-macos10.14 \
 		      $(addprefix -I, $(MAC_INTEL_CONAN_INCLUDE_DIRS)) \
@@ -27,10 +46,8 @@ MACARMCOPT:=  $(COPT) -target arm64-apple-macos11 \
 		      $(addprefix -L, $(MAC_ARM_CONAN_LIB_DIRS)) \
 		      $(addprefix -l, $(MAC_ARM_CONAN_LIBS)) \
 		      $(addprefix -framework , $(MAC_ARM_CONAN_FRAMEWORKS))
+endif
 COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3 -march=x86-64
-WINCC=	x86_64-w64-mingw32-gcc
-WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
-
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
 OPHIS_MON= Ophis/bin/ophis -c

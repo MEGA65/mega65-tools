@@ -29,6 +29,8 @@ src/tools/ascii_font.c
 
 gtest/bin/*
 
+conan/profile_mingw-w64
+
 conan.lock
 conanbuildinfo*
 conaninfo.txt
