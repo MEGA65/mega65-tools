@@ -314,6 +314,9 @@ $(CBMCONVERT):
 	$(SUBMODULEUPDATE)
 	( cd cbmconvert && make -f Makefile.unix )
 
+$(MEGA65LIBC):
+	$(SUBMODULEUPDATE)
+
 /usr/bin/convert:
 	echo "Could not find the program 'convert'. Try the following:"
 	echo "sudo apt-get install imagemagick"
