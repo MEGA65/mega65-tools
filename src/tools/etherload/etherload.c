@@ -3,7 +3,9 @@
 #include "ethlet_all_done_basic2_map.h"
 #include "ethlet_all_done_jump_map.h"
 
+#ifndef WINDOWS
 #include <sys/ioctl.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
