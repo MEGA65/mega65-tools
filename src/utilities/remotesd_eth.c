@@ -93,6 +93,11 @@ typedef struct {
   uint32_t start_sector_number;
 } WRITE_SECTOR_JOB;
 
+typedef struct {
+  uint8_t num_bytes_minus_one;
+  uint32_t address;
+} READ_MEMORY_JOB;
+
 typedef union {
   uint8_t b[1500];
   struct {
@@ -104,6 +109,7 @@ typedef union {
         union {
           READ_SECTOR_JOB read_sector;
           WRITE_SECTOR_JOB write_sector;
+          READ_MEMORY_JOB read_memory;
         };
       };
     };
@@ -359,6 +365,7 @@ void get_new_job()
        * IP packet.
        */
       uint16_t udp_length;
+      uint16_t num_bytes;
 
       // We read the header and job data. Since we don't know the exact job, yet, copy the worst case
       // (largest job) which is the read sector command.
@@ -428,7 +435,7 @@ void get_new_job()
           }
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
-              sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB)); // copy header incl. ftp_magic
+              sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
           send_buf.ftp.id = ip_id;
           send_buf.ftp.ip_length = HTONS(20 + 8 + 14);
           send_buf.ftp.udp_length = HTONS(8 + 14);
@@ -466,7 +473,7 @@ void get_new_job()
           handle_batch_write();
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
-              sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB)); // copy header incl. ftp_magic
+              sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
           send_buf.ftp.id = ip_id;
           send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
           send_buf.write_sector.batch_counter = recv_buf.write_sector.batch_counter;
@@ -506,6 +513,36 @@ void get_new_job()
         seq_num = recv_buf.ftp.seq_num;
         read_batch_active = 1;
         // printf("read job q:%d b:%d s:%ld\n", seq_num, batch_left, sector_number_read);
+        return;
+
+      case 0x11:
+        /*
+         * Read memory request
+         */
+
+        if (udp_length != 20) {
+          continue;
+        }
+        num_bytes = recv_buf.read_memory.num_bytes_minus_one;
+        ++num_bytes;
+        lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
+            sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB)); 
+        lcopy(recv_buf.read_memory.address, (uint32_t)&send_buf.b[sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB)], num_bytes);
+        send_buf.ftp.id = ip_id;
+        send_buf.ftp.ip_length = HTONS(20 + 8 + 12 + num_bytes);
+        send_buf.ftp.udp_length = HTONS(8 + 12 + num_bytes);
+        send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
+        send_buf.ftp.opcode = 0x11;
+        send_buf.read_memory.num_bytes_minus_one = recv_buf.read_memory.num_bytes_minus_one;
+        send_buf.read_memory.address = recv_buf.read_memory.address;
+        chks.u = 0;
+        checksum((uint8_t *)&send_buf.ftp, 20);
+        send_buf.ftp.checksum_ip = ~chks.u;
+        send_buf.ftp.checksum_udp = 0;
+
+        ++ip_id;
+        send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB) + num_bytes;
+
         return;
 
       case 0xff:

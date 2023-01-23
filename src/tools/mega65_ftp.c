@@ -185,11 +185,13 @@ int calculate_needed_direntries_for_vfat(char *filename);
 unsigned char lfn_checksum(const unsigned char *pFCBName);
 int get_cluster_count(char *filename);
 void wipe_direntries_of_current_file_or_dir(void);
+void determine_ethernet_window_size(void);
 
 int direct_sdcard_device = 0;
 FILE *fsdcard = NULL;
 
 int ethernet_mode = 0;
+int ethernet_window_size = 3;
 static int sockfd;
 static struct sockaddr_in *servaddr;
 static uint8_t eth_packet_queue[1024][1500];
@@ -851,8 +853,9 @@ int DIRTYMOCK(main)(int argc, char **argv)
         &ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate, &ethernet_embed_packet_seq);
 
     // Give helper program time to initialize
-    usleep(500000);
+    usleep(700000);
 
+    determine_ethernet_window_size();
     sdhc_check();
   }
   else {
@@ -1248,10 +1251,14 @@ void job_process_results(void)
   }
 }
 
+uint8_t memory_read_buffer[256];
+uint8_t memory_read_buffer_len = 0;
+
 void ethernet_process_result(uint8_t *rx_payload, int rx_len)
 {
   uint8_t *p = &rx_payload[6];
   uint32_t sector_number;
+  uint32_t memory_addr;
 
   switch (*p) {
   case 0x04: // sector read
@@ -1259,6 +1266,13 @@ void ethernet_process_result(uint8_t *rx_payload, int rx_len)
     log_debug("Received sector %d, batch start sector %d", sector_number, eth_batch_start_sector);
     uint32_t index = sector_number - eth_batch_start_sector;
     bcopy(&rx_payload[13], &queue_read_data[queue_read_len + index * 512], 512);
+    break;
+
+  case 0x11: // memory read
+    memory_read_buffer_len = p[1] + 1;
+    memory_addr = p[2] + (p[3] << 8) + (p[4] << 16) + (p[5] << 24);
+    log_debug("Received memory block at $%x (%d bytes)", memory_addr, memory_read_buffer_len);
+    bcopy(&rx_payload[12], memory_read_buffer, memory_read_buffer_len);
     break;
   }
 }
@@ -1305,11 +1319,21 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
         (tx_payload[4] + (tx_payload[5] << 8)));
     ethernet_process_result(rx_payload, rx_len);
     break;
+  case 0x11: // read memory cmd
+    // ry_payload[7] is number of bytes
+    // ry_payload[8] is 4 bytes of address
+    if (rx_len < 13 || memcmp(&rx_payload[7], &tx_payload[7], 5) != 0) {
+      return 0;
+    }
+    log_debug("Received packet (read_memory ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    ethernet_process_result(rx_payload, rx_len);
+    break;
   case 0xff: // quit cmd
     if (rx_len != 7) {
       return 0;
     }
-    log_debug("Received quit response packet #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+    log_debug("Received packet (quit ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
         (tx_payload[4] + (tx_payload[5] << 8)));
     break;
   default:
@@ -1456,7 +1480,7 @@ void process_jobs_ethernet(void)
         ++sector_number;
         ++write_batch_size;
       }
-      ethl_set_queue_length(8);
+      ethl_set_queue_length(ethernet_window_size);
       process_ethernet_write_sectors_job(ptr, write_batch_size);
       ptr += 9 * write_batch_size;
       i += write_batch_size - 1;
@@ -3359,6 +3383,11 @@ int bit2mcs(int argc, char *argv[]);
 
 BOOL initial_flashing_checks(void)
 {
+  if (ethernet_mode) {
+    log_error("Flashing of .cor files not supported in Ethernet mode");
+    return FALSE;
+  }
+
   // assess if running in xemu. If so, exit
   if (xemu_flag) {
     printf("%d - This command is not available for xemu.\n", xemu_flag);
@@ -3424,9 +3453,6 @@ void flash_core_to_slot(char *fname, int slotnum)
          "Please power cycle your device.\n\n"
          "The 'mega65_ftp' tool will exit now. To start another session, re-run after power-cycling.\n\n",
       fname, slotnum);
-
-  if (ethernet_mode)
-    etherload_finish();
 
   // exit mega65_ftp (as a new session will need to be created after the power-cycle anyway)
   exit(0);
@@ -4949,15 +4975,60 @@ void petscify_text(char *text)
   }
 }
 
+unsigned char peek(unsigned long addr)
+{
+  if (ethernet_mode) {
+    wait_all_acks();
+    const int packet_size = 12;
+    uint8_t payload[packet_size];
+    memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+    // bytes [4] and [5] will be filled with packet seq numbers
+    payload[6] = 0x11; // read mem command
+    payload[7] = 0; // number of bytes minus one
+    payload[8] = addr & 0xff;
+    payload[9] = (addr >> 8) & 0xff;
+    payload[10] = (addr >> 16) & 0xff;
+    payload[11] = (addr >> 24) & 0xff;
+    ethl_send_packet(payload, packet_size);
+    wait_all_acks();
+    if (memory_read_buffer_len != 1) {
+      log_error("Error reading memory data via Ethernet");
+      exit(-1);
+    }
+    return memory_read_buffer[0];
+  }
+  else {
+    return mega65_peek(addr);
+  }
+}
+
 void poke(unsigned long addr, unsigned char value)
 {
   if (ethernet_mode) {
-    log_error("Serial monitor memory access requested in Ethernet mode");
+    log_error("Serial monitor memory write access requested in Ethernet mode");
     exit(-1);
   }
   char cmd[16];
   sprintf(cmd, "s%lx %x\r", addr, value);
   slow_write(fd, cmd, strlen(cmd));
+}
+
+void determine_ethernet_window_size(void)
+{
+  uint8_t hardware_model_id = peek(0xFFD3629);
+  log_info("Hardware model id: $%02X - %s", hardware_model_id, get_model(hardware_model_id)->name);
+
+  switch(hardware_model_id)
+  {
+    case 0x01:
+    case 0x03:
+    case 0x21:
+      ethernet_window_size = 8; // xc7a200t_0 modesl have more Ethernet receive buffers
+      break;
+    default:
+      ethernet_window_size = 3;
+  }
+  log_info("Ethernet window size: %d packets", ethernet_window_size);
 }
 
 void request_remotesd_version(void)
