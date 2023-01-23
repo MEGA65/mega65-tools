@@ -191,11 +191,11 @@ SUBMODULEUPDATE= \
 ##
 ## Global Rules
 ##
-.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
+.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest submodules
 
-allmac:	$(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
-allwin:	$(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
-allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
+allmac:		submodules $(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
+allwin:		submodules $(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
+allunix:	submodules $(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
 
 ifeq ($(OS), Darwin)
 all: allmac
@@ -205,7 +205,10 @@ else
 all: allwin
 endif
 
-arcunix: $(TOOLSUNX)
+submodules:
+	$(SUBMODULEUPDATE)
+
+arcunix: submodules $(TOOLSUNX)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-linux; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
@@ -216,7 +219,7 @@ arcunix: $(TOOLSUNX)
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
-arcwin: $(TOOLSWIN)
+arcwin: submodules $(TOOLSWIN)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-windows; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
@@ -227,7 +230,7 @@ arcwin: $(TOOLSWIN)
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
-arcmac: $(TOOLSMAC)
+arcmac: submodules $(TOOLSMAC)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-macos; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
