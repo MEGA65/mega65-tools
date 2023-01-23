@@ -10,8 +10,7 @@ pipeline {
         }
         stage ('Full PR Testbuild') {
             when {
-                branch pattern: "^PR.+",
-                comparator: "REGEXP"
+                branch pattern: "PR-*"
             }
             steps {
                 sh 'make USE_LOCAL_CC65=1 all'
@@ -19,10 +18,7 @@ pipeline {
         }
         stage('Build Linux Tools') {
             when {
-                not {
-                    branch pattern: "^PR.+",
-                    comparator: "REGEXP"
-                }
+                not { branch pattern: "PR-*" }
             }
             steps {
                 sh 'make USE_LOCAL_CC65=1 arcunix'
@@ -30,10 +26,7 @@ pipeline {
         }
         stage('Build Windows Tools') {
             when {
-                not {
-                    branch pattern: "^PR.+",
-                    comparator: "REGEXP"
-                }
+                not { branch pattern: "PR-*" }
             }
             steps {
                 sh 'make USE_LOCAL_CC65=1 arcwin'
@@ -48,7 +41,7 @@ pipeline {
     post {
         always {
             script {
-                if (!env.BRANCH_NAME.startsWith('PR')) {
+                if (!env.BRANCH_NAME.startsWith('PR-')) {
                     archiveArtifacts artifacts: "m65tools-*.7z",
                         onlyIfSuccessful: true,
                         fingerprint: true
