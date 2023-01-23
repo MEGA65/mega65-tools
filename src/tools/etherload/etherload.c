@@ -399,7 +399,8 @@ int main(int argc, char **argv)
   }
 
   etherload_init(ip_address);
-  etherload_setup_dmaload();
+  ethl_setup_dmaload();
+  ethl_set_queue_length(32);
 
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();

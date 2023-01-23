@@ -17,7 +17,6 @@ static struct sockaddr_in servaddr;
 #define PORTNUM 4510
 #define MAX_UNACKED_FRAMES 256
 static int frame_unacked[MAX_UNACKED_FRAMES] = { 0 };
-//static long frame_load_addrs[MAX_UNACKED_FRAMES] = { -1 };
 static unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1500];
 static int unacked_frame_lengths[MAX_UNACKED_FRAMES] = { 0 };
 static long long unacked_sent_times[MAX_UNACKED_FRAMES] = { 0 };
@@ -165,8 +164,13 @@ struct sockaddr_in *ethl_get_server_addr(void)
 
 void update_retx_interval(void)
 {
-  int seq_gap = (packet_seq - last_rx_seq);
-  retx_interval = 2000 + 10000 * seq_gap;
+  int num_unacked = 0;
+  for (int i = 0; i < queue_length; i++) {
+    if (frame_unacked[i])
+      ++num_unacked;
+  }
+  //int seq_gap = (packet_seq - last_rx_seq);
+  retx_interval = 2000 + 10000 * num_unacked;
   if (retx_interval < 12000)
     retx_interval = 12000;
   if (retx_interval > 500000)
@@ -263,11 +267,8 @@ int expect_ack(uint8_t *payload, int len)
     // (if there are still any unacked frames)
     maybe_send_ack();
 
-    // Finally wait a short period of time, that should be slightly
-    // longer than the time it takes to send a 1280 byte UDP frame.
-    // On-wire frame will be ~1400 bytes = 11,200 bits = ~112 usec
-    // So we will wait 200 usec.
-    usleep(200);
+    // Finally wait a short period of time
+    usleep(20);
     // XXX DEBUG slow things down
     //    usleep(10000);
   }
@@ -310,7 +311,7 @@ void maybe_send_ack(void)
         exit(-1);
       }
 */
-      log_debug("Resending packet seq #%d with new seq #%d", get_packet_seq(unacked_frame_payloads[id], unacked_frame_lengths[id]), packet_seq);
+      log_warn("Resending packet seq #%d with new seq #%d", get_packet_seq(unacked_frame_payloads[id], unacked_frame_lengths[id]), packet_seq);
       if (!(*embed_packet_seq)(unacked_frame_payloads[id], unacked_frame_lengths[id], packet_seq)) {
         log_crit("Unable to embed packet sequence number");
         return;
@@ -329,17 +330,16 @@ void maybe_send_ack(void)
   }
 }
 
-int wait_all_acks(void)
+int wait_ack_slots_available(int num_free_slots_needed)
 {
   while (1) {
-    int unacked = -1;
+    int num_unacked = 0;
     for (int i = 0; i < queue_length; i++) {
-      if (frame_unacked[i]) {
-        unacked = i;
-        break;
+      if (frame_unacked[i] == 0) {
+        ++num_unacked;
       }
     }
-    if (unacked == -1)
+    if (num_unacked >= num_free_slots_needed)
       return 0;
 
     // Check for the arrival of any acks
@@ -363,13 +363,15 @@ int wait_all_acks(void)
 
     maybe_send_ack();
 
-    // Finally wait a short period of time, that should be slightly
-    // longer than the time it takes to send a 1280 byte UDP frame.
-    // On-wire frame will be ~1400 bytes = 11,200 bits = ~112 usec
-    // So we will wait 200 usec.
-    usleep(200);
+    // Finally wait a short period of time
+    usleep(20);
   }
   return 0;
+}
+
+int wait_all_acks(void)
+{
+  return wait_ack_slots_available(queue_length);
 }
 
 int send_ethlet(const char data[], const int bytes)
@@ -459,9 +461,14 @@ int ethl_schedule_ack(uint8_t *payload, int len)
   return 0;
 }
 
-void ethl_set_queue_length(uint8_t length)
+void ethl_set_queue_length(uint16_t length)
 {
   queue_length = length;
+}
+
+int ethl_get_current_seq_num()
+{
+  return packet_seq;
 }
 
 int send_mem(unsigned int address, unsigned char *buffer, int bytes)

@@ -156,7 +156,7 @@ void mount_file(char *filename);
 int ethernet_get_packet_seq(uint8_t *payload, int len);
 int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len);
 int ethernet_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len);
-int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num);;
+int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num);
 #define CACHE_NO 0
 #define CACHE_YES 1
 int read_flash(const unsigned int sector_number, unsigned char *buffer);
@@ -197,7 +197,6 @@ static uint16_t eth_packet_len[1024];
 int eth_num_packets = 0;
 uint32_t eth_batch_start_sector = 0;
 uint8_t eth_batch_size = 0;
-
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -819,6 +818,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
     }
     ethl_setup_dmaload();
     trigger_eth_hyperrupt();
+    usleep(100000);
     log_info("Starting helper routine transfer...");
     while (bytes > 0) {
       if (bytes < block_size)
@@ -849,6 +849,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
     // setup callbacks for job queue protocol
     ethl_setup_callbacks(
         &ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate, &ethernet_embed_packet_seq);
+
+    usleep(500000);
   }
   else {
     if (open_the_serial_port(serial_port))
@@ -1273,25 +1275,37 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
     return 0;
   }
 
-/*
-  if (rx_payload[4] != tx_payload[4] || rx_payload[5] != tx_payload[5]) {
-    return 0;
-  }
-*/
+  /*
+    if (rx_payload[4] != tx_payload[4] || rx_payload[5] != tx_payload[5]) {
+      return 0;
+    }
+  */
 
   switch (rx_payload[6]) {
+  case 0x02:
+    // rx_payload[7] is batch id
+    // rx_payload[8] is batch size
+    // rx_payload[9] is idx in batch
+    // ry_payload[10] is 4 bytes of sector number
+    if (rx_len != 14 || memcmp(&rx_payload[7], &tx_payload[7], 7) != 0) {
+      return 0;
+    }
+    log_debug("Received packet (write_sector ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    break;
   case 0x04:
+    // ry_payload[9] contains 4 bytes of sector number
     if (rx_len != 512 + 13 || memcmp(&rx_payload[9], &tx_payload[9], 4) != 0) {
       return 0;
     }
+    log_debug("Received packet (read_sector ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    ethernet_process_result(rx_payload, rx_len);
     break;
   default:
     return 0;
   }
 
-  log_debug("Received packet #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)), (tx_payload[4] + (tx_payload[5] << 8)));
-  log_debug("Processing response");
-  ethernet_process_result(rx_payload, rx_len);
   return 1;
 }
 
@@ -1310,54 +1324,155 @@ int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
   return 1;
 }
 
+const uint8_t ethernet_request_string[4] = { 'm', 'r', 'e', 'q' };
+
+uint32_t write_buffer_offset = 0;
+uint8_t write_data_buffer[65536];
+uint32_t write_sector_numbers[65536 / 512];
+uint8_t write_sector_count = 0;
+uint8_t write_batch_counter = 0;
+
+int cont_sector = 0;
+
+void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
+{
+  const int packet_size = 14 + 512;
+  int i;
+  uint8_t payload[packet_size];
+  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+  // bytes [4] and [5] will be filled with packet seq numbers
+  payload[6] = *job;
+  payload[7] = write_batch_counter;
+  payload[8] = (batch_size - 1) & 0xff;
+  memcpy(&payload[10], &job[5], 4);             // start sector
+
+  if (batch_size > 1) {
+    uint32_t start_sector = payload[10] + (payload[11] << 8) + (payload[12] << 16) + (payload[13] << 24);
+
+    if (cont_sector != start_sector) {
+      printf("New sector start %d\n", start_sector);
+      cont_sector = start_sector;
+    }
+    cont_sector += batch_size;
+  }
+
+  for (i = 0; i < batch_size; ++i)
+  {
+    int data_offset = job[1] + (job[2] << 8) + (job[3] << 16) + (job[4] << 24) - 0x50000;
+    payload[9] = i & 0xff; // slot index
+    bcopy(&write_data_buffer[data_offset], &payload[14], 512);
+    ethl_send_packet(payload, packet_size);
+    job += 9;
+  }
+
+  // Batches should not be mixed with single writes, so make sure the batch
+  // is applied completely before we do other batches or individual sector writes
+  if (batch_size > 1) {
+    wait_all_acks();
+  }
+
+  ++write_batch_counter;
+}
+
+void process_ethernet_read_sectors_job(uint8_t *job)
+{
+  int i;
+  uint8_t payload[13];
+  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+  memcpy(&payload[6], job, 7);                 // copy job bytes into packet
+
+  eth_batch_start_sector = payload[9] + (payload[10] << 8) + (payload[11] << 16) + (payload[12] << 24);
+  eth_batch_size = payload[7];
+  --payload[7];
+  if (payload[8] != 0) {
+    log_error("Unsupported batch size %d for ethernet mode", payload[7] + (payload[8] << 8));
+    exit(-1);
+  }
+
+  // We'll send a single request packet for a sector range, but will expect individual packets
+  // per sector as response (with the sector data in the payload). To detect dropped packets, we
+  // schedule an expected ack packet in the Etherload framework for each sector. Thus, we
+  // 'unroll' the request packet into multiple packets and schedule them. If a single response
+  // packet will be missing the framework will schedule resends for that single packet/sector
+  // automatically.
+  uint8_t payload_unrolled[13];
+  memcpy(payload_unrolled, payload, sizeof(payload));
+  payload_unrolled[7] = 1;
+  payload_unrolled[8] = 0;
+  uint32_t sector_number = eth_batch_start_sector;
+  wait_ack_slots_available(eth_batch_size);
+  uint16_t seq_num = ethl_get_current_seq_num();
+  for (i = 0; i < eth_batch_size; ++i) {
+    payload_unrolled[9] = sector_number >> 0;
+    payload_unrolled[10] = sector_number >> 8;
+    payload_unrolled[11] = sector_number >> 16;
+    payload_unrolled[12] = sector_number >> 24;
+    memcpy(eth_packet_queue[i], payload_unrolled, sizeof(payload_unrolled));
+    ++sector_number;
+    ethl_schedule_ack(payload_unrolled, sizeof(payload_unrolled));
+    eth_packet_len[i] = sizeof(payload_unrolled);
+  }
+  // We already scheduled the ack packages, so send the request without scheduling another
+  // expected response for it.
+  ethernet_embed_packet_seq(payload, sizeof(payload), seq_num);
+  ethl_send_packet_unscheduled(payload, sizeof(payload));
+}
+
 void process_jobs_ethernet(void)
 {
   uint8_t *ptr = queue_cmds;
-  int i, j;
-  uint8_t header_template[4] = { 'm', 'r', 'e', 'q' };
+  int i;
   queue_read_len = 0;
+  uint8_t last_cmd = 0;
+  int write_batch_size = 0;
 
   for (i = 0; i < queue_jobs; ++i) {
-    switch (*ptr) {
-    case 0x02: // physical write sector
-      ptr += 9;
-      log_debug("physical write sector job not implemented for ethernet");
-      exit(-1);
-      break;
-
-    case 0x04: // read sectors
-    {
-      uint8_t payload[13];
-      memcpy(payload, header_template, 4);
-      memcpy(&payload[6], ptr, 7);
-
-      eth_batch_start_sector = payload[9] + (payload[10] << 8) + (payload[11] << 16) + (payload[12] << 24);
-      eth_batch_size = payload[7];
-      if (payload[8] != 0) {
-        log_error("Unsupported batch size %d for ethernet mode", payload[7] + (payload[8] << 8));
-        exit(-1);
-      }
-      ethl_set_queue_length(eth_batch_size);
-
-      uint8_t payload_unrolled[13];
-      memcpy(payload_unrolled, payload, sizeof(payload));
-      payload_unrolled[7] = 1;
-      payload_unrolled[8] = 0;
-      uint32_t sector_number = eth_batch_start_sector;
-      for (j = 0; j < eth_batch_size; ++j)
-      {
-        payload_unrolled[9] = sector_number >> 0;
-        payload_unrolled[10] = sector_number >> 8;
-        payload_unrolled[11] = sector_number >> 16;
-        payload_unrolled[12] = sector_number >> 24;
-        memcpy(eth_packet_queue[j], payload_unrolled, sizeof(payload_unrolled));
-        ++sector_number;
-        ethl_schedule_ack(payload_unrolled, sizeof(payload_unrolled));
-        eth_packet_len[j] = sizeof(payload_unrolled);
-      }
-      ethl_send_packet_unscheduled(payload, sizeof(payload));
+    uint8_t cur_cmd = *ptr;
+    //printf("Entry %d cmd %d\n", i, cur_cmd);
+    if (last_cmd != cur_cmd && i > 0) {
+      // If we switch command (read, write, ...) make sure the one before is completely
+      // done before we continue so we don't mix read/write commands
+      log_debug("Switch of commands, waiting for acks\n");
       wait_all_acks();
     }
+    last_cmd = cur_cmd;
+
+    switch (cur_cmd) {
+    case 0x02: // physical write sector
+    {
+      // We see a new write command, let's detect whether this is a batch of consecutive
+      // sectors
+      int j;
+      uint8_t *look_ahead_ptr = ptr;
+      write_batch_size = 1;
+      int sector_number = ptr[5] + (ptr[6] << 8) + (ptr[7] << 16) + (ptr[8] << 24);
+      //printf("  Start at %d: sector %d\n", i, sector_number);
+      for (j = i + 1; j < queue_jobs && write_batch_size <= 256; ++j) {
+        look_ahead_ptr += 9;
+        if (*look_ahead_ptr != *ptr) {
+          break;
+        }
+        int next_sector_number = look_ahead_ptr[5] + (look_ahead_ptr[6] << 8) + (look_ahead_ptr[7] << 16)
+                                + (look_ahead_ptr[8] << 24);
+        if (next_sector_number != sector_number + 1) {
+          break;
+        }
+        //printf("    follow %d: sector %d batch size %d\n", j, next_sector_number, write_batch_size);
+        ++sector_number;
+        ++write_batch_size;
+      }
+      ethl_set_queue_length(8);
+      process_ethernet_write_sectors_job(ptr, write_batch_size);
+      ptr += 9 * write_batch_size;
+      i += write_batch_size - 1;
+      write_batch_size = 0;
+      break;
+    }
+
+    case 0x04: // read sectors
+      ethl_set_queue_length(256);
+      process_ethernet_read_sectors_job(ptr);
+      ptr += 7;
       break;
 
     case 0x0f: // read flash
@@ -1375,6 +1490,8 @@ void process_jobs_ethernet(void)
       exit(-1);
     }
   }
+
+  wait_all_acks();
 }
 
 void queue_execute(void)
@@ -1403,11 +1520,6 @@ void queue_execute(void)
   queue_jobs = 0;
 }
 
-uint32_t write_buffer_offset = 0;
-uint8_t write_data_buffer[65536];
-uint32_t write_sector_numbers[65536 / 512];
-uint8_t write_sector_count = 0;
-
 void queue_physical_write_sector(uint32_t sector_number, uint32_t mega65_address)
 {
   uint8_t job[9];
@@ -1431,16 +1543,19 @@ int execute_write_queue(void)
 
   int retVal = 0;
   do {
-    if (0)
-      log_debug("executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)", write_sector_count,
-          write_buffer_offset);
-    push_ram(0x50000, write_buffer_offset, &write_data_buffer[0]);
+    if (!ethernet_mode) {
+      if (0)
+        log_debug("executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)", write_sector_count,
+            write_buffer_offset);
+      push_ram(0x50000, write_buffer_offset, &write_data_buffer[0]);
+    }
 
     // XXX - Sort sector number order and merge consecutive writes into
     // multi-sector writes would be a good idea here.
     for (int i = 0; i < write_sector_count; i++) {
       queue_physical_write_sector(write_sector_numbers[i], 0x50000 + (i << 9));
     }
+    //printf("Execute write queue with %d entries\n", write_sector_count);
     queue_execute();
 
     // Reset write queue
@@ -4968,7 +5083,7 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
                       + sector_in_cluster;
 
         // We try to read-ahead a lot of sectors, because files are usually not very fragmented,
-        // so the extra read-ahead reduces the rount-trip time for scheduling each successive job
+        // so the extra read-ahead reduces the round-trip time for scheduling each successive job
         if (read_sector(sector_number, download_buffer, CACHE_YES, 128)) {
           printf("ERROR: Failed to read to sector %d\n", sector_number);
           retVal = -1;
