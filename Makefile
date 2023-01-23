@@ -224,6 +224,8 @@ GTESTFILESEXE=	$(GTESTBINDIR)/mega65_ftp.test.exe \
 MEGA65LIBCDIR= $(SRCDIR)/mega65-libc/cc65
 MEGA65LIBC= $(MEGA65LIBCDIR) $(wildcard $(MEGA65LIBCDIR)/src/*.c) $(wildcard $(MEGA65LIBCDIR)/src/*.s) $(wildcard $(MEGA65LIBCDIR)/include/*.h)
 
+WEEIP_SOURCES= $(wildcard $(SRCDIR)/weeip/*.c)
+
 # TOOLS omits TOOLSMAC. Linux users can make all. To make Mac binaries, use
 # a Mac to make allmac. See README.md.
 TOOLS=$(TOOLSUNX) $(EXTRAUNX) $(TOOLSWIN) $(EXTRAWIN)
@@ -712,6 +714,12 @@ $(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65) $(MEGA65LIBC)
 $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
+$(UTILDIR)/remotesd_eth.prg:       $(UTILDIR)/remotesd_eth.c $(CC65) $(MEGA65LIBC) $(WEEIP_SOURCES)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -I $(SRCDIR)/weeip -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $<  $(WEEIP_SOURCES) $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/random.c $(SRCDIR)/mega65-libc/cc65/src/debug.c $(SRCDIR)/mega65-libc/cc65/src/time.c $(SRCDIR)/mega65-libc/cc65/src/hal.c $(SRCDIR)/mega65-libc/cc65/src/targets.c
+
+$(TOOLDIR)/ftphelper_eth.c:	$(UTILDIR)/remotesd_eth.prg $(TOOLDIR)/bin2c
+	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd_eth.prg helperroutine_eth $(TOOLDIR)/ftphelper_eth.c
+
 define LINUX_AND_MINGW_GTEST_TARGETS
 $(1): $(2)
 	$$(CXX) $$(COPT) $$(GTESTOPTS) -Iinclude $(LIBUSBINC) -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $(3)
@@ -724,6 +732,7 @@ MEGA65FTP_SRC=	$(TOOLDIR)/mega65_ftp.c \
 		$(TOOLDIR)/m65common.c \
 		$(TOOLDIR)/logging.c \
 		$(TOOLDIR)/ftphelper.c \
+		$(TOOLDIR)/ftphelper_eth.c \
 		$(TOOLDIR)/filehost.c \
 		$(TOOLDIR)/diskman.c \
 		$(TOOLDIR)/bit2mcs.c

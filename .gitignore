@@ -25,6 +25,7 @@ src/tools/version.c
 src/tools/bin2c
 src/tools/map2c
 src/tools/ftphelper.c
+src/tools/ftphelper_eth.c
 src/tools/ascii_font.c
 
 gtest/bin/*
