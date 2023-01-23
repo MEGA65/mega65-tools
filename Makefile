@@ -173,7 +173,8 @@ GTESTFILESEXE=	$(GTESTBINDIR)/mega65_ftp.test.exe \
 		$(GTESTBINDIR)/bit2core.test.exe
 
 # all dependencies
-MEGA65LIBC= $(wildcard $(SRCDIR)/mega65-libc/cc65/src/*.c) $(wildcard $(SRCDIR)/mega65-libc/cc65/src/*.s) $(wildcard $(SRCDIR)/mega65-libc/cc65/include/*.h)
+MEGA65LIBCDIR= $(SRCDIR)/mega65-libc/cc65
+MEGA65LIBC= $(MEGA65LIBCDIR) $(wildcard $(MEGA65LIBCDIR)/src/*.c) $(wildcard $(MEGA65LIBCDIR)/src/*.s) $(wildcard $(MEGA65LIBCDIR)/include/*.h)
 
 # TOOLS omits TOOLSMAC. Linux users can make all. To make Mac binaries, use
 # a Mac to make allmac. See README.md.
@@ -191,11 +192,11 @@ SUBMODULEUPDATE= \
 ##
 ## Global Rules
 ##
-.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest submodules
+.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
 
-allmac:		submodules $(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
-allwin:		submodules $(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
-allunix:	submodules $(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
+allmac:		$(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
+allwin:		$(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
+allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
 
 ifeq ($(OS), Darwin)
 all: allmac
@@ -205,10 +206,7 @@ else
 all: allwin
 endif
 
-submodules:
-	$(SUBMODULEUPDATE)
-
-arcunix: submodules $(TOOLSUNX)
+arcunix: $(TOOLSUNX)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-linux; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
@@ -219,7 +217,7 @@ arcunix: submodules $(TOOLSUNX)
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
-arcwin: submodules $(TOOLSWIN)
+arcwin: $(TOOLSWIN)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-windows; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
@@ -230,7 +228,7 @@ arcwin: submodules $(TOOLSWIN)
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
-arcmac: submodules $(TOOLSMAC)
+arcmac: $(TOOLSMAC)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-macos; \
 	if [[ -e $${arcdir} ]]; then \
 		rm -rf $${arcdir} $${arcdir}.7z ; \
