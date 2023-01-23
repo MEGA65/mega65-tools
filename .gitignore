@@ -56,3 +56,4 @@ graph_info.json
 .vscode
 test.wxs
 cbmconvert
+bin/*.dSYM
