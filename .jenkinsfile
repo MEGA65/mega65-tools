@@ -8,17 +8,38 @@ pipeline {
                 sh 'make USE_LOCAL_CC65=1 cleanall'
             }
         }
-        stage('Build linux') {
+        stage ('Full PR Testbuild') {
+            when {
+                branch pattern: "^PR.+",
+                comparator: "REGEXP"
+            }
+            steps {
+                sh 'make USE_LOCAL_CC65=1 all'
+            }
+        }
+        stage('Build Linux Tools') {
+            when {
+                not {
+                    branch pattern: "^PR.+",
+                    comparator: "REGEXP"
+                }
+            }
             steps {
                 sh 'make USE_LOCAL_CC65=1 arcunix'
             }
         }
-        stage('Build windows') {
+        stage('Build Windows Tools') {
+            when {
+                not {
+                    branch pattern: "^PR.+",
+                    comparator: "REGEXP"
+                }
+            }
             steps {
                 sh 'make USE_LOCAL_CC65=1 arcwin'
             }
         }
-        stage('Test build') {
+        stage('Run build tests') {
             steps {
                 sh 'make USE_LOCAL_CC65=1 test'
             }
@@ -26,9 +47,13 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: "m65tools-*.7z",
-                onlyIfSuccessful: true,
-                fingerprint: true
+            script {
+                if (!env.BRANCH_NAME.startsWith('PR')) {
+                    archiveArtifacts artifacts: "m65tools-*.7z",
+                        onlyIfSuccessful: true,
+                        fingerprint: true
+                }
+            }
         }
     }
 }
