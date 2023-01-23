@@ -762,10 +762,10 @@ $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/versio
 $(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h Makefile
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp_intel.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
+$(BINDIR)/mega65_ftp_intel.osx: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h Makefile
 	$(CC) $(MACINTELCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -o $@ -Iinclude $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lpthread -lreadline -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp_arm.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
+$(BINDIR)/mega65_ftp_arm.osx: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h Makefile
 	$(CC) $(MACARMCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -o $@ -Iinclude $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lpthread -lreadline -DINCLUDE_BIT2MCS
 
 $(BINDIR)/m65ftp_test:	$(TESTDIR)/m65ftp_test.c
