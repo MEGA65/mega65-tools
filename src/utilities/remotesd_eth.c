@@ -99,6 +99,11 @@ uint8_t buffer_ready = 0;
 uint16_t sector_count = 0;
 uint8_t read_pending = 0;
 
+uint32_t read_cache_start = 0;
+uint8_t read_cache_size = 0;
+uint8_t read_cache_offset = 0;
+uint8_t read_cache_empty = 1;
+
 void rle_init(void)
 {
   olen = 0;
@@ -287,50 +292,173 @@ void mount_file(void)
 }
 #pragma optimize(on)
 
+void update_read_cache()
+{
+  if (read_cache_empty) {
+    goto reset_cache;
+  }
+
+  if (read_cache_size == 0) {
+    if (sector_number == read_cache_start + 256) {
+      lcopy(0xffd6e00, 0x40000 + (read_cache_offset << 9UL), 0x200);
+      ++read_cache_start;
+      ++read_cache_offset;
+      return;
+    }
+    goto reset_cache;
+  }
+
+  if (sector_number == read_cache_start + read_cache_size) {
+    lcopy(0xffd6e00, 0x40000 + (read_cache_size << 9UL), 0x200);
+    ++read_cache_size;
+    return;
+  }
+
+reset_cache:
+  read_cache_start = sector_number;
+  read_cache_size = 1;
+  read_cache_offset = 0;
+  read_cache_empty = 0;
+  lcopy(0xffd6e00, 0x40000, 0x200);
+}
+
+uint8_t read_from_cache(uint32_t req_sector, uint8_t *buffer)
+{
+  uint8_t offset = req_sector - read_cache_start;
+  //printf("r: %ld st: %ld sz: %d os: %d e: %d\n", req_sector, read_cache_start, read_cache_size, read_cache_offset, read_cache_empty);
+  if (read_cache_empty || req_sector < read_cache_start || req_sector - read_cache_start > 255) {
+    return 0;
+  }
+
+  if (read_cache_size == 0) {
+    offset += read_cache_offset;
+  }
+  else if (offset >= read_cache_size) {
+    return 0;
+  }
+
+  lcopy(0x40000 + (offset << 9UL), buffer, 0x200);
+  return 1;
+}
+
 SOCKET *s;
 byte_t buf[1500];
+byte_t batch_left;
+
+uint8_t batch_next_packet(uint8_t /*p*/)
+{
+  // just updating sector number and data, keep seq num
+  //if (batch_left > 0)
+  //  printf(" batch left %d sector %ld\n", batch_left, sector_number);
+  // Wait for SD to read and fiddle border colour to show we are alive
+  while (PEEK(0xD680) & 0x03)
+    POKE(0xD020, PEEK(0xD020) + 1);
+
+  *(uint32_t *)(buf + 9) = sector_number;
+  lcopy(0xffd6e00, (long)(buf + 13), 0x200);
+
+  // Already trigger next sector as read-ahead
+  ++sector_number;
+  --batch_left;
+  *(uint32_t *)0xD681 = sector_number;
+  POKE(0xD680, 0x02);
+  wait_for_sdcard_to_go_busy();
+  socket_select(s);
+  socket_send(buf, 0x20d);
+  //task_add(nwk_upstream, 0, 0,"upstream");
+  return 0;
+}
 
 byte_t rx_handler(byte_t p)
 {
   int size;
+  uint16_t seq_num;
+  byte_t hdr[] = { 0x6d, 0x72, 0x65, 0x71 }; // 'mreq'
 
   size = socket_data_size();
-  printf("received packet\n");
-  if (p != WEEIP_EV_DATA || size < 5 || memcmp(buf, "mreq", 4) != 0)
+
+  if (p == WEEIP_EV_DATA_SENT) {
+    //printf("sent complete\n");
+    if (batch_left > 0) {
+      task_add(batch_next_packet, 1, 0, "batch");
+    }
+    else {
+      block_rx = FALSE;
+    }
+    return 0;
+  }
+
+  if (p != WEEIP_EV_DATA || size < 5 || memcmp(buf, hdr, 4) != 0)
     return 0;
 
-  buf[2] = 's';
-  buf[3] = 'p';
+  //printf("received packet\n");
+  buf[2] = 0x73; // 's'
+  buf[3] = 0x70; // 'p';
 
   // skipping two bytes (serial no)
   switch (buf[6]) {
   case 0xff:
     printf("reset request\n");
     __asm__("jmp 58552");
-  case 0x01:
-    printf("read sector request\n");
-    if (size != 11)
+  case 0x04:
+    //printf("read sector request\n");
+    if (size != 13)
       return 0;
-    sector_number = *(uint32_t *)(buf + 7);
+    seq_num = *(uint16_t *)(buf + 4);
+    batch_left = *(uint16_t *)(buf + 7);
+    sector_number = *(uint32_t *)(buf + 9);
+    if (batch_left > 1)
+      printf("Req seq %d sect %ld cnt %d\n", seq_num, sector_number, batch_left);
     *(uint32_t *)0xD681 = sector_number;
-    printf("reading sector %d\n", sector_number);
     POKE(0xD680, 0x02);
-
     wait_for_sdcard_to_go_busy();
+    batch_next_packet(0);
+    block_rx = TRUE;
+/*
+    seq_num = *(uint16_t *)(buf + 4);
+    req_sector = *(uint32_t *)(buf + 7);
+    if (read_from_cache(req_sector, buf + 11)) {
+      //printf("cached\n");
+      socket_send(buf, 0x20b);
+      return 0;
+    }
+
+    if (req_sector != sector_number) {
+      printf("cache miss\n");
+      // Wait for SD to read and fiddle border colour to show we are alive
+      while (PEEK(0xD680) & 0x03)
+        POKE(0xD020, PEEK(0xD020) + 1);
+      *(uint32_t *)0xD681 = req_sector;
+      //printf("reading sector %ld, seq_num %d\n", sector_number, seq_num);
+      POKE(0xD680, 0x02);
+      wait_for_sdcard_to_go_busy();
+    }
+    else {
+      //printf("read-ahead\n");
+    }
 
     // Wait for SD to read and fiddle border colour to show we are alive
     while (PEEK(0xD680) & 0x03)
       POKE(0xD020, PEEK(0xD020) + 1);
-    printf("buffer ready\n");
 
+    sector_number = req_sector;
+    update_read_cache();
     lcopy(0xffd6e00, (long)(buf + 11), 0x200);
-    socket_send(buf, 0x20b);
-    printf("response sent\n");
 
+    // Already trigger next sector as read-ahead
+    ++sector_number;
+    *(uint32_t *)0xD681 = sector_number;
+    POKE(0xD680, 0x02);
+    socket_send(buf, 0x20b);
+    wait_for_sdcard_to_go_busy();
+*/
+    break;
   default:
-    printf("unknown request\n");
+    printf("unknown request %d\n", buf[6]);
     return 0;
   }
+
+  return 0;
 }
 
 void main(void)
@@ -377,7 +505,7 @@ void main(void)
   s = socket_create(SOCKET_UDP);
   socket_set_callback(rx_handler);
   socket_set_rx_buffer((buffer_t)buf, 1500);
-  socket_listen(4511);
+  socket_listen(4510);
 
   while (1) {
     task_periodic();

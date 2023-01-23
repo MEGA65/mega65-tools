@@ -15,16 +15,17 @@ static int sockfd;
 static struct sockaddr_in servaddr;
 
 #define PORTNUM 4510
-#define MAX_UNACKED_FRAMES 32
+#define MAX_UNACKED_FRAMES 256
 static int frame_unacked[MAX_UNACKED_FRAMES] = { 0 };
 //static long frame_load_addrs[MAX_UNACKED_FRAMES] = { -1 };
-static unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1280];
+static unsigned char unacked_frame_payloads[MAX_UNACKED_FRAMES][1500];
 static int unacked_frame_lengths[MAX_UNACKED_FRAMES] = { 0 };
+static long long unacked_sent_times[MAX_UNACKED_FRAMES] = { 0 };
 
+static int queue_length = 4;
 static int retx_interval = 1000;
 static long long start_time;
 static long long last_resend_time = 0;
-static int resend_frame = 0;
 
 static int packet_seq = 0;
 static int last_rx_seq = 0;
@@ -92,7 +93,7 @@ void etherload_finish(void)
 #endif
 }
 
-void etherload_setup_callbacks(
+void ethl_setup_callbacks(
     get_packet_seq_callback_t c1, match_payloads_callback_t c2, is_duplicate_callback_t c3, embed_packet_seq_callback_t c4)
 {
   get_packet_seq = c1;
@@ -166,39 +167,42 @@ void update_retx_interval(void)
 {
   int seq_gap = (packet_seq - last_rx_seq);
   retx_interval = 2000 + 10000 * seq_gap;
-  if (retx_interval < 1000)
-    retx_interval = 1000;
+  if (retx_interval < 12000)
+    retx_interval = 12000;
   if (retx_interval > 500000)
     retx_interval = 500000;
-  //  printf("  retx interval=%dusec (%d vs %d)\n",retx_interval,packet_seq,last_rx_seq);
+  //printf("  retx interval=%dusec (%d vs %d)\n",retx_interval,packet_seq,last_rx_seq);
 }
 
 int check_if_ack(uint8_t *rx_payload, int len)
 {
-/*
   log_debug("Pending acks:");
-  for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
+  for (int i = 0; i < queue_length; i++) {
     if (frame_unacked[i])
-      log_debug("  Frame ID #%d : addr=$%lx", i, frame_load_addrs[i]);
+      log_debug("  Frame ID #%d : seq_num=%d", i, get_packet_seq(unacked_frame_payloads[i], unacked_frame_lengths[i]));
   }
-*/
 
   // Set retry interval based on number of outstanding packets
+  log_debug("Received packet, checking seq_num");
   int seq_num = (*get_packet_seq)(rx_payload, len);
   if (seq_num < 0) {
     return 0;
   }
+  log_debug("Received packet, seq_num=%d", seq_num);
   last_rx_seq = seq_num;
   update_retx_interval();
 
-  for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
+  for (int i = 0; i < queue_length; i++) {
     if (frame_unacked[i]) {
       if ((*match_payloads)(rx_payload, len, unacked_frame_payloads[i], unacked_frame_lengths[i])) {
+        log_debug("Found match in slot #%d, freeing...", i);
         frame_unacked[i] = 0;
+        last_resend_time = gettime_us();
         return 1;
       }
     }
   }
+  log_debug("No match for packet");
   return 0;
 }
 
@@ -207,30 +211,34 @@ void maybe_send_ack(void);
 int expect_ack(uint8_t *payload, int len)
 {
   while (1) {
-    int addr_dup = -1;
+    int duplicate = -1;
     int free_slot = -1;
-    for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
+    for (int i = 0; i < queue_length; i++) {
       if (frame_unacked[i]) {
         if (is_duplicate(payload, len, unacked_frame_payloads[i], unacked_frame_lengths[i])) {
-          addr_dup = i;
+          duplicate = i;
           break;
         }
       }
       if ((!frame_unacked[i]) && (free_slot == -1))
         free_slot = i;
     }
-    if ((free_slot != -1) && (addr_dup == -1)) {
+    if ((free_slot != -1) && (duplicate == -1)) {
       // We have a free slot to put this frame, and it doesn't
-      // duplicate the address of another frame.
+      // duplicate the request of another frame.
       // Thus we can safely just note this one
-      //log_debug("Expecting ack of addr=$%lx @ %d", load_addr, free_slot);
+      embed_packet_seq(payload, len, packet_seq);
+      packet_seq++;
+      update_retx_interval();
       memcpy(unacked_frame_payloads[free_slot], payload, len);
       unacked_frame_lengths[free_slot] = len;
+      unacked_sent_times[free_slot] = gettime_us();
       frame_unacked[free_slot] = 1;
+      last_resend_time = gettime_us();
       return 0;
     }
     // We don't have a free slot, or we have an outstanding
-    // frame with the same address that we need to see an ack
+    // frame with the same request that we need to see an ack
     // for first.
 
     // Check for the arrival of any acks
@@ -240,7 +248,7 @@ int expect_ack(uint8_t *payload, int len)
     struct sockaddr_in src_address;
     socklen_t addr_len = sizeof(src_address);
 
-    while (r > -1 /*&& count < 100*/) {
+    while (r > -1 /*&& count++ < 100*/) {
       r = recvfrom(sockfd, (void *)ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
       if (r > -1) {
         if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
@@ -269,21 +277,23 @@ int expect_ack(uint8_t *payload, int len)
 void maybe_send_ack(void)
 {
   int i = 0;
-  int unackd[MAX_UNACKED_FRAMES];
-  int ucount = 0;
-  for (i = 0; i < MAX_UNACKED_FRAMES; i++)
-    if (frame_unacked[i])
-      unackd[ucount++] = i;
+  int id = 0;
+  long long oldest_sent_time = -1;
+  for (i = 0; i < queue_length; i++) {
+    if (frame_unacked[i]) {
+      if (oldest_sent_time == -1 || unacked_sent_times[i] < oldest_sent_time) {
+        oldest_sent_time = unacked_sent_times[i];
+        id = i;
+      }
+    }
+  }
 
-  if (ucount) {
-    if ((gettime_us() - last_resend_time) > retx_interval) {
-
+  if (oldest_sent_time != -1) {
+    long long now = gettime_us();
+    if ((now - last_resend_time) > retx_interval) {
+      log_debug("now %lld last %lld diff %lld intv %d", now, last_resend_time, now - last_resend_time, retx_interval);
       //      if (retx_interval<500000) retx_interval*=2;
 
-      resend_frame++;
-      if (resend_frame >= ucount)
-        resend_frame = 0;
-      int id = unackd[resend_frame];
 /*
       if (0)
         log_warn("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x", gettime_us() - start_time,
@@ -300,7 +310,7 @@ void maybe_send_ack(void)
         exit(-1);
       }
 */
-
+      log_debug("Resending packet seq #%d with new seq #%d", get_packet_seq(unacked_frame_payloads[id], unacked_frame_lengths[id]), packet_seq);
       if (!(*embed_packet_seq)(unacked_frame_payloads[id], unacked_frame_lengths[id], packet_seq)) {
         log_crit("Unable to embed packet sequence number");
         return;
@@ -309,10 +319,11 @@ void maybe_send_ack(void)
       update_retx_interval();
       sendto(sockfd, (void *)unacked_frame_payloads[id], unacked_frame_lengths[id], 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
       last_resend_time = gettime_us();
+      unacked_sent_times[id] = last_resend_time;
     }
     return;
   }
-  if (!ucount) {
+  if (oldest_sent_time == -1) {
     log_debug("No unacked frames");
     return;
   }
@@ -322,7 +333,7 @@ int wait_all_acks(void)
 {
   while (1) {
     int unacked = -1;
-    for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
+    for (int i = 0; i < queue_length; i++) {
       if (frame_unacked[i]) {
         unacked = i;
         break;
@@ -338,7 +349,7 @@ int wait_all_acks(void)
     struct sockaddr_in src_address;
     socklen_t addr_len = sizeof(src_address);
 
-    while (r > -1 /*&& count < 100*/) {
+    while (r > -1 /*&& count++ < 100*/) {
       r = recvfrom(sockfd, (void *)ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
       if (r > -1) {
         if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
@@ -378,13 +389,12 @@ int dmaload_get_packet_seq(uint8_t *payload, int len)
     return -1;
   }
 
-  int rx_seq_num = payload[ethlet_dma_load_offset_seq_num] + (payload[ethlet_dma_load_offset_seq_num + 1] << 8);
+  int seq_num = payload[ethlet_dma_load_offset_seq_num] + (payload[ethlet_dma_load_offset_seq_num + 1] << 8);
 
   long ack_addr = dmaload_parse_load_addr(payload);
-  log_debug("T+%lld : RXd frame addr=$%lx, rx seq=$%04x, tx seq=$%04x", gettime_us() - start_time, ack_addr, rx_seq_num,
-      packet_seq);
+  log_debug("  Frame addr=$%lx, seq=%d", ack_addr, seq_num);
 
-  return rx_seq_num;
+  return seq_num;
 }
 
 int dmaload_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len)
@@ -402,8 +412,6 @@ int dmaload_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload,
     log_debug("ACK addr=$%lx", load_addr);
     return 1;
   }
-}
-}
 #else
   if (!memcmp(rx_payload, tx_payload, rx_len)) {
     log_debug("ACK addr=$%lx", load_addr);
@@ -432,8 +440,33 @@ int dmaload_embed_packet_seq(uint8_t *payload, int len, int seq_num)
   return 1;
 }
 
+int ethl_send_packet(uint8_t *payload, int len)
+{
+  expect_ack(payload, len);
+  sendto(sockfd, payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  return 0;
+}
+
+int ethl_send_packet_unscheduled(uint8_t *payload, int len)
+{
+  sendto(sockfd, payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  return 0;
+}
+
+int ethl_schedule_ack(uint8_t *payload, int len)
+{
+  expect_ack(payload, len);
+  return 0;
+}
+
+void ethl_set_queue_length(uint8_t length)
+{
+  queue_length = length;
+}
+
 int send_mem(unsigned int address, unsigned char *buffer, int bytes)
 {
+  const int dmaload_len = 1280;
   uint8_t *payload = (uint8_t *) ethlet_dma_load;
 
   // Set position of marker to draw in 1KB units
@@ -450,21 +483,15 @@ int send_mem(unsigned int address, unsigned char *buffer, int bytes)
   // Copy data into packet
   memcpy(&payload[ethlet_dma_load_offset_data], buffer, bytes);
 
-  // Add to queue of packets with pending ACKs
-  expect_ack(payload, 1280);
-
   // Send the packet initially
   if (0)
     log_info("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...", gettime_us() - start_time, address, packet_seq,
         payload[ethlet_dma_load_offset_data], payload[ethlet_dma_load_offset_data + 1]);
-  dmaload_embed_packet_seq(payload, 1280, packet_seq);
-  packet_seq++;
-  update_retx_interval();
-  sendto(sockfd, payload, ethlet_dma_load_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  ethl_send_packet(payload, dmaload_len);
   return 0;
 }
 
-void etherload_setup_dmaload(void)
+void ethl_setup_dmaload(void)
 {
   get_packet_seq = dmaload_get_packet_seq;
   match_payloads = dmaload_match_payloads;
@@ -474,7 +501,7 @@ void etherload_setup_dmaload(void)
 
 int dmaload_no_pending_ack(int addr)
 {
-  for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
+  for (int i = 0; i < queue_length; i++) {
     if (frame_unacked[i]) {
       if (dmaload_parse_load_addr(unacked_frame_payloads[i]) == addr)
         return 0;

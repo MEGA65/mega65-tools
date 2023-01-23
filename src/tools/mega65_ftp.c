@@ -153,6 +153,10 @@ int sdhc_check(void);
 void request_remotesd_version(void);
 void request_quit(void);
 void mount_file(char *filename);
+int ethernet_get_packet_seq(uint8_t *payload, int len);
+int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len);
+int ethernet_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len);
+int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num);;
 #define CACHE_NO 0
 #define CACHE_YES 1
 int read_flash(const unsigned int sector_number, unsigned char *buffer);
@@ -191,6 +195,9 @@ static struct sockaddr_in *servaddr;
 static uint8_t eth_packet_queue[1024][1500];
 static uint16_t eth_packet_len[1024];
 int eth_num_packets = 0;
+uint32_t eth_batch_start_sector = 0;
+uint8_t eth_batch_size = 0;
+
 
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
@@ -230,7 +237,8 @@ unsigned char *sd_read_buffer = NULL;
 int sd_read_offset = 0;
 
 int file_system_found = 0;
-unsigned int partition_start = 0xffffffff; // The absolute sector location of the start of the partition (in units of sectors)
+unsigned int partition_start = 0xffffffff; // The absolute sector location of the start of the partition (in units of
+                                           // sectors)
 unsigned int partition_size = 0;
 unsigned char sectors_per_cluster = 0;
 unsigned int sectors_per_fat = 0;
@@ -293,9 +301,9 @@ void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr, "version: %s\n\n", version_string);
-  fprintf(stderr,
-      "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>|-i <broadcast ip>] [-s <230400|2000000|4000000>]  "
-      "[-b bitstream] [[-c command] ...]\n");
+  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>|-i <broadcast ip>] [-s "
+                  "<230400|2000000|4000000>]  "
+                  "[-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n");
   fprintf(stderr, "  -F - force startup, even if other program is detected\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
@@ -809,7 +817,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
       log_error("Unable to initialize ethernet communication");
       exit(-1);
     }
-    etherload_setup_dmaload();
+    ethl_setup_dmaload();
     trigger_eth_hyperrupt();
     log_info("Starting helper routine transfer...");
     while (bytes > 0) {
@@ -838,6 +846,9 @@ int DIRTYMOCK(main)(int argc, char **argv)
     sockfd = ethl_get_socket();
     servaddr = ethl_get_server_addr();
 
+    // setup callbacks for job queue protocol
+    ethl_setup_callbacks(
+        &ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate, &ethernet_embed_packet_seq);
   }
   else {
     if (open_the_serial_port(serial_port))
@@ -1232,25 +1243,134 @@ void job_process_results(void)
   }
 }
 
-void process_ethernet_read_sectors(void)
+void ethernet_process_result(uint8_t *rx_payload, int rx_len)
 {
+  uint8_t *p = &rx_payload[6];
+  uint32_t sector_number;
 
+  switch (*p) {
+  case 0x04:
+    sector_number = p[3] + (p[4] << 8) + (p[5] << 16) + (p[6] << 24);
+    log_debug("Received sector %d, batch start sector %d", sector_number, eth_batch_start_sector);
+    uint32_t index = sector_number - eth_batch_start_sector;
+    bcopy(&rx_payload[13], &queue_read_data[queue_read_len + index * 512], 512);
+    break;
+  }
+}
+
+int ethernet_get_packet_seq(uint8_t *payload, int len)
+{
+  if (len < 6) {
+    return -1;
+  }
+
+  return payload[4] + (payload[5] << 8);
+}
+
+int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len)
+{
+  if (rx_len < 7 || tx_len < 7 || memcmp(rx_payload, "mrsp", 4) || memcmp(tx_payload, "mreq", 4)) {
+    return 0;
+  }
+
+/*
+  if (rx_payload[4] != tx_payload[4] || rx_payload[5] != tx_payload[5]) {
+    return 0;
+  }
+*/
+
+  switch (rx_payload[6]) {
+  case 0x04:
+    if (rx_len != 512 + 13 || memcmp(&rx_payload[9], &tx_payload[9], 4) != 0) {
+      return 0;
+    }
+    break;
+  default:
+    return 0;
+  }
+
+  log_debug("Received packet #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)), (tx_payload[4] + (tx_payload[5] << 8)));
+  log_debug("Processing response");
+  ethernet_process_result(rx_payload, rx_len);
+  return 1;
+}
+
+int ethernet_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len)
+{
+  return 0;
+}
+
+int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
+{
+  if (len < 7) {
+    return 0;
+  }
+  payload[4] = seq_num;
+  payload[5] = seq_num >> 8;
+  return 1;
+}
+
+void process_ethernet_read_sectors()
+{
+  int i;
+  for (i = 0; i < eth_num_packets; ++i) {
+    log_debug("Sending queue packet #%d", i);
+    ethl_send_packet(eth_packet_queue[i], eth_packet_len[i]);
+  }
+  log_debug("Waiting for all packets to get acknowledged");
+  wait_all_acks();
+  log_debug("Queue done");
 }
 
 void process_jobs_ethernet(void)
 {
   uint8_t *ptr = queue_cmds;
   int i, j;
-  uint8_t header_template[4] = {'m', 'r', 'e', 'q'};
-  uint16_t serial = 0;
+  uint8_t header_template[4] = { 'm', 'r', 'e', 'q' };
+  queue_read_len = 0;
 
   for (i = 0; i < queue_jobs; ++i) {
     switch (*ptr) {
     case 0x02: // physical write sector
       ptr += 9;
+      log_debug("physical write sector job not implemented for ethernet");
+      exit(-1);
       break;
 
     case 0x04: // read sectors
+    {
+      uint8_t payload[13];
+      memcpy(payload, header_template, 4);
+      memcpy(&payload[6], ptr, 7);
+
+      eth_batch_start_sector = payload[9] + (payload[10] << 8) + (payload[11] << 16) + (payload[12] << 24);
+      eth_batch_size = payload[7];
+      if (payload[8] != 0) {
+        log_error("Unsupported batch size %d for ethernet mode", payload[7] + (payload[8] << 8));
+        exit(-1);
+      }
+      ethl_set_queue_length(eth_batch_size);
+
+      uint8_t payload_unrolled[13];
+      memcpy(payload_unrolled, payload, sizeof(payload));
+      payload_unrolled[7] = 1;
+      payload_unrolled[8] = 0;
+      uint32_t sector_number = eth_batch_start_sector;
+      for (j = 0; j < eth_batch_size; ++j)
+      {
+        payload_unrolled[9] = sector_number >> 0;
+        payload_unrolled[10] = sector_number >> 8;
+        payload_unrolled[11] = sector_number >> 16;
+        payload_unrolled[12] = sector_number >> 24;
+        memcpy(eth_packet_queue[j], payload_unrolled, sizeof(payload_unrolled));
+        ++sector_number;
+        ethl_schedule_ack(payload_unrolled, sizeof(payload_unrolled));
+        eth_packet_len[j] = sizeof(payload_unrolled);
+      }
+      ethl_send_packet_unscheduled(payload, sizeof(payload));
+      wait_all_acks();
+
+/*
       ++ptr;
       uint16_t sector_count = ptr[0] + (ptr[1] << 8);
       ptr += 2;
@@ -1258,13 +1378,12 @@ void process_jobs_ethernet(void)
       ptr += 4;
 
       while (sector_count > 0) {
-        eth_num_packets = sector_count < 1024 ? sector_count : 1024;
+        eth_num_packets = sector_count < 256 ? sector_count : 256;
         for (j = 0; j < eth_num_packets; ++j) {
           uint8_t *packet = eth_packet_queue[j];
           memcpy(packet, header_template, 4);
-          packet[4] = 0x01;
-          packet[5] = serial >> 0;
-          packet[6] = serial >> 8;
+          // bytes 4/5 will be filled with packet seq number by etherload framework
+          packet[6] = 0x01;
           packet[7] = sector_number >> 0;
           packet[8] = sector_number >> 8;
           packet[9] = sector_number >> 16;
@@ -1273,25 +1392,30 @@ void process_jobs_ethernet(void)
           ++serial;
           eth_packet_len[j] = 11;
         }
+        printf("Reading %d sectors\n", eth_num_packets);
         process_ethernet_read_sectors();
+        queue_read_len += eth_num_packets * 512;
         sector_count -= eth_num_packets;
       }
+*/
+    }
       break;
 
     case 0x0f: // read flash
       ptr += 7;
+      log_debug("read flash job not implemented for ethernet");
+      exit(-1);
       break;
     case 0x11: // read mem
       ptr += 9;
+      log_debug("read mem job not implemented for ethernet");
+      exit(-1);
       break;
     default:
       log_error("Queue cmd %d not implemented", *ptr);
       exit(-1);
     }
   }
-
-
-
 }
 
 void queue_execute(void)
@@ -1628,7 +1752,7 @@ int open_file_system(void)
     }
 
     if (partition_start == 0xffffffff && direct_sdcard_device) {
-      if (strncmp((const char*)&mbr[0x52], "FAT32", 5) == 0) {
+      if (strncmp((const char *)&mbr[0x52], "FAT32", 5) == 0) {
         partition_start = 0;
         partition_size = mbr[0x20] + (mbr[0x21] << 8) + (mbr[0x22] << 16) + (mbr[0x23] << 24);
         printf("Device is FAT32 partition, size=%d MB\n", partition_size / 2048);

@@ -55,6 +55,8 @@ ETH_HEADER eth_header;
  */
 EUI48 mac_local;
 
+bool_t block_rx = FALSE;
+
 #define MTU 2048
 unsigned char tx_frame_buf[MTU];
 
@@ -224,7 +226,11 @@ uint8_t eth_task (uint8_t /*p*/)
 
   // Process multiple ethernet frames at a time
   while((PEEK(0xD6E1)&0x20)) {
-    printf("[%d]",frames);
+    //printf("[%d]",frames);
+    if (block_rx) {
+      delay = 1;
+      goto exit_eth_task;
+    }
     eth_process_frame();
     frames++;
     if (frames==32) break;
@@ -234,6 +240,7 @@ uint8_t eth_task (uint8_t /*p*/)
   if(!(PEEK(0xD6E1)&0x20)) {
     delay = 10;
   }
+exit_eth_task:
   task_add(eth_task, delay, 0, "ethtask");
   return 0;
 }
