@@ -3,37 +3,44 @@ SHELL := /bin/bash
 .SUFFIXES: .bin .prg
 .PRECIOUS:	%.ngd %.ncd %.twx vivado/%.xpr bin/%.bit bin/%.mcs bin/%.M65 bin/%.BIN
 
-
-#COPT=	-Wall -g -std=gnu99 -fsanitize=address -fno-omit-frame-pointer -fsanitize-address-use-after-scope
-#CC=	clang
+##
+## General build setup
+##
 COPT=	-Wall -g -std=gnu99
 CC=	    gcc
 CXX=	g++
+
+##
+## Linux to Windows cross build setup
+##
 WINCC=  x86_64-w64-mingw32-gcc
 ifeq (, $(shell which $(WINCC)))
-$(info No $(WINCC) in PATH, can't build windows binaries)
+$(info WARNING: No $(WINCC) in PATH, can't build windows binaries)
+else
+ifeq (, $(shell which conan))
+$(info WARNING: Found $(WINCC), but no conan executable found in PATH, can't build windows binaries)
 else
 $(shell echo "toolchain=/usr/x86_64-w64-mingw32" > conan/profile_mingw-w64)
 $(shell echo "cc_version=`$(WINCC) -dumpversion | sed 's/-win32//g'`" >> conan/profile_mingw-w64)
 include conanbuildinfo_win.mak
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
-WINCOPT+= $(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
-          $(addprefix -D, $(WIN_CONAN_DEFINES)) \
-          $(addprefix -L, $(WIN_CONAN_LIB_DIRS)) \
-          $(addprefix -l, $(WIN_CONAN_LIBS))
+WINCOPT+=	$(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
+			$(addprefix -D, $(WIN_CONAN_DEFINES)) \
+			$(addprefix -L, $(WIN_CONAN_LIB_DIRS)) \
+			$(addprefix -l, $(WIN_CONAN_LIBS))
 
-conanbuildinfo_win.mak: conanfile.txt conan/profile_linux_to_win
-	conan install conanfile.txt --build=missing -pr:h=default -pr:h=conan/profile_linux_to_win -pr:b=default
-	sed 's/CONAN_/WIN_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_win.mak
-	rm conanbuildinfo.*
+endif # conan detection
+endif # mingw-w64 detection
 
-endif
-
+##
+## Macos build setup
+##
 OS := $(shell uname)
 ifeq ($(OS), Darwin)
+
 include conanbuildinfo_macos_intel.mak
 include conanbuildinfo_macos_arm.mak
-#MACCOPT=$(COPT) -framework CoreFoundation -framework IOKit
+
 MACINTELCOPT:=$(COPT) -target x86_64-apple-macos10.14 \
 		      $(addprefix -I, $(MAC_INTEL_CONAN_INCLUDE_DIRS)) \
 		      $(addprefix -D, $(MAC_INTEL_CONAN_DEFINES)) \
@@ -47,7 +54,16 @@ MACARMCOPT:=  $(COPT) -target arm64-apple-macos11 \
 		      $(addprefix -l, $(MAC_ARM_CONAN_LIBS)) \
 		      $(addprefix -framework , $(MAC_ARM_CONAN_FRAMEWORKS))
 endif
+
+
+##
+## Linux native build setup
+##
 COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3 -march=x86-64
+
+##
+## Tools build setup
+##
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
 OPHIS_MON= Ophis/bin/ophis -c
@@ -211,10 +227,6 @@ SUBMODULEUPDATE= \
 ##
 .PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
 
-allmac:		$(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
-allwin:		$(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
-allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
-
 ifeq ($(OS), Darwin)
 all: allmac
 else ifeq ($(OS), Linux)
@@ -222,6 +234,10 @@ all: allunix
 else
 all: allwin
 endif
+
+allmac:		$(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
+allwin:		$(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
+allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
 
 arcunix: $(TOOLSUNX)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-linux; \
@@ -317,6 +333,11 @@ conanbuildinfo_macos_intel.mak: conanfile.txt conan/*
 conanbuildinfo_macos_arm.mak: conanfile.txt conan/*
 	conan install conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
 	sed 's/CONAN_/MAC_ARM_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_arm.mak
+	rm conanbuildinfo.*
+
+conanbuildinfo_win.mak: conanfile.txt conan/profile_linux_to_win
+	conan install conanfile.txt --build=missing  -pr:b=default -pr:h=conan/profile_linux_to_win
+	sed 's/CONAN_/WIN_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_win.mak
 	rm conanbuildinfo.*
 
 ifndef USE_LOCAL_CC65
@@ -763,13 +784,13 @@ ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/ethlet_dma_load_map.h \
 ETHERLOAD_INCLUDES = -I/usr/local/include -Iinclude
 ETHERLOAD_LIBRARIES = -lm
 
-$(TOOLDIR)/etherload/ethlet_%.c:	$(TOOLDIR)/etherload/ethlet_%.bin $(BINDIR)/bin2c
+$(TOOLDIR)/etherload/ethlet_%.c:	$(TOOLDIR)/etherload/ethlet_%.bin $(BINDIR)/bin2c Makefile
 	$(BINDIR)/bin2c $(TOOLDIR)/etherload/ethlet_$*.bin ethlet_$* $(TOOLDIR)/etherload/ethlet_$*.c
 
-$(TOOLDIR)/etherload/%_map.h:	$(TOOLDIR)/etherload/%.map $(BINDIR)/map2h
+$(TOOLDIR)/etherload/%_map.h:	$(TOOLDIR)/etherload/%.map $(BINDIR)/map2h Makefile
 	$(BINDIR)/map2h $(TOOLDIR)/etherload/$*.map $* $(TOOLDIR)/etherload/$*_map.h
 
-$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
 $(BINDIR)/etherload_intel.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
@@ -778,5 +799,5 @@ $(BINDIR)/etherload_intel.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefil
 $(BINDIR)/etherload_arm.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
-$(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+$(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32
