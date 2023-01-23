@@ -279,7 +279,7 @@ arp_mens
  */
 byte_t
 arp_tick
-   (byte_t p)
+   (byte_t /*p*/)
 {
    ARP_CACHE_ENTRY *i;
 

@@ -262,17 +262,19 @@ void remove_rx_data(SOCKET *_sckt)
 
     n=_sckt->rx_oo_end - _sckt->rx_data;
 
-    for(ofs=0;ofs<n;ofs+=65535) {
+    for(ofs=0;ofs<n;ofs+=65535L) {
 
-      uint32_t count=65535;
+      uint32_t count=65535L;
       if (count>(n-ofs)) count = n-ofs;
 
       // Copy down from the end of the received data to rx_oo_end.
       lcopy(_sckt->rx + _sckt->rx_data + ofs, _sckt->rx + ofs, n);
     }
 
-    _sckt->rx_oo_start -= _sckt->rx_data;
-    if (_sckt->rx_oo_start < 0 ) _sckt->rx_oo_start = 0;
+    if (_sckt->rx_oo_start > _sckt->rx_data)
+      _sckt->rx_oo_start -= _sckt->rx_data;
+    else
+      _sckt->rx_oo_start = 0;
 
     _sckt->rx_oo_end -= _sckt->rx_data;
 

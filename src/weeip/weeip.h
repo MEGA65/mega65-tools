@@ -99,14 +99,14 @@ typedef struct {
         buffer_t rx;                              ///< Reception buffer pointer.
 	void *tx;                                 ///< Transmission buffer pointer.
 
-       
+
         uint32_t rx_size;                         ///< Reception buffer size.
 	uint16_t tx_size;                         ///< Size of transmit packet.
 	uint32_t rx_data;                         ///< Bytes used in RX buffer (i.e., bytes of data available)
         uint32_t rx_oo_start;                     ///< Start of out-of-order held data
         uint32_t rx_oo_end;                       ///< End of out-of-order held data
-  
-  
+
+
 	task_t callback;                          ///< Task for socket management.
 	uint16_t port;                            ///< Local port number.
 	uint16_t remPort;                         ///< Remote port number.

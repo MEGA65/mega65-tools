@@ -26,7 +26,7 @@
 
 // #define NOCRCCHECK
 
-static unsigned char eth_log_mode=0;
+unsigned char eth_log_mode=0;
 
 static uint16_t eth_size;        // Packet size.
 uint16_t eth_tx_len=0;           // Bytes written to TX buffer
@@ -108,6 +108,9 @@ void eth_process_frame(void)
   unsigned char cpu_side=j&3;
   unsigned char eth_side=(j>>2)&3;
 
+  // Acknowledge the ethernet frame, freeing the buffer up for next RX
+  POKE(0xD6E1,0x01); POKE(0xD6E1,0x03);
+
   //  printf("/");
 
   // Process the next received ethernet frame
@@ -134,7 +137,7 @@ void eth_process_frame(void)
     debug_msg("");
     snprintf(dbg_msg,80,"%02d:%02d:%02d/%d eth rx\n",tm.tm_hour,tm.tm_min,tm.tm_sec,PEEK(0xD012));
     debug_msg(dbg_msg);
-    for(i=0;i<2048;i+=16) {
+    for(i=34;i<46;i+=16) {
       lcopy(ETH_RX_BUFFER+i,(unsigned long)sixteenbytes,16);
       snprintf(dbg_msg,80,"  %04x : ",i);
       for(j=0;j<16;j++) snprintf(&dbg_msg[strlen(dbg_msg)],80-strlen(dbg_msg)," %02x",sixteenbytes[j]);
@@ -204,16 +207,13 @@ void eth_process_frame(void)
  drop:
   eth_drop();
 
-  // Acknowledge the ethernet frame, freeing the buffer up for next RX
-  POKE(0xD6E1,0x01); POKE(0xD6E1,0x03);
-
   // We processed a packet, so schedule ourselves immediately, in case there
   // are more packets coming.
   //task_add(eth_task, 0, 0,"ethtask");                    // try again to check more packets.
   //return;
 }
 
-uint8_t eth_task (uint8_t p)
+uint8_t eth_task (uint8_t /*p*/)
 {
   /*
    * Check if there are incoming packets.
