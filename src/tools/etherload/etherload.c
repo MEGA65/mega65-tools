@@ -1,29 +1,13 @@
-#include "etherload_common.h"
+#include <etherload_common.h>
 #include "ethlet_all_done_basic65_map.h"
 #include "ethlet_all_done_basic2_map.h"
 #include "ethlet_all_done_jump_map.h"
 
-// #ifdef WINDOWS
-// #include <winsock2.h>
-// #include <ws2tcpip.h>
-// #else
-// #include <arpa/inet.h>
-// #include <sys/socket.h>
-// #include <netinet/in.h>
-// #include <sys/types.h>
 #include <sys/ioctl.h>
-// #endif
-
 #include <stdlib.h>
-// #include <unistd.h>
-// #include <string.h>
 #include <strings.h>
 #include <stdio.h>
 #include <fcntl.h>
-// #include <time.h>
-// #include <sys/time.h>
-// #include <math.h>
-// #include <ctype.h>
 #include <getopt.h>
 
 #include <logging.h>

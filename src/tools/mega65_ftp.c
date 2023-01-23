@@ -43,6 +43,8 @@
 #include <stdio.h>
 
 #include "m65common.h"
+#include "etherload_common.h"
+#include "etherload/ethlet_all_done_basic2_map.h"
 #include "filehost.h"
 #include "diskman.h"
 #include "dirtymock.h"
@@ -183,9 +185,20 @@ void wipe_direntries_of_current_file_or_dir(void);
 int direct_sdcard_device = 0;
 FILE *fsdcard = NULL;
 
+int ethernet_mode = 0;
+static int sockfd;
+static struct sockaddr_in *servaddr;
+static uint8_t eth_packet_queue[1024][1500];
+static uint16_t eth_packet_len[1024];
+int eth_num_packets = 0;
+
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
 extern unsigned char helperroutine[];
+extern unsigned int helperroutine_eth_len;
+extern unsigned char helperroutine_eth[];
+extern char ethlet_all_done_basic2[];
+extern int ethlet_all_done_basic2_len;
 int helper_installed = 0;
 int job_done;
 int sectors_written;
@@ -208,6 +221,7 @@ int mode_report = 0;
 int serial_port_set = 0;
 char serial_port[1024] = "/dev/ttyUSB1";
 char device_name[1024] = "";
+char ip_address[16] = "";
 char *bitstream = NULL;
 char *username = NULL;
 char *password = NULL;
@@ -280,12 +294,13 @@ void usage(void)
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr, "version: %s\n\n", version_string);
   fprintf(stderr,
-      "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  "
+      "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>|-i <broadcast ip>] [-s <230400|2000000|4000000>]  "
       "[-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n");
   fprintf(stderr, "  -F - force startup, even if other program is detected\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
-  fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx\n");
+  fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx)\n");
+  fprintf(stderr, "  -i - broadcast ip of ethernet interface to use (e.g. 192.168.1.255)\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Almost always 2000000 is the correct answer).\n");
   fprintf(stderr, "  -b - Name of bitstream file to load.\n");
@@ -482,6 +497,9 @@ int execute_command(char *cmd)
       request_quit();
       if (xemu_flag)
         usleep(30000);
+    }
+    if (ethernet_mode) {
+      etherload_finish();
     }
     exit(0);
   }
@@ -707,7 +725,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
   log_setup(stderr, LOG_NOTE);
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:0:nF")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:i:0:nF")) != -1) {
     switch (opt) {
     case '0':
       loglevel = log_parse_level(optarg);
@@ -728,6 +746,10 @@ int DIRTYMOCK(main)(int argc, char **argv)
     case 'd':
       strcpy(device_name, optarg);
       direct_sdcard_device = 1;
+      break;
+    case 'i':
+      strncpy(ip_address, optarg, sizeof(ip_address));
+      ethernet_mode = 1;
       break;
     case 's':
       serial_speed = atoi(optarg);
@@ -776,6 +798,46 @@ int DIRTYMOCK(main)(int argc, char **argv)
       log_error("could not open device '%s'", device_name);
       exit(-3);
     }
+  }
+  else if (ethernet_mode) {
+    unsigned char *helper_ptr = helperroutine_eth + 2;
+    int bytes = helperroutine_eth_len - 2;
+    int address = 0x0801;
+    int block_size = 1024;
+
+    if (etherload_init(ip_address)) {
+      log_error("Unable to initialize ethernet communication");
+      exit(-1);
+    }
+    etherload_setup_dmaload();
+    trigger_eth_hyperrupt();
+    log_info("Starting helper routine transfer...");
+    while (bytes > 0) {
+      if (bytes < block_size)
+        block_size = bytes;
+      send_mem(address, helper_ptr, block_size);
+      helper_ptr += block_size;
+      address += block_size;
+      bytes -= block_size;
+    }
+    wait_all_acks();
+    log_info("Helper routine transfer complete");
+
+    // patch in end address
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address] = 0x01;
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address + 1] = 0x08;
+
+    // patch in do_run
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_do_run] = 1;
+
+    // disable cartridge signature detection
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_enable_cart_signature] = 0;
+
+    send_ethlet(ethlet_all_done_basic2, ethlet_all_done_basic2_len);
+
+    sockfd = ethl_get_socket();
+    servaddr = ethl_get_server_addr();
+
   }
   else {
     if (open_the_serial_port(serial_port))
@@ -1170,23 +1232,90 @@ void job_process_results(void)
   }
 }
 
+void process_ethernet_read_sectors(void)
+{
+
+}
+
+void process_jobs_ethernet(void)
+{
+  uint8_t *ptr = queue_cmds;
+  int i, j;
+  uint8_t header_template[4] = {'m', 'r', 'e', 'q'};
+  uint16_t serial = 0;
+
+  for (i = 0; i < queue_jobs; ++i) {
+    switch (*ptr) {
+    case 0x02: // physical write sector
+      ptr += 9;
+      break;
+
+    case 0x04: // read sectors
+      ++ptr;
+      uint16_t sector_count = ptr[0] + (ptr[1] << 8);
+      ptr += 2;
+      uint32_t sector_number = ptr[0] + (ptr[1] << 8) + (ptr[2] << 16) + (ptr[3] << 24);
+      ptr += 4;
+
+      while (sector_count > 0) {
+        eth_num_packets = sector_count < 1024 ? sector_count : 1024;
+        for (j = 0; j < eth_num_packets; ++j) {
+          uint8_t *packet = eth_packet_queue[j];
+          memcpy(packet, header_template, 4);
+          packet[4] = 0x01;
+          packet[5] = serial >> 0;
+          packet[6] = serial >> 8;
+          packet[7] = sector_number >> 0;
+          packet[8] = sector_number >> 8;
+          packet[9] = sector_number >> 16;
+          packet[10] = sector_number >> 24;
+          ++sector_number;
+          ++serial;
+          eth_packet_len[j] = 11;
+        }
+        process_ethernet_read_sectors();
+        sector_count -= eth_num_packets;
+      }
+      break;
+
+    case 0x0f: // read flash
+      ptr += 7;
+      break;
+    case 0x11: // read mem
+      ptr += 9;
+      break;
+    default:
+      log_error("Queue cmd %d not implemented", *ptr);
+      exit(-1);
+    }
+  }
+
+
+
+}
+
 void queue_execute(void)
 {
-  //  long long start = gettime_us();
+  if (ethernet_mode) {
+    process_jobs_ethernet();
+  }
+  else {
+    //  long long start = gettime_us();
 
-  // Push queued jobs in one go
-  push_ram(0xc001, queue_addr - 0xc001, queue_cmds);
-  //  dump_bytes(0,"queue_cmds",queue_cmds,queue_addr-0xc001);
+    // Push queued jobs in one go
+    push_ram(0xc001, queue_addr - 0xc001, queue_cmds);
+    //  dump_bytes(0,"queue_cmds",queue_cmds,queue_addr-0xc001);
 
-  // Then set number of jobs to execute them
-  // mega65_poke will try to read data after from on the
-  // serial interface, which messes up the protocol.
-  // so don't do that.
-  char cmd[1024];
-  snprintf(cmd, 1024, "sc000 %x\r", queue_jobs);
-  slow_write(fd, cmd, strlen(cmd));
+    // Then set number of jobs to execute them
+    // mega65_poke will try to read data after from on the
+    // serial interface, which messes up the protocol.
+    // so don't do that.
+    char cmd[1024];
+    snprintf(cmd, 1024, "sc000 %x\r", queue_jobs);
+    slow_write(fd, cmd, strlen(cmd));
 
-  job_process_results();
+    job_process_results();
+  }
   queue_addr = 0xc001;
   queue_jobs = 0;
 }
@@ -1439,7 +1568,7 @@ int DIRTYMOCK(write_sector)(const unsigned int sector_number, unsigned char *buf
     // With new method, we write the data, then schedule the write to happen with a job
 #if 0
     char cmd[1024];
-    // Clear pending input first    
+    // Clear pending input first
     int b=1;
     while(b>0){
       b=serialport_read(fd,(uint8_t *)cmd,1024);
@@ -3102,6 +3231,9 @@ void flash_core_to_slot(char *fname, int slotnum)
          "Please power cycle your device.\n\n"
          "The 'mega65_ftp' tool will exit now. To start another session, re-run after power-cycling.\n\n",
       fname, slotnum);
+
+  if (ethernet_mode)
+    etherload_finish();
 
   // exit mega65_ftp (as a new session will need to be created after the power-cycle anyway)
   exit(0);

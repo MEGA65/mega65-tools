@@ -735,7 +735,13 @@ MEGA65FTP_SRC=	$(TOOLDIR)/mega65_ftp.c \
 		$(TOOLDIR)/ftphelper_eth.c \
 		$(TOOLDIR)/filehost.c \
 		$(TOOLDIR)/diskman.c \
-		$(TOOLDIR)/bit2mcs.c
+		$(TOOLDIR)/bit2mcs.c \
+		$(TOOLDIR)/etherload/etherload_common.c \
+		$(TOOLDIR)/etherload/ethlet_dma_load.c \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic2.c
+
+MEGA65FTP_HDR=	$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
+		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h
 
 # Gives two targets of:
 # - gtest/bin/mega65_ftp.test
@@ -747,13 +753,13 @@ $(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/mega65_ftp.test, $(G
 # - gtest/bin/bit2core.test.exe
 $(eval $(call LINUX_AND_MINGW_GTEST_TARGETS, $(GTESTBINDIR)/bit2core.test, $(GTESTDIR)/bit2core_test.cpp $(TOOLDIR)/bit2core.c Makefile, -fpermissive))
 
-$(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
+$(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h Makefile
 	$(CC) $(COPT) -D_FILE_OFFSET_BITS=64 -Iinclude $(LIBUSBINC) -o $(BINDIR)/mega65_ftp $(MEGA65FTP_SRC) $(TOOLDIR)/version.c $(BUILD_STATIC) -lreadline -lncurses -ltinfo -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
+$(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
 	$(CC) $(COPT) -Iinclude $(LIBUSBINC) -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
+$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h Makefile
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp_intel.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
@@ -799,19 +805,18 @@ $(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 ##
 ## ========== etherload ==========
 ##
-ETHERLOAD_SOURCES = $(TOOLDIR)/etherload/etherload.c \
-		$(TOOLDIR)/etherload/etherload_common.c \
-		$(TOOLDIR)/etherload/ethlet_dma_load.c \
-		$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
-		$(TOOLDIR)/etherload/ethlet_all_done_basic65.c \
-		$(TOOLDIR)/etherload/ethlet_all_done_jump.c \
-		$(TOOLDIR)/logging.c \
-		$(TOOLDIR)/version.c
-ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/etherload_common.h \
-		$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
-		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h \
-		$(TOOLDIR)/etherload/ethlet_all_done_basic65_map.h \
-		$(TOOLDIR)/etherload/ethlet_all_done_jump_map.h
+ETHERLOAD_SOURCES=	$(TOOLDIR)/etherload/etherload.c \
+			$(TOOLDIR)/etherload/etherload_common.c \
+			$(TOOLDIR)/etherload/ethlet_dma_load.c \
+			$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
+			$(TOOLDIR)/etherload/ethlet_all_done_basic65.c \
+			$(TOOLDIR)/etherload/ethlet_all_done_jump.c \
+			$(TOOLDIR)/logging.c \
+			$(TOOLDIR)/version.c
+ETHERLOAD_HEADERS=	$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
+			$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h \
+			$(TOOLDIR)/etherload/ethlet_all_done_basic65_map.h \
+			$(TOOLDIR)/etherload/ethlet_all_done_jump_map.h
 ETHERLOAD_INCLUDES = -I/usr/local/include -Iinclude
 ETHERLOAD_LIBRARIES = -lm
 
@@ -821,7 +826,7 @@ $(TOOLDIR)/etherload/ethlet_%.c:	$(TOOLDIR)/etherload/ethlet_%.bin $(BINDIR)/bin
 $(TOOLDIR)/etherload/%_map.h:	$(TOOLDIR)/etherload/%.map $(BINDIR)/map2h Makefile
 	$(BINDIR)/map2h $(TOOLDIR)/etherload/$*.map $* $(TOOLDIR)/etherload/$*_map.h
 
-$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
+$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) include/*.h Makefile
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
 $(BINDIR)/etherload_intel.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
@@ -830,5 +835,5 @@ $(BINDIR)/etherload_intel.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefil
 $(BINDIR)/etherload_arm.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
-$(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
+$(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) include/*.h Makefile
 	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32
