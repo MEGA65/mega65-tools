@@ -9,18 +9,26 @@
 #include <sys/socket.h>
 #endif
 
-int etherload_init(const char* broadcast_address);
+typedef int (*get_packet_seq_callback_t)(uint8_t *payload, int len);
+typedef int (*match_payloads_callback_t)(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len);
+typedef int (*is_duplicate_callback_t)(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len);
+typedef int (*embed_packet_seq_callback_t)(uint8_t *payload, int len, int seq_num);
+
+int etherload_init(const char *broadcast_address);
 void etherload_finish(void);
 
 void etherload_setup_dmaload(void);
+void etherload_setup_callbacks(
+    get_packet_seq_callback_t c1, match_payloads_callback_t c2, is_duplicate_callback_t c3, embed_packet_seq_callback_t c4);
 
 int trigger_eth_hyperrupt(void);
-char* ethl_get_ip_address(void);
+char *ethl_get_ip_address(void);
 uint16_t ethl_get_port(void);
 int ethl_get_socket(void);
-struct sockaddr_in* ethl_get_server_addr(void);
+struct sockaddr_in *ethl_get_server_addr(void);
 
 int send_mem(unsigned int address, unsigned char *buffer, int bytes);
 int wait_all_acks(void);
-int no_pending_ack(int addr);
+int dmaload_no_pending_ack(int addr);
 int send_ethlet(const char data[], const int bytes);
+

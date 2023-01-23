@@ -29,10 +29,10 @@ static int resend_frame = 0;
 static int packet_seq = 0;
 static int last_rx_seq = 0;
 
-static int (*get_packet_seq)(uint8_t *payload, int len) = NULL;
-static int (*match_payloads)(uint8_t *recv_packet, int recv_len, uint8_t *cmp_packet, int cmp_len) = NULL;
-static int (*is_duplicate)(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len) = NULL;
-static int (*embed_packet_seq)(uint8_t *payload, int len, int seq_num) = NULL;
+static get_packet_seq_callback_t get_packet_seq = NULL;
+static match_payloads_callback_t match_payloads = NULL;
+static is_duplicate_callback_t is_duplicate = NULL;
+static embed_packet_seq_callback_t embed_packet_seq = NULL;
 
 extern char ethlet_dma_load[];
 extern int ethlet_dma_load_len;
@@ -90,6 +90,15 @@ void etherload_finish(void)
 #ifdef WINDOWS
   WSACleanup();
 #endif
+}
+
+void etherload_setup_callbacks(
+    get_packet_seq_callback_t c1, match_payloads_callback_t c2, is_duplicate_callback_t c3, embed_packet_seq_callback_t c4)
+{
+  get_packet_seq = c1;
+  match_payloads = c2;
+  is_duplicate = c3;
+  embed_packet_seq = c4;
 }
 
 // From os.c in serval-dna
@@ -256,19 +265,6 @@ int expect_ack(uint8_t *payload, int len)
   }
   return 0;
 }
-
-/*
-int no_pending_ack(int addr)
-{
-  for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
-    if (frame_unacked[i]) {
-      if (frame_load_addrs[i] == addr)
-        return 0;
-    }
-  }
-  return 1;
-}
-*/
 
 void maybe_send_ack(void)
 {
@@ -465,7 +461,6 @@ int send_mem(unsigned int address, unsigned char *buffer, int bytes)
   packet_seq++;
   update_retx_interval();
   sendto(sockfd, payload, ethlet_dma_load_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-
   return 0;
 }
 
@@ -475,4 +470,15 @@ void etherload_setup_dmaload(void)
   match_payloads = dmaload_match_payloads;
   is_duplicate = dmaload_is_duplicate;
   embed_packet_seq = dmaload_embed_packet_seq;
+}
+
+int dmaload_no_pending_ack(int addr)
+{
+  for (int i = 0; i < MAX_UNACKED_FRAMES; i++) {
+    if (frame_unacked[i]) {
+      if (dmaload_parse_load_addr(unacked_frame_payloads[i]) == addr)
+        return 0;
+    }
+  }
+  return 1;
 }

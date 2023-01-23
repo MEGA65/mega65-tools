@@ -399,6 +399,7 @@ int main(int argc, char **argv)
   }
 
   etherload_init(ip_address);
+  etherload_setup_dmaload();
 
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();
@@ -432,7 +433,7 @@ int main(int argc, char **argv)
 
     // Update screen, but only if we are not still waiting for a previous update
     // so that we don't get stuck in lock-step
-    if (no_pending_ack(0x0400 + 4 * 40))
+    if (dmaload_no_pending_ack(0x0400 + 4 * 40))
       send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
 
     send_mem(address, buffer, bytes);
