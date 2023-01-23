@@ -19,450 +19,365 @@
 #include <debug.h>
 #include <random.h>
 
-#include <eth.h>
-#include <weeip.h>
+#define ETH_RX_BUFFER 0xFFDE800L
+#define ETH_TX_BUFFER 0xFFDE800L
+#define ARP_REQUEST 0x0100 // big-endian for 0x0001
+#define ARP_REPLY 0x0200   // big-endian for 0x0002
 
-// Set to 1 to show debug messages
-#define DEBUG 0
+typedef struct {
+  uint8_t b[6];
+} EUI48;
 
-// Slight delay between chars for old HYPPO versions that lack ready check on serial write
-#define SERIAL_DELAY
-// #define SERIAL_DELAY for(aa=0;aa!=5;aa++) continue;
-uint16_t aa;
-// Write a char to the serial monitor interface
-#define SERIAL_WRITE(the_char)                                                                                              \
-  {                                                                                                                         \
-    __asm__("LDA %v", the_char);                                                                                            \
-    __asm__("STA $D643");                                                                                                   \
-    __asm__("NOP");                                                                                                         \
-  }
+typedef union {
+  uint32_t d;
+  uint8_t b[4];
+} IPV4;
 
-void press_key(void)
-{
-  POKE(0xD610, 0);
-  // wait for a key to be pressed
-  printf("press a key to continue...\n");
-  while (!PEEK(0xD610))
-    continue;
-  POKE(0xD610, 0);
-}
+/**
+ * Ethernet frame header.
+ */
+typedef struct {
+  EUI48 destination; ///< Packet Destination address.
+  EUI48 source;      ///< Packet Source address.
+  uint16_t type;     ///< Packet Type or Size (big-endian)
+} ETH_HEADER;
 
-uint8_t c, j, z, pl, job_type, pause_flag = 0, xemu_flag = 0;
-uint16_t i, job_type_addr;
-char filename[65];
+/**
+ * ARP message format.
+ */
+typedef struct {
+  uint16_t hardware;
+  uint16_t protocol;
+  uint8_t hw_size;
+  uint8_t pr_size;
+  uint16_t opcode;
+  EUI48 orig_hw;
+  IPV4 orig_ip;
+  EUI48 dest_hw;
+  IPV4 dest_ip;
+} ARP_HDR;
 
-void serial_write_string(uint8_t *m, uint16_t len)
-{
+/**
+ * IP Header format.
+ */
+typedef struct {
+  uint8_t ver_length;    ///< Protocol version (4) and header size (32 bits units).
+  uint8_t tos;           ///< Type of Service.
+  uint16_t ip_length;    ///< Total packet length.
+  uint16_t id;           ///< Message identifier.
+  uint16_t frag;         ///< Fragmentation index (not used).
+  uint8_t ttl;           ///< Time-to-live.
+  uint8_t protocol;      ///< Transport protocol identifier.
+  uint16_t checksum_ip;  ///< Header checksum.
+  IPV4 source;           ///< Source host address.
+  IPV4 destination;      ///< Destination host address.
+  uint16_t src_port;     ///< Source application address.
+  uint16_t dst_port;     ///< Destination application address.
+  uint16_t udp_length;   ///< UDP packet size.
+  uint16_t checksum_udp; ///< Packet checksum, with pseudo-header.
+  uint32_t ftp_magic;
+  uint16_t seq_num;
+  uint8_t opcode;
+  uint8_t num_sectors;
+  uint8_t unused_1;
+  uint32_t sector_number;
+} FTP_PKT;
 
-  for (i = 0; i < len; i++) {
-    SERIAL_DELAY;
-    c = *m;
-    m++;
-    SERIAL_DELAY;
-    SERIAL_WRITE(c);
-    // printf("%02X", c);
-    if (pause_flag) {
-      // #if DEBUG > 1
-      if (i < 368) {
-        printf("%02X", c);
-        if (((i + 5) % 4) == 0)
-          printf(" ");
-        if (((i + 17) % 16) == 0)
-          printf("\n");
-      }
-      // #endif
-    }
-    if (pause_flag)
-      press_key();
-  }
+typedef union {
+  uint8_t b[1500];
+  struct {
+    ETH_HEADER eth;
+    union {
+      ARP_HDR arp;
+      FTP_PKT ftp;
+    };
+  };
+} PACKET;
 
-#if DEBUG > 1
-  press_key();
-#endif
-}
+#define NTOHS(x) (((uint16_t)x >> 8) | ((uint16_t)x << 8))
+#define HTONS(x) (((uint16_t)x >> 8) | ((uint16_t)x << 8))
 
-uint8_t job_count = 0;
-uint16_t job_addr;
+PACKET reply_template;
 
-char msg[80 + 1];
+PACKET recv_buf;
+uint8_t sector_buf[512];
+PACKET send_buf;
+uint16_t send_buf_size;
+uint8_t sector_reading, sector_buffered;
+uint32_t sector_number_read, sector_number_buf;
+uint8_t batch_left;
+uint16_t seq_num;
 
-uint32_t buffer_address, sector_number, transfer_size;
+EUI48 mac_local;
+uint8_t ip_addr_set = 0;
 
-uint8_t temp_sector_buffer[0x200];
-
-uint8_t rle_count = 0, a;
-uint8_t olen = 0, iofs = 0, last_value = 0;
-uint8_t obuf[0x80];
-uint8_t local_buffer[256];
-
-uint8_t buffer_ready = 0;
-uint16_t sector_count = 0;
-uint8_t read_pending = 0;
-
-uint32_t read_cache_start = 0;
-uint8_t read_cache_size = 0;
-uint8_t read_cache_offset = 0;
-uint8_t read_cache_empty = 1;
-
-void rle_init(void)
-{
-  olen = 0;
-  iofs = 0;
-  last_value = 0xFF;
-  rle_count = 0;
-}
-
-uint8_t block_len = 0;
-uint8_t bo = 0;
-
-void rle_write_string(uint32_t buffer_address, uint32_t transfer_size)
-{
-  lcopy(buffer_address, (uint32_t)local_buffer, 256);
-
-  POKE(0xD610, 0);
-  while (transfer_size) {
-
-    // Use tight inner loop to send more quickly
-    if (transfer_size & 0x7f)
-      block_len = transfer_size & 0x7f;
-    else
-      block_len = 0x80;
-
-    //     printf("transfer_size=%d, block_len=%d,ba=$%x\n",transfer_size,block_len,buffer_address);
-
-    transfer_size -= block_len;
-
-    for (bo = 0; bo < block_len; bo++) {
-#if DEBUG > 1
-      // wait for a key to be pressed
-      printf("olen=%d, rle_count=%d, last=$%02x, byte=$%02x\n", olen, rle_count, last_value, local_buffer[iofs]);
-      while (!PEEK(0xD610))
-        continue;
-      POKE(0xD610, 0);
-#endif
-      if (olen == 127) {
-        // Write out 0x00 -- 0x7F as length of non RLE bytes,
-        // followed by the bytes
-#if DEBUG > 1
-        printf("$%02x raw\n", olen);
-#endif
-        SERIAL_WRITE(olen);
-        for (a = 0; a < 0x80; a++) {
-          c = obuf[a];
-          SERIAL_DELAY;
-          SERIAL_WRITE(c);
-        }
-        olen = 0;
-        rle_count = 0;
-      }
-
-      if (rle_count == 127) {
-        // Flush a full RLE buffer
-#if DEBUG > 1
-        printf("$%02x x $%02x\n", rle_count, last_value);
-#endif
-        c = 0x80 | rle_count;
-        SERIAL_WRITE(c);
-        SERIAL_DELAY;
-        SERIAL_WRITE(last_value);
-#if DEBUG > 1
-        printf("Wrote $%02x, $%02x\n", c, last_value);
-#endif
-        rle_count = 0;
-      }
-      obuf[olen++] = local_buffer[iofs];
-      if (local_buffer[iofs] == last_value) {
-        rle_count++;
-        if (rle_count == 3) {
-          // Switch from raw to RLE, flushing any pending raw bytes
-          if (olen > 3)
-            olen -= 3;
-          else
-            olen = 0;
-#if DEBUG > 1
-          printf("Flush $%02x raw %02x %02x %02x ...\n", olen, obuf[0], obuf[1], obuf[2]);
-#endif
-          if (olen) {
-            SERIAL_WRITE(olen);
-            for (a = 0; a < olen; a++) {
-              c = obuf[a];
-              SERIAL_DELAY;
-              SERIAL_WRITE(c);
-            }
-          }
-          olen = 0;
-        }
-        else if (rle_count < 3) {
-          // Don't do anything yet, as we haven't yet flipped to RLE coding
-        }
-        else {
-          // rle_count>3, so keep accumulating RLE data
-          olen--;
-        }
-      }
-      else {
-        // Flush any accumulated RLE data
-        if (rle_count > 2) {
-#if DEBUG > 1
-          printf("$%02x x $%02x\n", rle_count, last_value);
-#endif
-          c = 0x80 | rle_count;
-          SERIAL_WRITE(c);
-          SERIAL_DELAY;
-          SERIAL_WRITE(last_value);
-        }
-        // 1 of the new byte seen
-        rle_count = 1;
-      }
-
-      last_value = local_buffer[iofs];
-
-      // Advance and keep buffer primed
-      if (iofs == 0xff) {
-        buffer_address += 256;
-        lcopy(buffer_address, (long)&local_buffer[0], 256);
-
-        iofs = 0;
-      }
-      else
-        iofs++;
-    }
-  }
-}
-
-void rle_finalise(void)
-{
-  // Flush any accumulated RLE data
-  if (rle_count > 2) {
-#if DEBUG > 1
-    printf("Terminal $%02x x $%02x\n", rle_count, last_value);
-#endif
-    c = 0x80 | rle_count;
-    SERIAL_WRITE(c);
-    SERIAL_DELAY;
-    SERIAL_WRITE(last_value);
-  }
-  else if (olen) {
-#if DEBUG > 1
-    printf("Terminal flush $%02x raw %02x %02x %02x ...\n", olen, obuf[0], obuf[1], obuf[2]);
-#endif
-    SERIAL_WRITE(olen);
-    for (a = 0; a < olen; a++) {
-      c = obuf[a];
-      SERIAL_DELAY;
-      SERIAL_WRITE(c);
-    }
-  }
-}
+uint16_t ip_id = 0;
 
 void wait_for_sdcard_to_go_busy(void)
 {
-  if (xemu_flag) {
-    // Pause a little here, to permit xemu to echo the last command back to mega65_ftp.
-    // This need came about due to xemu presently completing SD card jobs instantaneously,
-    // and thus never goes busy.
-    for (aa = 0; aa < 20; aa++)
-      continue;
-  }
-  else {
-    while (!(PEEK(0xD680) & 0x03))
-      continue;
-  }
+  while (!(PEEK(0xD680) & 0x03))
+    continue;
 }
 
-#pragma optimize(off)
-void mount_file(void)
+typedef union {
+  uint16_t u;
+  uint8_t b[2];
+} chks_t;
+chks_t chks;
+
+static uint8_t _a, _b, _c;
+static unsigned int _b16;
+
+/**
+ * Calculate checksum for a memory area (must be word-aligned).
+ * Pad a zero byte, if the size is odd.
+ * Optimized for 8-bit word processors.
+ * The result is found in chks.
+ * @param buf Pointer to a memory buffer.
+ * @param size Data size in bytes.
+ */
+void checksum(uint8_t *buf, uint16_t size)
 {
-  printf("Mounting \"%s\"...\n", filename);
-  strcpy((char *)0x0400, filename);
-  *((char *)0x400 + strlen(filename)) = 0x00;
-
-  // Call dos_setname()
-  __asm__("LDY #$04");
-  __asm__("LDX #$00");
-
-  __asm__("LDA #$2E");
-  __asm__("STA $D640");
-  __asm__("NOP");
-
-  // Try to attach it
-  __asm__("LDA #$40");
-  __asm__("STA $D640");
-  __asm__("NOP");
-}
-#pragma optimize(on)
-
-void update_read_cache()
-{
-  if (read_cache_empty) {
-    goto reset_cache;
-  }
-
-  if (read_cache_size == 0) {
-    if (sector_number == read_cache_start + 256) {
-      lcopy(0xffd6e00, 0x40000 + (read_cache_offset << 9UL), 0x200);
-      ++read_cache_start;
-      ++read_cache_offset;
+  _c = 0;
+  while (size) {
+    /*
+     * First byte (do not care if LSB or not).
+     */
+    _a = chks.b[0];
+    _b = _b16 = _a + (*buf++) + _c;
+    _c = _b16 >> 8;
+    chks.b[0] = _b;
+    if (--size == 0) {
+      /*
+       * Pad a zero. Just test the carry.
+       */
+      if (_c) {
+        if (++chks.b[1] == 0)
+          chks.b[0]++;
+      }
       return;
     }
-    goto reset_cache;
+    /*
+     * Second byte (do not care if MSB or not).
+     */
+    _a = chks.b[1];
+    _b = _b16 = _a + (*buf++) + _c;
+    _c = _b16 >> 8;
+    chks.b[1] = _b;
+    size--;
+  }
+  /*
+   * Test the carry.
+   */
+  if (_c) {
+    ++chks.b[0];
+    if (!chks.b[0])
+      chks.b[1]++;
+  }
+}
+
+/**
+ * Sums a 16-bit word to the current checksum value.
+ * Optimized for 8-bit word processors.
+ * The result is found in chks.
+ * @param v Value to sum.
+ */
+void add_checksum(uint16_t v)
+{
+  /*
+   * First byte (MSB).
+   */
+  _a = chks.b[0];
+  _b = _b16 = _a + (v >> 8);
+  _c = _b16 >> 8;
+  chks.b[0] = _b;
+
+  /*
+   * Second byte (LSB).
+   */
+  _a = chks.b[1];
+  _b = _b16 = _a + (v & 0xff) + _c;
+  _c = _b16 >> 8;
+  chks.b[1] = _b;
+
+  /*
+   * Test for carry.
+   */
+  if (_c) {
+    if (++chks.b[0] == 0)
+      chks.b[1]++;
+  }
+}
+
+void get_new_job()
+{
+  while (PEEK(0xD6E1) & 0x20) {
+    POKE(0xD6E1, 0x01);
+    POKE(0xD6E1, 0x03);
+
+    lcopy(ETH_RX_BUFFER + 2L, (uint32_t)&recv_buf.eth, sizeof(ETH_HEADER));
+
+    /*
+     * Check destination address.
+     */
+
+    if ((recv_buf.eth.destination.b[0] & recv_buf.eth.destination.b[1] & recv_buf.eth.destination.b[2]
+            & recv_buf.eth.destination.b[3] & recv_buf.eth.destination.b[4] & recv_buf.eth.destination.b[5])
+        != 0xff) {
+      /*
+       * Not broadcast, check if it matches the local address.
+       */
+      if (memcmp(&recv_buf.eth.destination, &mac_local, sizeof(EUI48)))
+        continue;
+    }
+
+    if (recv_buf.eth.type == 0x0608) { // big-endian for 0x0806
+      /*
+       * ARP packet.
+       */
+      lcopy((uint32_t)&recv_buf.eth.source, (uint32_t)&send_buf.eth.destination, sizeof(EUI48));
+      lcopy((uint32_t)&mac_local, (uint32_t)&send_buf.eth.source, sizeof(EUI48));
+      send_buf.eth.type = 0x0608;
+      lcopy(ETH_RX_BUFFER + 2 + 14, (uint32_t)&send_buf.arp, sizeof(ARP_HDR));
+      if (send_buf.arp.opcode != ARP_REQUEST || send_buf.arp.dest_ip.d != reply_template.ftp.source.d) {
+        continue;
+      }
+      lcopy((uint32_t)&send_buf.arp.orig_hw, (uint32_t)&send_buf.arp.dest_hw, sizeof(EUI48));
+      lcopy((uint32_t)&mac_local, (uint32_t)&send_buf.arp.orig_hw, sizeof(EUI48));
+      send_buf.arp.dest_ip.d = send_buf.arp.orig_ip.d;
+      send_buf.arp.orig_ip.d = reply_template.ftp.source.d;
+      send_buf.arp.opcode = ARP_REPLY;
+      send_buf_size = sizeof(ETH_HEADER) + sizeof(ARP_HDR);
+    }
+    else if (recv_buf.eth.type == 0x0008) { // big-endian for 0x0800
+      lcopy(ETH_RX_BUFFER + 2 + 14, (uint32_t)&recv_buf.ftp, sizeof(FTP_PKT));
+      // printf("IP %d.%d.%d.%d-%d.%d.%d.%d:%d P:%d L:%d\n", recv_buf.ftp.source.b[0], recv_buf.ftp.source.b[1],
+      // recv_buf.ftp.source.b[2],
+      //     recv_buf.ftp.source.b[3], recv_buf.ftp.destination.b[0], recv_buf.ftp.destination.b[1],
+      //     recv_buf.ftp.destination.b[2], recv_buf.ftp.destination.b[3], NTOHS(recv_buf.ftp.dst_port),
+      //     recv_buf.ftp.protocol, NTOHS(recv_buf.ftp.udp_length));
+
+      if (ip_addr_set == 0) {
+        if (recv_buf.ftp.destination.b[3] != 65) {
+          continue;
+        }
+      }
+      else {
+        if (recv_buf.ftp.destination.d != reply_template.ftp.source.d
+            || recv_buf.ftp.source.d != reply_template.ftp.destination.d) {
+          continue;
+        }
+      }
+
+      if (recv_buf.ftp.protocol != 17 /*udp*/ || NTOHS(recv_buf.ftp.dst_port) != 4510
+          || NTOHS(recv_buf.ftp.udp_length) != 21) {
+        continue;
+      }
+
+      chks.u = 0;
+      checksum((uint8_t *)&recv_buf.ftp, 20);
+      if (chks.u != 0xffff) {
+        printf("IP checksum error\n");
+        continue;
+      }
+
+      if (ip_addr_set == 0) {
+        lcopy((uint32_t)&recv_buf.eth.source, (uint32_t)&reply_template.eth.destination, sizeof(EUI48));
+        reply_template.ftp.source.d = recv_buf.ftp.destination.d;
+        reply_template.ftp.destination.d = recv_buf.ftp.source.d;
+        reply_template.ftp.dst_port = recv_buf.ftp.src_port;
+        ip_addr_set = 1;
+      }
+
+      if (recv_buf.ftp.unused_1 != 0) {
+        printf("Sector count > 255 not supported\n");
+        continue;
+      }
+
+      if (recv_buf.ftp.ftp_magic != 0x7165726d /*mreq bug endian*/) {
+        printf("Non matching magic bytes: %x", recv_buf.ftp.ftp_magic);
+        continue;
+      }
+
+      batch_left = recv_buf.ftp.num_sectors;
+      sector_number_read = recv_buf.ftp.sector_number;
+      seq_num = recv_buf.ftp.seq_num;
+    }
+  }
+}
+
+void process()
+{
+  if (send_buf_size > 0) {
+    if (!PEEK(0xD6E0)&0x80) {
+      return;
+    }
+
+    // Copy to TX buffer
+    lcopy((uint32_t)&send_buf, ETH_TX_BUFFER, send_buf_size);
+
+    // Set packet length
+    POKE(0xD6E2, send_buf_size & 0xff);
+    POKE(0xD6E3, send_buf_size  >> 8);
+
+    // Send packet
+    POKE(0xD6E4,0x01); // TX now
+
+    send_buf_size = 0;
   }
 
-  if (sector_number == read_cache_start + read_cache_size) {
-    lcopy(0xffd6e00, 0x40000 + (read_cache_size << 9UL), 0x200);
-    ++read_cache_size;
+  if (sector_buffered) {
+    lcopy((uint32_t)&reply_template, (uint32_t)&send_buf, sizeof(ETH_HEADER) + sizeof(FTP_PKT));
+    send_buf.ftp.id = ip_id;
+    send_buf.ftp.seq_num = seq_num;
+    send_buf.ftp.sector_number = sector_number_buf;
+    lcopy((uint32_t)&sector_buf, (uint32_t)&send_buf.b[sizeof(ETH_HEADER) + sizeof(FTP_PKT)], 0x200);
+    chks.u = 0;
+    checksum((uint8_t *)&send_buf.ftp, 20);
+    send_buf.ftp.checksum_ip = ~chks.u;
+
+    // Calculate UDP checksum
+    /*chks.u = 0;
+    checksum((uint8_t *)&send_buf.ftp.ftp_magic, 13 + 512);
+    checksum((uint8_t *)&send_buf.ftp.source, 8 + 8); // 8 bytes src/dst ip addresses + 8 bytes udp header
+    add_checksum(17); // UDP protocol number
+    add_checksum(NTOHS(send_buf.ftp.udp_length)); // payload size + 8 bytes udp header
+    */
+    send_buf.ftp.checksum_udp = 0;
+
+    ++ip_id;
+    ++seq_num;
+    sector_buffered = 0;
+    send_buf_size = 14 + 20 + 8 + 13 + 512;
+  }
+
+  if (sector_reading) {
+    if (PEEK(0xD680) & 0x03) {
+      POKE(0xD020, PEEK(0xD020) + 1);
+      return;
+    }
+    lcopy(0xffd6e00, (long)sector_buf, 0x200);
+    sector_number_buf = sector_number_read;
+    --batch_left;
+    ++sector_number_read;
+    sector_reading = 0;
+    sector_buffered = 1;
+  }
+
+  if (batch_left > 0) {
+    *(uint32_t *)0xD681 = sector_number_read;
+    POKE(0xD680, 0x02);
+    wait_for_sdcard_to_go_busy();
+    sector_reading = 1;
     return;
   }
 
-reset_cache:
-  read_cache_start = sector_number;
-  read_cache_size = 1;
-  read_cache_offset = 0;
-  read_cache_empty = 0;
-  lcopy(0xffd6e00, 0x40000, 0x200);
-}
-
-uint8_t read_from_cache(uint32_t req_sector, uint8_t *buffer)
-{
-  uint8_t offset = req_sector - read_cache_start;
-  //printf("r: %ld st: %ld sz: %d os: %d e: %d\n", req_sector, read_cache_start, read_cache_size, read_cache_offset, read_cache_empty);
-  if (read_cache_empty || req_sector < read_cache_start || req_sector - read_cache_start > 255) {
-    return 0;
-  }
-
-  if (read_cache_size == 0) {
-    offset += read_cache_offset;
-  }
-  else if (offset >= read_cache_size) {
-    return 0;
-  }
-
-  lcopy(0x40000 + (offset << 9UL), buffer, 0x200);
-  return 1;
-}
-
-SOCKET *s;
-byte_t buf[1500];
-byte_t batch_left;
-
-uint8_t batch_next_packet(uint8_t /*p*/)
-{
-  // just updating sector number and data, keep seq num
-  //if (batch_left > 0)
-  //  printf(" batch left %d sector %ld\n", batch_left, sector_number);
-  // Wait for SD to read and fiddle border colour to show we are alive
-  while (PEEK(0xD680) & 0x03)
-    POKE(0xD020, PEEK(0xD020) + 1);
-
-  *(uint32_t *)(buf + 9) = sector_number;
-  lcopy(0xffd6e00, (long)(buf + 13), 0x200);
-
-  // Already trigger next sector as read-ahead
-  ++sector_number;
-  --batch_left;
-  *(uint32_t *)0xD681 = sector_number;
-  POKE(0xD680, 0x02);
-  wait_for_sdcard_to_go_busy();
-  socket_select(s);
-  socket_send(buf, 0x20d);
-  //task_add(nwk_upstream, 0, 0,"upstream");
-  return 0;
-}
-
-byte_t rx_handler(byte_t p)
-{
-  int size;
-  uint16_t seq_num;
-  byte_t hdr[] = { 0x6d, 0x72, 0x65, 0x71 }; // 'mreq'
-
-  size = socket_data_size();
-
-  if (p == WEEIP_EV_DATA_SENT) {
-    //printf("sent complete\n");
-    if (batch_left > 0) {
-      task_add(batch_next_packet, 1, 0, "batch");
-    }
-    else {
-      block_rx = FALSE;
-    }
-    return 0;
-  }
-
-  if (p != WEEIP_EV_DATA || size < 5 || memcmp(buf, hdr, 4) != 0)
-    return 0;
-
-  //printf("received packet\n");
-  buf[2] = 0x73; // 's'
-  buf[3] = 0x70; // 'p';
-
-  // skipping two bytes (serial no)
-  switch (buf[6]) {
-  case 0xff:
-    printf("reset request\n");
-    __asm__("jmp 58552");
-  case 0x04:
-    //printf("read sector request\n");
-    if (size != 13)
-      return 0;
-    seq_num = *(uint16_t *)(buf + 4);
-    batch_left = *(uint16_t *)(buf + 7);
-    sector_number = *(uint32_t *)(buf + 9);
-    if (batch_left > 1)
-      printf("Req seq %d sect %ld cnt %d\n", seq_num, sector_number, batch_left);
-    *(uint32_t *)0xD681 = sector_number;
-    POKE(0xD680, 0x02);
-    wait_for_sdcard_to_go_busy();
-    batch_next_packet(0);
-    block_rx = TRUE;
-/*
-    seq_num = *(uint16_t *)(buf + 4);
-    req_sector = *(uint32_t *)(buf + 7);
-    if (read_from_cache(req_sector, buf + 11)) {
-      //printf("cached\n");
-      socket_send(buf, 0x20b);
-      return 0;
-    }
-
-    if (req_sector != sector_number) {
-      printf("cache miss\n");
-      // Wait for SD to read and fiddle border colour to show we are alive
-      while (PEEK(0xD680) & 0x03)
-        POKE(0xD020, PEEK(0xD020) + 1);
-      *(uint32_t *)0xD681 = req_sector;
-      //printf("reading sector %ld, seq_num %d\n", sector_number, seq_num);
-      POKE(0xD680, 0x02);
-      wait_for_sdcard_to_go_busy();
-    }
-    else {
-      //printf("read-ahead\n");
-    }
-
-    // Wait for SD to read and fiddle border colour to show we are alive
-    while (PEEK(0xD680) & 0x03)
-      POKE(0xD020, PEEK(0xD020) + 1);
-
-    sector_number = req_sector;
-    update_read_cache();
-    lcopy(0xffd6e00, (long)(buf + 11), 0x200);
-
-    // Already trigger next sector as read-ahead
-    ++sector_number;
-    *(uint32_t *)0xD681 = sector_number;
-    POKE(0xD680, 0x02);
-    socket_send(buf, 0x20b);
-    wait_for_sdcard_to_go_busy();
-*/
-    break;
-  default:
-    printf("unknown request %d\n", buf[6]);
-    return 0;
-  }
-
-  return 0;
+  get_new_job();
 }
 
 void main(void)
 {
+  uint8_t i;
   asm("sei");
 
   // Fast CPU, M65 IO
@@ -478,436 +393,41 @@ void main(void)
 
   printf("%cMEGA65 SD network access helper.\n\n", 0x93);
 
-  eth_init();
+  // Read MAC address
+  lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
 
   printf("MAC %02x", mac_local.b[0]);
   for (i = 1; i < 6; i++)
     printf(":%02x", mac_local.b[i]);
   printf("\n");
 
-  // Default mask 255.255.255.0
-  for (i = 0; i < 3; i++)
-    ip_mask.b[i] = 0xff;
-  ip_mask.b[3] = 0;
+  batch_left = 0;
+  sector_reading = 0;
+  sector_buffered = 0;
+  send_buf_size = 0;
+  while (PEEK(0xD680) & 0x03)
+    POKE(0xD020, PEEK(0xD020) + 1);
 
-  ip_local.b[0] = 192;
-  ip_local.b[1] = 168;
-  ip_local.b[2] = 1;
-  ip_local.b[3] = 65;
-
-  printf("IP  %d.%d.%d.%d\n", ip_local.b[0], ip_local.b[1], ip_local.b[2], ip_local.b[3]);
-
-  // Setup WeeIP
-  weeip_init();
-  task_cancel(eth_task);
-  task_add(eth_task, 0, 0, "eth");
-
-  s = socket_create(SOCKET_UDP);
-  socket_set_callback(rx_handler);
-  socket_set_rx_buffer((buffer_t)buf, 1500);
-  socket_listen(4510);
+  // Prepare response packet
+  lcopy((uint32_t)&mac_local, (uint32_t)&reply_template.eth.source, sizeof(EUI48));
+  reply_template.eth.type = 0x0008;
+  reply_template.ftp.ver_length = 0x45;
+  reply_template.ftp.tos = 0;
+  reply_template.ftp.ip_length = HTONS(20 + 8 + 13 + 512);
+  reply_template.ftp.frag = 0;
+  reply_template.ftp.ttl = 64;
+  reply_template.ftp.protocol = 17;
+  reply_template.ftp.source.d = 0;
+  reply_template.ftp.src_port = HTONS(4510);
+  reply_template.ftp.udp_length = HTONS(8 + 13 + 512);
+  reply_template.ftp.checksum_udp = 0;
+  reply_template.ftp.ftp_magic = 0x7073726d; // 'mrsp' big endian
+  reply_template.ftp.opcode = 4;
+  reply_template.ftp.num_sectors = 1;
+  reply_template.ftp.unused_1 = 0;
+  printf("Data: %02x %02x %02x %02x %02x %02x\n", reply_template.b[6], reply_template.b[7], reply_template.b[8], reply_template.b[9], reply_template.b[10], reply_template.b[11]);
 
   while (1) {
-    task_periodic();
+    process();
   }
-
-  // Clear communications area
-  lfill(0xc000, 0x00, 0x1000);
-  lfill(0xc001, 0x42, 0x1000);
-
-#if 0
-  while (1) {
-    if (PEEK(0xC000)) {
-      // Perform one or more jobs
-      job_count = PEEK(0xC000);
-
-      // pause a little here, to permit xemu to echo the last command back to mega65_ftp
-      if (xemu_flag) {
-        for (aa = 0; aa < 30000; aa++)
-          continue;
-      }
-
-#if DEBUG
-      printf("\n\n\nReceived list of %d jobs.\n", job_count);
-#endif
-      job_addr = 0xc001;
-      for (jid = 0; jid < job_count; jid++) {
-        if (job_addr > 0xcfff)
-          break;
-        job_type_addr = job_addr;
-        job_type = PEEK(job_type_addr);
-        // printf("job_type=0x%02x\n", job_type);
-        switch (job_type) {
-
-        // - - - - - - - - - - - - - - - - - - - - -
-        // ??
-        // - - - - - - - - - - - - - - - - - - - - -
-        case 0x00:
-          job_addr++;
-          break;
-
-        // - - - - - - - - - - - - - - - - - - - - -
-        // Terminate / Quit
-        // - - - - - - - - - - - - - - - - - - - - -
-        case 0xFF:
-          __asm__("jmp 58552");
-          break;
-
-        // - - - - - - - - - - - - - - - - - - - - -
-        // Write sector
-        // - - - - - - - - - - - - - - - - - - - - -
-        case 0x02:
-        case 0x05: // multi write first
-        case 0x06: // multi write middle
-        case 0x07: // multi write end
-          job_addr++;
-          buffer_address = *(uint32_t *)job_addr;
-          job_addr += 4;
-          sector_number = *(uint32_t *)job_addr;
-          job_addr += 4;
-
-#if DEBUG > 0
-          printf("$%04x : write sector $%08lx from mem $%07lx\n", *(uint16_t *)0xDC08, sector_number, buffer_address);
-#endif
-
-          //	  lcopy(buffer_address,0x0400,512);
-          lcopy(buffer_address, 0xffd6e00, 512);
-
-          // Write sector
-          *(uint32_t *)0xD681 = sector_number;
-          POKE(0xD680, 0x57); // Open write gate
-          if (job_type == 0x02)
-            POKE(0xD680, 0x03);
-          if (job_type == 0x05)
-            POKE(0xD680, 0x04);
-          if (job_type == 0x06)
-            POKE(0xD680, 0x05);
-          if (job_type == 0x07)
-            POKE(0xD680, 0x06);
-
-          wait_for_sdcard_to_go_busy();
-
-          // Wait for SD to read and fiddle border colour to show we are alive
-          while (PEEK(0xD680) & 0x03)
-            POKE(0xD020, PEEK(0xD020) + 1);
-
-          break;
-
-        // - - - - - - - - - - - - - - - - - - - - -
-        // Read sector
-        // - - - - - - - - - - - - - - - - - - - - -
-        case 0x01:
-          job_addr++;
-          buffer_address = *(uint32_t *)job_addr;
-          job_addr += 4;
-          sector_number = *(uint32_t *)job_addr;
-          job_addr += 4;
-
-#if DEBUG
-          printf("$%04x : Read sector $%08lx into mem $%07lx\n", *(uint16_t *)0xDC08, sector_number, buffer_address);
-#endif
-          // Do read
-          *(uint32_t *)0xD681 = sector_number;
-          POKE(0xD680, 0x02);
-
-          wait_for_sdcard_to_go_busy();
-
-          // Wait for SD to read and fiddle border colour to show we are alive
-          while (PEEK(0xD680) & 0x03)
-            POKE(0xD020, PEEK(0xD020) + 1);
-
-          lcopy(0xffd6e00, buffer_address, 0x200);
-
-          snprintf(msg, 80, "ftjobdone:%04x:\n\r", job_type_addr);
-          serial_write_string(msg, strlen(msg));
-
-#if DEBUG
-          printf("$%04x : Read sector done\n", *(uint16_t *)0xDC08);
-#endif
-
-          break;
-
-        // - - - - - - - - - - - - - - - - - - - - -
-        // Read sectors and stream
-        // - - - - - - - - - - - - - - - - - - - - -
-        case 0x03: // 0x03 == with RLE
-        case 0x04: // 0x04 == no RLE
-          job_addr++;
-          sector_count = *(uint16_t *)job_addr;
-          job_addr += 2;
-          sector_number = *(uint32_t *)job_addr;
-          job_addr += 4;
-
-#if DEBUG > 1
-          printf("sector_count = %d\n", sector_count);
-          printf("sector_number = $%08lx (%ld)\n", sector_number, sector_number);
-          press_key();
-#endif
-
-          // Begin with no bytes to send
-          buffer_ready = 0;
-          // and no sector in progress being read
-          read_pending = 0;
-
-          // Reset RLE state
-          rle_init();
-
-          if (job_type == 3)
-            snprintf(msg, 80, "ftjobdata:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
-          else
-            snprintf(msg, 80, "ftjobdatr:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
-#if DEBUG > 1
-          printf("%s\n", msg);
-          press_key();
-#endif
-          serial_write_string(msg, strlen(msg));
-
-          while (sector_count || buffer_ready || read_pending) {
-            if (sector_count && (!read_pending)) {
-              // if sd-card is not busy, then do this stuff
-              if (!(PEEK(0xD680) & 0x03)) {
-                // Schedule reading of next sector
-
-                POKE(0xD020, PEEK(0xD020) + 1);
-
-                // Do read
-                *(uint32_t *)0xD681 = sector_number;
-
-                read_pending = 1;
-                sector_count--;
-
-                POKE(0xD680, 0x02);
-
-                wait_for_sdcard_to_go_busy();
-
-                sector_number++;
-              }
-            }
-            if (read_pending && (!buffer_ready)) {
-
-              // Read is complete, now queue it for sending back
-              if (!(PEEK(0xD680) & 0x03)) {
-                // Sector has been read. Copy it to a local buffer for sending,
-                // so that we can send it while reading the next sector
-                lcopy(0xffd6e00, (long)&temp_sector_buffer[0], 0x200);
-                // if (sector_number-1 == 2623)
-                //{
-                //  //pause_flag = 1;
-                //  for (z = 0; z < 16*8; z++)
-                //  {
-                //    if ( (z % 8) == 0)
-                //      printf(" ");
-                //    if ( (z % 16) == 0 )
-                //      printf("\n");
-                //    printf("%02X", temp_sector_buffer[z]);
-                //  }
-                //}
-
-                read_pending = 0;
-                buffer_ready = 1;
-              }
-            }
-            if (buffer_ready) {
-              // XXX - Just send it all in one go, since we don't buffer multiple
-              // sectors
-              if (job_type == 3)
-                rle_write_string((uint32_t)temp_sector_buffer, 0x200);
-              else
-                serial_write_string(temp_sector_buffer, 0x200);
-              buffer_ready = 0;
-              pause_flag = 0;
-            }
-          } // end while we have sectors to send
-
-          if (job_type == 3)
-            rle_finalise();
-
-#if DEBUG
-          sector_number = *(uint32_t *)(job_addr - 4);
-          sector_count = *(uint16_t *)(job_addr - 6);
-          printf("$%04x : Completed read sector $%08lx (count=%d)\n", *(uint16_t *)0xDC08, sector_number, sector_count);
-#endif
-
-          snprintf(msg, 80, "ftjobdone:%04x:\n\r", job_type_addr);
-          serial_write_string(msg, strlen(msg));
-
-#if DEBUG
-          printf("$%04x : Read sector done\n", *(uint16_t *)0xDC08);
-#endif
-
-          break;
-
-        case 0x0f: // 0x0F == Read a slab of QSPI flash
-          job_addr++;
-          sector_count = *(uint16_t *)job_addr;
-          job_addr += 2;
-          sector_number = *(uint32_t *)job_addr;
-          job_addr += 4;
-
-#if DEBUG > 1
-          printf("sector_count = %d\n", sector_count);
-          printf("sector_number = $%08lx (%ld)\n", sector_number, sector_number);
-          press_key();
-#endif
-
-          // Begin with no bytes to send
-          buffer_ready = 0;
-          // and no sector in progress being read
-          read_pending = 0;
-
-          // Reset RLE state
-          rle_init();
-
-          if (job_type == 3)
-            snprintf(msg, 80, "ftjobdata:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
-          else
-            snprintf(msg, 80, "ftjobdatr:%04x:%08lx:", job_type_addr, sector_count * 0x200L);
-#if DEBUG > 1
-          printf("%s\n", msg);
-          press_key();
-#endif
-          serial_write_string(msg, strlen(msg));
-
-          while (sector_count || buffer_ready || read_pending) {
-            if (sector_count && (!read_pending)) {
-              // if sd-card is not busy, then do this stuff
-              if (!(PEEK(0xD680) & 0x03)) {
-                // Schedule reading of next sector
-
-                POKE(0xD020, PEEK(0xD020) + 1);
-
-                // Do read
-                *(uint32_t *)0xD681 = sector_number;
-
-                read_pending = 1;
-                sector_count--;
-
-                POKE(0xD680, 0x53);
-
-                // Wait just a short time for the fast flash transaction to complete
-                for (z = 0; z < 180; z++)
-                  continue;
-
-                sector_number += 512;
-              }
-            }
-            if (read_pending && (!buffer_ready)) {
-
-              // Read is complete, now queue it for sending back
-              if (!(PEEK(0xD680) & 0x03)) {
-                // Sector has been read. Copy it to a local buffer for sending,
-                // so that we can send it while reading the next sector
-                lcopy(0xffd6e00, (long)&temp_sector_buffer[0], 0x200);
-                // if (sector_number-1 == 2623)
-                //{
-                //  //pause_flag = 1;
-                //  for (z = 0; z < 16*8; z++)
-                //  {
-                //    if ( (z % 8) == 0)
-                //      printf(" ");
-                //    if ( (z % 16) == 0 )
-                //      printf("\n");
-                //    printf("%02X", temp_sector_buffer[z]);
-                //  }
-                //}
-
-                read_pending = 0;
-                buffer_ready = 1;
-              }
-            }
-            if (buffer_ready) {
-              // XXX - Just send it all in one go, since we don't buffer multiple
-              // sectors
-              if (job_type == 3)
-                rle_write_string((uint32_t)temp_sector_buffer, 0x200);
-              else
-                serial_write_string(temp_sector_buffer, 0x200);
-              buffer_ready = 0;
-              pause_flag = 0;
-            }
-          } // end while we have sectors to send
-
-#if DEBUG
-          sector_number = *(uint32_t *)(job_addr - 4);
-          sector_count = *(uint16_t *)(job_addr - 6);
-          printf("$%04x : Completed read flash $%08lx (count=%d)\n", *(uint16_t *)0xDC08, sector_number, sector_count);
-#endif
-
-          snprintf(msg, 80, "ftjobdone:%04x:\n\r", job_type_addr);
-          serial_write_string(msg, strlen(msg));
-
-#if DEBUG
-          printf("$%04x : Read flash done\n", *(uint16_t *)0xDC08);
-#endif
-
-          break;
-
-        // - - - - - - - - - - - - - - - - - - - - -
-        // Send block of memory
-        // - - - - - - - - - - - - - - - - - - - - -
-        case 0x11:
-          job_addr++;
-          buffer_address = *(uint32_t *)job_addr;
-          job_addr += 4;
-          transfer_size = *(uint32_t *)job_addr;
-          job_addr += 4;
-
-#if DEBUG
-          printf("$%04x : Send mem $%07lx to $%07lx: %02x %02x ...\n", *(uint16_t *)0xDC08, buffer_address,
-              buffer_address + transfer_size - 1, lpeek(buffer_address), lpeek(buffer_address + 1));
-#endif
-
-          snprintf(msg, 80, "ftjobdata:%04x:%08lx:", job_type_addr, transfer_size);
-          serial_write_string(msg, strlen(msg));
-
-          // Set up buffers
-          rle_init();
-          rle_write_string(buffer_address, transfer_size);
-          rle_finalise();
-
-          snprintf(msg, 80, "ftjobdone:%04x:\n\r", job_type_addr);
-          serial_write_string(msg, strlen(msg));
-
-#if DEBUG
-          printf("$%04x : Send mem done\n", *(uint16_t *)0xDC08);
-#endif
-
-          break;
-
-        // - - - - - - - - - - - - - - - - - - - - -
-        // Mount a disk image
-        // - - - - - - - - - - - - - - - - - - - - -
-        case 0x12:
-          job_addr++;
-          strcpy(filename, (char *)job_addr);
-          mount_file();
-          break;
-
-        // - - - - - - - - - - - - - - - - - - - - -
-        // Request remotesd version
-        // - - - - - - - - - - - - - - - - - - - - -
-        case 0x13:
-          job_addr++;
-          serial_write_string("\nmega65ft1.0\n\r", 14);
-          break;
-
-          // - - - - - - - - - - - - - - - - - - - - -
-
-        default:
-          job_addr = 0xd000;
-          break;
-        }
-      }
-
-      // Indicate when we think we are all done
-      POKE(0xC000, 0);
-      snprintf(msg, 80, "ftbatchdone\n");
-      serial_write_string(msg, strlen(msg));
-
-#if DEBUG
-      printf("$%04x : Sending batch done\n", *(uint16_t *)0xDC08);
-#endif
-    }
-  }
-#endif
 }

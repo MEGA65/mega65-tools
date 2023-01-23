@@ -1310,18 +1310,6 @@ int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
   return 1;
 }
 
-void process_ethernet_read_sectors()
-{
-  int i;
-  for (i = 0; i < eth_num_packets; ++i) {
-    log_debug("Sending queue packet #%d", i);
-    ethl_send_packet(eth_packet_queue[i], eth_packet_len[i]);
-  }
-  log_debug("Waiting for all packets to get acknowledged");
-  wait_all_acks();
-  log_debug("Queue done");
-}
-
 void process_jobs_ethernet(void)
 {
   uint8_t *ptr = queue_cmds;
@@ -1369,35 +1357,6 @@ void process_jobs_ethernet(void)
       }
       ethl_send_packet_unscheduled(payload, sizeof(payload));
       wait_all_acks();
-
-/*
-      ++ptr;
-      uint16_t sector_count = ptr[0] + (ptr[1] << 8);
-      ptr += 2;
-      uint32_t sector_number = ptr[0] + (ptr[1] << 8) + (ptr[2] << 16) + (ptr[3] << 24);
-      ptr += 4;
-
-      while (sector_count > 0) {
-        eth_num_packets = sector_count < 256 ? sector_count : 256;
-        for (j = 0; j < eth_num_packets; ++j) {
-          uint8_t *packet = eth_packet_queue[j];
-          memcpy(packet, header_template, 4);
-          // bytes 4/5 will be filled with packet seq number by etherload framework
-          packet[6] = 0x01;
-          packet[7] = sector_number >> 0;
-          packet[8] = sector_number >> 8;
-          packet[9] = sector_number >> 16;
-          packet[10] = sector_number >> 24;
-          ++sector_number;
-          ++serial;
-          eth_packet_len[j] = 11;
-        }
-        printf("Reading %d sectors\n", eth_num_packets);
-        process_ethernet_read_sectors();
-        queue_read_len += eth_num_packets * 512;
-        sector_count -= eth_num_packets;
-      }
-*/
     }
       break;
 

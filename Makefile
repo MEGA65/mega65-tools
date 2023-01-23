@@ -714,8 +714,8 @@ $(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65) $(MEGA65LIBC)
 $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
-$(UTILDIR)/remotesd_eth.prg:       $(UTILDIR)/remotesd_eth.c $(CC65) $(MEGA65LIBC) $(WEEIP_SOURCES)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -I $(SRCDIR)/weeip -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $<  $(WEEIP_SOURCES) $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/random.c $(SRCDIR)/mega65-libc/cc65/src/debug.c $(SRCDIR)/mega65-libc/cc65/src/time.c $(SRCDIR)/mega65-libc/cc65/src/hal.c $(SRCDIR)/mega65-libc/cc65/src/targets.c
+$(UTILDIR)/remotesd_eth.prg:       $(UTILDIR)/remotesd_eth.c $(CC65) $(MEGA65LIBC)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/random.c $(SRCDIR)/mega65-libc/cc65/src/debug.c $(SRCDIR)/mega65-libc/cc65/src/time.c $(SRCDIR)/mega65-libc/cc65/src/hal.c $(SRCDIR)/mega65-libc/cc65/src/targets.c
 
 $(TOOLDIR)/ftphelper_eth.c:	$(UTILDIR)/remotesd_eth.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd_eth.prg helperroutine_eth $(TOOLDIR)/ftphelper_eth.c
