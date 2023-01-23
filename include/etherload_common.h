@@ -29,7 +29,7 @@ struct sockaddr_in *ethl_get_server_addr(void);
 int ethl_send_packet(uint8_t *payload, int len);
 int ethl_send_packet_unscheduled(uint8_t *payload, int len);
 int ethl_schedule_ack(uint8_t *payload, int len);
-void ethl_set_queue_length(uint16_t length);
+int ethl_set_queue_length(uint16_t length);
 int ethl_get_current_seq_num();
 
 int send_mem(unsigned int address, unsigned char *buffer, int bytes);

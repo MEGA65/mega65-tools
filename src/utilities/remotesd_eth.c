@@ -113,8 +113,8 @@ typedef union {
 #define NTOHS(x) (((uint16_t)x >> 8) | ((uint16_t)x << 8))
 #define HTONS(x) (((uint16_t)x >> 8) | ((uint16_t)x << 8))
 
+uint8_t quit_requested = 0;
 PACKET reply_template;
-
 PACKET recv_buf;
 uint8_t sector_buf[512];
 PACKET send_buf;
@@ -418,13 +418,15 @@ void get_new_job()
           continue;
         }
         if (recv_buf.write_sector.num_sectors_minus_one == 0) {
+          /*
+           * Single sector write request
+           */
           if (write_batch_active) {
             printf("ERROR: Single write request while write batch still active\n");
             while (1)
               continue;
           }
 
-          // Single sector write requested
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
               sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB)); // copy header incl. ftp_magic
           send_buf.ftp.id = ip_id;
@@ -453,7 +455,9 @@ void get_new_job()
           //printf("Single write sector %ld\n", recv_buf.write_sector.start_sector_number);
         }
         else {
-          // Multi-sector write as a batch has been requested
+          /*
+           * Multi sector write request (batch of sectors)
+           */
           if (!write_batch_active) {
             if (recv_buf.write_sector.batch_counter != current_batch_counter) {
               init_new_write_batch();
@@ -477,7 +481,11 @@ void get_new_job()
         }
         return;
 
-      case 0x04: // read sectors
+      case 0x04:
+        /*
+         * Read sectors request
+         */
+
         if (udp_length != 21) {
           continue;
         }
@@ -498,6 +506,27 @@ void get_new_job()
         seq_num = recv_buf.ftp.seq_num;
         read_batch_active = 1;
         // printf("read job q:%d b:%d s:%ld\n", seq_num, batch_left, sector_number_read);
+        return;
+
+      case 0xff:
+      /*
+       * Quit request
+       */
+        quit_requested = 1;
+        lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
+            sizeof(ETH_HEADER) + sizeof(FTP_PKT)); // copy header incl. opcode
+        send_buf.ftp.id = ip_id;
+        send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
+        send_buf.ftp.ip_length = HTONS(20 + 8 + 7);
+        send_buf.ftp.udp_length = HTONS(8 + 7);
+        send_buf.ftp.opcode = 0xff;
+        chks.u = 0;
+        checksum((uint8_t *)&send_buf.ftp, 20);
+        send_buf.ftp.checksum_ip = ~chks.u;
+        send_buf.ftp.checksum_udp = 0;
+
+        send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT);
+
         return;
       }
     }
@@ -573,6 +602,14 @@ void process()
     return;
   }
 
+  if (quit_requested) {
+    wait_for_sd_ready();
+    while (!(PEEK(0xD6E0) & 0x80)) continue;
+    __asm__("jmp 58552");
+    // Should never get here
+    while (1) continue;
+  }
+
   get_new_job();
 }
 
@@ -601,6 +638,11 @@ void main(void)
   // RXPH 1, MCST off, BCST on, TXPH 1, NOCRC off, NOPROM off
   POKE(0xD6E5, 0x64);
 
+
+  // Commented Ethernet controller reset out, it will be detected as a new Ethernet connection
+  // by the remote computer, flushing ARP cache and doing all kinds of re-initialisation.
+  // This just takes time and the controller state should be fine still after etherload
+  // transfer of this helper routine.
 /*
   POKE(0xD6E0, 0);
   wait_100ms();
@@ -617,7 +659,7 @@ void main(void)
 
   srand(random32(0));
 
-  printf("%cMEGA65 SD network access helper.\n\n", 0x93);
+  printf("%cMEGA65 Ethernet File Transfer helper.\n\n", 0x93);
 
   // Read MAC address
   lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);

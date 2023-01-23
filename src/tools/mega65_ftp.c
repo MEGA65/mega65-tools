@@ -850,7 +850,10 @@ int DIRTYMOCK(main)(int argc, char **argv)
     ethl_setup_callbacks(
         &ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate, &ethernet_embed_packet_seq);
 
+    // Give helper program time to initialize
     usleep(500000);
+
+    sdhc_check();
   }
   else {
     if (open_the_serial_port(serial_port))
@@ -1251,7 +1254,7 @@ void ethernet_process_result(uint8_t *rx_payload, int rx_len)
   uint32_t sector_number;
 
   switch (*p) {
-  case 0x04:
+  case 0x04: // sector read
     sector_number = p[3] + (p[4] << 8) + (p[5] << 16) + (p[6] << 24);
     log_debug("Received sector %d, batch start sector %d", sector_number, eth_batch_start_sector);
     uint32_t index = sector_number - eth_batch_start_sector;
@@ -1282,7 +1285,7 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
   */
 
   switch (rx_payload[6]) {
-  case 0x02:
+  case 0x02: // write sector cmd
     // rx_payload[7] is batch id
     // rx_payload[8] is batch size
     // rx_payload[9] is idx in batch
@@ -1293,14 +1296,21 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
     log_debug("Received packet (write_sector ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
         (tx_payload[4] + (tx_payload[5] << 8)));
     break;
-  case 0x04:
-    // ry_payload[9] contains 4 bytes of sector number
+  case 0x04: // read sector cmd
+    // ry_payload[9] is 4 bytes of sector number
     if (rx_len != 512 + 13 || memcmp(&rx_payload[9], &tx_payload[9], 4) != 0) {
       return 0;
     }
     log_debug("Received packet (read_sector ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
         (tx_payload[4] + (tx_payload[5] << 8)));
     ethernet_process_result(rx_payload, rx_len);
+    break;
+  case 0xff: // quit cmd
+    if (rx_len != 7) {
+      return 0;
+    }
+    log_debug("Received quit response packet #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
     break;
   default:
     return 0;
@@ -1332,8 +1342,6 @@ uint32_t write_sector_numbers[65536 / 512];
 uint8_t write_sector_count = 0;
 uint8_t write_batch_counter = 0;
 
-int cont_sector = 0;
-
 void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
 {
   const int packet_size = 14 + 512;
@@ -1345,16 +1353,6 @@ void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
   payload[7] = write_batch_counter;
   payload[8] = (batch_size - 1) & 0xff;
   memcpy(&payload[10], &job[5], 4);             // start sector
-
-  if (batch_size > 1) {
-    uint32_t start_sector = payload[10] + (payload[11] << 8) + (payload[12] << 16) + (payload[13] << 24);
-
-    if (cont_sector != start_sector) {
-      printf("New sector start %d\n", start_sector);
-      cont_sector = start_sector;
-    }
-    cont_sector += batch_size;
-  }
 
   for (i = 0; i < batch_size; ++i)
   {
@@ -1428,11 +1426,10 @@ void process_jobs_ethernet(void)
 
   for (i = 0; i < queue_jobs; ++i) {
     uint8_t cur_cmd = *ptr;
-    //printf("Entry %d cmd %d\n", i, cur_cmd);
     if (last_cmd != cur_cmd && i > 0) {
       // If we switch command (read, write, ...) make sure the one before is completely
       // done before we continue so we don't mix read/write commands
-      log_debug("Switch of commands, waiting for acks\n");
+      log_debug("Switch of command type, waiting for acks\n");
       wait_all_acks();
     }
     last_cmd = cur_cmd;
@@ -1446,7 +1443,6 @@ void process_jobs_ethernet(void)
       uint8_t *look_ahead_ptr = ptr;
       write_batch_size = 1;
       int sector_number = ptr[5] + (ptr[6] << 8) + (ptr[7] << 16) + (ptr[8] << 24);
-      //printf("  Start at %d: sector %d\n", i, sector_number);
       for (j = i + 1; j < queue_jobs && write_batch_size <= 256; ++j) {
         look_ahead_ptr += 9;
         if (*look_ahead_ptr != *ptr) {
@@ -1457,7 +1453,6 @@ void process_jobs_ethernet(void)
         if (next_sector_number != sector_number + 1) {
           break;
         }
-        //printf("    follow %d: sector %d batch size %d\n", j, next_sector_number, write_batch_size);
         ++sector_number;
         ++write_batch_size;
       }
@@ -4956,6 +4951,10 @@ void petscify_text(char *text)
 
 void poke(unsigned long addr, unsigned char value)
 {
+  if (ethernet_mode) {
+    log_error("Serial monitor memory access requested in Ethernet mode");
+    exit(-1);
+  }
   char cmd[16];
   sprintf(cmd, "s%lx %x\r", addr, value);
   slow_write(fd, cmd, strlen(cmd));
@@ -4969,8 +4968,20 @@ void request_remotesd_version(void)
 
 void request_quit(void)
 {
-  poke(0xc001, 0xff);
-  poke(0xc000, 0x01);
+  if (ethernet_mode) {
+    wait_all_acks();
+    const int packet_size = 7;
+    uint8_t payload[packet_size];
+    memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+    // bytes [4] and [5] will be filled with packet seq numbers
+    payload[6] = 0xff; // quit command
+    ethl_send_packet(payload, packet_size);
+    wait_all_acks();
+  }
+  else {
+    poke(0xc001, 0xff);
+    poke(0xc000, 0x01);
+  }
 }
 
 void mount_file(char *filename)

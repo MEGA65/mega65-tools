@@ -162,13 +162,19 @@ struct sockaddr_in *ethl_get_server_addr(void)
   return &servaddr;
 }
 
-void update_retx_interval(void)
+int get_num_unacked_frames(void)
 {
   int num_unacked = 0;
   for (int i = 0; i < queue_length; i++) {
     if (frame_unacked[i])
       ++num_unacked;
   }
+  return num_unacked;
+}
+
+void update_retx_interval(void)
+{
+  int num_unacked = get_num_unacked_frames();
   //int seq_gap = (packet_seq - last_rx_seq);
   retx_interval = 2000 + 10000 * num_unacked;
   if (retx_interval < 12000)
@@ -297,7 +303,7 @@ void maybe_send_ack(void)
 
 /*
       if (0)
-        log_warn("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x", gettime_us() - start_time,
+        log_debug("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x", gettime_us() - start_time,
             frame_load_addrs[id], id, ucount, packet_seq, unacked_frame_payloads[id][ethlet_dma_load_offset_data + 0],
             unacked_frame_payloads[id][ethlet_dma_load_offset_data + 1]);
 
@@ -311,7 +317,7 @@ void maybe_send_ack(void)
         exit(-1);
       }
 */
-      log_warn("Resending packet seq #%d with new seq #%d", get_packet_seq(unacked_frame_payloads[id], unacked_frame_lengths[id]), packet_seq);
+      log_debug("Resending packet seq #%d with new seq #%d", get_packet_seq(unacked_frame_payloads[id], unacked_frame_lengths[id]), packet_seq);
       if (!(*embed_packet_seq)(unacked_frame_payloads[id], unacked_frame_lengths[id], packet_seq)) {
         log_crit("Unable to embed packet sequence number");
         return;
@@ -333,13 +339,8 @@ void maybe_send_ack(void)
 int wait_ack_slots_available(int num_free_slots_needed)
 {
   while (1) {
-    int num_unacked = 0;
-    for (int i = 0; i < queue_length; i++) {
-      if (frame_unacked[i] == 0) {
-        ++num_unacked;
-      }
-    }
-    if (num_unacked >= num_free_slots_needed)
+    int num_free_slots = queue_length - get_num_unacked_frames();
+    if (num_free_slots >= num_free_slots_needed)
       return 0;
 
     // Check for the arrival of any acks
@@ -461,9 +462,17 @@ int ethl_schedule_ack(uint8_t *payload, int len)
   return 0;
 }
 
-void ethl_set_queue_length(uint16_t length)
+int ethl_set_queue_length(uint16_t length)
 {
+  if (length > MAX_UNACKED_FRAMES) {
+    log_error("Requested etherload queue length %d exceeds maximum capacity %d\n", length, MAX_UNACKED_FRAMES);
+    return 1;
+  }
+  if (queue_length != length && get_num_unacked_frames() != 0) {
+    log_crit("Queue length set while there were still unacked frames\n");
+  }
   queue_length = length;
+  return 0;
 }
 
 int ethl_get_current_seq_num()
