@@ -13,6 +13,8 @@ CXX=	g++
 ##
 ## Linux to Windows cross build setup
 ##
+OS := $(shell uname)
+ifeq ($(OS), Linux)
 WINCC=  x86_64-w64-mingw32-gcc
 ifeq (, $(shell which $(WINCC)))
 $(info WARNING: No $(WINCC) in PATH, can't build windows binaries)
@@ -22,20 +24,20 @@ $(info WARNING: Found $(WINCC), but no conan executable found in PATH, can't bui
 else
 $(shell echo "toolchain=/usr/x86_64-w64-mingw32" > conan/profile_mingw-w64)
 $(shell echo "cc_version=`$(WINCC) -dumpversion | sed 's/-win32//g'`" >> conan/profile_mingw-w64)
-include conanbuildinfo_win.mak
+include conanbuildinfo_linux_to_win.mak
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
 WINCOPT+=	$(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
-			$(addprefix -D, $(WIN_CONAN_DEFINES)) \
-			$(addprefix -L, $(WIN_CONAN_LIB_DIRS)) \
-			$(addprefix -l, $(WIN_CONAN_LIBS))
+		$(addprefix -D, $(WIN_CONAN_DEFINES)) \
+		$(addprefix -L, $(WIN_CONAN_LIB_DIRS)) \
+		$(addprefix -l, $(WIN_CONAN_LIBS))
 
 endif # conan detection
 endif # mingw-w64 detection
+endif # Linux
 
 ##
 ## Macos build setup
 ##
-OS := $(shell uname)
 ifeq ($(OS), Darwin)
 
 include conanbuildinfo_macos_intel.mak
@@ -53,7 +55,20 @@ MACARMCOPT:=  $(COPT) -target arm64-apple-macos11 \
 		      $(addprefix -L, $(MAC_ARM_CONAN_LIB_DIRS)) \
 		      $(addprefix -l, $(MAC_ARM_CONAN_LIBS)) \
 		      $(addprefix -framework , $(MAC_ARM_CONAN_FRAMEWORKS))
-endif
+
+# Cross build setup (WIP)
+#ifdef CROSS_MAC_TO_WIN
+#
+#include conanbuildinfo_macos_to_win.mak
+#
+#WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
+#WINCOPT+=	$(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
+#		$(addprefix -D, $(WIN_CONAN_DEFINES)) \
+#		$(addprefix -L, $(WIN_CONAN_LIB_DIRS)) \
+#		$(addprefix -l, $(WIN_CONAN_LIBS))
+#
+#endif # CROSS_MAC_TO_WIN
+endif # Darwin
 
 
 ##
@@ -325,19 +340,24 @@ test.exe: $(GTESTFILESEXE)
 ##
 ## Prerequisites
 ##
-conanbuildinfo_macos_intel.mak: conanfile.txt conan/*
+conanbuildinfo_macos_intel.mak: conanfile.txt conan/profile_macos_10.14_intel Makefile
 	conan install conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_10.14_intel
 	sed 's/CONAN_/MAC_INTEL_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_intel.mak
 	rm conanbuildinfo.*
 
-conanbuildinfo_macos_arm.mak: conanfile.txt conan/*
+conanbuildinfo_macos_arm.mak: conanfile.txt conan/profile_macos_11_arm Makefile
 	conan install conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
 	sed 's/CONAN_/MAC_ARM_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_arm.mak
 	rm conanbuildinfo.*
 
-conanbuildinfo_win.mak: conanfile.txt conan/profile_linux_to_win
+conanbuildinfo_linux_to_win.mak: conanfile.txt conan/profile_linux_to_win Makefile
 	conan install conanfile.txt --build=missing  -pr:b=default -pr:h=conan/profile_linux_to_win
-	sed 's/CONAN_/WIN_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_win.mak
+	sed 's/CONAN_/WIN_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_linux_to_win.mak
+	rm conanbuildinfo.*
+
+conanbuildinfo_macos_to_win.mak: conanfile.txt conan/profile_macos_to_win_host conan/profile_macos_to_win_build Makefile
+	conan install conanfile.txt --build=missing  -pr:b=default -pr:b=conan/profile_macos_to_win_build -pr:h=default -pr:h=conan/profile_macos_to_win_host
+	sed 's/CONAN_/WIN_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_to_win.mak
 	rm conanbuildinfo.*
 
 ifndef USE_LOCAL_CC65
