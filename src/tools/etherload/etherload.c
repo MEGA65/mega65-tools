@@ -5,10 +5,12 @@
 
 #include <sys/ioctl.h>
 #include <stdlib.h>
+#include <string.h>
 #include <strings.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <unistd.h>
 
 #include <logging.h>
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdlib.h>
+#include <stdint.h>
 #ifdef WINDOWS
 #include <winsock2.h>
 #include <ws2tcpip.h>

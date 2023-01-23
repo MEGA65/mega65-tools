@@ -22,6 +22,8 @@
 
 #define _GNU_SOURCE
 
+#include "etherload_common.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -43,7 +45,6 @@
 #include <stdio.h>
 
 #include "m65common.h"
-#include "etherload_common.h"
 #include "etherload/ethlet_all_done_basic2_map.h"
 #include "filehost.h"
 #include "diskman.h"
