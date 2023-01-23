@@ -5024,7 +5024,7 @@ void determine_ethernet_window_size(void)
     case 0x01:
     case 0x03:
     case 0x21:
-      ethernet_window_size = 8; // xc7a200t_0 modesl have more Ethernet receive buffers
+      ethernet_window_size = 28; // xc7a200t_0 modesl have more Ethernet receive buffers
       break;
     default:
       ethernet_window_size = 3;
