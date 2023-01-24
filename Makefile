@@ -7,13 +7,15 @@ SHELL := /bin/bash
 ## General build setup
 ##
 COPT=	-Wall -g -std=gnu99
-CC=	    gcc
+CC=	gcc
 CXX=	g++
+
+OS := $(shell uname)
 
 ##
 ## Linux to Windows cross build setup
 ##
-OS := $(shell uname)
+ifeq ($(WIN_CROSS_BUILD), 1)
 ifeq ($(OS), Linux)
 WINCC=  x86_64-w64-mingw32-gcc
 ifeq (, $(shell which $(WINCC)))
@@ -23,7 +25,7 @@ ifeq (, $(shell which conan))
 $(info WARNING: Found $(WINCC), but no conan executable found in PATH, can't build windows binaries)
 else
 $(shell echo "toolchain=/usr/x86_64-w64-mingw32" > conan/profile_mingw-w64)
-$(shell echo "cc_version=`$(WINCC) -dumpversion | sed 's/-win32//g'`" >> conan/profile_mingw-w64)
+$(shell echo "cc_version=`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\.[[:digit:]]\+\).*$$/\1/'`" >> conan/profile_mingw-w64)
 include conanbuildinfo_linux_to_win.mak
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
 WINCOPT+=	$(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
@@ -34,6 +36,7 @@ WINCOPT+=	$(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
 endif # conan detection
 endif # mingw-w64 detection
 endif # Linux
+endif # WIN_CROSS_BUILD
 
 ##
 ## Macos build setup
@@ -240,7 +243,7 @@ SUBMODULEUPDATE= \
 ##
 ## Global Rules
 ##
-.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
+.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest win_build_check
 
 ifeq ($(OS), Darwin)
 all: allmac
@@ -287,6 +290,16 @@ arcmac: $(TOOLSMAC)
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
+# check if WIN_CROSS_BUILD is enabled or if we are on WINDOWS
+win_build_check:
+ifneq ($(OS), Windows_NT)
+	@if [ -z "$(WIN_CROSS_BUILD)" ] || [ "$(WIN_CROSS_BUILD)" -ne "1" ] ; then \
+		echo "Please set env WIN_CROSS_BUILD=1 to enable windows builds on linux."; \
+		echo "This requires you to install conan."; \
+		exit 1; \
+	fi
+endif
+
 tests: $(TESTS)
 
 # c-programs
@@ -326,7 +339,7 @@ test: $(GTESTFILES)
 		$$test; \
 	done
 
-test.exe: $(GTESTFILESEXE)
+test.exe: win_build_check $(GTESTFILESEXE)
 	@for test in $+; do \
 		name=$${test%%.test.exe}; \
 		name=$${name##*/}; \
@@ -648,7 +661,7 @@ define TRIPLE_TARGET
 $(1): $(2) $(TOOLDIR)/version.c Makefile
 	$$(CC) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
-$(1).exe: $(2) $(TOOLDIR)/version.c Makefile
+$(1).exe: $(2) win_build_check $(TOOLDIR)/version.c Makefile
 	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
 $(1)_intel.osx: $(2) $(TOOLDIR)/version.c Makefile
@@ -692,12 +705,12 @@ $(BINDIR)/m65_intel.osx:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 $(BINDIR)/m65_arm.osx:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(M65_SRC) -framework Security
 
-$(BINDIR)/m65.exe:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
+$(BINDIR)/m65.exe:	win_build_check $(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $@ $(M65_SRC) -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
 ## special target for linux static win build even if DO_STATIC is 0
-static_m65_exe:		$(M65_SRC) $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
+static_m65_exe:		win_build_check $(M65_SRC) $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
 	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $@ $(M65_SRC) -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
 
 ##
@@ -716,7 +729,7 @@ define LINUX_AND_MINGW_GTEST_TARGETS
 $(1): $(2)
 	$$(CXX) $$(COPT) $$(GTESTOPTS) -Iinclude $(LIBUSBINC) -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $(3)
 
-$(1).exe: $(2)
+$(1).exe: win_build_check $(2)
 	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude $(LIBUSBINC) -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $$(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic $(3)
 endef
 
@@ -744,7 +757,7 @@ $(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
 $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
 	$(CC) $(COPT) -Iinclude $(LIBUSBINC) -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
+$(BINDIR)/mega65_ftp.exe: win_build_check $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp_intel.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
@@ -782,7 +795,7 @@ $(BINDIR)/m65dbg_intel.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 $(BINDIR)/m65dbg_arm.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(M65DBG_SOURCES) $(M65DEBUG_READLINE)
 
-$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
+$(BINDIR)/m65dbg.exe:	win_build_check $(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
 
 #-----------------------------------------------------------------------------
@@ -819,5 +832,5 @@ $(BINDIR)/etherload_intel.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefil
 $(BINDIR)/etherload_arm.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
-$(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
+$(BINDIR)/etherload.exe:	win_build_check $(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32

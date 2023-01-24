@@ -13,7 +13,7 @@ pipeline {
                 branch pattern: "PR-*"
             }
             steps {
-                sh 'make USE_LOCAL_CC65=1 all'
+                sh 'make USE_LOCAL_CC65=1 WIN_CROSS_BUILD=1 all'
             }
         }
         stage('Build Linux Tools') {
@@ -29,7 +29,7 @@ pipeline {
                 not { branch pattern: "PR-*" }
             }
             steps {
-                sh 'make USE_LOCAL_CC65=1 arcwin'
+                sh 'make USE_LOCAL_CC65=1 WIN_CROSS_BUILD=1 arcwin'
             }
         }
         stage('Run build tests') {

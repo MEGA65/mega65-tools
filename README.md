@@ -38,10 +38,10 @@ sudo install -y gcc-mingw-w64 mingw-w64-common libz-mingw-w64-dev cmake python3-
 pip install conan
 ```
 
-Execute the Windows cross-build by calling
+Execute the Windows cross-build by calling (if you do this often, you can set `WIN_CROSS_BUILD` to `1` in your environment)
 
 ```
-make allwin
+make WIN_CROSS_BUILD=1 allwin
 ```
 
 For developers that want to commit code to the repo, it's suggested you also install clang-format version 11.
