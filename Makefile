@@ -294,8 +294,11 @@ arcmac: $(TOOLSMAC)
 win_build_check:
 ifneq ($(OS), Windows_NT)
 	@if [ -z "$(WIN_CROSS_BUILD)" ] || [ "$(WIN_CROSS_BUILD)" -ne "1" ] ; then \
+		echo ""; \
 		echo "Please set env WIN_CROSS_BUILD=1 to enable windows builds on linux."; \
-		echo "This requires you to install conan."; \
+		echo ""; \
+		echo "This requires you to install mingw32 and conan."; \
+		echo ""; \
 		exit 1; \
 	fi
 endif
