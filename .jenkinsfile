@@ -2,10 +2,14 @@ pipeline {
     agent {
         docker { image 'megawin' }
     }
+    environment {
+        USE_LOCAL_CC65 = 1
+        WIN_CROSS_BUILD = 1
+    }
     stages {
         stage('Cleanup') {
             steps {
-                sh 'make USE_LOCAL_CC65=1 cleanall'
+                sh 'make cleanall'
             }
         }
         stage ('Full PR Testbuild') {
@@ -13,7 +17,7 @@ pipeline {
                 branch pattern: "PR-*"
             }
             steps {
-                sh 'make USE_LOCAL_CC65=1 WIN_CROSS_BUILD=1 all'
+                sh 'make all'
             }
         }
         stage('Build Linux Tools') {
@@ -21,7 +25,7 @@ pipeline {
                 not { branch pattern: "PR-*" }
             }
             steps {
-                sh 'make USE_LOCAL_CC65=1 arcunix'
+                sh 'make arcunix'
             }
         }
         stage('Build Windows Tools') {
@@ -29,12 +33,12 @@ pipeline {
                 not { branch pattern: "PR-*" }
             }
             steps {
-                sh 'make USE_LOCAL_CC65=1 WIN_CROSS_BUILD=1 arcwin'
+                sh 'make arcwin'
             }
         }
         stage('Run build tests') {
             steps {
-                sh 'make USE_LOCAL_CC65=1 test'
+                sh 'make test'
             }
         }
     }
