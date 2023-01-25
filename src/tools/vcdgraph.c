@@ -67,11 +67,11 @@ int rasters=0;
 int set_pixel(png_bytep *png_rows, int x, int y, int r, int g, int b)
 {
   if (y < 0 || y>=rasters ) {
-    printf("set_pixel: y=%d out of bounds", y);
+    //    printf("set_pixel: y=%d out of bounds", y);
     return 1;
   }
   if (x < 0 || x > raster_len) {
-    printf("set_pixel: x=%d out of bounds", x);
+    //    printf("set_pixel: x=%d out of bounds", x);
     return 1;
   }
 
@@ -226,8 +226,8 @@ int main(int argc,char **argv)
 #define ROW_GAP (72.0/16)
   // C64 style PAL is 63usec, although official PAL is 64usec.
   // C64 thus actually runs slightly faster than 50Hz display
-  #define RASTER_DURATION 64040.0
-  //#define RASTER_DURATION 16010.0
+  //  #define RASTER_DURATION 64040.0
+  #define RASTER_DURATION 16010.0
   int page_y_margin=72/4;
   int page_x_margin=72/4;
   int page_y=page_y_margin;
@@ -364,7 +364,7 @@ int main(int argc,char **argv)
 
   png_bytep png_rows[rasters];
   for (int y=0;y<rasters;y++)
-    png_rows[y] = (png_bytep)malloc(3 * raster_len * sizeof(png_byte)); 
+    png_rows[y] = (png_bytep)calloc(3 * raster_len,sizeof(png_byte)); 
 
   // Grey-scale pixels
   int y=0;
@@ -439,6 +439,41 @@ int main(int argc,char **argv)
   png_write_end(png_ptr, NULL);
   
   fclose(fp);
+
+  // Now generate a test pattern image with PAL colour modulation
+  // to compare with what the VHDL produces
+
+  for (int y=0;y<rasters;y++)
+    png_rows[y] = (png_bytep)calloc(3 * raster_len,sizeof(png_byte)); 
   
+  printf("Image size = %dx%d\n",raster_len,rasters);
+  
+  for(int y=0;y<rasters;y++) {
+    for(int x=0;x<raster_len;x++) {
+      // Create the same transition as in the middle section of the
+      // VHDL test pattern, that lacks chroma intensity when R > G
+      float r=y/256.0;
+      float g=x/256.0;
+      float b=1;
+
+      /* Y = 0.299R´ + 0.587G´ + 0.114B´
+	 U = – 0.147R´ – 0.289G´ + 0.436B´
+	 = 0.492 (B´ – Y)
+	 V = 0.615R´ – 0.515G´ – 0.100B´
+	 = 0.877(R´ – Y)
+      */
+
+      float y=0.299*r + 0.587*g + 0.114 * b;
+      float u = -.147*r - 0.289*g - 0.436*b;
+      float v = 0.615*r - 0.515*g - 0.100*b;
+
+      float luma = y + 0.3;
+      float chroma = 0;
+      float comp = luma + chroma;
+      
+      set_pixel(png_rows,x,y, comp*255, comp*255, 255 + 0* comp*255);
+    }
+  }
+
   return 0;
 }
