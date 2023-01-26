@@ -81,9 +81,9 @@ unsigned char keybuffer(unsigned char wait)
 void testpixels(int test_mode)
 {
 
-  unsigned char is_black=0;
-  unsigned char bad=0;
-  
+  unsigned char is_black = 0;
+  unsigned char bad = 0;
+
   // Now we scan screen pixel area for any black coloured pixels
   // If we find the colour black then the test has failed as the pixels should be masked
   // Pixel resolution is double character resolution
@@ -93,47 +93,56 @@ void testpixels(int test_mode)
       // (86,104) = x,y for top left of screen
       read_pixel(xp + 86 + 2, yp + 104, &red, &green, &blue);
       // If any of the pixels we are checking are black (RGB=000000) then we have a fail, i.e
-      // the character pixel row has not been masked out      
-      is_black=0;
+      // the character pixel row has not been masked out
+      is_black = 0;
       if ((red == 0x00 && green == 0x00 && blue == 0x00)) {
-	is_black=1;
+        is_black = 1;
       }
-      bad=0;
-      if (test_mode==0) {
-	if (is_black&&(yp>7)) bad=1;
-	if ((yp<8)&&(!is_black)) bad=1;
+      bad = 0;
+      if (test_mode == 0) {
+        if (is_black && (yp > 7))
+          bad = 1;
+        if ((yp < 8) && (!is_black))
+          bad = 1;
       }
-      if (test_mode==1) {
-	if (is_black&&yp<8) bad=1;
-	if (yp>7&&(!is_black)) bad=1;
+      if (test_mode == 1) {
+        if (is_black && yp < 8)
+          bad = 1;
+        if (yp > 7 && (!is_black))
+          bad = 1;
       }
-      if (test_mode==2) {
-	if (is_black&&(yp&2)) bad=1;
-	if ((!is_black)&&(!(yp&2))) bad=1;
+      if (test_mode == 2) {
+        if (is_black && (yp & 2))
+          bad = 1;
+        if ((!is_black) && (!(yp & 2)))
+          bad = 1;
       }
 
-      POKE(SCREEN + 80 + 4 + xp*2 + yp*40,0xa0);
+      POKE(SCREEN + 80 + 4 + xp * 2 + yp * 40, 0xa0);
       if (is_black) {
-	if (bad) {
-	  POKE(COLOR + 80 + 4 + xp*2 + yp*40 + 1,0x2);
-	}
-	else {
-	  POKE(COLOR + 80 + 4 + xp*2 + yp*40 + 1,0x5);
-	}
-      } else {
-	if (bad) {
-	  POKE(COLOR + 80 + 4 + xp*2 + yp*40 + 1,0xa);
-	} else {
-	  POKE(COLOR + 80 + 4 + xp*2 + yp*40 + 1,0xd);
-	}
+        if (bad) {
+          POKE(COLOR + 80 + 4 + xp * 2 + yp * 40 + 1, 0x2);
+        }
+        else {
+          POKE(COLOR + 80 + 4 + xp * 2 + yp * 40 + 1, 0x5);
+        }
+      }
+      else {
+        if (bad) {
+          POKE(COLOR + 80 + 4 + xp * 2 + yp * 40 + 1, 0xa);
+        }
+        else {
+          POKE(COLOR + 80 + 4 + xp * 2 + yp * 40 + 1, 0xd);
+        }
       }
 
-      if (bad) errcount++;
+      if (bad)
+        errcount++;
     }
   }
 }
 
-unsigned int fails[3]={0,0,0};
+unsigned int fails[3] = { 0, 0, 0 };
 
 void main(void)
 {
@@ -154,19 +163,33 @@ void main(void)
   // Disable hot registers
   // POKE(0xD05D, PEEK(0xD05D) & 0x7f);
 
+  // switch to PAL mode
+  POKE(0xD06fL, 0x00);
+  POKE(0xD072L, 0x00);
+  POKE(0xD048L, 0x68);
+  POKE(0xD049L, 0x0 | (PEEK(0xD049L) & 0xf0));
+  POKE(0xD04AL, 0xF8);
+  POKE(0xD04BL, 0x1 | (PEEK(0xD04BL) & 0xf0));
+  POKE(0xD04EL, 0x68);
+  POKE(0xD04FL, 0x0 | (PEEK(0xD04FL) & 0xf0));
+  POKE(0xD072L, 0);
+  // switch CIA TOD 50/60
+  POKE(0xDc0el, PEEK(0xDc0el) | 0x80);
+  POKE(0xDd0el, PEEK(0xDd0el) | 0x80);
+
   // No ugly screen during test run
-  for(i=0;i<0x0400;i+=2) {
-    POKE(SCREEN + i+0,0x20);
-    POKE(SCREEN + i+1,0x00);
-    POKE(COLOR + i+0,0x00);
-    POKE(COLOR + i+1,0x00);
-  }  
-    
+  for (i = 0; i < 0x0400; i += 2) {
+    POKE(SCREEN + i + 0, 0x20);
+    POKE(SCREEN + i + 1, 0x00);
+    POKE(COLOR + i + 0, 0x00);
+    POKE(COLOR + i + 1, 0x00);
+  }
+
   // bit0: 0CHR16 enable 16-bit character numbers (two screen bytes per character)
   POKE(0xD054, PEEK(0xD054) | 1);
 
-  // Only display 20 chars, since in 16-bit text mode that uses all 40 bytes per row  
-  POKE(0xD05E,20);
+  // Only display 20 chars, since in 16-bit text mode that uses all 40 bytes per row
+  POKE(0xD05E, 20);
 
   // bit5: ATTR enable extended attributes and 8 bit colour entries
   // bit7: H640 disable C64 640 horizontal pixels / 80 column mode
@@ -189,10 +212,13 @@ void main(void)
 
   // run our 1st test with rowmask of $0f
   testpixels(0);
-  fails[0]=errcount;
+  fails[0] = errcount;
   if (errcount) {
+    unit_test_fail("draw upper 4 rows only");
     testresult++;
   }
+  else
+    unit_test_ok("draw upper 4 rows only");
 
   // POKE(SCREEN+2,98+128); // ** ONLY USED FOR TESTING THE TEST! ** Output the character to mask (Half Inverted space to
   // simulate passing the test)
@@ -200,29 +226,41 @@ void main(void)
   // run our 2nd test with rowmask of $0f
   POKE(COLOR + 1, 0xf0); // Second Rowmask: 11110000, i.e. top
                          // 4 character pixel lines should be masked (not displayed)
-  testpixels(1); fails[1]=errcount;
+  testpixels(1);
+  fails[1] = errcount;
   if (errcount != 0) {
+    unit_test_fail("draw lower 4 rows only");
     testresult++;
   }
+  else
+    unit_test_ok("draw lower 4 rows only");
 
   // Now put an FCM char there.
   // data at $40040 = char number $1001
-  POKE(0xD054,PEEK(0xD054)|0x04); // allow high-char FCM
-  lfill(0x40040,1,64);
+  POKE(0xD054, PEEK(0xD054) | 0x04); // allow high-char FCM
+  lfill(0x40040, 1, 64);
   POKE(SCREEN + 2, 0x01); // Output the character to mask (FCM char at $40040)
   POKE(SCREEN + 3, 0x10);
   POKE(COLOR + 1, 0x55); // Third Rowmask: 01010101, i.e., alternate rows should
-                         // be masked, i.e., not displayed.  
+                         // be masked, i.e., not displayed.
   // Make white black, and fill FCM char with it
-  POKE(0xD101,0x00);POKE(0xD201,0x00);POKE(0xD301,0x00);
-  testpixels(2); fails[2]=errcount;
+  POKE(0xD101, 0x00);
+  POKE(0xD201, 0x00);
+  POKE(0xD301, 0x00);
+  testpixels(2);
+  fails[2] = errcount;
   if (errcount != 0) {
+    unit_test_fail("draw alternating rows only");
     testresult++;
   }
-  
+  else
+    unit_test_ok("draw alternating rows only");
+
   // Make white white again
-  POKE(0xD101,0xff);POKE(0xD201,0xff);POKE(0xD301,0xff);
-  
+  POKE(0xD101, 0xff);
+  POKE(0xD201, 0xff);
+  POKE(0xD301, 0xff);
+
   // keybuffer(1);
 
   restore_state();
@@ -230,23 +268,24 @@ void main(void)
   printf("%c", 147); // clear screen;
   printf(".\nIssue #%d - %s\n\n", ISSUE_NUM, ISSUE_NAME);
 
+  if (fails[0])
+    printf("FAIL - Draw upper 4 rows only (%d)\n", fails[0]);
+  else
+    printf("PASS - Draw upper 4 rows only\n");
+  if (fails[1])
+    printf("FAIL - Draw lower 4 rows only (%d)\n", fails[1]);
+  else
+    printf("PASS - Draw lower 4 rows only\n");
+  if (fails[2])
+    printf("FAIL - Draw FCM alternate rows only (%d)\n", fails[2]);
+  else
+    printf("PASS - Draw FCM alternate rows only\n");
 
-  if (fails[0]) printf("FAIL - Draw upper 4 rows only (%d)\n",fails[0]);
-  else printf("PASS - Draw upper 4 rows only\n");
-  if (fails[1]) printf("FAIL - Draw lower 4 rows only (%d)\n",fails[1]);
-  else printf("PASS - Draw lower 4 rows only\n");
-  if (fails[2]) printf("FAIL - Draw FCM alternate rows only (%d)\n", fails[2]);
-  else printf("PASS - Draw FCM alternate rows only\n");
-  
   // if testresult > 1, i.e. both rowmask tests failed then it's a failure overall
-  if (testresult) {
+  if (testresult)
     printf("%02d rowmask tests failed :(\n", testresult);
-    unit_test_report(ISSUE_NUM, sub++, TEST_FAIL);
-  }
-  else {
+  else
     printf("Rowmask tests passed - success :)");
-    unit_test_report(ISSUE_NUM, sub++, TEST_PASS);
-  }
 
   // Report completion of tests
   unit_test_report(ISSUE_NUM, sub++, TEST_DONEALL);
