@@ -103,7 +103,8 @@ dest_bank:
 	sta $d6e3
 
 	; Set source IP last byte to 65
-	lda #$41
+	;lda #$41
+	lda #$06
 ;	lda #$ff ; XXX DEBUG - set it to broadcast to avoid IP/UDP header crc changes
 	sta $681d
 	; Set dest IP last byte to that of sender

@@ -837,3 +837,27 @@ $(BINDIR)/etherload_arm.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 
 $(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) include/*.h Makefile
 	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32
+
+
+
+ETHLOADTEST_SOURCES =	$(TOOLDIR)/eth_load_test.c \
+                	$(TOOLDIR)/eth_load_test_remote_compiled.c \
+			$(TOOLDIR)/etherload/etherload_common.c \
+			$(TOOLDIR)/etherload/ethlet_dma_load.c \
+			$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
+			$(TOOLDIR)/logging.c \
+			$(TOOLDIR)/version.c
+
+ETHLOADTEST_HEADERS=	$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
+			$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h
+ETHLOADTEST_INCLUDES = -I/usr/local/include -Iinclude
+ETHLOADTEST_LIBRARIES = -lm
+
+$(BINDIR)/eth_load_test_arm.osx: $(ETHLOADTEST_SOURCES) $(ETHLOADTEST_HEADERS) include/*.h
+	$(CC) $(MACARMCOPT) -o $@ $(ETHLOADTEST_SOURCES) $(ETHLOADTEST_INCLUDES) $(ETHLOADTEST_LIBRARIES)
+
+$(TOOLDIR)/eth_load_test_remote_compiled.c:	$(UTILDIR)/eth_load_test_remote.prg $(TOOLDIR)/bin2c
+	$(TOOLDIR)/bin2c $< helperroutine_eth $@
+
+$(UTILDIR)/eth_load_test_remote.prg:       $(UTILDIR)/eth_load_test_remote.c $(CC65) $(MEGA65LIBC)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/random.c $(SRCDIR)/mega65-libc/cc65/src/debug.c $(SRCDIR)/mega65-libc/cc65/src/time.c $(SRCDIR)/mega65-libc/cc65/src/hal.c $(SRCDIR)/mega65-libc/cc65/src/targets.c

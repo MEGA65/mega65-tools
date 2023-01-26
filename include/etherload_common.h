@@ -37,4 +37,4 @@ int send_mem(unsigned int address, unsigned char *buffer, int bytes);
 int wait_ack_slots_available(int num_free_slots_needed);
 int wait_all_acks(void);
 int dmaload_no_pending_ack(int addr);
-int send_ethlet(const char data[], const int bytes);
+int send_ethlet(const uint8_t data[], const int bytes);

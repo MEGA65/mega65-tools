@@ -672,8 +672,8 @@ void main(void)
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
 
-  // RXPH 1, MCST off, BCST on, TXPH 1, NOCRC off, NOPROM off
-  POKE(0xD6E5, 0x75);
+  // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM off
+  POKE(0xD6E5, 0x74);
 
 
   // Commented Ethernet controller reset out, it will be detected as a new Ethernet connection

@@ -138,7 +138,8 @@ int trigger_eth_hyperrupt(void)
 
   // Adapt ip address (modify last byte to use ip x.y.z.65 as dest address)
   servaddr.sin_addr.s_addr &= 0x00ffffff;
-  servaddr.sin_addr.s_addr |= (65 << 24);
+  //servaddr.sin_addr.s_addr |= (65 << 24);
+  servaddr.sin_addr.s_addr |= (6 << 24);
 
   return 0;
 }
@@ -376,7 +377,7 @@ int wait_all_acks(void)
   return wait_ack_slots_available(queue_length);
 }
 
-int send_ethlet(const char data[], const int bytes)
+int send_ethlet(const uint8_t data[], const int bytes)
 {
   return sendto(sockfd, data, bytes, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 }
