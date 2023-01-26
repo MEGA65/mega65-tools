@@ -50,8 +50,8 @@ entry:
 	sta $d640
 	clv
 	; chdir root
-	lda #$3e
-	sta $d643
+	lda #$3c
+	sta $d640
 	clv
 	; set rom filename
 	ldy #$02
