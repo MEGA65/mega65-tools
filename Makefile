@@ -86,7 +86,7 @@ OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
 OPHIS_MON= Ophis/bin/ophis -c
 
-ACME=	/usr/local/bin/acme
+ACME=	$(shell which acme)
 
 ifdef USE_LOCAL_CC65
 	# use locally installed binary (requires 'cc65,ld65,etc' to be in the $PATH)
