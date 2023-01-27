@@ -844,7 +844,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
     // disable cartridge signature detection
     ethlet_all_done_basic2[ethlet_all_done_basic2_offset_enable_cart_signature] = 0;
 
-    send_ethlet(ethlet_all_done_basic2, ethlet_all_done_basic2_len);
+    send_ethlet((uint8_t*)ethlet_all_done_basic2, ethlet_all_done_basic2_len);
 
     sockfd = ethl_get_socket();
     servaddr = ethl_get_server_addr();
@@ -1369,6 +1369,13 @@ uint8_t write_batch_counter = 0;
 
 void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
 {
+  // Batches should not be mixed with single writes
+  // Make sure we start with an empty queue of pending packets before we
+  // start the next batch
+  if (batch_size > 1) {
+    wait_all_acks();
+  }
+
   const int packet_size = 14 + 512;
   int i;
   uint8_t payload[packet_size];

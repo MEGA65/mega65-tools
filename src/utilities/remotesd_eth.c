@@ -8,7 +8,6 @@
 
 */
 
-#include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 
@@ -151,6 +150,22 @@ chks_t chks;
 static uint8_t _a, _b, _c;
 static unsigned int _b16;
 
+void init(void)
+{
+  POKE(0xD020, 0);
+  POKE(0xD021, 0);
+  lfill(0x400, 0x20, 1000);
+  lfill(0xff80000, 5, 1000);
+}
+
+void print(uint8_t row, uint8_t col, char* text)
+{
+  uint16_t addr = 0x400 + 40 * row + col;
+  while (*text) {
+    *((char*)addr++) = *text++;
+  }
+}
+
 /**
  * Calculate checksum for a memory area (must be word-aligned).
  * Pad a zero byte, if the size is odd.
@@ -264,7 +279,7 @@ void multi_sector_write_next()
   int cmd = 5; // Multi-sector mid
 
   if (!slot_ids_received[slots_written]) {
-    printf("WARN: slot #%d not yet available\n", slots_written);
+    print(2, 0, "retransmission detected");
     return;
   }
 
@@ -292,12 +307,12 @@ void handle_batch_write()
   cache_position += (uint32_t)id << 9;
 
   if (recv_buf.write_sector.batch_counter != current_batch_counter) {
-    printf("Late duplicate packet for batch #%d\n", recv_buf.write_sector.batch_counter);
+    print(2, 0, "late duplicate packet for batch");
     return;
   }
 
   if (slot_ids_received[id] != 0) {
-    printf("WARN: Dup sector data, slot id %d\n", id);
+    print(2, 0, "duplicate packet");
     return;
   }
 
@@ -396,7 +411,7 @@ void get_new_job()
       chks.u = 0;
       checksum((uint8_t *)&recv_buf.ftp, 20);
       if (chks.u != 0xffff) {
-        printf("IP checksum error\n");
+        print(1, 0, "ip checksum error");
         continue;
       }
 
@@ -406,14 +421,14 @@ void get_new_job()
         reply_template.ftp.destination.d = recv_buf.ftp.source.d;
         reply_template.ftp.dst_port = recv_buf.ftp.src_port;
         ip_addr_set = 1;
-        printf("IP : %d.%d.%d.%d\n", reply_template.ftp.source.b[0], reply_template.ftp.source.b[1],
-            reply_template.ftp.source.b[2], reply_template.ftp.source.b[3]);
-        printf("\nRemote\nIP : %d.%d.%d.%d\n", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
-            reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3]);
+        // printf("IP : %d.%d.%d.%d\n", reply_template.ftp.source.b[0], reply_template.ftp.source.b[1],
+        //     reply_template.ftp.source.b[2], reply_template.ftp.source.b[3]);
+        // printf("\nRemote\nIP : %d.%d.%d.%d\n", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
+        //     reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3]);
       }
 
       if (recv_buf.ftp.ftp_magic != 0x7165726d /* 'mreq' big endian*/) {
-        printf("Non matching magic bytes: %x", recv_buf.ftp.ftp_magic);
+        //printf("Non matching magic bytes: %x", recv_buf.ftp.ftp_magic);
         continue;
       }
 
@@ -429,7 +444,7 @@ void get_new_job()
            * Single sector write request
            */
           if (write_batch_active) {
-            printf("ERROR: Single write request while write batch still active\n");
+            print(1, 0, "error: single write request while write batch still active");
             while (1)
               continue;
           }
@@ -497,7 +512,7 @@ void get_new_job()
           continue;
         }
         if (recv_buf.read_sector.unused_1 != 0) {
-          printf("Sector count > 255 not supported\n");
+          print(1, 0, "sector count > 255 not supported");
           continue;
         }
 
@@ -640,6 +655,7 @@ void process()
   }
 
   if (quit_requested) {
+    print(1, 0, "quit requested");
     wait_for_sd_ready();
     while (!(PEEK(0xD6E0) & 0x80)) continue;
     __asm__("jmp 58552");
@@ -662,9 +678,11 @@ void wait_100ms(void)
   }
 }
 
+uint8_t pst;
+
 void main(void)
 {
-  uint8_t i;
+  //uint8_t i;
   asm("sei");
 
   // Fast CPU, M65 IO
@@ -694,17 +712,16 @@ void main(void)
   // Cursor off
   POKE(204, 0x80);
 
-  srand(random32(0));
-
-  printf("%cMEGA65 Ethernet File Transfer helper.\n\n", 0x93);
+  init();
+  print(0, 0, "mega65 ethernet file transfer helper.");
 
   // Read MAC address
   lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
 
-  printf("Local\nMAC: %02x", mac_local.b[0]);
-  for (i = 1; i < 6; i++)
-    printf(":%02x", mac_local.b[i]);
-  printf("\n");
+  //printf("Local\nMAC: %02x", mac_local.b[0]);
+  //for (i = 1; i < 6; i++)
+    //printf(":%02x", mac_local.b[i]);
+  //printf("\n");
 
   sector_reading = 0;
   sector_buffered = 0;
@@ -726,6 +743,16 @@ void main(void)
   reply_template.ftp.ftp_magic = 0x7073726d; // 'mrsp' big endian
 
   while (1) {
+    __asm__("php");
+    __asm__("pla");
+    __asm__("sta %v", pst);
+    if (!(pst & 0x04)) {
+      print(1, 0, "irq error");
+      while (1) {
+        POKE(0xD020, 1);
+        POKE(0xD020, 2);
+      }
+    }
     process();
   }
 }
