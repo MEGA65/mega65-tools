@@ -188,6 +188,8 @@ basic_program_start_pointer:
 	.dword $00002001
 basic_program_start_backup:
 	.dword $00000000
+cartridge_address:
+	.dword $00008004
 cartridge_backup:
 	.byte $00
 
@@ -232,8 +234,12 @@ autostart_entry:
 	sta (<basic_program_start_pointer),z
 
 	; restore cartridge signature byte
+	lda #$00
+	taz
 	lda cartridge_backup
-	sta $8004
+	; sta ((<cartridge_address)),z
+	nop
+	sta (<cartridge_address),z
 
 	; restore basic irq vector
 	; ldq basic_irq_backup
