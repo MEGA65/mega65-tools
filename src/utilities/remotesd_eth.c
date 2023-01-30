@@ -10,13 +10,8 @@
 
 #include <string.h>
 #include <stdint.h>
-
-#include <hal.h>
+#include <stdio.h>
 #include <memory.h>
-#include <dirent.h>
-#include <fileio.h>
-#include <debug.h>
-#include <random.h>
 
 #define ETH_RX_BUFFER 0xFFDE800L
 #define ETH_TX_BUFFER 0xFFDE800L
@@ -118,6 +113,8 @@ typedef union {
 #define NTOHS(x) (((uint16_t)x >> 8) | ((uint16_t)x << 8))
 #define HTONS(x) (((uint16_t)x >> 8) | ((uint16_t)x << 8))
 
+uint8_t cpu_status;
+char msg[80];
 uint8_t quit_requested = 0;
 PACKET reply_template;
 PACKET recv_buf;
@@ -161,9 +158,30 @@ void init(void)
 void print(uint8_t row, uint8_t col, char* text)
 {
   uint16_t addr = 0x400 + 40 * row + col;
+  lfill(addr, 0x20, 40);
   while (*text) {
     *((char*)addr++) = *text++;
   }
+}
+
+void print_mac_address(void)
+{
+  // Read MAC address
+  lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
+  sprintf(msg, "mac: %02x:%02x:%02x:%02x:%02x:%02x", mac_local.b[0], mac_local.b[1], mac_local.b[2], mac_local.b[3], mac_local.b[4], mac_local.b[5]);
+  print(3, 0, "local");
+  print(4, 0, msg);
+}
+
+void print_ip_informtaion(void)
+{
+  sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.source.b[0], reply_template.ftp.source.b[1],
+      reply_template.ftp.source.b[2], reply_template.ftp.source.b[3]);
+  print(5, 0, msg);
+  print(7, 0, "remote");
+  sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
+      reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3]);
+  print(8, 0, msg);
 }
 
 /**
@@ -386,11 +404,6 @@ void get_new_job()
       // (largest job) which is the read sector command.
       lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER), (uint32_t)&recv_buf.ftp.ver_length,
           sizeof(FTP_PKT) + sizeof(READ_SECTOR_JOB));
-      // printf("IP %d.%d.%d.%d-%d.%d.%d.%d:%d P:%d L:%d\n", recv_buf.ftp.source.b[0], recv_buf.ftp.source.b[1],
-      // recv_buf.ftp.source.b[2],
-      //     recv_buf.ftp.source.b[3], recv_buf.ftp.destination.b[0], recv_buf.ftp.destination.b[1],
-      //     recv_buf.ftp.destination.b[2], recv_buf.ftp.destination.b[3], NTOHS(recv_buf.ftp.dst_port),
-      //     recv_buf.ftp.protocol, NTOHS(recv_buf.ftp.udp_length));
 
       if (ip_addr_set == 0) {
         if (recv_buf.ftp.destination.b[3] != 65) {
@@ -411,7 +424,7 @@ void get_new_job()
       chks.u = 0;
       checksum((uint8_t *)&recv_buf.ftp, 20);
       if (chks.u != 0xffff) {
-        print(1, 0, "ip checksum error");
+        print(10, 0, "wrong ip checksum detected");
         continue;
       }
 
@@ -421,10 +434,7 @@ void get_new_job()
         reply_template.ftp.destination.d = recv_buf.ftp.source.d;
         reply_template.ftp.dst_port = recv_buf.ftp.src_port;
         ip_addr_set = 1;
-        // printf("IP : %d.%d.%d.%d\n", reply_template.ftp.source.b[0], reply_template.ftp.source.b[1],
-        //     reply_template.ftp.source.b[2], reply_template.ftp.source.b[3]);
-        // printf("\nRemote\nIP : %d.%d.%d.%d\n", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
-        //     reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3]);
+        print_ip_informtaion();
       }
 
       if (recv_buf.ftp.ftp_magic != 0x7165726d /* 'mreq' big endian*/) {
@@ -444,7 +454,7 @@ void get_new_job()
            * Single sector write request
            */
           if (write_batch_active) {
-            print(1, 0, "error: single write request while write batch still active");
+            print(10, 0, "error: single/multi write conflict");
             while (1)
               continue;
           }
@@ -474,7 +484,6 @@ void get_new_job()
           *(uint32_t *)0xD681 = recv_buf.write_sector.start_sector_number;
           POKE(0xD680, 0x57); // Open write gate
           POKE(0xD680, 0x03); // Single sector write command
-          //printf("Single write sector %ld\n", recv_buf.write_sector.start_sector_number);
         }
         else {
           /*
@@ -512,7 +521,7 @@ void get_new_job()
           continue;
         }
         if (recv_buf.read_sector.unused_1 != 0) {
-          print(1, 0, "sector count > 255 not supported");
+          print(10, 0, "error: sector count > 255 not supported");
           continue;
         }
 
@@ -678,11 +687,8 @@ void wait_100ms(void)
   }
 }
 
-uint8_t pst;
-
 void main(void)
 {
-  //uint8_t i;
   asm("sei");
 
   // Fast CPU, M65 IO
@@ -690,22 +696,8 @@ void main(void)
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
 
-  // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM off
-  POKE(0xD6E5, 0x74);
-
-
-  // Commented Ethernet controller reset out, it will be detected as a new Ethernet connection
-  // by the remote computer, flushing ARP cache and doing all kinds of re-initialisation.
-  // This just takes time and the controller state should be fine still after etherload
-  // transfer of this helper routine.
-/*
-  POKE(0xD6E0, 0);
-  wait_100ms();
-  POKE(0xD6E0, 3);
-  wait_100ms();
-  POKE(0xD6E1, 3);
-  POKE(0xD6E1, 0);
-*/
+  // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM on
+  POKE(0xD6E5, 0x75);
 
   POKE(0xD689, PEEK(0xD689) | 128); // Enable SD card buffers instead of Floppy buffer
 
@@ -713,15 +705,9 @@ void main(void)
   POKE(204, 0x80);
 
   init();
-  print(0, 0, "mega65 ethernet file transfer helper.");
+  print(1, 0, "mega65 ethernet file transfer helper.");
 
-  // Read MAC address
-  lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
-
-  //printf("Local\nMAC: %02x", mac_local.b[0]);
-  //for (i = 1; i < 6; i++)
-    //printf(":%02x", mac_local.b[i]);
-  //printf("\n");
+  print_mac_address();
 
   sector_reading = 0;
   sector_buffered = 0;
@@ -745,9 +731,9 @@ void main(void)
   while (1) {
     __asm__("php");
     __asm__("pla");
-    __asm__("sta %v", pst);
-    if (!(pst & 0x04)) {
-      print(1, 0, "irq error");
+    __asm__("sta %v", cpu_status);
+    if (!(cpu_status & 0x04)) {
+      print(10, 0, "error: cpu irq enabled");
       while (1) {
         POKE(0xD020, 1);
         POKE(0xD020, 2);
