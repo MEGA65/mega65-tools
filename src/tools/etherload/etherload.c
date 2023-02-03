@@ -16,11 +16,11 @@
 
 #include <logging.h>
 
-extern char ethlet_all_done_basic2[];
+extern unsigned char ethlet_all_done_basic2[];
 extern int ethlet_all_done_basic2_len;
-extern char ethlet_all_done_basic65[];
+extern unsigned char ethlet_all_done_basic65[];
 extern int ethlet_all_done_basic65_len;
-extern char ethlet_all_done_jump[];
+extern unsigned char ethlet_all_done_jump[];
 extern int ethlet_all_done_jump_len;
 
 unsigned char colour_ram[1000];
@@ -64,6 +64,7 @@ int use_binary = 0;
 int bin_load_addr = 0;
 char *ip_address = NULL;
 char *filename = NULL;
+char *d81_image = NULL;
 
 int get_terminal_size(int max_width)
 {
@@ -187,6 +188,7 @@ void init_cmd_options(void)
   CMD_OPTION("jump",        required_argument, 0,            'j', "addr",   "Jump to provided address <addr> after loading (hex notation).");
   CMD_OPTION("bin",         required_argument, 0,            'b', "addr",   "Treat <prgname> as binary file and load at address <addr>.");
   CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
+  CMD_OPTION("mount",       no_argument,       0,            'm', "d81file","Mount d81 file image from SD card.");
   // clang-format on
 }
 
@@ -257,7 +259,7 @@ int main(int argc, char **argv)
     usage(-3, "No arguments given!");
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "i:r45hj:b:0:", cmd_opts, &opt_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "i:r45hj:b:m:0:", cmd_opts, &opt_index)) != -1) {
     if (opt == 0) {
       if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
         log_setup(stderr, loglevel);
@@ -290,6 +292,9 @@ int main(int argc, char **argv)
         log_crit("-b option needs hex addr");
         exit(-1);
       }
+      break;
+    case 'm':
+      d81_image = strdup(optarg);
       break;
     case '4':
       reset64 = 1;
@@ -402,6 +407,10 @@ int main(int argc, char **argv)
     }
   }
 
+  if (d81_image && strlen(d81_image) > 23) {
+    d81_image[24] = '\0';
+  }
+
   etherload_init(ip_address);
   ethl_setup_dmaload();
   ethl_set_queue_length(32);
@@ -474,6 +483,11 @@ int main(int argc, char **argv)
     // patch in cartridge signature enable
     ethlet_all_done_basic2[ethlet_all_done_basic2_offset_enable_cart_signature] = cart_detect;
 
+    // patch in d81 filename
+    if (d81_image) {
+      memcpy(&ethlet_all_done_basic2[ethlet_all_done_basic2_offset_d81filename], d81_image, strlen(d81_image));
+    }
+
     send_ethlet(ethlet_all_done_basic2, ethlet_all_done_basic2_len);
   }
   else if (reset65) {
@@ -487,6 +501,11 @@ int main(int argc, char **argv)
 
     // patch in cartridge signature enable
     ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 3] = cart_detect;
+
+    // patch in d81 filename
+    if (d81_image) {
+      memcpy(&ethlet_all_done_basic65[ethlet_all_done_basic65_offset_d81filename], d81_image, strlen(d81_image));
+    }
 
     send_ethlet(ethlet_all_done_basic65, ethlet_all_done_basic65_len);
   }

@@ -49,10 +49,6 @@ entry:
 	lda #$22
 	sta $d640
 	clv
-	; chdir root
-	lda #$3c
-	sta $d640
-	clv
 	; set rom filename
 	ldy #$02
 	lda #$2e
@@ -67,6 +63,25 @@ entry:
 	sta $d640
 	clv
 
+	; mount d81
+	lda d81filename
+	beq copy_reset_routine
+	ldx #$17
+*	lda d81filename,x
+	sta $0200,x
+	dex
+	bpl -
+	; set d81 filename
+	ldy #$02
+	lda #$2e
+	sta $d640
+	clv
+	; attach d81 image
+	lda #$40
+	sta $d640
+	clv
+
+copy_reset_routine:
 	; copy reset routine to $0334
 	ldx #reset_c64_end - reset_c64
 *	lda reset_c64-1,x
@@ -189,7 +204,9 @@ entry:
 	jmp tmpbuffer
 
 romfilename:
-	.byte "MEGA65.ROM", $00
+	.byte "MEGA65.ROM", $00, $00
+d81filename:
+	.dword 0, 0, 0, 0
 
 enable_cart_signature:
 	.byte $00
