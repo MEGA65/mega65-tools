@@ -3,18 +3,49 @@ SHELL := /bin/bash
 .SUFFIXES: .bin .prg
 .PRECIOUS:	%.ngd %.ncd %.twx vivado/%.xpr bin/%.bit bin/%.mcs bin/%.M65 bin/%.BIN
 
-OS := $(shell uname)
-ifeq ($(OS), Darwin)
-include conanbuildinfo_macos_intel.mak
-include conanbuildinfo_macos_arm.mak
-endif
-
-#COPT=	-Wall -g -std=gnu99 -fsanitize=address -fno-omit-frame-pointer -fsanitize-address-use-after-scope
-#CC=	clang
+##
+## General build setup
+##
 COPT=	-Wall -g -std=gnu99
 CC=	gcc
 CXX=	g++
-#MACCOPT=$(COPT) -framework CoreFoundation -framework IOKit
+
+OS := $(shell uname)
+
+##
+## Linux to Windows cross build setup
+##
+ifeq ($(WIN_CROSS_BUILD), 1)
+ifeq ($(OS), Linux)
+WINCC=  x86_64-w64-mingw32-gcc
+ifeq (, $(shell which $(WINCC)))
+$(info WARNING: No $(WINCC) in PATH, can't build windows binaries)
+else
+ifeq (, $(shell which conan))
+$(info WARNING: Found $(WINCC), but no conan executable found in PATH, can't build windows binaries)
+else
+$(shell echo "toolchain=/usr/x86_64-w64-mingw32" > conan/profile_mingw-w64)
+$(shell echo "cc_version=`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\.[[:digit:]]\+\).*$$/\1/'`" >> conan/profile_mingw-w64)
+include conanbuildinfo_linux_to_win.mak
+WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
+WINCOPT+=	$(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
+		$(addprefix -D, $(WIN_CONAN_DEFINES)) \
+		$(addprefix -L, $(WIN_CONAN_LIB_DIRS)) \
+		$(addprefix -l, $(WIN_CONAN_LIBS))
+
+endif # conan detection
+endif # mingw-w64 detection
+endif # Linux
+endif # WIN_CROSS_BUILD
+
+##
+## Macos build setup
+##
+ifeq ($(OS), Darwin)
+
+include conanbuildinfo_macos_intel.mak
+include conanbuildinfo_macos_arm.mak
+
 MACINTELCOPT:=$(COPT) -target x86_64-apple-macos10.14 \
 		      $(addprefix -I, $(MAC_INTEL_CONAN_INCLUDE_DIRS)) \
 		      $(addprefix -D, $(MAC_INTEL_CONAN_DEFINES)) \
@@ -27,15 +58,35 @@ MACARMCOPT:=  $(COPT) -target arm64-apple-macos11 \
 		      $(addprefix -L, $(MAC_ARM_CONAN_LIB_DIRS)) \
 		      $(addprefix -l, $(MAC_ARM_CONAN_LIBS)) \
 		      $(addprefix -framework , $(MAC_ARM_CONAN_FRAMEWORKS))
-COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3 -march=x86-64
-WINCC=	x86_64-w64-mingw32-gcc
-WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
 
+# Cross build setup (WIP)
+#ifdef CROSS_MAC_TO_WIN
+#
+#include conanbuildinfo_macos_to_win.mak
+#
+#WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
+#WINCOPT+=	$(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
+#		$(addprefix -D, $(WIN_CONAN_DEFINES)) \
+#		$(addprefix -L, $(WIN_CONAN_LIB_DIRS)) \
+#		$(addprefix -l, $(WIN_CONAN_LIBS))
+#
+#endif # CROSS_MAC_TO_WIN
+endif # Darwin
+
+
+##
+## Linux native build setup
+##
+COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3 -march=x86-64
+
+##
+## Tools build setup
+##
 OPHIS=	Ophis/bin/ophis
 OPHISOPT=	-4 --no-warn
 OPHIS_MON= Ophis/bin/ophis -c
 
-ACME=	/usr/local/bin/acme
+ACME=	$(shell which acme)
 
 ifdef USE_LOCAL_CC65
 	# use locally installed binary (requires 'cc65,ld65,etc' to be in the $PATH)
@@ -192,11 +243,7 @@ SUBMODULEUPDATE= \
 ##
 ## Global Rules
 ##
-.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest
-
-allmac:		$(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
-allwin:		$(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
-allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
+.PHONY: all allunix relunix allmac allwin arcwin arcmac arcunix tests tools utilities format clean cleanall cleantest win_build_check
 
 ifeq ($(OS), Darwin)
 all: allmac
@@ -205,6 +252,10 @@ all: allunix
 else
 all: allwin
 endif
+
+allmac:		$(SDCARD_FILES) $(TOOLSMAC) $(EXTRAMAC) $(UTILITIES) $(TESTS)
+allwin:		$(SDCARD_FILES) $(TOOLSWIN) $(EXTRAWIN) $(UTILITIES) $(TESTS)
+allunix:	$(SDCARD_FILES) $(TOOLSUNX) $(EXTRAUNX) $(UTILITIES) $(TESTS)
 
 arcunix: $(TOOLSUNX)
 	arcdir=m65tools-`$(SRCDIR)/gitversion.sh arcname`-linux; \
@@ -238,6 +289,19 @@ arcmac: $(TOOLSMAC)
 	ln $(ASSETS)/README-dev.md $${arcdir}/README.md ; \
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
+
+# check if WIN_CROSS_BUILD is enabled or if we are on WINDOWS
+win_build_check:
+ifneq ($(OS), Windows_NT)
+	@if [ -z "$(WIN_CROSS_BUILD)" ] || [ "$(WIN_CROSS_BUILD)" -ne "1" ] ; then \
+		echo ""; \
+		echo "Please set env WIN_CROSS_BUILD=1 to enable windows builds on linux."; \
+		echo ""; \
+		echo "This requires you to install mingw32 and conan."; \
+		echo ""; \
+		exit 1; \
+	fi
+endif
 
 tests: $(TESTS)
 
@@ -278,7 +342,7 @@ test: $(GTESTFILES)
 		$$test; \
 	done
 
-test.exe: $(GTESTFILESEXE)
+test.exe: win_build_check $(GTESTFILESEXE)
 	@for test in $+; do \
 		name=$${test%%.test.exe}; \
 		name=$${name##*/}; \
@@ -292,14 +356,24 @@ test.exe: $(GTESTFILESEXE)
 ##
 ## Prerequisites
 ##
-conanbuildinfo_macos_intel.mak: conanfile.txt conan/*
+conanbuildinfo_macos_intel.mak: conanfile.txt conan/profile_macos_10.14_intel Makefile
 	conan install conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_10.14_intel
 	sed 's/CONAN_/MAC_INTEL_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_intel.mak
 	rm conanbuildinfo.*
 
-conanbuildinfo_macos_arm.mak: conanfile.txt conan/*
+conanbuildinfo_macos_arm.mak: conanfile.txt conan/profile_macos_11_arm Makefile
 	conan install conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
 	sed 's/CONAN_/MAC_ARM_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_arm.mak
+	rm conanbuildinfo.*
+
+conanbuildinfo_linux_to_win.mak: conanfile.txt conan/profile_linux_to_win Makefile
+	conan install conanfile.txt --build=missing  -pr:b=default -pr:h=conan/profile_linux_to_win
+	sed 's/CONAN_/WIN_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_linux_to_win.mak
+	rm conanbuildinfo.*
+
+conanbuildinfo_macos_to_win.mak: conanfile.txt conan/profile_macos_to_win_host conan/profile_macos_to_win_build Makefile
+	conan install conanfile.txt --build=missing  -pr:b=default -pr:b=conan/profile_macos_to_win_build -pr:h=default -pr:h=conan/profile_macos_to_win_host
+	sed 's/CONAN_/WIN_CONAN_/g' conanbuildinfo.mak > conanbuildinfo_macos_to_win.mak
 	rm conanbuildinfo.*
 
 ifndef USE_LOCAL_CC65
@@ -590,7 +664,7 @@ define TRIPLE_TARGET
 $(1): $(2) $(TOOLDIR)/version.c Makefile
 	$$(CC) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
-$(1).exe: $(2) $(TOOLDIR)/version.c Makefile
+$(1).exe: $(2) win_build_check $(TOOLDIR)/version.c Makefile
 	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
 $(1)_intel.osx: $(2) $(TOOLDIR)/version.c Makefile
@@ -634,12 +708,12 @@ $(BINDIR)/m65_intel.osx:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 $(BINDIR)/m65_arm.osx:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(M65_SRC) -framework Security
 
-$(BINDIR)/m65.exe:	$(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
+$(BINDIR)/m65.exe:	win_build_check $(M65_SRC) $(TOOLDIR)/fpgajtag/*.h include/*.h Makefile
 	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $@ $(M65_SRC) -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
 # $(TOOLDIR)/fpgajtag/listComPorts.c $(TOOLDIR)/fpgajtag/disphelper.c
 
 ## special target for linux static win build even if DO_STATIC is 0
-static_m65_exe:		$(M65_SRC) $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
+static_m65_exe:		win_build_check $(M65_SRC) $(TOOLDIR)/fpgajtag/*.c $(TOOLDIR)/fpgajtag/*.h $(TOOLDIR)/version.c Makefile
 	$(WINCC) $(WINCOPT) -D_FORTIFY_SOURCES=2 -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $@ $(M65_SRC) -Wl,-Bstatic -lusb-1.0 -lwsock32 -lws2_32 -lpng -lz -lssp -Wl,-Bdynamic
 
 ##
@@ -658,7 +732,7 @@ define LINUX_AND_MINGW_GTEST_TARGETS
 $(1): $(2)
 	$$(CXX) $$(COPT) $$(GTESTOPTS) -Iinclude $(LIBUSBINC) -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $(3)
 
-$(1).exe: $(2)
+$(1).exe: win_build_check $(2)
 	$$(CXX) $$(WINCOPT) $$(GTESTOPTS) -Iinclude $(LIBUSBINC) -o $$@ $$(filter %.c %.cpp,$$^) $(TOOLDIR)/version.c -lreadline -lncurses -lgtest_main -lgtest -lpthread $$(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic $(3)
 endef
 
@@ -686,7 +760,7 @@ $(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
 $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
 	$(CC) $(COPT) -Iinclude $(LIBUSBINC) -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap -DINCLUDE_BIT2MCS
 
-$(BINDIR)/mega65_ftp.exe: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
+$(BINDIR)/mega65_ftp.exe: win_build_check $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp_intel.osx: $(MEGA65FTP_SRC) $(TOOLDIR)/version.c include/*.h Makefile
@@ -724,7 +798,7 @@ $(BINDIR)/m65dbg_intel.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 $(BINDIR)/m65dbg_arm.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(M65DBG_SOURCES) $(M65DEBUG_READLINE)
 
-$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
+$(BINDIR)/m65dbg.exe:	win_build_check $(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $(BINDIR)/m65dbg.exe $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
 
 #-----------------------------------------------------------------------------
@@ -746,13 +820,13 @@ ETHERLOAD_HEADERS = $(TOOLDIR)/etherload/ethlet_dma_load_map.h \
 ETHERLOAD_INCLUDES = -I/usr/local/include -Iinclude
 ETHERLOAD_LIBRARIES = -lm
 
-$(TOOLDIR)/etherload/ethlet_%.c:	$(TOOLDIR)/etherload/ethlet_%.bin $(BINDIR)/bin2c
+$(TOOLDIR)/etherload/ethlet_%.c:	$(TOOLDIR)/etherload/ethlet_%.bin $(BINDIR)/bin2c Makefile
 	$(BINDIR)/bin2c $(TOOLDIR)/etherload/ethlet_$*.bin ethlet_$* $(TOOLDIR)/etherload/ethlet_$*.c
 
-$(TOOLDIR)/etherload/%_map.h:	$(TOOLDIR)/etherload/%.map $(BINDIR)/map2h
+$(TOOLDIR)/etherload/%_map.h:	$(TOOLDIR)/etherload/%.map $(BINDIR)/map2h Makefile
 	$(BINDIR)/map2h $(TOOLDIR)/etherload/$*.map $* $(TOOLDIR)/etherload/$*_map.h
 
-$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+$(BINDIR)/etherload:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(CC) $(COPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
 $(BINDIR)/etherload_intel.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
@@ -761,5 +835,5 @@ $(BINDIR)/etherload_intel.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefil
 $(BINDIR)/etherload_arm.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
-$(BINDIR)/etherload.exe:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS)
+$(BINDIR)/etherload.exe:	win_build_check $(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32

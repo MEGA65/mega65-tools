@@ -2,26 +2,40 @@ pipeline {
     agent {
         docker { image 'megawin' }
     }
+    environment {
+        USE_LOCAL_CC65 = 1  // docker has cc65 installed
+        WIN_CROSS_BUILD = 1 // we want to build win on linux
+    }
     stages {
+        /*
+         * make sure we start from a clean slate
+         */
         stage('Cleanup') {
             steps {
-                sh 'make USE_LOCAL_CC65=1 cleanall'
+                sh 'make cleanall'
             }
         }
+        /*
+         * For a PR branch we build all possible linux and windows targets
+         */
         stage ('Full PR Testbuild') {
             when {
                 branch pattern: "PR-*"
             }
             steps {
-                sh 'make USE_LOCAL_CC65=1 all'
+                sh 'make allunix allwin'
             }
         }
+        /*
+         * For a non PR branch we only build the stuff that goes into a
+         * release archive.
+         */
         stage('Build Linux Tools') {
             when {
                 not { branch pattern: "PR-*" }
             }
             steps {
-                sh 'make USE_LOCAL_CC65=1 arcunix'
+                sh 'make arcunix'
             }
         }
         stage('Build Windows Tools') {
@@ -29,18 +43,24 @@ pipeline {
                 not { branch pattern: "PR-*" }
             }
             steps {
-                sh 'make USE_LOCAL_CC65=1 arcwin'
+                sh 'make arcwin'
             }
         }
+        /*
+         * do unittests
+         */
         stage('Run build tests') {
             steps {
-                sh 'make USE_LOCAL_CC65=1 test'
+                sh 'make test'
             }
         }
     }
     post {
         always {
             script {
+                /*
+                 * only archive artifact for non PR builds
+                 */
                 if (!env.BRANCH_NAME.startsWith('PR-')) {
                     archiveArtifacts artifacts: "m65tools-*.7z",
                         onlyIfSuccessful: true,
