@@ -226,7 +226,7 @@ int get_terminal_size(int max_width)
 
 char *wrap_line(const char *line, int wrap, int *offset)
 {
-  int pos;
+  int pos, extra = 1;
   char *buffer;
 
   if (strlen(line) <= wrap) {
@@ -234,14 +234,34 @@ char *wrap_line(const char *line, int wrap, int *offset)
     return strdup(line);
   }
 
-  for (pos = wrap; line[pos] != ' '; pos--)
+  // look if there is a \n less then wrap away
+  for (pos = 0; pos <= wrap && line[pos] && line[pos] != '\n'; pos++)
     ;
+  if (pos <= wrap) {
+    buffer = malloc(pos + 1);
+    if (buffer != NULL) {
+      if (pos > 0)
+        strncpy(buffer, line, pos);
+      buffer[pos] = 0;
+    }
+    *offset = pos + 1;
+    return buffer;
+  }
+
+  // search backwards from wrap to last space
+  for (pos = wrap; line[pos] != ' ' && pos > 0; pos--)
+    ;
+  // no space found, just wrap to width
+  if (pos == 0) {
+    pos = wrap;
+    extra = 0;
+  }
   buffer = malloc(pos + 1);
   if (buffer != NULL) {
     strncpy(buffer, line, pos);
     buffer[pos] = 0;
   }
-  *offset = pos + 1;
+  *offset = pos + extra;
 
   return buffer;
 }
@@ -358,10 +378,18 @@ void init_cmd_options(void)
   CMD_OPTION("charrom",   1, 0,         'C', "file",  "Character ROM <file> to preload at $FF7E000.");
   CMD_OPTION("colourrom", 1, 0,         'c', "file",  "Colour RAM <file> to preload at $FF80000.");
 
-  CMD_OPTION("vtype",     1, 0,         't', "-|text|file",
-                  "Type <text> via keyboard virtualisation. If a <file>name is provided, the contents of the file are typed. "
-                  "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
-  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text|file", "As virttype, but add a RETURN at the end of the line.");
+  CMD_OPTION("vtype",     1, 0,         't', "-|text",
+                  "Type <text> via keyboard virtualisation.\nThe following escape sequences are supported:\n"
+                  "    ~M  RETURN      ~T  INST/DEL\n"
+                  "    ~C  RUN/STOP    ~1  F1\n"
+                  "    ~D  DOWN        ~3  F3\n"
+                  "    ~U  UP          ~5  F5\n"
+                  "    ~L  LEFT        ~7  F7\n"
+                  "    ~R  RIGHT       ~z  sleep 1 sec\n"
+                  "    ~H  HOME        ~Z  sleep 2 sec\n"
+                  "<-> will read input and display a live screen from the MEGA65.\n"
+                  "Warning: this is awfully slow and has lots of problems!");
+  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text", "As virttype, but add a RETURN at the end of the line.");
 
   CMD_OPTION("memsave",   1, 0,         0x81, "[addr:addr;]filename", "saves memory range addr:addr (hex) to filename. "
                   "If addr range is omitted, save current basic memory. "
@@ -1158,7 +1186,7 @@ void do_type_text(char *type_text)
         // eos after tilde? break out of loop!
         if (type_text[i + 1] == 0)
           break;
-        // control sequences
+        // control sequences (remember to UPDATE USAGE!)
         switch (type_text[i + 1]) {
         case 'C':
           c1 = 0x03;
