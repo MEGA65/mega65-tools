@@ -1152,9 +1152,12 @@ void do_type_text(char *type_text)
   }
   else {
     int i;
+    unsigned char c1;
     for (i = 0; type_text[i]; i++) {
       if (type_text[i] == '~') {
-        unsigned char c1;
+        // eos after tilde? break out of loop!
+        if (type_text[i + 1] == 0)
+          break;
         // control sequences
         switch (type_text[i + 1]) {
         case 'C':
@@ -1196,7 +1199,6 @@ void do_type_text(char *type_text)
         }
         do_type_key(c1);
         i++;
-        break;
       }
       else
         do_type_key(type_text[i]);
