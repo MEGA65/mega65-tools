@@ -1196,6 +1196,11 @@ void do_type_text(char *type_text)
         case '7':
           c1 = 0xF7;
           break; // F7
+        case 'Z':
+          sleep(1);
+        case 'z':
+          sleep(1);
+          break;
         }
         do_type_key(c1);
         i++;
