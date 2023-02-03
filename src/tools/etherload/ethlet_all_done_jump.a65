@@ -34,6 +34,53 @@ entry:
 	lda #$53
 	sta $d02f
 
+	; check if image filename was provided
+	lda d81filename
+	beq copy_reset_routine
+
+	; backup page at $200 to colour ram
+	sta $d707
+	.byte $81, $ff ; dst mb
+	.byte $00      ; end of job options
+	.byte $00      ; copy
+	.word $18      ; count
+	.word $0200    ; src
+	.byte $00      ; src bank
+	.word $7F00    ; dst
+	.byte $08      ; dst bank
+	.byte $00      ; cmd hi
+	.word $0000    ; modulo / ignored
+
+	ldx #$17
+*	lda d81filename,x
+	sta $0200,x
+	dex
+	bpl -
+
+	; set d81 filename
+	ldy #$02
+	lda #$2e
+	sta $d640
+	clv
+	; attach d81 image
+	lda #$40
+	sta $d640
+	clv
+
+	; restore page at $200 from colour ram
+	sta $d707
+	.byte $80, $ff ; src mb
+	.byte $00      ; end of job options
+	.byte $00      ; copy
+	.word $18      ; count
+	.word $7F00    ; src
+	.byte $08      ; src bank
+	.word $0200    ; dst
+	.byte $00      ; dst bank
+	.byte $00      ; cmd hi
+	.word $0000    ; modulo / ignored
+
+copy_reset_routine:
 	; copy reset routine to tmpbuffer
 	ldx #jump_routine_end - jump_routine
 *	lda jump_routine-1,x
@@ -41,7 +88,9 @@ entry:
 	dex
 	bne -
 
-  jmp tmpbuffer
+	jmp tmpbuffer
+d81filename:
+	.dword 0, 0, 0, 0
 
 ; this routine resets all mappings and jumps into the provided address
 jump_routine:

@@ -188,7 +188,7 @@ void init_cmd_options(void)
   CMD_OPTION("jump",        required_argument, 0,            'j', "addr",   "Jump to provided address <addr> after loading (hex notation).");
   CMD_OPTION("bin",         required_argument, 0,            'b', "addr",   "Treat <prgname> as binary file and load at address <addr>.");
   CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
-  CMD_OPTION("mount",       no_argument,       0,            'm', "d81file","Mount d81 file image from SD card.");
+  CMD_OPTION("mount",       required_argument, 0,            'm', "file",   "Mount d81 file image <file> from SD card.");
   // clang-format on
 }
 
@@ -514,6 +514,11 @@ int main(int argc, char **argv)
     log_note("Jumping to address $%04X", jump_addr);
     ethlet_all_done_jump[ethlet_all_done_jump_offset_jump_addr + 1] = jump_addr & 0xff;
     ethlet_all_done_jump[ethlet_all_done_jump_offset_jump_addr + 2] = jump_addr >> 8;
+
+    // patch in d81 filename
+    if (d81_image) {
+      memcpy(&ethlet_all_done_jump[ethlet_all_done_jump_offset_d81filename], d81_image, strlen(d81_image));
+    }
 
     send_ethlet(ethlet_all_done_jump, ethlet_all_done_jump_len);
   }
