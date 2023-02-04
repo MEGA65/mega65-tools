@@ -14,6 +14,11 @@ matrix:
       - HOMEBREW_NO_AUTO_UPDATE=1 brew install conan cc65 p7zip
       script:
       - make USE_LOCAL_CC65=1 arcmac
+      - wget https://raw.githubusercontent.com/MEGA65/builder-docker/main/megabuild/filehost-upload
+      - |
+        if [[ "$TRAVIS_BRANCH" == "development" ]]; then
+          python3 filehost-upload -i 7d96641c-b306-49cf-80ff-ea1e5d00c9d1 -a addversion -V $TRAVIS_BUILD_NUMBER -I "`git log -1 --pretty=tformat:'dev@%h: %s'`" m65tools-*-macos.7z
+        fi
       before_deploy:
       - |
         if [[ -z "$TRAVIS_TAG" ]]; then
@@ -29,7 +34,7 @@ matrix:
         api_key: $GITHUB_API_KEY
         file_glob: true
         file:
-        - $TRAVIS_BUILD_DIR/m65tools-*.7z
+        - $TRAVIS_BUILD_DIR/m65tools-*-macos.7z
         skip_cleanup: true
         prerelease: true
         draft: false
