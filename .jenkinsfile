@@ -5,6 +5,9 @@ pipeline {
     environment {
         USE_LOCAL_CC65 = 1  // docker has cc65 installed
         WIN_CROSS_BUILD = 1 // we want to build win on linux
+        FH_API_KEY = credentials('filehost-api-key')
+        FH_ID_DEV_M65LNX = '2b7bd912-1181-447c-a489-223f16b764c1'
+        FH_ID_DEV_M65WIN = '658322fd-e586-4b4f-a991-89470b269b4a'
     }
     stages {
         /*
@@ -65,6 +68,16 @@ pipeline {
                     archiveArtifacts artifacts: "m65tools-*.7z",
                         onlyIfSuccessful: true,
                         fingerprint: true
+                }
+            }
+        }
+        success {
+            script {
+                if (env.BRANCH_NAME == 'development') {
+                    sh '''
+                    filehost-upload -i ${FH_ID_DEV_M65LNX} -a addversion -V ${BUILD_NUMBER} -I "`git log -1 --pretty=tformat:'dev@%h: %s'`" m65tools-*-linux.7z
+                    filehost-upload -i ${FH_ID_DEV_M65WIN} -a addversion -V ${BUILD_NUMBER} -I "`git log -1 --pretty=tformat:'dev@%h: %s'`" m65tools-*-windows.7z
+                    '''
                 }
             }
         }
