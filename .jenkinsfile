@@ -8,6 +8,8 @@ pipeline {
         FH_API_KEY = credentials('filehost-api-key')
         FH_ID_DEV_M65LNX = '2b7bd912-1181-447c-a489-223f16b764c1'
         FH_ID_DEV_M65WIN = '658322fd-e586-4b4f-a991-89470b269b4a'
+        FH_ID_REL_M65LNX = 'e97f3bf4-9d55-4ae2-a39a-d31dd15e8d34'
+        FH_ID_REL_M65WIN = '06c55815-7826-4ad6-be0e-b8dc5e721b6d'
     }
     stages {
         /*
@@ -77,6 +79,12 @@ pipeline {
                     sh '''
                     filehost-upload -i ${FH_ID_DEV_M65LNX} -a addversion -V ${BUILD_NUMBER} -I "`git log -1 --pretty=tformat:'dev@%h: %s'`" m65tools-*-linux.7z
                     filehost-upload -i ${FH_ID_DEV_M65WIN} -a addversion -V ${BUILD_NUMBER} -I "`git log -1 --pretty=tformat:'dev@%h: %s'`" m65tools-*-windows.7z
+                    '''
+                }
+                else if (env.BRANCH_NAME == 'master') {
+                    sh '''
+                    filehost-upload -i ${FH_ID_REL_M65LNX} -a addversion -V ${BUILD_NUMBER} -I "`git log -1 --pretty=tformat:'master@%h: %s'`" m65tools-*-linux.7z
+                    filehost-upload -i ${FH_ID_REL_M65WIN} -a addversion -V ${BUILD_NUMBER} -I "`git log -1 --pretty=tformat:'master@%h: %s'`" m65tools-*-windows.7z
                     '''
                 }
             }

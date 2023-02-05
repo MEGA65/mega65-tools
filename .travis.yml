@@ -17,7 +17,9 @@ matrix:
       - make USE_LOCAL_CC65=1 arcmac
       - wget https://raw.githubusercontent.com/MEGA65/builder-docker/main/megabuild/filehost-upload
       - |
-        if [[ "$TRAVIS_BRANCH" == "development" ]]; then
+        if [[ "$TRAVIS_BRANCH" == "master" ]]; then
+          python3 filehost-upload -i 57f855b9-a758-49df-ba7c-d120c4d1241d -a addversion -V $TRAVIS_BUILD_NUMBER -I "`git log -1 --pretty=tformat:'master@%h: %s'`" m65tools-*-macos.7z
+        elif [[ "$TRAVIS_BRANCH" == "development" ]]; then
           python3 filehost-upload -i 7d96641c-b306-49cf-80ff-ea1e5d00c9d1 -a addversion -V $TRAVIS_BUILD_NUMBER -I "`git log -1 --pretty=tformat:'dev@%h: %s'`" m65tools-*-macos.7z
         fi
       before_deploy:
