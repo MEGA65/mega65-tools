@@ -3,6 +3,9 @@ bin/mega65_ftp*
 bin/m65dbg*
 bin/romdiff*
 
+bin/*.osx
+bin/*.dSYM
+
 bin/etherload
 bin/giftotiles
 bin/pngprepare
@@ -15,6 +18,8 @@ bin/md2h65
 bin/trenzm65powercontrol
 bin/bin2c
 bin/map2h
+bin/bitinfo
+bin/vcdgraph
 
 src/tools/version.c
 src/tools/bin2c
@@ -24,12 +29,19 @@ src/tools/ascii_font.c
 
 gtest/bin/*
 
+conan/profile_mingw-w64
+
+conan.lock
+conanbuildinfo*
+conaninfo.txt
+graph_info.json
+
 *~
 #*#
 .#*
-.DS_Store
 *.bin
 *.gz
+*.7z
 *.o
 *.D81
 *.d81

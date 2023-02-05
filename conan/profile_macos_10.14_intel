@@ -1,0 +1,5 @@
+[settings]
+os=Macos
+os.version=10.14
+arch=x86_64
+build_type=Release

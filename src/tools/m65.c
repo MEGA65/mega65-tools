@@ -226,7 +226,7 @@ int get_terminal_size(int max_width)
 
 char *wrap_line(const char *line, int wrap, int *offset)
 {
-  int pos;
+  int pos, extra = 1;
   char *buffer;
 
   if (strlen(line) <= wrap) {
@@ -234,14 +234,34 @@ char *wrap_line(const char *line, int wrap, int *offset)
     return strdup(line);
   }
 
-  for (pos = wrap; line[pos] != ' '; pos--)
+  // look if there is a \n less then wrap away
+  for (pos = 0; pos <= wrap && line[pos] && line[pos] != '\n'; pos++)
     ;
+  if (pos <= wrap) {
+    buffer = malloc(pos + 1);
+    if (buffer != NULL) {
+      if (pos > 0)
+        strncpy(buffer, line, pos);
+      buffer[pos] = 0;
+    }
+    *offset = pos + 1;
+    return buffer;
+  }
+
+  // search backwards from wrap to last space
+  for (pos = wrap; line[pos] != ' ' && pos > 0; pos--)
+    ;
+  // no space found, just wrap to width
+  if (pos == 0) {
+    pos = wrap;
+    extra = 0;
+  }
   buffer = malloc(pos + 1);
   if (buffer != NULL) {
     strncpy(buffer, line, pos);
     buffer[pos] = 0;
   }
-  *offset = pos + 1;
+  *offset = pos + extra;
 
   return buffer;
 }
@@ -358,10 +378,18 @@ void init_cmd_options(void)
   CMD_OPTION("charrom",   1, 0,         'C', "file",  "Character ROM <file> to preload at $FF7E000.");
   CMD_OPTION("colourrom", 1, 0,         'c', "file",  "Colour RAM <file> to preload at $FF80000.");
 
-  CMD_OPTION("vtype",     1, 0,         't', "-|text|file",
-                  "Type <text> via keyboard virtualisation. If a <file>name is provided, the contents of the file are typed. "
-                  "<-> will read input and display a live screen from the MEGA65. Warning: this is awfully slow!");
-  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text|file", "As virttype, but add a RETURN at the end of the line.");
+  CMD_OPTION("vtype",     1, 0,         't', "-|text",
+                  "Type <text> via keyboard virtualisation.\nThe following escape sequences are supported:\n"
+                  "    ~M  RETURN      ~T  INST/DEL\n"
+                  "    ~C  RUN/STOP    ~1  F1\n"
+                  "    ~D  DOWN        ~3  F3\n"
+                  "    ~U  UP          ~5  F5\n"
+                  "    ~L  LEFT        ~7  F7\n"
+                  "    ~R  RIGHT       ~z  sleep 1 sec\n"
+                  "    ~H  HOME        ~Z  sleep 2 sec\n"
+                  "<-> will read input and display a live screen from the MEGA65.\n"
+                  "Warning: this is awfully slow and has lots of problems!");
+  CMD_OPTION("vtyperet",  1, 0,         'T', "-|text", "As virttype, but add a RETURN at the end of the line.");
 
   CMD_OPTION("memsave",   1, 0,         0x81, "[addr:addr;]filename", "saves memory range addr:addr (hex) to filename. "
                   "If addr range is omitted, save current basic memory. "
@@ -1152,10 +1180,13 @@ void do_type_text(char *type_text)
   }
   else {
     int i;
+    unsigned char c1;
     for (i = 0; type_text[i]; i++) {
       if (type_text[i] == '~') {
-        unsigned char c1;
-        // control sequences
+        // eos after tilde? break out of loop!
+        if (type_text[i + 1] == 0)
+          break;
+        // control sequences (remember to UPDATE USAGE!)
         switch (type_text[i + 1]) {
         case 'C':
           c1 = 0x03;
@@ -1193,10 +1224,14 @@ void do_type_text(char *type_text)
         case '7':
           c1 = 0xF7;
           break; // F7
+        case 'Z':
+          sleep(1);
+        case 'z':
+          sleep(1);
+          break;
         }
         do_type_key(c1);
         i++;
-        break;
       }
       else
         do_type_key(type_text[i]);
@@ -2537,91 +2572,12 @@ int main(int argc, char **argv)
   }
 
   if (filename) {
-    log_note("loading file '%s'", filename);
-    /*
-        unsigned int load_routine_addr = 0xf664;
-
-        int filename_matches = 0;
-        int first_time = 1;
-
-        // We REALLY need to know which mode we are in for LOAD
-        while (do_go64 && (!saw_c64_mode)) {
-          detect_mode();
-          if (!saw_c64_mode) {
-            log_crit("in C65 mode, but expected C64 mode");
-            exit(-1);
-          }
-        }
-        while ((!do_go64) && (!saw_c65_mode)) {
-          detect_mode();
-          if (!saw_c65_mode) {
-            log_crit("should be in C65 mode, but don't seem to be");
-            exit(-1);
-          }
-        }
-
-        while (!filename_matches) {
-
-          if (saw_c64_mode) {
-            // Assume LOAD vector in C64 mode is fixed
-            load_routine_addr = 0xf4a5;
-            log_info("assuming LOAD routine at $F4A5 for C64 mode");
-          }
-          else {
-            unsigned char vectorbuff[2];
-            fetch_ram(0x3FFD6, 2, vectorbuff);
-            load_routine_addr = vectorbuff[0] + (vectorbuff[1] << 8);
-            log_info("LOAD vector from ROM is $%04x", load_routine_addr);
-          }
-          // Type LOAD command and set breakpoint to catch the ROM routine
-          // when it executes.
-          breakpoint_set(load_routine_addr);
-          if (first_time) {
-            if (saw_c64_mode) {
-              // What we stuff in the keyboard buffer here is actually
-              // not important for ,1 loading.  That gets handled in the loading
-              // logic.  But we reflect it here, so that it doesn't confuse people.
-              if (comma_eight_comma_one)
-                stuff_keybuffer("Lo\"!\",8,1\r");
-              else
-                stuff_keybuffer("LOAD\"!\",8\r");
-            }
-            else {
-              // Really wait for C65 to get to READY prompt
-              stuff_keybuffer("DLo\"!\r");
-            }
-          }
-          first_time = 0;
-          breakpoint_wait();
-
-          int filename_addr = 1;
-          unsigned char filename_len = mega65_peek(0xb7);
-          if (saw_c64_mode)
-            filename_addr = mega65_peek(0xbb) + mega65_peek(0xbc) * 256;
-          else {
-            filename_addr = mega65_peek(0xbb) + mega65_peek(0xbc) * 256 + mega65_peek(0xbe) * 65536;
-          }
-          char requested_name[256];
-          fetch_ram(filename_addr, filename_len, (unsigned char *)requested_name);
-          requested_name[filename_len] = 0;
-          log_info("requested file is '%s' (len=%d)", requested_name, filename_len);
-          // If we caught the boot load request, then feed the DLOAD command again
-          if (!strcmp(requested_name, "0:AUTOBOOT.C65*"))
-            first_time = 1;
-
-          if (!strcmp(requested_name, "!"))
-            break;
-          if (!strcmp(requested_name, "0:!"))
-            break;
-
-          start_cpu();
-        }
-    */
-    // We can ignore the filename.
-    // Next we just load the file
-
+    unsigned char sid_header[0x7e];
     int is_sid_tune = 0;
 
+    log_note("loading file '%s'", filename);
+
+    // Next we just load the file
     FILE *f = fopen(filename, "rb");
     if (f == NULL) {
       log_crit("could not find file '%s'", filename);
@@ -2629,10 +2585,23 @@ int main(int argc, char **argv)
     }
     else {
       char buffer[40];
-      int load_addr = fgetc(f);
-      load_addr |= fgetc(f) << 8;
+      unsigned char SIDmagic1[5] = { 0x50, 0x53, 0x49, 0x44, 0x00 };
+      unsigned char SIDmagic2[5] = { 0x52, 0x53, 0x49, 0x44, 0x00 };
 
-      if ((load_addr != 0x5350) && (load_addr != 0x5352)) {
+      // load full SID header here!
+      if (fread(sid_header, 1, 0x7e, f) != 0x7e) {
+        log_debug("short read while trying to get SID header, not SID file!");
+        memset(sid_header, 0, sizeof(sid_header));
+      }
+      //	dump_bytes(0,"sid header",sid_header,0x7c);
+
+      // seek back just after load address
+      fseek(f, 2, SEEK_SET);
+
+      int load_addr = sid_header[0] | (sid_header[1]<<8);
+
+      // check for magic SID header, last byte needs to be 1-4, those are the valid versions
+      if ((memcmp(sid_header, SIDmagic1, 5) && memcmp(sid_header, SIDmagic2, 5)) || (sid_header[5] < 0 || sid_header[5] > 4)) {
         if (!comma_eight_comma_one) {
           if (saw_c64_mode)
             load_addr = 0x0801;
@@ -2647,121 +2616,176 @@ int main(int argc, char **argv)
             log_warn("loading C64 BASIC PRG in C65 mode!");
           log_info("load address is $%04x", load_addr);
         }
+        // write user feedback to the screen
         snprintf(buffer, 40, "REM M65 INJECTING AT $%04X:\r", load_addr);
+        stuff_keybuffer(buffer);
+        usleep(20000);
       }
       else {
-        snprintf(buffer, 40, "REM M65 INJECTING AT $0400 + $%04X:\r", load_addr);
+        // give some feedback about found magic
+        log_note("detected %s v%d tune", sid_header, sid_header[5]);
+
+        // Player is for C64 mode!
+        if (!saw_c64_mode) {
+          switch_to_c64mode();
+          // the systems needs a bit to switch over
+          usleep(200000);
+        }
+
         is_sid_tune = 1;
       }
-      // write user feedback to the screen
-      stuff_keybuffer(buffer);
-      usleep(20000);
+
       real_stop_cpu();
 
       if (is_sid_tune) {
-        // It's probably a SID file
+        log_info("loading SID header...");
 
-        log_info("examining SID file...");
+        // SID header was alread read above!
 
-        // Read header
-        unsigned char sid_header[0x7c];
-        fread(sid_header, 0x7c, 1, f);
+        // SID version 2+ has 0x7c bytes of header
+        // we already did read the first two, so 0x7c reads
+        // also the first 2 bytes == load_addr of the data/prg!
+        // if it is a SID version 1, header is only 0x76,
+        // as specified in the word at 0x6 of the header
 
-        unsigned int start_addr = (sid_header[0x0a - 0x02] << 8) + sid_header[0x0b - 0x02];
-        unsigned int play_addr = (sid_header[0x0c - 0x02] << 8) + sid_header[0x0d - 0x02];
-        //	unsigned int play_speed=sid_header[0x12-0x02];
+        unsigned int end_of_sid_header = (sid_header[0x06] << 8) + sid_header[0x07];
+        unsigned int start_addr = (sid_header[0x0a] << 8) + sid_header[0x0b];
+        unsigned int play_addr = (sid_header[0x0c] << 8) + sid_header[0x0d];
+        //	unsigned int play_speed=sid_header[0x12];
 
-        char *name = (char *)&sid_header[0x16 - 0x02];
-        char *author = (char *)&sid_header[0x36 - 0x02];
-        char *released = (char *)&sid_header[0x56 - 0x02];
+        char *name = (char *)&sid_header[0x16];
+        char *author = (char *)&sid_header[0x36];
+        char *released = (char *)&sid_header[0x56];
 
-        log_info("SID tune '%s' by '%s' (%s)", name, author, released);
+        log_note("found SID tune '%s' by '%s' (%s)", name, author, released);
 
         // Also show player info on the screen
+        // clang-format off
         char player_screen[1000] = { "                                        "
                                      "                                        "
-                                     "                                        "
-                                     "M65 TOOL CRUSTY SID PLAYER V00.00 ALPHA "
-                                     "                                        "
+                                     " M65 TOOL CRUSTY SID PLAYER V0.01 ALPHA "
                                      "                                        "
                                      "                                        "
                                      "                                        "
                                      "                                        "
+                                     "  Track                                 "
+                                     "    0                                   "
+                                     "                                        "
+                                     "  Name                                  "
+                                     "                                        "
+                                     "                                        "
+                                     "  Artist                                "
+                                     "                                        "
+                                     "                                        "
+                                     "  Copyright                             "
                                      "                                        "
                                      "                                        "
                                      "                                        "
                                      "                                        "
                                      "                                        "
-                                     "0 - 9 = SELECT TRACK                    "
-                                     "                                        "
-                                     "                                        "
-                                     "                                        "
-                                     "                                        "
-                                     "                                        "
-                                     "                                        "
-                                     "                                        "
-                                     "                                        "
+                                     "          0 - 9 = SELECT TRACK          "
                                      "                                        "
                                      "                                        " };
-        for (int i = 0; name[i]; i++)
-          player_screen[40 * 6 + i] = name[i];
-        for (int i = 0; author[i]; i++)
-          player_screen[40 * 8 + i] = author[i];
-        for (int i = 0; released[i]; i++)
-          player_screen[40 * 10 + i] = released[i];
+        // clang-format on
+        for (int i = 0; i < 32 && name[i]; i++)
+          player_screen[40 * 11 + 4 + i] = name[i];
+        for (int i = 0; i < 32 && author[i]; i++)
+          player_screen[40 * 14 + 4 + i] = author[i];
+        for (int i = 0; i < 32 && released[i]; i++)
+          player_screen[40 * 17 + 4 + i] = released[i];
 
-        for (int i = 0; i < 1000; i++) {
-          if (player_screen[i] >= '@' && player_screen[i] <= 'Z')
-            player_screen[i] &= 0x1f;
-          if (player_screen[i] >= 'a' && player_screen[i] <= 'z')
-            player_screen[i] &= 0x1f;
-        }
+        // convert to screen codes
+        for (int i=0; i < 920; i++)
+          player_screen[i] = wincp1252_to_screen(player_screen[i]) | ((i < 5*40 || i >= 20*40) ? 0x80 : 0x00);
+
+        // hide code on screen (blue on blue)
+        memset(player_screen + 920, 6, 80);
+        push_ram(0xff802d0L, 80, (unsigned char *)player_screen + 920);
+        memset(player_screen + 920, 0xa0, 80);
 
         push_ram(0x0400, 1000, (unsigned char *)player_screen);
 
-        // Patch load address
-        load_addr = (sid_header[0x7d - 0x02] << 8) + sid_header[0x7c - 0x02];
+        // fetch load address from the two bytes after the end_of_sid_header
+        load_addr = (sid_header[end_of_sid_header + 1] << 8) + sid_header[end_of_sid_header];
         log_debug("SID load address is $%04x", load_addr);
-        //	dump_bytes(0,"sid header",sid_header,0x7c);
 
         // Prepare simple play routine
         // XXX For now it is always VIC frame locked
         log_note("uploading SID play routine");
-        int b = 56;
-        unsigned char player[56] = { 0x78, 0xa9, 0x35, 0x85, 0x01, 0xa9, 0x01, 0x20, 0x34, 0x12, 0xa9, 0x80, 0xcd, 0x12,
-          0xd0, 0xd0, 0xfb, 0xa9, 0x01, 0x8d, 0x20, 0xd0, 0x20, 0x78, 0x56, 0xa9, 0x00, 0x8d, 0x20, 0xd0, 0xa9, 0x80, 0xcd,
-          0x12, 0xd0, 0xf0, 0xfb,
 
-          0xad, 0x10, 0xd6, 0xf0, 0x0b, 0x8d, 0x10, 0xd6, 0x29, 0x0f, 0x8d, 0x21, 0xd0, 0x4c, 0x07, 0x04,
+        // clang-format off
+        /*
+                  SEI
+                  LDA #$17
+                  STA $d018     // lowercase
+                  LDA #$35
+                  STA $01       // get rid of rom
+                  LDA #$00      // song number
+        player_init:
+                  JSR $1234     // call SID initAddress
+        after_init:
+                  LDA #$80
+        raster1:
+                  CMP $d012
+                  BNE raster1   // wait for raster
+                  LDA #$01
+                  STA $d020     // white border
+                  JSR $5678     // call SID playAddress
+                  LDA #$00
+                  STA $d020     // black border
+                  LDA #$80
+        raster2:
+                  CMP $d012
+                  BNE raster2   // wait for raster
+                  LDA $d610
+                  BEQ after_init
+                  STA $d610     // got a keypress
+                  AND #$0f      // we only want 0-9 but we don't care about the key
+                  ORA #$30      // make it a screencode
+                  STA $0944     // and write it to the screen
+                  AND #$0f      // back to 0-9
+                  BRA player_init  // init player again
+                  // this is endless!
+        */
+        unsigned char player[64] = {
+          0x78, 0xa9, 0x17, 0x8d, 0x18, 0xd0, 0xa9, 0x35, 0x85, 0x01, 0xa9, 0x00, 0x20, 0x34, 0x12, 0xa9,
+          0x80, 0xcd, 0x12, 0xd0, 0xd0, 0xfb, 0xa9, 0x01, 0x8d, 0x20, 0xd0, 0x20, 0x78, 0x56, 0xa9, 0x00,
+          0x8d, 0x20, 0xd0, 0xa9, 0x80, 0xcd, 0x12, 0xd0, 0xd0, 0xfb, 0xad, 0x10, 0xd6, 0xf0, 0xe0, 0x8d,
+          0x10, 0xd6, 0x29, 0x0f, 0x09, 0x30, 0x8d, 0x44, 0x05, 0x29, 0x0f, 0x80, 0xcf, 0x00, 0x00, 0x00
+        };
+        // clang-format on
 
-          0x4c, 0x0A, 0x04 };
-
-        player[6 + 0] = sid_header[0x11 - 0x02] - 1;
+        // patch all kind of stuff into player code
+        player[11] = sid_header[0x11] - 1;
 
         if (start_addr) {
-          player[8 + 0] = (start_addr >> 0) & 0xff;
-          player[8 + 1] = (start_addr >> 8) & 0xff;
+          player[13] = (start_addr >> 0) & 0xff;
+          player[14] = (start_addr >> 8) & 0xff;
         }
         else {
-          player[7 + 0] = 0xea;
-          player[7 + 1] = 0xea;
-          player[7 + 2] = 0xea;
+          player[12] = 0xb8; // CLV is safer
+          player[13] = 0xb8;
+          player[14] = 0xb8;
         }
         if (play_addr) {
-          player[23 + 0] = (play_addr >> 0) & 0xff;
-          player[23 + 1] = (play_addr >> 8) & 0xff;
+          player[28] = (play_addr >> 0) & 0xff;
+          player[29] = (play_addr >> 8) & 0xff;
         }
         else {
-          player[22 + 0] = 0xea;
-          player[22 + 1] = 0xea;
-          player[22 + 2] = 0xea;
+          player[27] = 0xb8;
+          player[28] = 0xb8;
+          player[29] = 0xb8;
         }
 
         // Enable M65 IO for keyboard scanning
         slow_write(fd, "sffd302f 47\n", 12);
         slow_write(fd, "sffd302f 53\n", 12);
 
-        push_ram(0x0400, b, player);
+        // push to tape buffer
+        push_ram(0x06d0, 64, player);
+
+        // seek to start of SID prg (after end_of_sid_header + 2 bytes of load_addr)
+        fseek(f, end_of_sid_header + 2, SEEK_SET);
       }
 
       unsigned char buf[32768];
@@ -2858,25 +2882,8 @@ int main(int argc, char **argv)
           }
         }
 
-#ifdef WINDOWS_GUS
-        // Windows doesn't seem to work with the l fast-load monitor command
-        log_info("asking Gus to write data...");
-        for (int i = 0; i < b; i += 16) {
-          int ofs = 0;
-          sprintf(cmd, "s%x", load_addr + i);
-          ofs = strlen(cmd);
-          for (int j = 0; (j < 16) && (i + j) < b; j++) {
-            sprintf(&cmd[ofs], " %x", buf[i + j]);
-            ofs = strlen(cmd);
-          }
-          sprintf(&cmd[ofs], "\r");
-          ofs = strlen(cmd);
-          slow_write(fd, cmd, strlen(cmd));
-        }
-#else
-        // load_addr=0x400;
         push_ram(load_addr, b, buf);
-#endif
+
         load_addr += b;
         b = fread(buf, 1, max_bytes, f);
       }
@@ -2887,23 +2894,8 @@ int main(int argc, char **argv)
       // jump to end of load routine, resume CPU at a CLC, RTS
       monitor_sync();
 
-      /*
-            // Clear keyboard input buffer
-            if (saw_c64_mode)
-              sprintf(cmd, "sc6 0\r");
-            else
-              sprintf(cmd, "sd0 0\r");
-            slow_write(fd, cmd, strlen(cmd));
-            monitor_sync();
-
-            // Remove breakpoint
-            sprintf(cmd, "b\r");
-            slow_write(fd, cmd, strlen(cmd));
-            monitor_sync();
-      */
-
       // Set end of memory pointer
-      {
+      if (!comma_eight_comma_one) {
         int top_of_mem_ptr_addr = 0x2d;
         if (saw_c65_mode)
           top_of_mem_ptr_addr = 0x82;
@@ -2913,26 +2905,16 @@ int main(int argc, char **argv)
         push_ram(top_of_mem_ptr_addr, 2, load_addr_bytes);
         log_info("storing end of program pointer $%04x at $%02x", load_addr, top_of_mem_ptr_addr);
       }
-      /*
-            // We need to set X and Y to load address before
-            // returning: LDX #$ll / LDY #$yy / CLC / RTS
-            unsigned char membuf[6];
-            fetch_ram(0x380l, 6, membuf);
 
-            sprintf(cmd, "s380 a2 %x a0 %x 18 60\r", load_addr & 0xff, (load_addr >> 8) & 0xff);
-            log_info("returning top of load address = $%04X", load_addr);
-            slow_write(fd, cmd, strlen(cmd));
-            monitor_sync();
+      // start the simple SID Player
+      if (is_sid_tune) {
+        slow_write(fd, "g06d0\r", 6);
+        monitor_sync();
+        start_cpu();
+        log_note("SID player started");
+        do_exit(0);
+      }
 
-            if ((!is_sid_tune) || (!do_run))
-              sprintf(cmd, "g0380\r");
-            else
-              sprintf(cmd, "g0400\r");
-            slow_write(fd, cmd, strlen(cmd));
-            monitor_sync();
-
-            push_ram(0x380l, 6, membuf);
-      */
       if (!halt) {
         start_cpu();
       }

@@ -2120,3 +2120,26 @@ char *find_serial_port(const int serial_speed)
   return NULL;
 #endif
 }
+
+// very lazy conversion from Windows Codepage 1252 to PETSCII screen codes (used by SID mini player)
+unsigned char wincp1252_to_screen(unsigned char ascii)
+{
+  // control and latin chars - use raster char
+  if (ascii < 0x20 || ascii > 0x7b)
+    return 0x5e;
+  // numbers and interpunctation
+  if (ascii < 0x40)
+    return ascii;
+  // big letters
+  if (ascii < 0x5b)
+    return ascii;
+  if (ascii < 0x5f)
+    return 0x94;
+  if (ascii == 0x5f)
+    return 0x64; // underscore
+  // lower letters
+  if (ascii < 0x7b)
+    return ascii & 0x1f;
+  // default is raster
+  return 0x5e;
+}
