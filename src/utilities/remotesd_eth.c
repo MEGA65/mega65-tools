@@ -426,7 +426,7 @@ void get_new_job()
         }
       }
       else {
-        if (send_buf.arp.dest_ip.b[3] != 6/*65*/) {
+        if (send_buf.arp.dest_ip.b[3] != 65) {
           continue;
         }
         reply_template.ftp.source.d = send_buf.arp.dest_ip.d;
@@ -453,7 +453,7 @@ void get_new_job()
           sizeof(FTP_PKT) + sizeof(READ_SECTOR_JOB));
 
       if (ip_addr_set == 0) {
-        if (recv_buf.ftp.destination.b[3] != 6/*65*/) {
+        if (recv_buf.ftp.destination.b[3] != 65) {
           continue;
         }
       }
