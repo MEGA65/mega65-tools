@@ -673,12 +673,12 @@ void get_new_job()
 
 void process()
 {
-  if (do_debug == 0 && PEEK(0xD610)) {
+  /*if (do_debug == 0 && PEEK(0xD610)) {
     do_debug = 1;
     POKE(0xD021, 6);
     POKE(0xD610, 0);
     print(16, 0, "debug active");
-  }
+  }*/
 
   if (send_buf_size > 0) {
     if (do_debug) {
