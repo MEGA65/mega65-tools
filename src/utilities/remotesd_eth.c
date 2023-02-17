@@ -338,7 +338,7 @@ void multi_sector_write_next()
   int cmd = 5; // Multi-sector mid
 
   if (!slot_ids_received[slots_written]) {
-    print(2, 0, "retransmission detected");
+    //print(2, 0, "retransmission detected");
     ++retrans_cnt;
     update_counters();
     return;
@@ -373,7 +373,7 @@ void handle_batch_write()
   }
 
   if (slot_ids_received[id] != 0) {
-    print(2, 0, "duplicate packet");
+    //print(2, 0, "duplicate packet");
     ++dup_cnt;
     update_counters();
     return;
