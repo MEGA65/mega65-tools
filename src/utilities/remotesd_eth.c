@@ -265,6 +265,32 @@ void add_checksum(uint16_t v)
   }
 }
 
+uint8_t check_ip_checksum(uint8_t *hdr)
+{
+  chks_t ref_chks;
+  ref_chks.b[0] = hdr[10];
+  ref_chks.b[1] = hdr[11];
+  hdr[10] = 0;
+  hdr[11] = 0;
+
+  chks.u = 0;
+  checksum(hdr, 20);
+  if (~chks.u == ref_chks.u) {
+    return 1; 
+  }
+  sprintf(msg, "ref: %04x  act: %04x", ref_chks.u, ~chks.u);
+  print(19, 0, msg);
+  return 0;
+}
+
+void wait_key(void)
+{
+  while (PEEK(0xD610) == 0)
+    continue;
+  POKE(0xD610, 0);
+  POKE(0xD020, PEEK(0xD020) + 1);
+}
+
 void wait_for_sd_ready()
 {
   while (PEEK(0xD680) & 0x03)
@@ -421,10 +447,35 @@ void get_new_job()
         continue;
       }
 
-      chks.u = 0;
-      checksum((uint8_t *)&recv_buf.ftp, 20);
-      if (chks.u != 0xffff) {
-        print(10, 0, "wrong ip checksum detected");
+      if (!check_ip_checksum((uint8_t *)&recv_buf.ftp)) {
+        uint8_t *ptr = (uint8_t *)&recv_buf.ftp;
+        print(15, 0, "wrong ip checksum detected");
+        sprintf(msg, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x", 
+          ptr[0], 
+          ptr[1],
+          ptr[2],
+          ptr[3],
+          ptr[4],
+          ptr[5],
+          ptr[6],
+          ptr[7],
+          ptr[8],
+          ptr[9]);
+        print(16, 0, msg);
+        sprintf(msg, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x", 
+          ptr[10], 
+          ptr[11],
+          ptr[12],
+          ptr[13],
+          ptr[14],
+          ptr[15],
+          ptr[16],
+          ptr[17],
+          ptr[18],
+          ptr[19]);
+        print(17, 0, msg);
+        ++chks_err_cnt;
+        update_counters();
         continue;
       }
 
