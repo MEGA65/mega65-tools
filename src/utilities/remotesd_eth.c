@@ -138,6 +138,11 @@ uint8_t ip_addr_set = 0;
 
 uint16_t ip_id = 0;
 
+uint32_t chks_err_cnt = 0;
+uint32_t retrans_cnt = 0;
+uint32_t dup_cnt = 0;
+uint8_t do_debug = 0;
+
 typedef union {
   uint16_t u;
   uint8_t b[2];
@@ -182,6 +187,16 @@ void print_ip_informtaion(void)
   sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
       reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3]);
   print(8, 0, msg);
+}
+
+void update_counters(void)
+{
+  sprintf(msg, "ip chks err count: %lu", chks_err_cnt);
+  print(10, 0, msg);
+  sprintf(msg, "retrans detected:  %lu", retrans_cnt);
+  print(11, 0, msg);
+  sprintf(msg, "duplicate packets: %lu", dup_cnt);
+  print(12, 0, msg);
 }
 
 /**
@@ -324,6 +339,8 @@ void multi_sector_write_next()
 
   if (!slot_ids_received[slots_written]) {
     print(2, 0, "retransmission detected");
+    ++retrans_cnt;
+    update_counters();
     return;
   }
 
@@ -357,6 +374,8 @@ void handle_batch_write()
 
   if (slot_ids_received[id] != 0) {
     print(2, 0, "duplicate packet");
+    ++dup_cnt;
+    update_counters();
     return;
   }
 
@@ -374,7 +393,7 @@ void get_new_job()
     POKE(0xD6E1, 0x03);
 
     lcopy(ETH_RX_BUFFER + 2L, (uint32_t)&recv_buf.eth, sizeof(ETH_HEADER));
-
+    if (do_debug) { print(17,0,"rx packet"); wait_key();} 
     /*
      * Check destination address.
      */
@@ -390,6 +409,7 @@ void get_new_job()
     }
 
     if (recv_buf.eth.type == 0x0608) { // big-endian for 0x0806
+      if (do_debug) { print(17,0,"arp detected"); wait_key();} 
       /*
        * ARP packet.
        */
@@ -406,7 +426,7 @@ void get_new_job()
         }
       }
       else {
-        if (send_buf.arp.dest_ip.b[3] != 65) {
+        if (send_buf.arp.dest_ip.b[3] != 6/*65*/) {
           continue;
         }
         reply_template.ftp.source.d = send_buf.arp.dest_ip.d;
@@ -426,13 +446,14 @@ void get_new_job()
       uint16_t udp_length;
       uint16_t num_bytes;
 
+      if (do_debug) { print(17,0,"ip detected"); wait_key();} 
       // We read the header and job data. Since we don't know the exact job, yet, copy the worst case
       // (largest job) which is the read sector command.
       lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER), (uint32_t)&recv_buf.ftp.ver_length,
           sizeof(FTP_PKT) + sizeof(READ_SECTOR_JOB));
 
       if (ip_addr_set == 0) {
-        if (recv_buf.ftp.destination.b[3] != 65) {
+        if (recv_buf.ftp.destination.b[3] != 6/*65*/) {
           continue;
         }
       }
@@ -446,6 +467,7 @@ void get_new_job()
       if (recv_buf.ftp.protocol != 17 /*udp*/ || NTOHS(recv_buf.ftp.dst_port) != 4510) {
         continue;
       }
+      if (do_debug) { print(17,0,"udp 4510 detected"); wait_key();} 
 
       if (!check_ip_checksum((uint8_t *)&recv_buf.ftp)) {
         uint8_t *ptr = (uint8_t *)&recv_buf.ftp;
@@ -492,11 +514,13 @@ void get_new_job()
         //printf("Non matching magic bytes: %x", recv_buf.ftp.ftp_magic);
         continue;
       }
+      if (do_debug) { print(17,0,"magic found"); wait_key();} 
 
       udp_length = NTOHS(recv_buf.ftp.udp_length);
 
       switch (recv_buf.ftp.opcode) {
       case 0x02: // write sector
+        if (do_debug) { print(17,0,"write sector"); wait_key();} 
         if (udp_length != 534) {
           continue;
         }
@@ -537,6 +561,7 @@ void get_new_job()
           POKE(0xD680, 0x03); // Single sector write command
         }
         else {
+          if (do_debug) { print(17,0,"write multi-sector"); wait_key();} 
           /*
            * Multi sector write request (batch of sectors)
            */
@@ -564,6 +589,7 @@ void get_new_job()
         return;
 
       case 0x04:
+        if (do_debug) { print(17,0,"read sectors"); wait_key();} 
         /*
          * Read sectors request
          */
@@ -647,7 +673,18 @@ void get_new_job()
 
 void process()
 {
+  if (do_debug == 0 && PEEK(0xD610)) {
+    do_debug = 1;
+    POKE(0xD021, 6);
+    POKE(0xD610, 0);
+    print(16, 0, "debug active");
+  }
+
   if (send_buf_size > 0) {
+    if (do_debug) {
+      print(15, 0, "send_buf_size");
+      wait_key();
+    }
     if (!(PEEK(0xD6E0) & 0x80)) {
       return;
     }
@@ -655,6 +692,11 @@ void process()
     lcopy((uint32_t)&send_buf, ETH_TX_BUFFER, send_buf_size);
 
     // Set packet length
+    if (do_debug) {
+      sprintf(msg, "size: %d", send_buf_size);
+      print(15, 0, msg);
+      wait_key();
+    }
     POKE(0xD6E2, send_buf_size & 0xff);
     POKE(0xD6E3, send_buf_size >> 8);
 
@@ -668,6 +710,10 @@ void process()
   }
 
   if (batch_left == 0 && write_batch_active) {
+    if (do_debug) {
+      print(15, 0, "write_batch_active");
+      wait_key();
+    }
     while (slots_written <= write_batch_max_id) {
       multi_sector_write_next();
     }
@@ -759,6 +805,7 @@ void main(void)
   print(1, 0, "mega65 ethernet file transfer helper.");
 
   print_mac_address();
+  update_counters();
 
   sector_reading = 0;
   sector_buffered = 0;

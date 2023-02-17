@@ -122,6 +122,8 @@ void checksum(uint8_t *buf, uint16_t size)
 
 uint8_t test_hdr[] = { 0x45, 0x00, 0x05, 0xce, 0xae, 0x87, 0x00, 0x00, 0x40, 0x11, 0x2b, 0x36, 0xc0, 0xa8, 0x8d, 0x0a, 0xc0, 0xa8, 0x8d, 0x06 };
 
+uint8_t pst;
+
 void main(void)
 {
   EUI48 mac_local;
@@ -148,8 +150,11 @@ void main(void)
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
 
-  // RXPH 1, MCST off, BCST on, TXPH 1, NOCRC off, NOPROM on
+  // RXPH 1, MCST off, BCST on, TXPH 1, NOCRC off, NOPROM off
   POKE(0xD6E5, 0x74);
+
+  // enable debug, select tx state
+  POKE(0xD6EF, 1);
 
   // Cursor off
   POKE(204, 0x80);
@@ -167,10 +172,38 @@ void main(void)
   printf("test checksum: %04x\n", chks.u);
   //while(1) continue;
 
+  __asm__("sei");
+  while(1) continue;
   while (1) {
+    __asm__("php");
+    __asm__("pla");
+    __asm__("sta %v", pst);
+    if (pst & 0x04) {
+
+      printf("hallo");
+      POKE(0xD020, PEEK(0xD020) + 1);
+    }
+    else {
+      POKE(0xD021, 0);
+      while (1) continue;
+    }
+    __asm__("php");
+    __asm__("pla");
+    __asm__("sta %v", pst);
+    if (pst & 0x04) {
+      POKE(0xD020, PEEK(0xD020) + 1);
+    }
+    else {
+      POKE(0xD021, 0);
+      while (1) continue;
+    }
+  }
+#if 0
+
     // receive packet
     while (!(PEEK(0xD6E1) & 0x20))
       continue;
+
 
     ++slot;
     slot_address += 2048;
@@ -203,7 +236,7 @@ void main(void)
       goto error;
     }
     if (!mac_match) {
-      printf("Ignoring packet for other MAC\n");
+      //printf("Ignoring packet for other MAC\n");
       continue;
     }
 
@@ -275,12 +308,16 @@ void main(void)
     buf.t.ip.checksum_ip = ~chks.u;
     buf.t.ip.checksum_udp = 0;
 
+    //tmp8 = PEEK(0xD6EF);
+    //printf("tx state %d", tmp8);
     tmp8 = PEEK(0xD6E0);
     while (tmp8 < 127) {
       POKE(0xD021, PEEK(0xD021) + 1);
       tmp8 = PEEK(0xD6E0);
     }
-    
+
+    if (send_data_size != 52) printf("%d\n", send_data_size);
+
     lcopy((uint32_t)&buf, ETH_TX_BUFFER, send_data_size);
     // Set packet length
     POKE(0xD6E2, send_data_size & 0xff);
@@ -288,6 +325,17 @@ void main(void)
 
     // transmit packet
     POKE(0xD6E4, 0x01);
+    /*tmp8 = PEEK(0xD6EF);
+    printf(" %d", tmp8);
+    tmp8 = PEEK(0xD6EF);
+    printf(" %d", tmp8);
+    tmp8 = PEEK(0xD6EF);
+    printf(" %d", tmp8);
+    tmp8 = PEEK(0xD6EF);
+    printf(" %d", tmp8);
+    tmp8 = PEEK(0xD6EF);
+    printf(" %d\n", tmp8);
+    */
     POKE(0xD020, col_toggle);
     col_toggle = 1 - col_toggle;
 
@@ -300,4 +348,5 @@ error:
   printf("Slot: %d at $%lx\n", slot, slot_address);
   printf("rx hdr: %04x\n", rx_hdr);
   while (1) continue;
+#endif
 }
