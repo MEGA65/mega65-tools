@@ -1263,12 +1263,14 @@ void ethernet_process_result(uint8_t *rx_payload, int rx_len)
 
   switch (*p) {
   case 0x04: // sector read
+  {
     sector_number = p[3] + (p[4] << 8) + (p[5] << 16) + (p[6] << 24);
     log_debug("Received sector %d, batch start sector %d", sector_number, eth_batch_start_sector);
     uint32_t index = sector_number - eth_batch_start_sector;
     bcopy(&rx_payload[13], &queue_read_data[queue_read_len + index * 512], 512);
     break;
-
+  }
+  
   case 0x11: // memory read
     memory_read_buffer_len = p[1] + 1;
     memory_addr = p[2] + (p[3] << 8) + (p[4] << 16) + (p[5] << 24);
