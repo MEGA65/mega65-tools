@@ -25,7 +25,7 @@ ifeq (, $(shell which conan))
 $(info WARNING: Found $(WINCC), but no conan executable found in PATH, can't build windows binaries)
 else
 $(shell echo "toolchain=/usr/x86_64-w64-mingw32" > conan/profile_mingw-w64)
-$(shell echo "cc_version=`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\.[[:digit:]]\+\).*$$/\1/'`" >> conan/profile_mingw-w64)
+$(shell echo "cc_version=`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\(\.[[:digit:]]\+\)\?\).*$$/\1/'`" >> conan/profile_mingw-w64)
 include conanbuildinfo_linux_to_win.mak
 WINCOPT=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1
 WINCOPT+=	$(addprefix -I, $(WIN_CONAN_INCLUDE_DIRS)) \
@@ -226,8 +226,6 @@ GTESTFILESEXE=	$(GTESTBINDIR)/mega65_ftp.test.exe \
 # all dependencies
 MEGA65LIBCDIR= $(SRCDIR)/mega65-libc/cc65
 MEGA65LIBC= $(MEGA65LIBCDIR) $(wildcard $(MEGA65LIBCDIR)/src/*.c) $(wildcard $(MEGA65LIBCDIR)/src/*.s) $(wildcard $(MEGA65LIBCDIR)/include/*.h)
-
-WEEIP_SOURCES= $(wildcard $(SRCDIR)/weeip/*.c)
 
 # TOOLS omits TOOLSMAC. Linux users can make all. To make Mac binaries, use
 # a Mac to make allmac. See README.md.
@@ -813,7 +811,7 @@ $(BINDIR)/m65dbg_intel.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 $(BINDIR)/m65dbg_arm.osx:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(M65DBG_SOURCES) $(M65DEBUG_READLINE)
 
-$(BINDIR)/m65dbg.exe:	$(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
+$(BINDIR)/m65dbg.exe:	win_build_check $(M65DBG_SOURCES) $(M65DBG_HEADERS) Makefile
 	$(WINCC) $(WINCOPT) $(M65DBG_INCLUDES) -o $@ $(M65DBG_SOURCES) $(M65DBG_LIBRARIES) $(BUILD_STATIC) -lwsock32 -lws2_32 -Wl,-Bdynamic
 
 #-----------------------------------------------------------------------------
@@ -853,27 +851,3 @@ $(BINDIR)/etherload_arm.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) Makefile
 
 $(BINDIR)/etherload.exe:	win_build_check $(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) include/*.h Makefile
 	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32
-
-
-
-ETHLOADTEST_SOURCES =	$(TOOLDIR)/eth_load_test.c \
-                	$(TOOLDIR)/eth_load_test_remote_compiled.c \
-			$(TOOLDIR)/etherload/etherload_common.c \
-			$(TOOLDIR)/etherload/ethlet_dma_load.c \
-			$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
-			$(TOOLDIR)/logging.c \
-			$(TOOLDIR)/version.c
-
-ETHLOADTEST_HEADERS=	$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
-			$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h
-ETHLOADTEST_INCLUDES = -I/usr/local/include -Iinclude
-ETHLOADTEST_LIBRARIES = -lm
-
-$(BINDIR)/eth_load_test_arm.osx: $(ETHLOADTEST_SOURCES) $(ETHLOADTEST_HEADERS) include/*.h
-	$(CC) $(MACARMCOPT) -o $@ $(ETHLOADTEST_SOURCES) $(ETHLOADTEST_INCLUDES) $(ETHLOADTEST_LIBRARIES)
-
-$(TOOLDIR)/eth_load_test_remote_compiled.c:	$(UTILDIR)/eth_load_test_remote.prg $(TOOLDIR)/bin2c
-	$(TOOLDIR)/bin2c $< helperroutine_eth $@
-
-$(UTILDIR)/eth_load_test_remote.prg:       $(UTILDIR)/eth_load_test_remote.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/random.c $(SRCDIR)/mega65-libc/cc65/src/debug.c $(SRCDIR)/mega65-libc/cc65/src/time.c $(SRCDIR)/mega65-libc/cc65/src/hal.c $(SRCDIR)/mega65-libc/cc65/src/targets.c
