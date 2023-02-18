@@ -379,7 +379,7 @@ int wait_all_acks(void)
 
 int send_ethlet(const uint8_t data[], const int bytes)
 {
-  return sendto(sockfd, data, bytes, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  return sendto(sockfd, (char *)data, bytes, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 }
 
 long dmaload_parse_load_addr(uint8_t *payload)
@@ -448,13 +448,13 @@ int dmaload_embed_packet_seq(uint8_t *payload, int len, int seq_num)
 int ethl_send_packet(uint8_t *payload, int len)
 {
   expect_ack(payload, len);
-  sendto(sockfd, payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  sendto(sockfd, (char *)payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   return 0;
 }
 
 int ethl_send_packet_unscheduled(uint8_t *payload, int len)
 {
-  sendto(sockfd, payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  sendto(sockfd, (char *)payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   return 0;
 }
 
