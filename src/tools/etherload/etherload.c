@@ -188,7 +188,7 @@ void init_cmd_options(void)
   CMD_OPTION("jump",        required_argument, 0,            'j', "addr",   "Jump to provided address <addr> after loading (hex notation).");
   CMD_OPTION("bin",         required_argument, 0,            'b', "addr",   "Treat <prgname> as binary file and load at address <addr>.");
   CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
-  CMD_OPTION("mount",       required_argument, 0,            'm', "file",   "Mount d81 file image <file> from SD card.");
+  CMD_OPTION("mount",       required_argument, 0,            'm', "file",   "Mount d81 file image <file> from SD card (eg. MEGA65.D81).");
   // clang-format on
 }
 

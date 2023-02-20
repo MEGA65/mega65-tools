@@ -61,23 +61,21 @@ entry:
 	sta $d640
 	clv
 
-	; mount d81
-	lda d81filename
-	beq map_crom
-	ldx #$17
-*	lda d81filename,x
-	sta $0200,x
-	dex
-	bpl -
-	; set d81 filename
-	ldy #$02
-	lda #$2e
+	; unmount current images
+	lda #$42
 	sta $d640
 	clv
-	; attach d81 image
-	lda #$40
-	sta $d640
-	clv
+	; set default d81 image name
+	ldy #$00
+*	lda d81filename,y
+	beq +
+	sta $11b2,y	; filename buffer (basic65 uses this on boot-up)
+	iny
+	cpy #$0c
+	bmi -
+*	lda #$00
+	sta $11b2,y
+	sty $11b1	; filename length
 
 map_crom:
 	; map $c000 interface rom
