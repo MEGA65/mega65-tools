@@ -52,6 +52,7 @@ graph_info.json
 *.list
 *.xz
 *.exe
+.DS_Store
 .nova
 .vscode
 test.wxs

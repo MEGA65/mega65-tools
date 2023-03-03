@@ -169,6 +169,37 @@ void print(uint8_t row, uint8_t col, char* text)
   }
 }
 
+void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line)
+{
+  char *msg_ptr = msg;
+  while (n-- > 0)
+  {
+    uint8_t b = *data++;
+    *msg_ptr = b >> 4;
+    if (*msg_ptr < 10) {
+      *msg_ptr |= 0x30;
+    }
+    else {
+      *msg_ptr += 0x37;
+    }
+    ++msg_ptr;
+    *msg_ptr = b & 0xf;
+    if (*msg_ptr < 10) {
+      *msg_ptr |= 0x30;
+    }
+    else {
+      *msg_ptr += 0x37;
+    }
+
+    ++msg_ptr;
+    *msg_ptr = 0x20;
+    ++msg_ptr;
+  }
+  *msg_ptr = 0;
+
+  print(screen_line, 0, msg);
+}
+
 void print_mac_address(void)
 {
   // Read MAC address
@@ -470,32 +501,11 @@ void get_new_job()
       if (do_debug) { print(17,0,"udp 4510 detected"); wait_key();} 
 
       if (!check_ip_checksum((uint8_t *)&recv_buf.ftp)) {
-        uint8_t *ptr = (uint8_t *)&recv_buf.ftp;
+        uint8_t *data_ptr = (uint8_t *)&recv_buf.ftp;
         print(15, 0, "wrong ip checksum detected");
-        sprintf(msg, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x", 
-          ptr[0], 
-          ptr[1],
-          ptr[2],
-          ptr[3],
-          ptr[4],
-          ptr[5],
-          ptr[6],
-          ptr[7],
-          ptr[8],
-          ptr[9]);
-        print(16, 0, msg);
-        sprintf(msg, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x", 
-          ptr[10], 
-          ptr[11],
-          ptr[12],
-          ptr[13],
-          ptr[14],
-          ptr[15],
-          ptr[16],
-          ptr[17],
-          ptr[18],
-          ptr[19]);
-        print(17, 0, msg);
+        dump_bytes(data_ptr, 10, 16);
+        dump_bytes(data_ptr + 10, 10, 17);
+
         ++chks_err_cnt;
         update_counters();
         continue;
