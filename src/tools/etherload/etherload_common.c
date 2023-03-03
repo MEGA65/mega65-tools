@@ -25,6 +25,7 @@ static long long unacked_sent_times[MAX_UNACKED_FRAMES] = { 0 };
 static int queue_length = 4;
 static int retx_interval = 1000;
 static int retx_cnt = 0;
+static long long ack_timeout = 4000000; // usec
 static long long start_time;
 static long long last_resend_time = 0;
 static long long last_rx_time = -1;
@@ -37,6 +38,7 @@ static get_packet_seq_callback_t get_packet_seq = NULL;
 static match_payloads_callback_t match_payloads = NULL;
 static is_duplicate_callback_t is_duplicate = NULL;
 static embed_packet_seq_callback_t embed_packet_seq = NULL;
+static timeout_handler_callback_t timeout_handler = NULL;
 
 extern char ethlet_dma_load[];
 extern int ethlet_dma_load_len;
@@ -96,13 +98,14 @@ void etherload_finish(void)
 #endif
 }
 
-void ethl_setup_callbacks(
-    get_packet_seq_callback_t c1, match_payloads_callback_t c2, is_duplicate_callback_t c3, embed_packet_seq_callback_t c4)
+void ethl_setup_callbacks(get_packet_seq_callback_t c1, match_payloads_callback_t c2, is_duplicate_callback_t c3,
+    embed_packet_seq_callback_t c4, timeout_handler_callback_t c5)
 {
   get_packet_seq = c1;
   match_payloads = c2;
   is_duplicate = c3;
   embed_packet_seq = c4;
+  timeout_handler = c5;
 }
 
 // From os.c in serval-dna
@@ -142,7 +145,7 @@ int trigger_eth_hyperrupt(void)
   // Adapt ip address (modify last byte to use ip x.y.z.65 as dest address)
   servaddr.sin_addr.s_addr &= 0x00ffffff;
   servaddr.sin_addr.s_addr |= (65 << 24);
-  //servaddr.sin_addr.s_addr |= (6 << 24);
+  // servaddr.sin_addr.s_addr |= (6 << 24);
 
   return 0;
 }
@@ -179,14 +182,14 @@ int get_num_unacked_frames(void)
 
 void update_retx_interval(void)
 {
-  //int num_unacked = get_num_unacked_frames();
-  //int seq_gap = (packet_seq - last_rx_seq);
+  // int num_unacked = get_num_unacked_frames();
+  // int seq_gap = (packet_seq - last_rx_seq);
   retx_interval = 2000 + retx_cnt * last_rx_intv;
   if (retx_interval < 10000)
     retx_interval = 10000;
   if (retx_interval > 500000)
     retx_interval = 500000;
-  //printf("  retx interval=%dusec (cnt=%d last_rx_intv=%lld)\n", retx_interval, retx_cnt, last_rx_intv);
+  // printf("  retx interval=%dusec (cnt=%d last_rx_intv=%lld)\n", retx_interval, retx_cnt, last_rx_intv);
 }
 
 int check_if_ack(uint8_t *rx_payload, int len)
@@ -256,7 +259,7 @@ int expect_ack(uint8_t *payload, int len)
 
     // Check for the arrival of any acks
     unsigned char ackbuf[8192];
-    //int count = 0;
+    // int count = 0;
     int r = 0;
     struct sockaddr_in src_address;
     socklen_t addr_len = sizeof(src_address);
@@ -304,26 +307,34 @@ void maybe_send_ack(void)
       log_debug("now %lld last %lld diff %lld intv %d", now, last_resend_time, now - last_resend_time, retx_interval);
       //      if (retx_interval<500000) retx_interval*=2;
 
-/*
-      if (0)
-        log_debug("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x", gettime_us() - start_time,
-            frame_load_addrs[id], id, ucount, packet_seq, unacked_frame_payloads[id][ethlet_dma_load_offset_data + 0],
-            unacked_frame_payloads[id][ethlet_dma_load_offset_data + 1]);
+      /*
+            if (0)
+              log_debug("T+%lld : Resending addr=$%lx @ %d (%d unacked), seq=$%04x, data=%02x %02x", gettime_us() -
+         start_time, frame_load_addrs[id], id, ucount, packet_seq, unacked_frame_payloads[id][ethlet_dma_load_offset_data +
+         0], unacked_frame_payloads[id][ethlet_dma_load_offset_data + 1]);
 
-      long ack_addr = (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_mb] << 20)
-                    + ((unacked_frame_payloads[id][ethlet_dma_load_offset_dest_bank] & 0xf) << 16)
-                    + (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_address + 1] << 8)
-                    + (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_address + 0] << 0);
+            long ack_addr = (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_mb] << 20)
+                          + ((unacked_frame_payloads[id][ethlet_dma_load_offset_dest_bank] & 0xf) << 16)
+                          + (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_address + 1] << 8)
+                          + (unacked_frame_payloads[id][ethlet_dma_load_offset_dest_address + 0] << 0);
 
-      if (ack_addr != frame_load_addrs[id]) {
-        log_crit("Resending frame with incorrect load address: expected=$%lx, saw=$%lx", frame_load_addrs[id], ack_addr);
-        exit(-1);
+            if (ack_addr != frame_load_addrs[id]) {
+              log_crit("Resending frame with incorrect load address: expected=$%lx, saw=$%lx", frame_load_addrs[id],
+         ack_addr); exit(-1);
+            }
+      */
+
+      if (timeout_handler && (now - oldest_sent_time > ack_timeout)) {
+        if (last_rx_time != -1 && (now - last_rx_time > ack_timeout)) {
+          timeout_handler();
+        }
       }
-*/
+
       log_debug("Resending packet seq #%d", get_packet_seq(unacked_frame_payloads[id], unacked_frame_lengths[id]));
       ++retx_cnt;
       update_retx_interval();
-      sendto(sockfd, (void *)unacked_frame_payloads[id], unacked_frame_lengths[id], 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+      sendto(sockfd, (void *)unacked_frame_payloads[id], unacked_frame_lengths[id], 0, (struct sockaddr *)&servaddr,
+          sizeof(servaddr));
       last_resend_time = gettime_us();
       log_debug("Pending acks:");
       for (int i = 0; i < queue_length; i++) {
@@ -348,7 +359,7 @@ int wait_ack_slots_available(int num_free_slots_needed)
 
     // Check for the arrival of any acks
     unsigned char ackbuf[8192];
-    //int count = 0;
+    // int count = 0;
     int r = 0;
     struct sockaddr_in src_address;
     socklen_t addr_len = sizeof(src_address);
@@ -424,7 +435,7 @@ int dmaload_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload,
     return 1;
   }
 #endif
-return 0;
+  return 0;
 }
 
 int dmaload_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len)
@@ -486,7 +497,7 @@ int ethl_get_current_seq_num()
 int send_mem(unsigned int address, unsigned char *buffer, int bytes)
 {
   const int dmaload_len = 1280;
-  uint8_t *payload = (uint8_t *) ethlet_dma_load;
+  uint8_t *payload = (uint8_t *)ethlet_dma_load;
 
   // Set position of marker to draw in 1KB units
   payload[3] = address >> 10;

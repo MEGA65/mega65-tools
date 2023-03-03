@@ -361,7 +361,6 @@ int main(int argc, char **argv)
     }
   }
 
-
   int open_flags = O_RDONLY;
 #ifdef WINDOWS
   open_flags |= O_BINARY;

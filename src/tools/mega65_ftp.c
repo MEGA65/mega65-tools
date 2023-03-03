@@ -158,6 +158,7 @@ int ethernet_get_packet_seq(uint8_t *payload, int len);
 int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len);
 int ethernet_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len);
 int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num);
+int ethernet_timeout_handler();
 #define CACHE_NO 0
 #define CACHE_YES 1
 int read_flash(const unsigned int sector_number, unsigned char *buffer);
@@ -844,14 +845,14 @@ int DIRTYMOCK(main)(int argc, char **argv)
     // disable cartridge signature detection
     ethlet_all_done_basic2[ethlet_all_done_basic2_offset_enable_cart_signature] = 0;
 
-    send_ethlet((uint8_t*)ethlet_all_done_basic2, ethlet_all_done_basic2_len);
+    send_ethlet((uint8_t *)ethlet_all_done_basic2, ethlet_all_done_basic2_len);
 
     sockfd = ethl_get_socket();
     servaddr = ethl_get_server_addr();
 
     // setup callbacks for job queue protocol
-    ethl_setup_callbacks(
-        &ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate, &ethernet_embed_packet_seq);
+    ethl_setup_callbacks(&ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate,
+        &ethernet_embed_packet_seq, ethernet_timeout_handler);
 
     // Give helper program time to initialize
     usleep(700000);
@@ -1270,7 +1271,7 @@ void ethernet_process_result(uint8_t *rx_payload, int rx_len)
     bcopy(&rx_payload[13], &queue_read_data[queue_read_len + index * 512], 512);
     break;
   }
-  
+
   case 0x11: // memory read
     memory_read_buffer_len = p[1] + 1;
     memory_addr = p[2] + (p[3] << 8) + (p[4] << 16) + (p[5] << 24);
@@ -1363,6 +1364,19 @@ int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
 
 const uint8_t ethernet_request_string[4] = { 'm', 'r', 'e', 'q' };
 
+int ethernet_timeout_handler()
+{
+  log_warn("ACK timeout, requesting TX reset from MEGA65");
+  const int packet_size = 7;
+  uint8_t payload[packet_size];
+  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+  payload[4] = 0;                              // no seq num for tx reset
+  payload[5] = 0;                              // no seq num for tx reset
+  payload[6] = 0xfe;                           // reset tx command
+  ethl_send_packet_unscheduled(payload, packet_size);
+  return 1;
+}
+
 uint32_t write_buffer_offset = 0;
 uint8_t write_data_buffer[65536];
 uint32_t write_sector_numbers[65536 / 512];
@@ -1386,10 +1400,9 @@ void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
   payload[6] = *job;
   payload[7] = write_batch_counter;
   payload[8] = (batch_size - 1) & 0xff;
-  memcpy(&payload[10], &job[5], 4);             // start sector
+  memcpy(&payload[10], &job[5], 4); // start sector
 
-  for (i = 0; i < batch_size; ++i)
-  {
+  for (i = 0; i < batch_size; ++i) {
     int data_offset = job[1] + (job[2] << 8) + (job[3] << 16) + (job[4] << 24) - 0x50000;
     payload[9] = i & 0xff; // slot index
     bcopy(&write_data_buffer[data_offset], &payload[14], 512);
@@ -1483,7 +1496,7 @@ void process_jobs_ethernet(void)
           break;
         }
         int next_sector_number = look_ahead_ptr[5] + (look_ahead_ptr[6] << 8) + (look_ahead_ptr[7] << 16)
-                                + (look_ahead_ptr[8] << 24);
+                               + (look_ahead_ptr[8] << 24);
         if (next_sector_number != sector_number + 1) {
           break;
         }
@@ -1584,7 +1597,7 @@ int execute_write_queue(void)
     for (int i = 0; i < write_sector_count; i++) {
       queue_physical_write_sector(write_sector_numbers[i], 0x50000 + (i << 9));
     }
-    //printf("Execute write queue with %d entries\n", write_sector_count);
+    // printf("Execute write queue with %d entries\n", write_sector_count);
     queue_execute();
 
     // Reset write queue
@@ -4994,7 +5007,7 @@ unsigned char peek(unsigned long addr)
     memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
     // bytes [4] and [5] will be filled with packet seq numbers
     payload[6] = 0x11; // read mem command
-    payload[7] = 0; // number of bytes minus one
+    payload[7] = 0;    // number of bytes minus one
     payload[8] = addr & 0xff;
     payload[9] = (addr >> 8) & 0xff;
     payload[10] = (addr >> 16) & 0xff;
@@ -5028,15 +5041,14 @@ void determine_ethernet_window_size(void)
   uint8_t hardware_model_id = peek(0xFFD3629);
   log_info("Hardware model id: $%02X - %s", hardware_model_id, get_model(hardware_model_id)->name);
 
-  switch(hardware_model_id)
-  {
-    case 0x01:
-    case 0x03:
-    case 0x21:
-      ethernet_window_size = 28; // xc7a200t_0 modesl have more Ethernet receive buffers
-      break;
-    default:
-      ethernet_window_size = 3;
+  switch (hardware_model_id) {
+  case 0x01:
+  case 0x03:
+  case 0x21:
+    ethernet_window_size = 28; // xc7a200t_0 models have more Ethernet receive buffers
+    break;
+  default:
+    ethernet_window_size = 3;
   }
   log_info("Ethernet window size: %d packets", ethernet_window_size);
 }

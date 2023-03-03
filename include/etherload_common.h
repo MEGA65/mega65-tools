@@ -14,13 +14,14 @@ typedef int (*get_packet_seq_callback_t)(uint8_t *payload, int len);
 typedef int (*match_payloads_callback_t)(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len);
 typedef int (*is_duplicate_callback_t)(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len);
 typedef int (*embed_packet_seq_callback_t)(uint8_t *payload, int len, int seq_num);
+typedef int (*timeout_handler_callback_t)();
 
 int etherload_init(const char *broadcast_address);
 void etherload_finish(void);
 
 void ethl_setup_dmaload(void);
-void ethl_setup_callbacks(
-    get_packet_seq_callback_t c1, match_payloads_callback_t c2, is_duplicate_callback_t c3, embed_packet_seq_callback_t c4);
+void ethl_setup_callbacks(get_packet_seq_callback_t c1, match_payloads_callback_t c2, is_duplicate_callback_t c3,
+    embed_packet_seq_callback_t c4, timeout_handler_callback_t c5);
 
 int trigger_eth_hyperrupt(void);
 char *ethl_get_ip_address(void);

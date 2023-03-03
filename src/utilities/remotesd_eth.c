@@ -141,6 +141,7 @@ uint16_t ip_id = 0;
 uint32_t chks_err_cnt = 0;
 uint32_t retrans_cnt = 0;
 uint32_t dup_cnt = 0;
+uint32_t tx_reset_cnt = 0;
 uint8_t do_debug = 0;
 
 typedef union {
@@ -160,20 +161,19 @@ void init(void)
   lfill(0xff80000, 5, 1000);
 }
 
-void print(uint8_t row, uint8_t col, char* text)
+void print(uint8_t row, uint8_t col, char *text)
 {
   uint16_t addr = 0x400 + 40 * row + col;
   lfill(addr, 0x20, 40);
   while (*text) {
-    *((char*)addr++) = *text++;
+    *((char *)addr++) = *text++;
   }
 }
 
 void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line)
 {
   char *msg_ptr = msg;
-  while (n-- > 0)
-  {
+  while (n-- > 0) {
     uint8_t b = *data++;
     *msg_ptr = b >> 4;
     if (*msg_ptr < 10) {
@@ -204,7 +204,8 @@ void print_mac_address(void)
 {
   // Read MAC address
   lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
-  sprintf(msg, "mac: %02x:%02x:%02x:%02x:%02x:%02x", mac_local.b[0], mac_local.b[1], mac_local.b[2], mac_local.b[3], mac_local.b[4], mac_local.b[5]);
+  sprintf(msg, "mac: %02x:%02x:%02x:%02x:%02x:%02x", mac_local.b[0], mac_local.b[1], mac_local.b[2], mac_local.b[3],
+      mac_local.b[4], mac_local.b[5]);
   print(3, 0, "local");
   print(4, 0, msg);
 }
@@ -228,6 +229,8 @@ void update_counters(void)
   print(11, 0, msg);
   sprintf(msg, "duplicate packets: %lu", dup_cnt);
   print(12, 0, msg);
+  sprintf(msg, "tx resets:         %lu", tx_reset_cnt);
+  print(13, 0, msg);
 }
 
 /**
@@ -322,7 +325,7 @@ uint8_t check_ip_checksum(uint8_t *hdr)
   chks.u = 0;
   checksum(hdr, 20);
   if (~chks.u == ref_chks.u) {
-    return 1; 
+    return 1;
   }
   sprintf(msg, "ref: %04x  act: %04x", ref_chks.u, ~chks.u);
   print(19, 0, msg);
@@ -369,7 +372,7 @@ void multi_sector_write_next()
   int cmd = 5; // Multi-sector mid
 
   if (!slot_ids_received[slots_written]) {
-    //print(2, 0, "retransmission detected");
+    // print(2, 0, "retransmission detected");
     ++retrans_cnt;
     update_counters();
     return;
@@ -404,7 +407,7 @@ void handle_batch_write()
   }
 
   if (slot_ids_received[id] != 0) {
-    //print(2, 0, "duplicate packet");
+    // print(2, 0, "duplicate packet");
     ++dup_cnt;
     update_counters();
     return;
@@ -424,7 +427,10 @@ void get_new_job()
     POKE(0xD6E1, 0x03);
 
     lcopy(ETH_RX_BUFFER + 2L, (uint32_t)&recv_buf.eth, sizeof(ETH_HEADER));
-    if (do_debug) { print(17,0,"rx packet"); wait_key();} 
+    if (do_debug) {
+      print(17, 0, "rx packet");
+      wait_key();
+    }
     /*
      * Check destination address.
      */
@@ -440,7 +446,10 @@ void get_new_job()
     }
 
     if (recv_buf.eth.type == 0x0608) { // big-endian for 0x0806
-      if (do_debug) { print(17,0,"arp detected"); wait_key();} 
+      if (do_debug) {
+        print(17, 0, "arp detected");
+        wait_key();
+      }
       /*
        * ARP packet.
        */
@@ -477,7 +486,10 @@ void get_new_job()
       uint16_t udp_length;
       uint16_t num_bytes;
 
-      if (do_debug) { print(17,0,"ip detected"); wait_key();} 
+      if (do_debug) {
+        print(17, 0, "ip detected");
+        wait_key();
+      }
       // We read the header and job data. Since we don't know the exact job, yet, copy the worst case
       // (largest job) which is the read sector command.
       lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER), (uint32_t)&recv_buf.ftp.ver_length,
@@ -498,7 +510,10 @@ void get_new_job()
       if (recv_buf.ftp.protocol != 17 /*udp*/ || NTOHS(recv_buf.ftp.dst_port) != 4510) {
         continue;
       }
-      if (do_debug) { print(17,0,"udp 4510 detected"); wait_key();} 
+      if (do_debug) {
+        print(17, 0, "udp 4510 detected");
+        wait_key();
+      }
 
       if (!check_ip_checksum((uint8_t *)&recv_buf.ftp)) {
         uint8_t *data_ptr = (uint8_t *)&recv_buf.ftp;
@@ -521,16 +536,22 @@ void get_new_job()
       }
 
       if (recv_buf.ftp.ftp_magic != 0x7165726d /* 'mreq' big endian*/) {
-        //printf("Non matching magic bytes: %x", recv_buf.ftp.ftp_magic);
+        // printf("Non matching magic bytes: %x", recv_buf.ftp.ftp_magic);
         continue;
       }
-      if (do_debug) { print(17,0,"magic found"); wait_key();} 
+      if (do_debug) {
+        print(17, 0, "magic found");
+        wait_key();
+      }
 
       udp_length = NTOHS(recv_buf.ftp.udp_length);
 
       switch (recv_buf.ftp.opcode) {
       case 0x02: // write sector
-        if (do_debug) { print(17,0,"write sector"); wait_key();} 
+        if (do_debug) {
+          print(17, 0, "write sector");
+          wait_key();
+        }
         if (udp_length != 534) {
           continue;
         }
@@ -571,7 +592,10 @@ void get_new_job()
           POKE(0xD680, 0x03); // Single sector write command
         }
         else {
-          if (do_debug) { print(17,0,"write multi-sector"); wait_key();} 
+          if (do_debug) {
+            print(17, 0, "write multi-sector");
+            wait_key();
+          }
           /*
            * Multi sector write request (batch of sectors)
            */
@@ -599,7 +623,10 @@ void get_new_job()
         return;
 
       case 0x04:
-        if (do_debug) { print(17,0,"read sectors"); wait_key();} 
+        if (do_debug) {
+          print(17, 0, "read sectors");
+          wait_key();
+        }
         /*
          * Read sectors request
          */
@@ -636,9 +663,10 @@ void get_new_job()
         }
         num_bytes = recv_buf.read_memory.num_bytes_minus_one;
         ++num_bytes;
-        lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
-            sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB)); 
-        lcopy(recv_buf.read_memory.address, (uint32_t)&send_buf.b[sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB)], num_bytes);
+        lcopy(
+            (uint32_t)&reply_template, (uint32_t)&send_buf, sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB));
+        lcopy(recv_buf.read_memory.address,
+            (uint32_t)&send_buf.b[sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB)], num_bytes);
         send_buf.ftp.id = ip_id;
         send_buf.ftp.ip_length = HTONS(20 + 8 + 12 + num_bytes);
         send_buf.ftp.udp_length = HTONS(8 + 12 + num_bytes);
@@ -656,10 +684,21 @@ void get_new_job()
 
         return;
 
+      case 0xfe:
+        /*
+         * Reset TX request
+         */
+        // Reset Ethernet controller tx, it seemed to stop sending packets
+        POKE(0xD6E0, 0x01);
+        POKE(0xD6E0, 0x03);
+        ++tx_reset_cnt;
+        update_counters();
+        return;
+
       case 0xff:
-      /*
-       * Quit request
-       */
+        /*
+         * Quit request
+         */
         quit_requested = 1;
         lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
             sizeof(ETH_HEADER) + sizeof(FTP_PKT)); // copy header incl. opcode
@@ -773,10 +812,12 @@ void process()
   if (quit_requested) {
     print(1, 0, "quit requested");
     wait_for_sd_ready();
-    while (!(PEEK(0xD6E0) & 0x80)) continue;
+    while (!(PEEK(0xD6E0) & 0x80))
+      continue;
     __asm__("jmp 58552");
     // Should never get here
-    while (1) continue;
+    while (1)
+      continue;
   }
 
   get_new_job();
