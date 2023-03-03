@@ -24,8 +24,11 @@ static long long unacked_sent_times[MAX_UNACKED_FRAMES] = { 0 };
 
 static int queue_length = 4;
 static int retx_interval = 1000;
+static int retx_cnt = 0;
 static long long start_time;
 static long long last_resend_time = 0;
+static long long last_rx_time = -1;
+static long long last_rx_intv = 0;
 
 static int packet_seq = 0;
 static int last_rx_seq = 0;
@@ -176,24 +179,18 @@ int get_num_unacked_frames(void)
 
 void update_retx_interval(void)
 {
-  int num_unacked = get_num_unacked_frames();
+  //int num_unacked = get_num_unacked_frames();
   //int seq_gap = (packet_seq - last_rx_seq);
-  retx_interval = 2000 + 10000 * num_unacked;
-  if (retx_interval < 12000)
-    retx_interval = 12000;
+  retx_interval = 2000 + retx_cnt * last_rx_intv;
+  if (retx_interval < 10000)
+    retx_interval = 10000;
   if (retx_interval > 500000)
     retx_interval = 500000;
-  //printf("  retx interval=%dusec (%d vs %d)\n",retx_interval,packet_seq,last_rx_seq);
+  //printf("  retx interval=%dusec (cnt=%d last_rx_intv=%lld)\n", retx_interval, retx_cnt, last_rx_intv);
 }
 
 int check_if_ack(uint8_t *rx_payload, int len)
 {
-  log_debug("Pending acks:");
-  for (int i = 0; i < queue_length; i++) {
-    if (frame_unacked[i])
-      log_debug("  Frame ID #%d : seq_num=%d", i, get_packet_seq(unacked_frame_payloads[i], unacked_frame_lengths[i]));
-  }
-
   // Set retry interval based on number of outstanding packets
   log_debug("Received packet, checking seq_num");
   int seq_num = (*get_packet_seq)(rx_payload, len);
@@ -202,6 +199,10 @@ int check_if_ack(uint8_t *rx_payload, int len)
   }
   log_debug("Received packet, seq_num=%d", seq_num);
   last_rx_seq = seq_num;
+  long long now = gettime_us();
+  last_rx_intv = (last_rx_time == -1) ? 0 : now - last_rx_time;
+  last_rx_time = now;
+  retx_cnt = 0;
   update_retx_interval();
 
   for (int i = 0; i < queue_length; i++) {
@@ -319,16 +320,16 @@ void maybe_send_ack(void)
         exit(-1);
       }
 */
-      log_debug("Resending packet seq #%d with new seq #%d", get_packet_seq(unacked_frame_payloads[id], unacked_frame_lengths[id]), packet_seq);
-      if (!(*embed_packet_seq)(unacked_frame_payloads[id], unacked_frame_lengths[id], packet_seq)) {
-        log_crit("Unable to embed packet sequence number");
-        return;
-      }
-      packet_seq++;
+      log_debug("Resending packet seq #%d", get_packet_seq(unacked_frame_payloads[id], unacked_frame_lengths[id]));
+      ++retx_cnt;
       update_retx_interval();
       sendto(sockfd, (void *)unacked_frame_payloads[id], unacked_frame_lengths[id], 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
       last_resend_time = gettime_us();
-      unacked_sent_times[id] = last_resend_time;
+      log_debug("Pending acks:");
+      for (int i = 0; i < queue_length; i++) {
+        if (frame_unacked[i])
+          log_debug("  Frame ID #%d : seq_num=%d", i, get_packet_seq(unacked_frame_payloads[i], unacked_frame_lengths[i]));
+      }
     }
     return;
   }
