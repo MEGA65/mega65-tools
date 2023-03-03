@@ -4235,6 +4235,7 @@ int upload_single_file(char *name, char *dest_name)
     int remaining_length = st.st_size;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
+    unsigned long long last_status_output = 0;
     unsigned int sector_number;
     FILE *f = fopen(name, "rb");
 
@@ -4282,8 +4283,12 @@ int upload_single_file(char *name, char *dest_name)
       if (0)
         printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
             bytes, sector_number, sector_number, file_cluster);
-      printf("\rUploaded %lld bytes.", (long long)st.st_size - remaining_length);
-      fflush(stdout);
+      unsigned long long now = gettime_ms();
+      if (now - last_status_output > 100) {
+        printf("\rUploaded %lld bytes.", (long long)st.st_size - remaining_length);
+        fflush(stdout);
+        last_status_output = now;
+      }
 
       if (write_sector(sector_number, buffer)) {
         printf("ERROR: Failed to write to sector %d\n", sector_number);
@@ -5143,6 +5148,7 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
     int remaining_bytes = de.d_filelen;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
+    unsigned long long last_status_output = 0;
     unsigned int sector_number;
     FILE *f = NULL;
 
@@ -5205,9 +5211,12 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
       if (0)
         printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
             (int)de.d_filelen, sector_number, sector_number, file_cluster);
-      if (!showClusters && !quietFlag)
+      unsigned long long now = gettime_ms();
+      if (!showClusters && !quietFlag && (now - last_status_output > 100)) {
         printf("\rDownloaded %lld bytes.", (long long)de.d_filelen - remaining_bytes);
-      fflush(stdout);
+        last_status_output = now;
+        fflush(stdout);
+      }
 
       //      printf("T+%lld : after write.\n",gettime_us()-start_usec);
 
