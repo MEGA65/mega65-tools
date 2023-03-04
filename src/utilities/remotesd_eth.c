@@ -493,7 +493,7 @@ void get_new_job()
       // We read the header and job data. Since we don't know the exact job, yet, copy the worst case
       // (largest job) which is the read sector command.
       lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER), (uint32_t)&recv_buf.ftp.ver_length,
-          sizeof(FTP_PKT) + sizeof(READ_SECTOR_JOB));
+          sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
 
       if (ip_addr_set == 0) {
         if (recv_buf.ftp.destination.b[3] != 65) {
