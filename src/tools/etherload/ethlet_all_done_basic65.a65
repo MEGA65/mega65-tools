@@ -32,12 +32,6 @@ entry:
 	lda #$53
 	sta $d02f
 
-	ldx #$0b
-*	lda romfilename,x
-	sta $0200,x
-	dex
-	bpl -
-
 	; Disable C65 ROM write protection via Hypervisor trap
 	lda #$02
 	sta $d641
@@ -47,6 +41,16 @@ entry:
 	lda #$22
 	sta $d640
 	clv
+
+	lda enable_default_rom_load
+	beq mount_d81
+
+	; copy rom filename to bank 0
+	ldx #$0b
+*	lda romfilename,x
+	sta $0200,x
+	dex
+	bpl -
 	; set rom filename
 	ldy #$02
 	lda #$2e
@@ -61,6 +65,7 @@ entry:
 	sta $d640
 	clv
 
+mount_d81:
 	; unmount current images
 	lda #$42
 	sta $d640
@@ -117,6 +122,8 @@ map_crom:
 	neg
 	sta basic_program_start_backup
 
+	lda restore_prg
+	beq finalize
 	; patch basic irq vector at $32007 to jump into our autostart code
 	lda #<autostart_entry
 	ldz #$00
@@ -128,6 +135,12 @@ map_crom:
 	; sta ((<basic_irq_pointer)),z
 	nop
 	sta (<basic_irq_pointer),z
+
+finalize:
+	; restore rom write protection
+	lda #$00
+	sta $d641
+	clv
 
 	; bp=zp
 	lda #$00
@@ -179,7 +192,10 @@ romfilename:
 	.byte "MEGA65.ROM", 0, 0
 d81filename:
 	.dword 0, 0, 0, 0, 0
-
+enable_default_rom_load:
+	.byte $01
+restore_prg:
+	.byte $01
 
 autostart:
 ; autostart routine called in irq after bootup of kernal and basic is complete.
@@ -254,6 +270,11 @@ autostart_entry:
 	nop
 	sta (<cartridge_address),z
 
+	; Disable C65 ROM write protection via Hypervisor trap
+	lda #$02
+	sta $d641
+	clv
+	
 	; restore basic irq vector
 	; ldq basic_irq_backup
 	neg

@@ -34,6 +34,7 @@ int ethl_schedule_ack(uint8_t *payload, int len);
 int ethl_set_queue_length(uint16_t length);
 int ethl_get_current_seq_num();
 
+void set_send_mem_rom_write_enable();
 int send_mem(unsigned int address, unsigned char *buffer, int bytes);
 int wait_ack_slots_available(int num_free_slots_needed);
 int wait_all_acks(void);

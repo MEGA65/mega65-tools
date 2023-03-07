@@ -43,6 +43,8 @@ static timeout_handler_callback_t timeout_handler = NULL;
 extern char ethlet_dma_load[];
 extern int ethlet_dma_load_len;
 
+static int dma_load_rom_write_enable = 0;
+
 unsigned char hyperrupt_trigger[128];
 unsigned char magic_string[12] = {
   0x65, 0x47, 0x53,       // 65 G S
@@ -494,10 +496,25 @@ int ethl_get_current_seq_num()
   return packet_seq;
 }
 
+void set_send_mem_rom_write_enable()
+{
+  dma_load_rom_write_enable = 1;
+}
+
 int send_mem(unsigned int address, unsigned char *buffer, int bytes)
 {
+  static int rom_write_enabled = 0;
+
   const int dmaload_len = 1280;
   uint8_t *payload = (uint8_t *)ethlet_dma_load;
+
+  if (!rom_write_enabled && dma_load_rom_write_enable) {
+    rom_write_enabled = 1;
+    payload[ethlet_dma_load_offset_rom_write_enable + 1] = 1;
+  }
+  else {
+    payload[ethlet_dma_load_offset_rom_write_enable + 1] = 0;
+  }
 
   // Set position of marker to draw in 1KB units
   payload[3] = address >> 10;

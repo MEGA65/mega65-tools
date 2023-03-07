@@ -65,6 +65,7 @@ int bin_load_addr = 0;
 char *ip_address = NULL;
 char *filename = NULL;
 char *d81_image = NULL;
+char *rom_file = NULL;
 
 int get_terminal_size(int max_width)
 {
@@ -182,11 +183,12 @@ void init_cmd_options(void)
 
   CMD_OPTION("ip",          required_argument, 0,            'i', "ipaddr", "Set IPv4 broadcast address of the subnet where MEGA65 is connected (eg. 192.168.1.255).");
   CMD_OPTION("run",         no_argument,       0,            'r',   "",     "Automatically RUN programme after loading.");
+  CMD_OPTION("rom",         required_argument, 0,            'R', "file",   "Upload and use ROM <file> instead of the default one on SD card (prgname is optional in this case).");
   CMD_OPTION("c64mode",     no_argument,       0,            '4',   "",     "Reset to C64 mode after transfer.");
   CMD_OPTION("m65mode",     no_argument,       0,            '5',   "",     "Reset to MEGA65 mode after transfer.");
   CMD_OPTION("halt",        no_argument,       &halt,        1,     "",     "Halt and wait for next transfer after completion.");
   CMD_OPTION("jump",        required_argument, 0,            'j', "addr",   "Jump to provided address <addr> after loading (hex notation).");
-  CMD_OPTION("bin",         required_argument, 0,            'b', "addr",   "Treat <prgname> as binary file and load at address <addr>.");
+  CMD_OPTION("bin",         required_argument, 0,            'b', "addr",   "Treat <prgname> as binary file and load at address <addr> (hex notation).");
   CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
   CMD_OPTION("mount",       required_argument, 0,            'm', "file",   "Mount d81 file image <file> from SD card (eg. MEGA65.D81).");
   // clang-format on
@@ -246,6 +248,57 @@ void dump_bytes(char *msg, unsigned char *b, int len)
   return;
 }
 
+void load_file(int fd, int start_addr)
+{
+  char msg[80];
+  unsigned char buffer[1024];
+  int offset = 0;
+  int bytes;
+  int address = start_addr;
+
+  // Clear screen first
+  log_debug("Clearing screen");
+  memset(colour_ram, 0x01, 1000);
+  memset(progress_screen, 0x20, 1000);
+  send_mem(0x1f800, colour_ram, 1000);
+  send_mem(0x0400, progress_screen, 1000);
+  wait_all_acks();
+  log_debug("Screen cleared.");
+
+  progress_line(0, 0, 40);
+  snprintf(msg, 40, "Loading \"%s\" at $%07X", filename, address);
+  progress_print(0, 1, msg);
+  progress_line(0, 2, 40);
+
+  while ((bytes = read(fd, buffer, 1024)) != 0) {
+    log_debug("Read %d bytes at offset %d", bytes, offset);
+
+    offset += bytes;
+
+    // Send screen with current loading state
+    progress_line(0, 10, 40);
+    snprintf(msg, 40, "Loading block @ $%07X", address);
+    progress_print(0, 11, msg);
+    progress_line(0, 12, 40);
+
+    // Update screen, but only if we are not still waiting for a previous update
+    // so that we don't get stuck in lock-step
+    if (dmaload_no_pending_ack(0x0400 + 4 * 40))
+      send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
+
+    send_mem(address, buffer, bytes);
+
+    address += bytes;
+  }
+
+  memset(progress_screen, 0x20, 1000);
+  snprintf(msg, 40, "Loaded $%04X - $%04X", start_addr, address);
+  progress_line(0, 15, 40);
+  progress_print(0, 16, msg);
+  progress_line(0, 17, 40);
+  send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
+}
+
 int main(int argc, char **argv)
 {
   int opt_index;
@@ -259,7 +312,7 @@ int main(int argc, char **argv)
     usage(-3, "No arguments given!");
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "i:r45hj:b:m:0:", cmd_opts, &opt_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "i:rR:45hj:b:m:0:", cmd_opts, &opt_index)) != -1) {
     if (opt == 0) {
       if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
         log_setup(stderr, loglevel);
@@ -296,6 +349,9 @@ int main(int argc, char **argv)
     case 'm':
       d81_image = strdup(optarg);
       break;
+    case 'R':
+      rom_file = strdup(optarg);
+      break;
     case '4':
       reset64 = 1;
       break;
@@ -310,12 +366,17 @@ int main(int argc, char **argv)
     }
   }
 
-  if (!argv[optind]) {
+  if (!argv[optind] && !rom_file) {
     usage(-3, "Filename for upload not specified, aborting.");
   }
 
-  filename = strdup(argv[optind]);
-  check_file_access(filename, "programme");
+  if (argv[optind]) {
+    filename = strdup(argv[optind]);
+    check_file_access(filename, "programme");
+  }
+  else if(!rom_file) {
+    usage(-3, "Filename for upload not specified, aborting.");
+  }
 
   if (argc - optind > 1)
     usage(-3, "Unexpected extra commandline arguments.");
@@ -361,48 +422,58 @@ int main(int argc, char **argv)
     }
   }
 
-  int open_flags = O_RDONLY;
-#ifdef WINDOWS
-  open_flags |= O_BINARY;
-#endif
-  int fd = open(filename, open_flags);
-  unsigned char buffer[1024];
-  int offset = 0;
-  int bytes;
+  // check rom file
+  if (rom_file) {
+    check_file_access(rom_file, "ROM");
+    if (!filename && !reset64 && !reset65) {
+      // reset to M65 mode if no prg and no reset mode is provided 
+      reset65 = 1;
+    }
+  }
 
+  int open_flags = O_RDONLY;
+  int fd;
   int address;
   int start_addr;
 
-  if (!use_binary) {
-    // Read 2 byte load address
-    bytes = read(fd, buffer, 2);
-    if (bytes < 2) {
-      log_crit("Failed to read load address from file '%s'", filename);
-      exit(-1);
-    }
-    address = buffer[0] + 256 * buffer[1];
-    start_addr = address;
-    log_info("Load address of programme is $%04x", start_addr);
-  }
-  else {
-    start_addr = bin_load_addr;
-    address = start_addr;
-    log_info("Load address of file is $%04x", start_addr);
-  }
-
-  if (!halt && !do_jump && !reset64 && !reset65) {
-    // Try to automatically determine reset mode (c64 vs. m65)
-    if (start_addr == 0x801) {
-      log_note("PRG is C64 @0801");
-      reset64 = 1;
-    }
-    else if (start_addr == 0x2001) {
-      log_note("PRG is MEGA65 @2001");
-      reset65 = 1;
+  if (filename) {
+#ifdef WINDOWS
+    open_flags |= O_BINARY;
+#endif
+    fd = open(filename, open_flags);
+    
+    if (!use_binary) {
+      // Read 2 byte load address
+      unsigned char buffer[2]; 
+      ssize_t bytes = read(fd, buffer, 2);
+      if (bytes < 2) {
+        log_crit("Failed to read load address from file '%s'", filename);
+        exit(-1);
+      }
+      address = buffer[0] + 256 * buffer[1];
+      start_addr = address;
+      log_info("Load address of programme is $%04x", start_addr);
     }
     else {
-      log_crit("can't determine reset mode (c64/m65) from programme load address $%04x", start_addr);
-      exit(-1);
+      start_addr = bin_load_addr;
+      address = start_addr;
+      log_info("Load address of file is $%04x", start_addr);
+    }
+
+    if (!halt && !do_jump && !reset64 && !reset65) {
+      // Try to automatically determine reset mode (c64 vs. m65)
+      if (start_addr == 0x801) {
+        log_note("PRG is C64 @0801");
+        reset64 = 1;
+      }
+      else if (start_addr == 0x2001) {
+        log_note("PRG is MEGA65 @2001");
+        reset65 = 1;
+      }
+      else {
+        log_crit("can't determine reset mode (c64/m65) from programme load address $%04x", start_addr);
+        exit(-1);
+      }
     }
   }
 
@@ -417,51 +488,19 @@ int main(int argc, char **argv)
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();
 
-  char msg[80];
-
-  // Clear screen first
-  log_debug("Clearing screen");
-  memset(colour_ram, 0x01, 1000);
-  memset(progress_screen, 0x20, 1000);
-  send_mem(0x1f800, colour_ram, 1000);
-  send_mem(0x0400, progress_screen, 1000);
-  wait_all_acks();
-  log_debug("Screen cleared.");
-
-  progress_line(0, 0, 40);
-  snprintf(msg, 40, "Loading \"%s\" at $%04X", filename, address);
-  progress_print(0, 1, msg);
-  progress_line(0, 2, 40);
-
-  while ((bytes = read(fd, buffer, 1024)) != 0) {
-    log_debug("Read %d bytes at offset %d", bytes, offset);
-
-    offset += bytes;
-
-    // Send screen with current loading state
-    progress_line(0, 10, 40);
-    snprintf(msg, 40, "Loading block @ $%04X", address);
-    progress_print(0, 11, msg);
-    progress_line(0, 12, 40);
-
-    // Update screen, but only if we are not still waiting for a previous update
-    // so that we don't get stuck in lock-step
-    if (dmaload_no_pending_ack(0x0400 + 4 * 40))
-      send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
-
-    send_mem(address, buffer, bytes);
-
-    address += bytes;
+  if (filename) {
+    load_file(fd, start_addr);
+    close(fd);
+    log_note("Sent %s to %s on port %d.", filename, ethl_get_ip_address(), ethl_get_port());
   }
 
-  memset(progress_screen, 0x20, 1000);
-  snprintf(msg, 40, "Loaded $%04X - $%04X", start_addr, address);
-  progress_line(0, 15, 40);
-  progress_print(0, 16, msg);
-  progress_line(0, 17, 40);
-  send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
-
-  log_note("Sent %s to %s on port %d.", filename, ethl_get_ip_address(), ethl_get_port());
+  if (rom_file) {
+    set_send_mem_rom_write_enable();
+    int fd = open(rom_file, open_flags);
+    load_file(fd, 0x20000);
+    close(fd);
+    log_note("Sent ROM %s to %s on port %d.", rom_file, ethl_get_ip_address(), ethl_get_port());
+  }
 
   wait_all_acks();
 
@@ -487,6 +526,17 @@ int main(int argc, char **argv)
       memcpy(&ethlet_all_done_basic2[ethlet_all_done_basic2_offset_d81filename], d81_image, strlen(d81_image));
     }
 
+    // patch in disabling of default rom load
+    if (rom_file) {
+      ethlet_all_done_basic2[ethlet_all_done_basic2_offset_enable_default_rom_load] = 0;
+    }
+
+    // patch in disabling of prg restore
+    if (!filename) {
+      ethlet_all_done_basic2[ethlet_all_done_basic2_offset_restore_prg] = 0;
+    }
+
+
     send_ethlet(ethlet_all_done_basic2, ethlet_all_done_basic2_len);
   }
   else if (reset65) {
@@ -504,6 +554,16 @@ int main(int argc, char **argv)
     // patch in d81 filename
     if (d81_image) {
       memcpy(&ethlet_all_done_basic65[ethlet_all_done_basic65_offset_d81filename], d81_image, strlen(d81_image));
+    }
+
+    // patch in disabling of default rom load
+    if (rom_file) {
+      ethlet_all_done_basic65[ethlet_all_done_basic65_offset_enable_default_rom_load] = 0;
+    }
+
+    // patch in disabling of prg restore
+    if (!filename) {
+      ethlet_all_done_basic65[ethlet_all_done_basic65_offset_restore_prg] = 0;
     }
 
     send_ethlet(ethlet_all_done_basic65, ethlet_all_done_basic65_len);
