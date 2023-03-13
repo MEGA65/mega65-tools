@@ -1960,7 +1960,7 @@ int main(int argc, char **argv)
         next = strchr(optarg, '=') + 1;
         memsave_filename = strdup(next);
       }
-      else if (strchr(optarg, '='))
+      else if (strchr(optarg, ':') || strchr(optarg, '='))
         usage(-3, "failed to parse memsave argument (range without file?)");
       else {
         memsave_start = -1;
