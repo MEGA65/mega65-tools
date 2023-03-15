@@ -438,12 +438,16 @@ USB_INFO *fpgausb_init(void)
 
     // fetch device info strings and store in m65com_usbinfo
     // skip device if this fails
-    if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0 || UDESC(iSerialNumber) < 0) {
+    // the TE0790-03L (no Xilinx License) does not have a serial set!
+    if (UDESC(iManufacturer) < 0 || UDESC(iProduct) < 0) {
       log_debug("error getting USB device attributes");
       libusb_close(usbhandle);
       continue;
     }
     libusb_close(usbhandle);
+    // set serial to "undefined" if this is unset
+    if (usbinfo_array[usbinfo_array_index].iSerialNumber[0] == 0)
+      strcpy((char *)usbinfo_array[usbinfo_array_index].iSerialNumber, "undefined");
 
     usbinfo_array[usbinfo_array_index].dev = dev;
     usbinfo_array[usbinfo_array_index].idVendor = desc.idVendor;
