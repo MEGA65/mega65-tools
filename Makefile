@@ -328,8 +328,15 @@ test.exe: win_build_check $(GTESTFILESEXE)
 ##
 conan_mac: conanfile.txt conan/profile_macos_10.14_intel conan/profile_macos_11_arm Makefile
 	mkdir -p $(PKGDIR)/macos_intel $(PKGDIR)/macos_arm
-	conan install -if $(PKGDIR)/macos_intel -of $(PKGDIR)/macos_intel conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_10.14_intel
-	conan install -if $(PKGDIR)/macos_arm -of $(PKGDIR)/macos_arm conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
+	
+	@conan_version=$$(echo `conan --version` | sed "s/^Conan version \([[:digit:]]*\).*/\1/"); \
+	if [[ "$${conan_version}" -eq "1" ]]; then \
+		conan_intel_flags="-if $(PKGDIR)/macos_intel"; \
+		conan_arm_flags="-if $(PKGDIR)/macos_arm"; \
+	fi; \
+	conan install $${conan_intel_flags} -of $(PKGDIR)/macos_intel conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_10.14_intel; \
+	conan install $${conan_arm_flags} -of $(PKGDIR)/macos_arm conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
+	
 	$(eval MACINTELCOPT := $(MACCOPT) -target x86_64-apple-macos10.14 \
 	                       `pkg-config --cflags --libs $(PKGDIR)/macos_intel/libpng.pc $(PKGDIR)/macos_intel/libusb-1.0.pc $(PKGDIR)/macos_intel/zlib.pc`)
 	$(eval MACARMCOPT   := $(MACCOPT) -target arm64-apple-macos11 \
