@@ -391,7 +391,7 @@ void init_cmd_options(void)
                   "Warning: this is awfully slow and has lots of problems!");
   CMD_OPTION("vtyperet",  1, 0,         'T', "-|text", "As virttype, but add a RETURN at the end of the line.");
 
-  CMD_OPTION("memsave",   1, 0,         0x81, "[addr:addr;]filename", "saves memory range addr:addr (hex) to filename. "
+  CMD_OPTION("memsave",   1, 0,         0x81, "[addr:addr=]filename", "saves memory range addr:addr (hex) to filename. "
                   "If addr range is omitted, save current basic memory. "
                   "Only BASIC save without addr range will add load addr in front of data!");
 
@@ -1954,13 +1954,13 @@ int main(int argc, char **argv)
       char *next;
       if (!optarg)
         usage(-3, "failed to parse memsave address argument");
-      if (strchr(optarg, ':') && strchr(optarg, ',')) { // got both range and filename
+      if (strchr(optarg, ':') && strchr(optarg, '=')) { // got both range and filename
         if (sscanf(optarg, "%x:%x;", &memsave_start, &memsave_end) != 2)
           usage(-3, "failed to parse memsave address argument");
-        next = strchr(optarg, ',') + 1;
+        next = strchr(optarg, '=') + 1;
         memsave_filename = strdup(next);
       }
-      else if (strchr(optarg, ','))
+      else if (strchr(optarg, ':') || strchr(optarg, '='))
         usage(-3, "failed to parse memsave argument (range without file?)");
       else {
         memsave_start = -1;
