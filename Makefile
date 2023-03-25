@@ -345,7 +345,7 @@ conan_win: conanfile.txt conan/profile_linux_to_win Makefile
 	fi; \
 	conan install $${conan_flags} -of $(PKGDIR)/win conanfile.txt --build=missing -pr:b=default -pr:h=conan/profile_linux_to_win; \
 	$(eval WINCOPT := $(WINCOPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1 \
-	                  `pkg-config --cflags --libs $(PKGDIR)/win/libpng.pc $(PKGDIR)/win/libusb.pc $(PKGDIR)/win/zlib.pc`)
+	                  `pkg-config --cflags --libs $(PKGDIR)/win/libpng.pc $(PKGDIR)/win/libusb-1.0.pc $(PKGDIR)/win/zlib.pc`)
 
 ifndef USE_LOCAL_CC65
 $(CC65):
