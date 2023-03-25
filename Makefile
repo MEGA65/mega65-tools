@@ -328,8 +328,8 @@ test.exe: win_build_check $(GTESTFILESEXE)
 ##
 conan_mac: conanfile.txt conan/profile_macos_10.14_intel conan/profile_macos_11_arm Makefile
 	mkdir -p $(PKGDIR)/macos_intel $(PKGDIR)/macos_arm
-	conan install -of $(PKGDIR)/macos_intel conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_10.14_intel
-	conan install -of $(PKGDIR)/macos_arm conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
+	conan install -if $(PKGDIR)/macos_intel -of $(PKGDIR)/macos_intel conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_10.14_intel
+	conan install -if $(PKGDIR)/macos_arm -of $(PKGDIR)/macos_arm conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
 	$(eval MACINTELCOPT := $(MACCOPT) -target x86_64-apple-macos10.14 \
 	                       `pkg-config --cflags --libs $(PKGDIR)/macos_intel/libpng.pc $(PKGDIR)/macos_intel/libusb-1.0.pc $(PKGDIR)/macos_intel/zlib.pc`)
 	$(eval MACARMCOPT   := $(MACCOPT) -target arm64-apple-macos11 \
