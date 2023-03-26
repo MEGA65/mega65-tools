@@ -170,6 +170,12 @@ void print(uint8_t row, uint8_t col, char *text)
   }
 }
 
+void stop_fatal(char *text)
+{
+  print(2, 0, text);
+  while (1) continue;
+}
+
 void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line)
 {
   char *msg_ptr = msg;
@@ -356,6 +362,9 @@ void init_new_write_batch()
   batch_left = recv_buf.write_sector.num_sectors_minus_one;
   write_batch_max_id = batch_left;
   ++batch_left;
+  if (batch_left < 2 || batch_left > 128) {
+    stop_fatal("error: batch size out of bounds");
+  }
   sector_number_write = recv_buf.write_sector.start_sector_number;
   current_batch_counter = recv_buf.write_sector.batch_counter;
   // printf("batch #%d size %d sector %ld\n", current_batch_counter, batch_left, sector_number_write);
@@ -370,6 +379,10 @@ void init_new_write_batch()
 void multi_sector_write_next()
 {
   int cmd = 5; // Multi-sector mid
+
+  if (slots_written > write_batch_max_id) {
+    stop_fatal("error: slots written out of bounds");
+  }
 
   if (!slot_ids_received[slots_written]) {
     // print(2, 0, "retransmission detected");
@@ -491,7 +504,7 @@ void get_new_job()
         wait_key();
       }
       // We read the header and job data. Since we don't know the exact job, yet, copy the worst case
-      // (largest job) which is the read sector command.
+      // (largest job) which is the write sector command.
       lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER), (uint32_t)&recv_buf.ftp.ver_length,
           sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
 
@@ -560,9 +573,7 @@ void get_new_job()
            * Single sector write request
            */
           if (write_batch_active) {
-            print(10, 0, "error: single/multi write conflict");
-            while (1)
-              continue;
+            stop_fatal("error: single/multi write conflict");
           }
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
@@ -604,6 +615,10 @@ void get_new_job()
               init_new_write_batch();
             }
           }
+
+          if (recv_buf.write_sector.slot_index > write_batch_max_id) {
+            stop_fatal("error: write slot out of range");
+          }
           handle_batch_write();
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
@@ -627,6 +642,11 @@ void get_new_job()
           print(17, 0, "read sectors");
           wait_key();
         }
+
+        if (write_batch_active) {
+          stop_fatal("error: read/write requests mixed up");
+        }
+
         /*
          * Read sectors request
          */
@@ -635,8 +655,7 @@ void get_new_job()
           continue;
         }
         if (recv_buf.read_sector.unused_1 != 0) {
-          print(10, 0, "error: sector count > 255 not supported");
-          continue;
+          stop_fatal("error: sector count > 255 not supported");
         }
 
         reply_template.ftp.ip_length = HTONS(20 + 8 + 13 + 512);
@@ -835,6 +854,8 @@ void wait_100ms(void)
   }
 }
 
+static uint8_t testhdr[20] = {0x45, 0, 2, 0x2a, 0x2a, 0x9c, 0, 0, 0x40, 0x11, 0, 0, 0xc0, 0xa8, 0xb2, 0x14, 0xc0, 0xa8, 0xb2, 0x41};
+
 void main(void)
 {
   asm("sei");
@@ -843,6 +864,8 @@ void main(void)
   POKE(0, 65);
   POKE(0xD02F, 0x47);
   POKE(0xD02F, 0x53);
+
+  check_ip_checksum(testhdr);
 
   // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM on
   POKE(0xD6E5, 0x75);
