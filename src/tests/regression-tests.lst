@@ -12,4 +12,6 @@ test_468.prg    10  all
 test_585.prg    20  mega65r3,mega65r2
 test_604.prg    10  all
 test_646.prg    10  all
+test_671.prg    10  all
+test_682.prg    10  all
 # END OF FILE
