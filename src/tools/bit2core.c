@@ -36,6 +36,7 @@ extern const char *version_string;
 #define ARG_CORENAME argv[3]
 #define ARG_COREVERSION argv[4]
 #define ARG_COREPATH argv[5]
+#define ARG_COREFLAGS argv[6]
 
 #define CORE_HEADER_SIZE 4096
 
@@ -88,8 +89,65 @@ int get_model_id(const char *m65targetname)
       return map_m65target_to_model_id[k].model_id;
     }
   }
-  printf("ERROR: Failed to find model id for m65target of '%s'...", m65targetname);
+  fprintf(stderr, "ERROR: Failed to find model id for m65target of '%s'...\n", m65targetname);
   exit(1);
+}
+
+/* CORE capabilites and flags
+ *
+ * The core cpabilities is a 8 bit bitfield which defines which
+ * capabilities the core has. The lower bits tell if a slot is
+ * capable of running certain cartridge types. If the high bit is
+ * set, the core is unasable as a default core.
+ *
+ * The flags are a preset currently and should be changeable within
+ * MEGAFLASH while being installed into a slot. With those flags
+ * the bootup sequence will determine which slot to use if a certain
+ * cartridge is inserted.
+ */
+// clang-format off
+#define CORECAP_CART         0b00000111
+#define CORECAP_CART_C64     0b00000001
+#define CORECAP_CART_C128    0b00000010
+#define CORECAP_CART_M65     0b00000100
+#define CORECAP_UNDEFINED    0b01111000 // free for further expansion
+#define CORECAP_SLOT_DEFAULT 0b10000000 // in capabilities 1 means: prohibited use as default
+// clang-format on
+
+typedef struct {
+  char name[16];
+  unsigned char bits;
+} m65core_capabilities;
+
+// clang-format off
+static m65core_capabilities map_m65core_capability[] = {
+  { "default",  CORECAP_SLOT_DEFAULT },
+  { "c64cart",  CORECAP_CART_C64 },
+  { "c128cart", CORECAP_CART_C128 },
+  { "m65cart",  CORECAP_CART_M65 },
+  { "", 0 }
+};
+// clang-format on
+
+unsigned char parse_capability_bits(char *capstr)
+{
+  unsigned char capbits = 0, i;
+  char *part;
+
+  for (part = strtok(capstr, ","); part; part = strtok(NULL, ",")) {
+    for (i = 0; map_m65core_capability[i].name[0]; i++) {
+      if (!strncmp(part, map_m65core_capability[i].name, strlen(part))) {
+        capbits |= map_m65core_capability[i].bits;
+        break;
+      }
+    }
+    if (!map_m65core_capability[i].name[0]) {
+      fprintf(stderr, "ERROR: Failed to parse capability bits '%s'...\n", part);
+      exit(1);
+    }
+  }
+
+  return capbits;
 }
 
 #pragma pack(push, 1)
@@ -104,6 +162,8 @@ typedef union {
     unsigned char banner_present;
     unsigned char embed_file_count;
     unsigned long embed_file_offset;
+    unsigned char core_bootcaps;
+    unsigned char core_bootflags;
   };
 } header_info;
 #pragma pack(pop)
@@ -136,7 +196,7 @@ void show_help(void)
       "MEGA65 bitstream to core file converter\n"
       "---------------------------------------\n"
       "Version: %s\n\n"
-      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor> [<file to embed> ...]\n"
+      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor> [=<caps>[+<flags>]] [<file to embed> ...]\n"
       "\n"
       "Note: 1st argument specifies your Mega65 target name, which can be either:\n\n",
       version_string);
@@ -148,7 +208,20 @@ void show_help(void)
                   "SD-Card population. You can list multiple files or you can give a\n"
                   "filename prefixed with a @ to specify a special list file. In it you\n"
                   "can list the filenames of files to embed that reside in the *same* path\n"
-                  "as the list file. WARNING: there is no duplicate protection!\n"
+                  "as the list file. WARNING: there is no duplicate protection!\n\n"
+                  "The optional '=<caps>+<flag>' parameter are used to set the core\n"
+                  "capabilites: can it be default or is it a core capable of handling a\n"
+                  "cartridge. Mutliple flags can be combined using ',' as separator, but\n"
+                  "doing so, does not need to make sense. Be aware that every core is\n"
+                  "default capable, except the 'default' capability is SET.\n"
+                  "\n");
+
+  fprintf(stderr, "  String       Capability        Flags\n"
+                  "  ------       ----------        -------\n"
+                  "  default      *NO DEFAULT*      default\n"
+                  "  c64cart      C64 Cartridge     C64 Cartridge\n"
+                  "  c128cart     C128 Cartridge    C128 Cartridge\n"
+                  "  m65cart      MEGA65 Cartridge  MEGA65 Cartridge\n"
                   "\n");
 }
 
@@ -397,9 +470,10 @@ void write_core_file(int core_len, unsigned char *core_file, char *core_filename
   return;
 }
 
-void build_core_file(const int bit_size, int *core_len, unsigned char *core_file, const char *core_name,
-    const char *core_version, const char *m65target_name, const char *core_filename)
+int build_core_file(const int bit_size, int *core_len, unsigned char *core_file, const char *core_name,
+    const char *core_version, const char *m65target_name, const char *core_filename, char *core_caps)
 {
+  int offset = 0;
 
   // Write core file name and version
   header_info header_block;
@@ -408,13 +482,28 @@ void build_core_file(const int bit_size, int *core_len, unsigned char *core_file
 
   memset(header_block.data, 0, CORE_HEADER_SIZE);
 
-  for (int i = 0; i < 16; i++)
-    header_block.magic[i] = MAGIC_STR[i];
-
-  strcpy(header_block.core_name, core_name);
-  strcpy(header_block.core_version, core_version);
-  strcpy(header_block.m65_target, m65target_name);
+  memcpy(header_block.magic, MAGIC_STR, 16);
+  strncpy(header_block.core_name, core_name, 31);
+  strncpy(header_block.core_version, core_version, 31);
+  strncpy(header_block.m65_target, m65target_name, 31);
   header_block.model_id = get_model_id(m65target_name);
+
+  // parse core caps/flags
+  if (core_caps && core_caps[0] == '=') {
+    char *core_flags = strchr(core_caps, '+');
+    if (core_flags) {
+      *core_flags = 0;
+      core_flags++;
+    }
+    header_block.core_bootcaps = parse_capability_bits(core_caps + 1);
+    if (core_flags)
+      header_block.core_bootflags = parse_capability_bits(core_flags);
+    offset = 1;
+  }
+  fprintf(stderr, "INFO: bootcaps 0x%02X, bootflags 0x%02X\n",
+          header_block.core_bootcaps, header_block.core_bootflags);
+  if ((header_block.core_bootflags & header_block.core_bootcaps) != header_block.core_bootflags)
+    fprintf(stderr, "WARNING: bootflags are not supported by bootcaps!\n");
 
   bcopy(header_block.data, core_file, CORE_HEADER_SIZE);
   *core_len = CORE_HEADER_SIZE;
@@ -424,6 +513,8 @@ void build_core_file(const int bit_size, int *core_len, unsigned char *core_file
   }
   bcopy(bitstream_data, &core_file[*core_len], bit_size);
   *core_len += bit_size;
+
+  return offset;
 }
 
 unsigned long htoc64l(unsigned long v)
@@ -600,7 +691,7 @@ int core_len = 0;
 
 int DIRTYMOCK(main)(int argc, char **argv)
 {
-  int err;
+  int err, offset;
 
   if (argc < 6) {
     show_help();
@@ -615,8 +706,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
   if (err != 0)
     return err;
 
-  build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH);
-  for (int i = 6; i < argc; i++) {
+  offset = build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH, argc > 6 ? ARG_COREFLAGS : NULL);
+  for (int i = 6 + offset; i < argc; i++) {
     //    fprintf(stderr,"Embedding file '%s'\n",argv[i]);
     if (argv[i][0] == '@')
       embed_file_list(&core_len, core_file, argv[i] + 1);
