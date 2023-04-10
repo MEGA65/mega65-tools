@@ -139,6 +139,7 @@ uint8_t ip_addr_set = 0;
 uint16_t ip_id = 0;
 
 uint32_t chks_err_cnt = 0;
+uint32_t udp_chks_err_cnt = 0;
 uint32_t retrans_cnt = 0;
 uint32_t dup_cnt = 0;
 uint32_t tx_reset_cnt = 0;
@@ -149,6 +150,10 @@ typedef union {
   uint8_t b[2];
 } chks_t;
 chks_t chks;
+
+void checksum_fast();
+extern chks_t chks_fast;
+uint16_t chks_size;
 
 static uint8_t _a, _b, _c;
 static unsigned int _b16;
@@ -229,14 +234,16 @@ void print_ip_informtaion(void)
 
 void update_counters(void)
 {
-  sprintf(msg, "ip chks err count: %lu", chks_err_cnt);
+  sprintf(msg, "ip chks err count:  %lu", chks_err_cnt);
   print(10, 0, msg);
-  sprintf(msg, "retrans detected:  %lu", retrans_cnt);
+  sprintf(msg, "udp chks err count: %lu", udp_chks_err_cnt);
   print(11, 0, msg);
-  sprintf(msg, "duplicate packets: %lu", dup_cnt);
+  sprintf(msg, "retrans detected:   %lu", retrans_cnt);
   print(12, 0, msg);
-  sprintf(msg, "tx resets:         %lu", tx_reset_cnt);
+  sprintf(msg, "duplicate packets:  %lu", dup_cnt);
   print(13, 0, msg);
+  sprintf(msg, "tx resets:          %lu", tx_reset_cnt);
+  print(14, 0, msg);
 }
 
 /**
@@ -334,7 +341,50 @@ uint8_t check_ip_checksum(uint8_t *hdr)
     return 1;
   }
   sprintf(msg, "ref: %04x  act: %04x", ref_chks.u, ~chks.u);
-  print(19, 0, msg);
+  print(20, 0, msg);
+  return 0;
+}
+
+uint8_t check_udp_checksum()
+{
+  static uint16_t udp_length;
+  static uint16_t ref_chks;
+
+  udp_length = NTOHS(recv_buf.ftp.udp_length);
+
+  if (udp_length > 1400)
+  {
+    stop_fatal("illegal udp length");
+  }
+
+  *(uint32_t *)0xC800 = recv_buf.ftp.source.d;
+  *(uint32_t *)0xC804 = recv_buf.ftp.destination.d;
+  *(uint8_t *)0xC808 = 0;
+  *(uint8_t *)0xC809 = recv_buf.ftp.protocol;
+  *(uint16_t *)0xC80A = recv_buf.ftp.udp_length;
+  lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + 20, 0xC80CUL, udp_length);
+  
+  ref_chks = *(uint16_t *)0xC812;
+  *(uint16_t *)0xC812 = 0; // reset checksum field
+  
+  chks_size = udp_length + 12;
+  checksum_fast();
+  chks_fast.u = ~chks_fast.u;
+
+  if (chks_fast.u == 0) {
+    chks_fast.u = 0xffffU;
+  }
+  if (chks_fast.u == ref_chks) {
+    return 1;
+  }
+  sprintf(msg, "uref: %04x  uact: %04x  l: %04x", ref_chks, chks_fast.u, udp_length + 12);
+  print(21, 0, msg);
+  
+  chks.u = 0;
+  checksum((uint8_t *)0xC800U, udp_length + 12);
+  sprintf(msg, "cref: %04x", ~chks.u);
+  print(22, 0, msg);
+
   return 0;
 }
 
@@ -530,9 +580,9 @@ void get_new_job()
 
       if (!check_ip_checksum((uint8_t *)&recv_buf.ftp)) {
         uint8_t *data_ptr = (uint8_t *)&recv_buf.ftp;
-        print(15, 0, "wrong ip checksum detected");
-        dump_bytes(data_ptr, 10, 16);
-        dump_bytes(data_ptr + 10, 10, 17);
+        print(16, 0, "wrong ip checksum detected");
+        dump_bytes(data_ptr, 10, 17);
+        dump_bytes(data_ptr + 10, 10, 18);
 
         ++chks_err_cnt;
         update_counters();
@@ -558,6 +608,13 @@ void get_new_job()
       }
 
       udp_length = NTOHS(recv_buf.ftp.udp_length);
+
+      if (!check_udp_checksum())
+      {
+        ++udp_chks_err_cnt;
+        update_counters();
+        continue;
+      }
 
       switch (recv_buf.ftp.opcode) {
       case 0x02: // write sector
