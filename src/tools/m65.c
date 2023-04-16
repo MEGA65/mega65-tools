@@ -2028,7 +2028,12 @@ int main(int argc, char **argv)
     if (detected_port == NULL) {
       if (!jtag_only)
         log_note("tip: try using 'm65 --autodiscover --verbose'");
-      log_crit("no valid jtag port not found, aborting");
+      if (bitstream) {
+        log_crit("you supplied a bitstream for a different MEGA65 model than is connected");
+        log_crit("please use the correct bitstream for your device");
+      }
+      else
+        log_crit("no matching jtag port found, aborting");
       exit(1);
     }
 
