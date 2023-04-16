@@ -158,12 +158,15 @@ typedef union {
     char core_name[32];
     char core_version[32];
     char m65_target[32];
-    unsigned char model_id;
-    unsigned char banner_present;
-    unsigned char embed_file_count;
-    unsigned long embed_file_offset;
-    unsigned char core_bootcaps;
-    unsigned char core_bootflags;
+    uint8_t model_id;
+    uint8_t banner_present;
+    uint8_t embed_file_count;
+    uint32_t embed_file_offset;
+    // embed_file_offset was unisigned long which is 64 bit on linux,
+    // so older core files have 4 garbage bytes:
+    uint32_t __backwards_compability;
+    uint8_t core_bootcaps;
+    uint8_t core_bootflags;
   };
 } header_info;
 #pragma pack(pop)
@@ -517,13 +520,14 @@ int build_core_file(const int bit_size, int *core_len, unsigned char *core_file,
   return offset;
 }
 
-unsigned long htoc64l(unsigned long v)
+uint32_t htoc64l(unsigned long v)
 {
   union {
     unsigned char c[4];
-    unsigned long l;
+    uint32_t l;
   } conv;
 
+  fprintf(stderr, "%ld\n", sizeof(conv.l));
   conv.c[0] = (v >> 0) & 0xff;
   conv.c[1] = (v >> 8) & 0xff;
   conv.c[2] = (v >> 16) & 0xff;
