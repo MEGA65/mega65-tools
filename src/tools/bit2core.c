@@ -508,13 +508,13 @@ int build_core_file(const int bit_size, int *core_len, unsigned char *core_file,
   if ((header_block.core_bootflags & header_block.core_bootcaps) != header_block.core_bootflags)
     fprintf(stderr, "WARNING: bootflags are not supported by bootcaps!\n");
 
-  bcopy(header_block.data, core_file, CORE_HEADER_SIZE);
+  memcpy(core_file, header_block.data, CORE_HEADER_SIZE);
   *core_len = CORE_HEADER_SIZE;
   if (bit_size + (*core_len) >= 8192 * 1024) {
     fprintf(stderr, "ERROR: Bitstream + header > 8MB\n");
     exit(-1);
   }
-  bcopy(bitstream_data, &core_file[*core_len], bit_size);
+  memcpy(&core_file[*core_len], bitstream_data, bit_size);
   *core_len += bit_size;
 
   return offset;
@@ -603,7 +603,7 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
     fprintf(stderr, "INFO: Embedding banner file in last 32KB of slot.\n");
     header_block->banner_present = 1;
     banner_present = 1;
-    bcopy(file_data, &core_file[(8192 - 32) * 1024], file_len);
+    memcpy(&core_file[(8192 - 32) * 1024], file_data, file_len);
   }
 
   // Write embedded file
@@ -625,9 +625,9 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
   core_file[this_offset + 6] = file_len >> 16;
   core_file[this_offset + 7] = file_len >> 24;
 
-  bcopy(basename, &core_file[this_offset + 4 + 4], 32);
+  stpncpy((char *)&core_file[this_offset + 4 + 4], basename, 32);
 
-  bcopy(file_data, &core_file[this_offset + 4 + 4 + 32], file_len);
+  memcpy(&core_file[this_offset + 4 + 4 + 32], file_data, file_len);
 
   header_block->embed_file_count++;
 
