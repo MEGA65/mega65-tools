@@ -527,7 +527,6 @@ uint32_t htoc64l(unsigned long v)
     uint32_t l;
   } conv;
 
-  fprintf(stderr, "%ld\n", sizeof(conv.l));
   conv.c[0] = (v >> 0) & 0xff;
   conv.c[1] = (v >> 8) & 0xff;
   conv.c[2] = (v >> 16) & 0xff;
