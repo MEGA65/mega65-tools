@@ -624,7 +624,7 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
   core_file[this_offset + 6] = file_len >> 16;
   core_file[this_offset + 7] = file_len >> 24;
 
-  stpncpy((char *)&core_file[this_offset + 4 + 4], basename, 32);
+  strncpy((char *)&core_file[this_offset + 4 + 4], basename, 32);
 
   memcpy(&core_file[this_offset + 4 + 4 + 32], file_data, file_len);
 
