@@ -56,12 +56,19 @@ multiple_of_four:
 
 start_at_zero:
         dez
+        bmi just_four
         stz sizehi
         clc
         neg
         neg
         lda $00
         bra next_page
+
+just_four:
+        neg
+        neg
+        lda $00
+        bra done
 
 start:
         stz sizehi
