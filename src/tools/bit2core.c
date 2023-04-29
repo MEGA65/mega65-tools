@@ -55,7 +55,7 @@ static m65target_info m65targetgroups[] = {
   // Mega65 Target Name/s                           MB  FPGA Part
   { "nexys4|nexys4ddr|nexys4ddrwidget|megaphoner1", 4, "7a100tcsg324" },
   { "mega65r2",                                     4, "7a100tfgg484" },
-  { "mega65r1|mega65r3",                            8, "7a200tfbg484" },
+  { "mega65r1|mega65r3|mega65r4",                   8, "7a200tfbg484" },
   { "wukonga100t",                                  4, "7a100tfgg676" }
 };
 // clang-format on
@@ -75,6 +75,12 @@ static m65target_to_model_id map_m65target_to_model_id[] = {
   { "mega65r1",           0x01, 8192 },
   { "mega65r2",           0x02, 4096 },
   { "mega65r3",           0x03, 8192 },
+  { "mega65r4",           0x04, 8192 },
+  { "mega65r5",           0x05, 8192 },
+  { "mega65r6",           0x06, 8192 },
+  { "mega65r7",           0x07, 8192 },
+  { "mega65r8",           0x08, 8192 },
+  { "mega65r9",           0x09, 8192 },
   { "megaphoner1",        0x21, 4096 },
   { "nexys4",             0x40, 4096 }, // aka 'nexys4psram'
   { "nexys4ddr",          0x41, 4096 },
