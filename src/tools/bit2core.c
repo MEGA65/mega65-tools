@@ -164,9 +164,15 @@ typedef union {
     uint32_t embed_file_offset;
     // embed_file_offset was unisigned long which is 64 bit on linux,
     // so older core files have 4 garbage bytes:
-    uint32_t __backwards_compability;
+    uint32_t __backwards_compability1;
     uint8_t core_bootcaps;
     uint8_t core_bootflags;
+    // place size and crc32 at 0x80 - don't mess this up!
+    uint8_t __unused1;
+    uint16_t __unused2;
+    // this needs to be at 0x80 !!
+    uint32_t core_size;
+    uint32_t core_crc32;
   };
 } header_info;
 #pragma pack(pop)
@@ -609,7 +615,7 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
   unsigned int this_offset = last_file_offset;
   unsigned int next_offset = this_offset + 4 + 4 + 32 + file_len;
 
-  if (next_offset >= 8192 * 1024 - 4) {
+  if (next_offset >= (8192 - (banner_present ? 32 : 0)) * 1024 - 4) {
     fprintf(stderr, "ERROR: COR files must be less than 8MB\n");
     exit(-1);
   }
@@ -683,6 +689,56 @@ void embed_file_list(int *core_len, unsigned char *core_file, char *filename)
   free(filepath);
 }
 
+uint32_t rc_crc32(uint32_t crc, const char *buf, size_t len)
+{
+	static uint32_t table[256];
+	static int have_table = 0;
+	uint32_t rem;
+	uint8_t octet;
+	int i, j;
+	const char *p, *q;
+
+	/* This check is not thread safe; there is no mutex. */
+	if (have_table == 0) {
+		/* Calculate CRC table. */
+		for (i = 0; i < 256; i++) {
+			rem = i;  /* remainder from polynomial division */
+			for (j = 0; j < 8; j++) {
+				if (rem & 1) {
+					rem >>= 1;
+					rem ^= 0xedb88320;
+				} else
+					rem >>= 1;
+			}
+			table[i] = rem;
+		}
+		have_table = 1;
+	}
+
+	crc = ~crc;
+	q = buf + len;
+	for (p = buf; p < q; p++) {
+		octet = *p;  /* Cast to unsigned octet. */
+		crc = (crc >> 8) ^ table[(crc & 0xff) ^ octet];
+	}
+	return ~crc;
+}
+
+void calculate_core_crc32(int core_len, unsigned char *core_file)
+{
+  uint32_t crc;
+  header_info *header_block = (header_info *)core_file;
+
+  header_block->core_size = core_len;
+  header_block->core_crc32 = 0xf0f0f0f0;
+
+  crc = rc_crc32(0, (char *)core_file, core_len);
+
+  fprintf(stderr, "INFO: CRC32 = %08X\n", crc);
+
+  header_block->core_crc32 = crc;
+}
+
 char *find_fpga_part_from_m65targetname(const char *m65targetname)
 {
   m65target_info *m65target = find_m65targetinfo_from_m65targetname(m65targetname);
@@ -728,6 +784,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
   else
     // Leave 4 extra zero bytes at end for end of embedded file chain
     core_len += 4;
+
+  calculate_core_crc32(core_len, core_file);
 
   write_core_file(core_len, core_file, ARG_COREPATH);
 
