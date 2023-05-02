@@ -41,6 +41,8 @@ extern const char *version_string;
 #define CORE_HEADER_SIZE 4096
 
 static unsigned char bitstream_data[MAX_MB * BYTES_IN_MEGABYTE];
+unsigned char core_file[8192 * 1024];
+int core_len = 0;
 
 typedef struct {
   char name[MAX_M65_TARGET_NAME_LEN];
@@ -64,28 +66,32 @@ static int m65targetgroup_count = sizeof(m65targetgroups) / sizeof(m65target_inf
 typedef struct {
   char name[MAX_M65_TARGET_NAME_LEN];
   int model_id;
+  unsigned int core_size;
 } m65target_to_model_id;
 
 // clang-format off
 static m65target_to_model_id map_m65target_to_model_id[] = {
   // Mega65 Target Name   // Model ID
-  { "mega65r1",           0x01 },
-  { "mega65r2",           0x02 },
-  { "mega65r3",           0x03 },
-  { "megaphoner1",        0x21 },
-  { "nexys4",             0x40 }, // aka 'nexys4psram'
-  { "nexys4ddr",          0x41 },
-  { "nexys4ddrwidget",    0x42 },
-  { "wukonga100t",        0xFD }
+  { "mega65r1",           0x01, 8192 },
+  { "mega65r2",           0x02, 4096 },
+  { "mega65r3",           0x03, 8192 },
+  { "megaphoner1",        0x21, 4096 },
+  { "nexys4",             0x40, 4096 }, // aka 'nexys4psram'
+  { "nexys4ddr",          0x41, 4096 },
+  { "nexys4ddrwidget",    0x42, 4096 },
+  { "wukonga100t",        0xFD, 4096 }
 };
 // clang-format on
 
 static int m65target_to_model_id_count = sizeof(map_m65target_to_model_id) / sizeof(m65target_to_model_id);
+unsigned int max_core_size = 8192;
 
 int get_model_id(const char *m65targetname)
 {
   for (int k = 0; k < m65target_to_model_id_count; k++) {
     if (strcmp(map_m65target_to_model_id[k].name, m65targetname) == 0) {
+      max_core_size = map_m65target_to_model_id[k].core_size;
+      fprintf(stderr, "INFO: CORE size set to %d KB", max_core_size);
       return map_m65target_to_model_id[k].model_id;
     }
   }
@@ -516,7 +522,7 @@ int build_core_file(const int bit_size, int *core_len, unsigned char *core_file,
 
   memcpy(core_file, header_block.data, CORE_HEADER_SIZE);
   *core_len = CORE_HEADER_SIZE;
-  if (bit_size + (*core_len) >= 8192 * 1024) {
+  if (bit_size + (*core_len) >= max_core_size * 1024) {
     fprintf(stderr, "ERROR: Bitstream + header > 8MB\n");
     exit(-1);
   }
@@ -608,14 +614,14 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
     fprintf(stderr, "INFO: Embedding banner file in last 32KB of slot.\n");
     header_block->banner_present = 1;
     banner_present = 1;
-    memcpy(&core_file[(8192 - 32) * 1024], file_data, file_len);
+    memcpy(&core_file[(max_core_size - 32) * 1024], file_data, file_len);
   }
 
   // Write embedded file
   unsigned int this_offset = last_file_offset;
   unsigned int next_offset = this_offset + 4 + 4 + 32 + file_len;
 
-  if (next_offset >= (8192 - (banner_present ? 32 : 0)) * 1024 - 4) {
+  if (next_offset >= (max_core_size - (banner_present ? 32 : 0)) * 1024 - 4) {
     fprintf(stderr, "ERROR: COR files must be less than 8MB\n");
     exit(-1);
   }
@@ -745,9 +751,6 @@ char *find_fpga_part_from_m65targetname(const char *m65targetname)
   return m65target->fpga_part;
 }
 
-unsigned char core_file[8192 * 1024];
-int core_len = 0;
-
 int DIRTYMOCK(main)(int argc, char **argv)
 {
   int err, offset;
@@ -775,11 +778,11 @@ int DIRTYMOCK(main)(int argc, char **argv)
   }
 
   if (banner_present) {
-    if (core_len >= (8192 - 32) * 1024 - 4) {
+    if (core_len >= (max_core_size - 32) * 1024 - 4) {
       fprintf(stderr, "ERROR: Insufficient room to place BANNER.M65 at end of slot.\n");
       exit(-1);
     }
-    core_len = 8192 * 1024;
+    core_len = max_core_size * 1024;
   }
   else
     // Leave 4 extra zero bytes at end for end of embedded file chain
