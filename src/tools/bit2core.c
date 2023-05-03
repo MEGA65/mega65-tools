@@ -91,7 +91,7 @@ int get_model_id(const char *m65targetname)
   for (int k = 0; k < m65target_to_model_id_count; k++) {
     if (strcmp(map_m65target_to_model_id[k].name, m65targetname) == 0) {
       max_core_size = map_m65target_to_model_id[k].core_size;
-      fprintf(stderr, "INFO: CORE size set to %d KB", max_core_size);
+      fprintf(stderr, "INFO: CORE size set to %d KB\n", max_core_size);
       return map_m65target_to_model_id[k].model_id;
     }
   }
