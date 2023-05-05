@@ -57,6 +57,9 @@ void bust_cache(void)
 {
   lpoke(0xbfffff2, fast_flags & (0xff - cache_bit));
   lpoke(0xbfffff2, fast_flags | cache_bit);
+
+  // And read somewhere completely different to ensure read cache line is invalidated
+  lpeek(0xbfffff0);
 }
 
 void setup_hyperram(void)
@@ -70,12 +73,14 @@ void setup_hyperram(void)
   //  lpoke(0xbfffffd,0x03);
   //  lpoke(0xbfffffe,0x01);
 
+#if 1
   lpoke(0x8000000, 0xbd);
   while (lpeek(0x8000000) != 0xBD) {
     printf("Rewriting $8000000 = $BD.\n");
     lpoke(0x8000000, 0xbd);
   }
-  for (addr = 0x8001000; (addr != 0x9000000); addr += 0x1000) {
+#endif
+  for (addr = 0x8001000; (addr != 0xC000000); addr += 0x1000) {
 
     // XXX There is still some cache consistency bugs,
     // so we bust the cache before checking various things
@@ -129,7 +134,7 @@ void setup_hyperram(void)
 
   upper_addr = addr;
 
-  if ((addr != 0x8800000) && (addr != 0x9000000)) {
+  if ((addr != 0x8800000) && (addr != 0x9000000) && (addr != 0xc000000)) {
     printf("\nError(s) while testing Slow RAM\n");
     printf("\nPress any key to continue...\n");
     while (PEEK(0xD610))
@@ -241,6 +246,55 @@ void test_continuousread(void)
   }
 }
 
+void test_continuousreadwrite(void)
+{
+  i = 0;
+
+  for (addr = 0x8000000; addr < 0x8800000; addr += 0x8000)
+    lfill(addr, i++, 0x8000);
+
+  printf("Initialising hyperram contents...\n");
+
+  addr = 0x8000000;
+  lfill(addr, 0xbd, 0x800);
+
+  addr = 0x8800000;
+  lfill(addr, 0xbd, 0x800);
+
+  // Prepare test pattern
+  for(j=0;j<0x800;j++) POKE(0xc000+j,j);
+
+  // Copy slow RAM back and check
+  while (!PEEK(0xD610)) {
+    POKE(0xD020, PEEK(0xD020) + 1);
+    addr += 0x800; if (addr > (upper_addr-0x800)) addr=0x8000000;
+    lcopy(0xc000,addr, 0x800);
+    lcopy(addr, 0x0400, 1000);
+
+    // Mark mismatches red
+    // Internal hyperram:
+    i = 0;
+    for (j = 0; j < 1000; j++) {
+      if (PEEK(0x0400 + j) != (j&0xff)) {
+        i++;
+        POKE(0xD800 + j, 2);
+      } else POKE(0xD800 + j,0xe);
+    }
+    if (i > 0) {
+      // Wait for user press while debugging external hyperram read problems.
+      while (!PEEK(0xD610)) {
+        POKE(0xD021, PEEK(0xD021) + 1);
+      }
+      if (PEEK(0xD610) == 3)
+        return;
+      POKE(0xD610, 0);
+    }
+
+  }
+}
+
+
+
 void test_ramtiming(void)
 {
   printf("%c%cThis message should appear without\n"
@@ -344,8 +398,23 @@ void show_cache_line(unsigned long addr, int row)
 
 void show_cache_contents(void)
 {
-  show_cache_line(0xb000000L, 0);
-  show_cache_line(0xb000010L, 1);
+  if (upper_addr<0xa000000) {
+    // HyperRAM probably, due to <32MB size
+    show_cache_line(0xb000000L, 0);
+    show_cache_line(0xb000010L, 1);
+  } else {
+    // SDRAM probably, due to >32MB size
+    lpoke(0xffd37ff,0x08);
+    printf("cache line: validP=%d\n",lpeek(0xffd37ff)&1);
+    lpoke(0xffd37ff,0x0c); printf("  @ $%01x",lpeek(0xffd37ff));
+    lpoke(0xffd37ff,0x0b); printf("%02x",lpeek(0xffd37ff));
+    lpoke(0xffd37ff,0x0a); printf("%02x",lpeek(0xffd37ff));
+    lpoke(0xffd37ff,0x09); printf("%02x:",lpeek(0xffd37ff));
+    for(k=0;k<8;k++) {
+      lpoke(0xffd37ff,k); printf("%02x ",lpeek(0xffd37ff));
+    }
+    printf("\n");
+  }
 }
 
 void test_cacheerror(void)
@@ -381,6 +450,12 @@ void test_cacheerror(void)
     if (k != (j + 0x10)) {
       printf("Read $%02x from $%08lx instead of $%02x\n", k, 0x8000800L + j, j + 0x10);
       show_cache_contents();
+
+      printf("\nPress any key to continue.\n");
+      while (PEEK(0xD610)) POKE(0xD610, 0);
+      while (!PEEK(0xD610)) continue;
+      if (PEEK(0xD610) == 0x03) return;
+      while (PEEK(0xD610)) POKE(0xD610, 0);      
     }
   }
 
@@ -422,6 +497,9 @@ void test_miswrite(void)
 
       //	show_cache_contents();
 
+      // Cause read cache to invalidate
+      lpeek(0xbffffff);
+      
       // Copy slow RAM back and check
       // while(1) {
       lcopy(addr, 0xc000, 0x800);
@@ -485,20 +563,34 @@ void test_checkerboard(void)
   }
   printf("\n");
 
-  // Now copy out blocks of HypeRAM and verify that the checkerboard pattern is still there.
-  printf("Verifying");
-  for (addr = 0x8000000; addr < upper_addr; addr += 0x800) {
+  printf("Initial fast verification");
+  for (addr = 0x8000000; addr < upper_addr; addr += 0x400) {
     if (PEEK(0xD610) == 0x03)
       return;
     while (PEEK(0xD610))
       POKE(0xD610, 0);
     if (!(addr & 0xffff))
       printf(".");
-    lcopy(addr, 0xc000, 0x800);
-    for (temp_addr = 0xc000; temp_addr < 0xc800; temp_addr++)
+    j=lpeek(addr);
+    if (j!=0xaa) printf("!@$%07lx",addr);
+  }
+  
+  // Now copy out blocks of HyperRAM and verify that the checkerboard pattern is still there.
+  printf("Verifying");
+  for (addr = 0x8000000; addr < upper_addr; addr += 0x400) {
+    if (PEEK(0xD610) == 0x03)
+      return;
+    while (PEEK(0xD610))
+      POKE(0xD610, 0);
+    if (!(addr & 0xffff))
+      printf(".");
+    lcopy(addr, 0xc000, 0x400);
+    for (temp_addr = 0xc000; temp_addr < (0xc000+0x400); temp_addr++)
       if (((temp_addr & 1) & (PEEK(temp_addr) != 0x55)) || ((!(temp_addr & 1)) & (PEEK(temp_addr) != 0xAA))) {
         printf("\nVerify error: $%08lx contained $%02x instead of $%02x\n", addr + temp_addr - 0xc000, PEEK(temp_addr),
             (addr & 1) ? 0x55 : 0xaa);
+	printf("Re-read of $%08lx = $%02x\n",addr + temp_addr - 0xc000, lpeek(addr + temp_addr - 0xc000));
+	printf("(skipping remainder of this 2KB block)\n");
         while (PEEK(0xD610))
           POKE(0xD610, 0);
         while (!PEEK(0xD610))
@@ -507,6 +599,7 @@ void test_checkerboard(void)
           return;
         while (PEEK(0xD610))
           POKE(0xD610, 0);
+	break;
       }
   }
   printf("\n");
@@ -556,6 +649,8 @@ void test_checkerboard(void)
 
 void show_info(void)
 {
+  int expected_capacity;
+  
   printf("%cUpper limit of Slow RAM is $%08lx\n", 0x13, upper_addr);
   mbs = (unsigned int)((addr - 0x8000000L) >> 20L);
   printf("Slow RAM is %d MB\n", mbs);
@@ -568,7 +663,11 @@ void show_info(void)
 
   //  printf("Chip ID: %d rows, %d columns\n",
   //	 (id0hi&0x1f)+1,(id0lo>>4)+1);
-  printf("  Expected capacity: %d MB\n", 1 << ((id0hi & 0x1f) + 1 + (id0lo >> 4) + 1 + 1 - 20));
+  expected_capacity = 1 << ((id0hi & 0x1f) + 1 + (id0lo >> 4) + 1 + 1 - 20);
+  if (expected_capacity<1024)
+    printf("  Expected capacity: %d MB\n", expected_capacity);
+  else
+    printf("  Unknown capacity\n");
   printf("  Vendor: ");
   switch (id0lo & 0xf) {
   case 1:
@@ -717,13 +816,12 @@ void test_speed(void)
       break;
 
     printf("%c", 0x13);
-    show_info();
+    //    show_info();
     printf("\n%cFast Chip RAM:%c\n", 0x12, 0x92);
 
     // Test read speed of normal and extra ram
-    while (PEEK(0xD012) != 0x20)
-      while (PEEK(0xD011) & 0x80)
-        continue;
+    while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+
     lcopy(0x20000L, 0x40000L, 32768);
     r2 = PEEK(0xD012);
     printf("Copy Chip RAM to Chip RAM: ");
@@ -732,9 +830,8 @@ void test_speed(void)
     speed = 32768000L / time;
     printf("%ld KB/s \n", speed);
 
-    while (PEEK(0xD012) != 0x20)
-      while (PEEK(0xD011) & 0x80)
-        continue;
+    while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+
     lfill(0x40000L, 0, 32768);
     r2 = PEEK(0xD012);
     printf("            Fill Chip RAM: ");
@@ -748,32 +845,33 @@ void test_speed(void)
 
     printf("%cInternal Slow RAM @%dMHz:%c\n", 0x12, fast_flags & 1 ? 80 : 40, 0x92);
 
-    while (PEEK(0xD012) != 0x20)
-      while (PEEK(0xD011) & 0x80)
-        continue;
+    while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+
     //      POKE(0xD020,1);
+    POKE(0xD020,1);
     lcopy(0x8000000, 0x40000, 4096);
+
     POKE(0xD020, 14);
+    
     r2 = PEEK(0xD012);
     printf("Copy Slow RAM to Chip RAM: ");
     time = (r2 - 0x20) * 63;
     speed = 4096000L / time;
     printf("%ld KB/s \n", speed);
 
-    while (PEEK(0xD012) != 0x20)
-      while (PEEK(0xD011) & 0x80)
-        continue;
+    while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+
     lcopy(0x40000, 0x8000000, 4096);
+
     r2 = PEEK(0xD012);
     printf("Copy Chip RAM to Slow RAM: ");
     time = (r2 - 0x20) * 63;
     speed = 4096000L / time;
     printf("%ld KB/s \n", speed);
 
-    while (PEEK(0xD012) != 0x20)
-      while (PEEK(0xD011) & 0x80)
-        continue;
-    //      POKE(0xD020,2);
+    while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+    
+    // POKE(0xD020,2);
     lcopy(0x8000000, 0x8010000, 4096);
     POKE(0xD020, 14);
     r2 = PEEK(0xD012);
@@ -782,9 +880,8 @@ void test_speed(void)
     speed = 4096000L / time;
     printf("%ld KB/s \n", speed);
 
-    while (PEEK(0xD012) != 0x20)
-      while (PEEK(0xD011) & 0x80)
-        continue;
+    while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+
     lfill(0x8000000, 0, 4096);
     r2 = PEEK(0xD012);
     printf("            Fill Slow RAM: ");
@@ -797,13 +894,12 @@ void test_speed(void)
 
     printf("%cTrapdoor Slow RAM @%dMHz:%c\n", 0x12, fast_flags & 1 ? 80 : 40, 0x92);
 
-    if (upper_addr <= 0x8800000)
+    if (upper_addr != 0x8800000)
       printf("  Not detected.\n");
     else {
 
-      while (PEEK(0xD012) != 0x20)
-        while (PEEK(0xD011) & 0x80)
-          continue;
+    while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+
       //      POKE(0xD020,1);
       lcopy(0x8800000, 0x40000, 4096);
       POKE(0xD020, 14);
@@ -813,9 +909,8 @@ void test_speed(void)
       speed = 4096000L / time;
       printf("%ld KB/s \n", speed);
 
-      while (PEEK(0xD012) != 0x20)
-        while (PEEK(0xD011) & 0x80)
-          continue;
+      while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+
       lcopy(0x40000, 0x8800000, 4096);
       r2 = PEEK(0xD012);
       printf("Copy Chip RAM to Slow RAM: ");
@@ -823,9 +918,7 @@ void test_speed(void)
       speed = 4096000L / time;
       printf("%ld KB/s \n", speed);
 
-      while (PEEK(0xD012) != 0x20)
-        while (PEEK(0xD011) & 0x80)
-          continue;
+      while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
       //      POKE(0xD020,2);
       lcopy(0x8800000, 0x8810000, 4096);
       POKE(0xD020, 14);
@@ -835,9 +928,8 @@ void test_speed(void)
       speed = 4096000L / time;
       printf("%ld KB/s \n", speed);
 
-      while (PEEK(0xD012) != 0x20)
-        while (PEEK(0xD011) & 0x80)
-          continue;
+      while ((PEEK(0xD011) & 0x80)||(PEEK(0xD012) != 0x20)) continue;
+      
       lfill(0x8800000, 0, 4096);
       r2 = PEEK(0xD012);
       printf("            Fill Slow RAM: ");
@@ -889,6 +981,7 @@ void main(void)
            "6 - Probe RAM timings\n"
            "7 - Test chipset DMA\n"
            "8 - Select %d MHz command mode.\n"
+	   "9 - Write/read stability.\n"
            "\n"
            "Press RUN/STOP to return to menu from\nany test.\n",
         fast_flags & 0x01 ? 40 : 80);
@@ -930,6 +1023,9 @@ void main(void)
     case '8':
       fast_flags ^= 0x01;
       slow_flags ^= 0x01;
+      break;
+    case '9':
+      test_continuousreadwrite();
       break;
     }
 
