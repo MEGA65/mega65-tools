@@ -6,4 +6,4 @@ libpng/1.6.39
 *:shared=False
 
 [generators]
-make
+PkgConfigDeps
