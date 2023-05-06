@@ -12,7 +12,6 @@
         .segment        "CODE"
 
 _checksum_fast:
-        sei
         tay                     ; keep data size lo in y
         stx tmp1
         ldz tmp1                ; remember sizehi in z
@@ -138,7 +137,6 @@ done:
         tax                     ; keep in x as return value
         tya                     ; A = chks lo
         eor #$ff                ; invert chks lo
-        cli
         rts                     ; return chks (AX)
 
         .segment        "DATA"

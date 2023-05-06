@@ -1366,7 +1366,7 @@ const uint8_t ethernet_request_string[4] = { 'm', 'r', 'e', 'q' };
 
 int ethernet_timeout_handler()
 {
-  log_warn("ACK timeout, requesting TX reset from MEGA65");
+  log_warn("ACK timeout, requesting ethernet controller reset from MEGA65");
   const int packet_size = 7;
   uint8_t payload[packet_size];
   memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string

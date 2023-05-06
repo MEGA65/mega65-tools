@@ -18,6 +18,10 @@
 #define ARP_REQUEST 0x0100 // big-endian for 0x0001
 #define ARP_REPLY 0x0200   // big-endian for 0x0002
 
+uint16_t fastcall ip_checksum_recv();
+uint16_t fastcall checksum_fast(uint16_t size);
+void fastcall dma_copy_eth_io(void *src, void *dst, uint16_t size);
+
 typedef struct {
   uint8_t b[6];
 } EUI48;
@@ -116,6 +120,7 @@ typedef union {
 uint8_t cpu_status;
 char msg[80];
 uint8_t quit_requested = 0;
+uint8_t eth_controller_reset_done = 0;
 PACKET reply_template;
 PACKET recv_buf;
 uint8_t sector_buf[512];
@@ -143,7 +148,7 @@ uint32_t udp_chks_err_cnt = 0;
 uint32_t retrans_cnt = 0;
 uint32_t dup_cnt = 0;
 uint32_t tx_reset_cnt = 0;
-uint8_t do_debug = 0;
+uint32_t rx_invalid_cnt = 0;
 
 typedef union {
   uint16_t u;
@@ -151,12 +156,24 @@ typedef union {
 } chks_t;
 chks_t chks;
 
-void checksum_fast();
-extern chks_t chks_fast;
-uint16_t chks_size;
-
 static uint8_t _a, _b, _c;
 static unsigned int _b16;
+
+void stop_fatal(char *text);
+
+void print(uint8_t row, uint8_t col, char *text)
+{
+  uint16_t addr = 0x400u + 40u * row + col;
+
+  lfill(addr, 0x20, 40 - col);
+  while (*text) {
+    *((char *)addr++) = *text++;
+    
+    if (addr > 0x7bf) {
+      stop_fatal("print out of bounds error");
+    }
+  }
+}
 
 void init(void)
 {
@@ -164,21 +181,22 @@ void init(void)
   POKE(0xD021, 0);
   lfill(0x400, 0x20, 1000);
   lfill(0xff80000, 5, 1000);
-}
 
-void print(uint8_t row, uint8_t col, char *text)
-{
-  uint16_t addr = 0x400 + 40 * row + col;
-  lfill(addr, 0x20, 40);
-  while (*text) {
-    *((char *)addr++) = *text++;
-  }
+  print(10, 0, "ip chks err count:  0");
+  print(11, 0, "udp chks err count: 0");
+  print(12, 0, "retrans detected:   0");
+  print(13, 0, "duplicate packets:  0");
+  print(14, 0, "tx resets:          0");
+  print(15, 0, "rx invalid packets: 0");
 }
 
 void stop_fatal(char *text)
 {
   print(2, 0, text);
-  while (1) continue;
+  while (1) {
+    POKE(0xD020, 1);
+    POKE(0xD020, 2);
+  }
 }
 
 void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line)
@@ -232,18 +250,27 @@ void print_ip_informtaion(void)
   print(8, 0, msg);
 }
 
+void update_rx_invalid_counter()
+{
+  ++rx_invalid_cnt;
+  sprintf(msg, "%lu", rx_invalid_cnt);
+  print(15, 20, msg);
+}
+
 void update_counters(void)
 {
-  sprintf(msg, "ip chks err count:  %lu", chks_err_cnt);
-  print(10, 0, msg);
-  sprintf(msg, "udp chks err count: %lu", udp_chks_err_cnt);
-  print(11, 0, msg);
-  sprintf(msg, "retrans detected:   %lu", retrans_cnt);
-  print(12, 0, msg);
-  sprintf(msg, "duplicate packets:  %lu", dup_cnt);
-  print(13, 0, msg);
-  sprintf(msg, "tx resets:          %lu", tx_reset_cnt);
-  print(14, 0, msg);
+  static const uint8_t col = 20;
+
+  sprintf(msg, "%lu", chks_err_cnt);
+  print(10, col, msg);
+  sprintf(msg, "%lu", udp_chks_err_cnt);
+  print(11, col, msg);
+  sprintf(msg, "%lu", retrans_cnt);
+  print(12, col, msg);
+  sprintf(msg, "%lu", dup_cnt);
+  print(13, col, msg);
+  sprintf(msg, "%lu", tx_reset_cnt);
+  print(14, col, msg);
 }
 
 /**
@@ -329,18 +356,18 @@ void add_checksum(uint16_t v)
 
 uint8_t check_ip_checksum(uint8_t *hdr)
 {
-  chks_t ref_chks;
-  ref_chks.b[0] = hdr[10];
-  ref_chks.b[1] = hdr[11];
-  hdr[10] = 0;
-  hdr[11] = 0;
+  static chks_t ref_chks;
 
-  chks.u = 0;
-  checksum(hdr, 20);
-  if (~chks.u == ref_chks.u) {
+  chks.u = ip_checksum_recv();
+  //chks.u = 0;
+  //checksum(hdr, 20);
+  if (chks.u == 0xffffU) {
     return 1;
   }
-  sprintf(msg, "ref: %04x  act: %04x", ref_chks.u, ~chks.u);
+
+  ref_chks.b[0] = hdr[10];
+  ref_chks.b[1] = hdr[11];
+  sprintf(msg, "ip chks    rx: %04x  act: %04x", ref_chks.u, chks.u);
   print(20, 0, msg);
   return 0;
 }
@@ -354,52 +381,45 @@ uint8_t check_udp_checksum()
 
   if (udp_length > 1400)
   {
-    stop_fatal("illegal udp length");
+    stop_fatal("udp length too large");
   }
 
-  *(uint32_t *)0xC800 = recv_buf.ftp.source.d;
-  *(uint32_t *)0xC804 = recv_buf.ftp.destination.d;
-  *(uint8_t *)0xC808 = 0;
-  *(uint8_t *)0xC809 = recv_buf.ftp.protocol;
+  if (udp_length < 8)
+  {
+    stop_fatal("udp length too small");
+  }
   *(uint16_t *)0xC80A = recv_buf.ftp.udp_length;
-  lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + 20, 0xC80CUL, udp_length);
+  //lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + 20, 0xC80CU, udp_length);
+  dma_copy_eth_io((void *)(0xD800U + 2 + sizeof(ETH_HEADER) + 20), (void *)(0xC80CU), udp_length);
   
   ref_chks = *(uint16_t *)0xC812;
   *(uint16_t *)0xC812 = 0; // reset checksum field
-  
-  chks_size = udp_length + 12;
-  checksum_fast();
-  chks_fast.u = ~chks_fast.u;
 
-  if (chks_fast.u == 0) {
-    chks_fast.u = 0xffffU;
+  chks.u = checksum_fast(udp_length + 12);
+  //chks.u = 0;
+  //checksum((uint8_t *)0xC800U, udp_length + 12);
+
+  if (chks.u == 0) {
+    chks.u = 0xffffU;
   }
-  if (chks_fast.u == ref_chks) {
+  if (chks.u == ref_chks) {
     return 1;
   }
-  sprintf(msg, "uref: %04x  uact: %04x  l: %04x", ref_chks, chks_fast.u, udp_length + 12);
-  print(21, 0, msg);
+  sprintf(msg, "udp chks   rx: %04x act: %04x len: %04x", ref_chks, chks.u, udp_length + 12);
+  print(23, 0, msg);
   
-  chks.u = 0;
-  checksum((uint8_t *)0xC800U, udp_length + 12);
-  sprintf(msg, "cref: %04x", ~chks.u);
-  print(22, 0, msg);
+  ++udp_chks_err_cnt;
+  update_counters();
+  update_rx_invalid_counter();
 
   return 0;
-}
-
-void wait_key(void)
-{
-  while (PEEK(0xD610) == 0)
-    continue;
-  POKE(0xD610, 0);
-  POKE(0xD020, PEEK(0xD020) + 1);
 }
 
 void wait_for_sd_ready()
 {
   while (PEEK(0xD680) & 0x03)
-    POKE(0xD020, PEEK(0xD020) + 1);
+    //POKE(0xD020, PEEK(0xD020) + 1);
+    continue;
 }
 
 void init_new_write_batch()
@@ -463,6 +483,9 @@ void handle_batch_write()
   uint8_t id = recv_buf.write_sector.slot_index;
   uint32_t cache_position = 0x40000ul;
   cache_position += (uint32_t)id << 9;
+  if (cache_position < 0x40000ul || cache_position > 0x5fe00ul) {
+    stop_fatal("cache_position out of bounds");
+  }
 
   if (recv_buf.write_sector.batch_counter != current_batch_counter) {
     print(2, 0, "late duplicate packet for batch");
@@ -483,6 +506,18 @@ void handle_batch_write()
   multi_sector_write_next();
 }
 
+void wait_100ms(void)
+{
+  // 16 x ~64usec raster lines = ~1ms
+  int c = 1600;
+  unsigned char b;
+  while (c--) {
+    b = PEEK(0xD012U);
+    while (b == PEEK(0xD012U))
+      continue;
+  }
+}
+
 void get_new_job()
 {
   while (PEEK(0xD6E1) & 0x20) {
@@ -490,10 +525,6 @@ void get_new_job()
     POKE(0xD6E1, 0x03);
 
     lcopy(ETH_RX_BUFFER + 2L, (uint32_t)&recv_buf.eth, sizeof(ETH_HEADER));
-    if (do_debug) {
-      print(17, 0, "rx packet");
-      wait_key();
-    }
     /*
      * Check destination address.
      */
@@ -509,10 +540,6 @@ void get_new_job()
     }
 
     if (recv_buf.eth.type == 0x0608) { // big-endian for 0x0806
-      if (do_debug) {
-        print(17, 0, "arp detected");
-        wait_key();
-      }
       /*
        * ARP packet.
        */
@@ -549,10 +576,6 @@ void get_new_job()
       uint16_t udp_length;
       uint16_t num_bytes;
 
-      if (do_debug) {
-        print(17, 0, "ip detected");
-        wait_key();
-      }
       // We read the header and job data. Since we don't know the exact job, yet, copy the worst case
       // (largest job) which is the write sector command.
       lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER), (uint32_t)&recv_buf.ftp.ver_length,
@@ -573,19 +596,16 @@ void get_new_job()
       if (recv_buf.ftp.protocol != 17 /*udp*/ || NTOHS(recv_buf.ftp.dst_port) != 4510) {
         continue;
       }
-      if (do_debug) {
-        print(17, 0, "udp 4510 detected");
-        wait_key();
-      }
 
       if (!check_ip_checksum((uint8_t *)&recv_buf.ftp)) {
         uint8_t *data_ptr = (uint8_t *)&recv_buf.ftp;
-        print(16, 0, "wrong ip checksum detected");
-        dump_bytes(data_ptr, 10, 17);
-        dump_bytes(data_ptr + 10, 10, 18);
+        print(17, 0, "wrong ip checksum detected");
+        dump_bytes(data_ptr, 10, 18);
+        dump_bytes(data_ptr + 10, 10, 19);
 
         ++chks_err_cnt;
         update_counters();
+        update_rx_invalid_counter();
         continue;
       }
 
@@ -594,17 +614,21 @@ void get_new_job()
         reply_template.ftp.source.d = recv_buf.ftp.destination.d;
         reply_template.ftp.destination.d = recv_buf.ftp.source.d;
         reply_template.ftp.dst_port = recv_buf.ftp.src_port;
+
+        // init pseudo header bytes in udp recv checksum buffer
+        *(uint32_t *)0xC800 = recv_buf.ftp.source.d;
+        *(uint32_t *)0xC804 = recv_buf.ftp.destination.d;
+        *(uint8_t *)0xC808 = 0;
+        *(uint8_t *)0xC809 = recv_buf.ftp.protocol;
+
         ip_addr_set = 1;
         print_ip_informtaion();
       }
 
       if (recv_buf.ftp.ftp_magic != 0x7165726d /* 'mreq' big endian*/) {
         // printf("Non matching magic bytes: %x", recv_buf.ftp.ftp_magic);
+        update_rx_invalid_counter();
         continue;
-      }
-      if (do_debug) {
-        print(17, 0, "magic found");
-        wait_key();
       }
 
       udp_length = NTOHS(recv_buf.ftp.udp_length);
@@ -613,16 +637,14 @@ void get_new_job()
       {
         ++udp_chks_err_cnt;
         update_counters();
+        update_rx_invalid_counter();
         continue;
       }
 
       switch (recv_buf.ftp.opcode) {
       case 0x02: // write sector
-        if (do_debug) {
-          print(17, 0, "write sector");
-          wait_key();
-        }
         if (udp_length != 534) {
+          update_rx_invalid_counter();
           continue;
         }
         if (recv_buf.write_sector.num_sectors_minus_one == 0) {
@@ -660,10 +682,6 @@ void get_new_job()
           POKE(0xD680, 0x03); // Single sector write command
         }
         else {
-          if (do_debug) {
-            print(17, 0, "write multi-sector");
-            wait_key();
-          }
           /*
            * Multi sector write request (batch of sectors)
            */
@@ -695,11 +713,6 @@ void get_new_job()
         return;
 
       case 0x04:
-        if (do_debug) {
-          print(17, 0, "read sectors");
-          wait_key();
-        }
-
         if (write_batch_active) {
           stop_fatal("error: read/write requests mixed up");
         }
@@ -709,6 +722,7 @@ void get_new_job()
          */
 
         if (udp_length != 21) {
+          update_rx_invalid_counter();
           continue;
         }
         if (recv_buf.read_sector.unused_1 != 0) {
@@ -722,6 +736,9 @@ void get_new_job()
         reply_template.read_sector.num_sectors_minus_one = 0;
 
         batch_left = recv_buf.read_sector.num_sectors_minus_one;
+        if (batch_left > 64) {
+          stop_fatal("batchleft out of bounds");
+        }
         ++batch_left;
         sector_number_read = recv_buf.read_sector.sector_number;
         seq_num = recv_buf.ftp.seq_num;
@@ -735,10 +752,14 @@ void get_new_job()
          */
 
         if (udp_length != 20) {
+          update_rx_invalid_counter();
           continue;
         }
         num_bytes = recv_buf.read_memory.num_bytes_minus_one;
         ++num_bytes;
+        if (num_bytes > 600) {
+          stop_fatal("num_bytes out of range");
+        }
         lcopy(
             (uint32_t)&reply_template, (uint32_t)&send_buf, sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB));
         lcopy(recv_buf.read_memory.address,
@@ -764,11 +785,26 @@ void get_new_job()
         /*
          * Reset TX request
          */
-        // Reset Ethernet controller tx, it seemed to stop sending packets
-        POKE(0xD6E0, 0x01);
-        POKE(0xD6E0, 0x03);
-        ++tx_reset_cnt;
-        update_counters();
+        if (!eth_controller_reset_done) {
+          // Reset Ethernet controller tx, it seemed to stop sending packets
+          POKE(0xD6E0, 0x00);
+          wait_100ms();
+          wait_100ms();
+          wait_100ms();
+          wait_100ms();
+          wait_100ms();
+          POKE(0xD6E0, 0x03);
+          wait_100ms();
+          wait_100ms();
+          wait_100ms();
+          wait_100ms();
+          wait_100ms();
+          POKE(0xD6E1, 3);
+          POKE(0xD6E1, 0);
+          ++tx_reset_cnt;
+          update_counters();
+          eth_controller_reset_done = 1;
+        }
         return;
 
       case 0xff:
@@ -798,47 +834,29 @@ void get_new_job()
 
 void process()
 {
-  /*if (do_debug == 0 && PEEK(0xD610)) {
-    do_debug = 1;
-    POKE(0xD021, 6);
-    POKE(0xD610, 0);
-    print(16, 0, "debug active");
-  }*/
-
   if (send_buf_size > 0) {
-    if (do_debug) {
-      print(15, 0, "send_buf_size");
-      wait_key();
-    }
     if (!(PEEK(0xD6E0) & 0x80)) {
       return;
     }
     // Copy to TX buffer
+    if (send_buf_size > 600) {
+      stop_fatal("send_buf_size out of bounds");
+    }
     lcopy((uint32_t)&send_buf, ETH_TX_BUFFER, send_buf_size);
 
     // Set packet length
-    if (do_debug) {
-      sprintf(msg, "size: %d", send_buf_size);
-      print(15, 0, msg);
-      wait_key();
-    }
     POKE(0xD6E2, send_buf_size & 0xff);
     POKE(0xD6E3, send_buf_size >> 8);
 
-    // Make sure ethernet is not under reset
-    POKE(0xD6E0, 0x03);
-
     // Send packet
     POKE(0xD6E4, 0x01); // TX now
+
+    eth_controller_reset_done = 0;
 
     send_buf_size = 0;
   }
 
   if (batch_left == 0 && write_batch_active) {
-    if (do_debug) {
-      print(15, 0, "write_batch_active");
-      wait_key();
-    }
     while (slots_written <= write_batch_max_id) {
       multi_sector_write_next();
     }
@@ -864,7 +882,7 @@ void process()
 
   if (sector_reading) {
     if (PEEK(0xD680) & 0x03) {
-      POKE(0xD020, PEEK(0xD020) + 1);
+      //POKE(0xD020, PEEK(0xD020) + 1);
       return;
     }
     lcopy(0xffd6e00, (long)sector_buf, 0x200);
@@ -892,41 +910,24 @@ void process()
       continue;
     __asm__("jmp 58552");
     // Should never get here
-    while (1)
-      continue;
+    stop_fatal("error: failed to execute rom reset routine");
   }
 
   get_new_job();
 }
 
-void wait_100ms(void)
-{
-  // 16 x ~64usec raster lines = ~1ms
-  int c = 1600;
-  unsigned char b;
-  while (c--) {
-    b = PEEK(0xD012U);
-    while (b == PEEK(0xD012U))
-      continue;
-  }
-}
-
-static uint8_t testhdr[20] = {0x45, 0, 2, 0x2a, 0x2a, 0x9c, 0, 0, 0x40, 0x11, 0, 0, 0xc0, 0xa8, 0xb2, 0x14, 0xc0, 0xa8, 0xb2, 0x41};
-
 void main(void)
 {
   asm("sei");
 
-  // Fast CPU, M65 IO
+  // Fast CPU, M65 Ethernet I/O (eth buffer @ $d800)
   POKE(0, 65);
-  POKE(0xD02F, 0x47);
-  POKE(0xD02F, 0x53);
+  POKE(0xD02F, 0x45);
+  POKE(0xD02F, 0x54);
 
-  check_ip_checksum(testhdr);
-
-  // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM on
+    // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM on
   POKE(0xD6E5, 0x75);
-
+  
   POKE(0xD689, PEEK(0xD689) | 128); // Enable SD card buffers instead of Floppy buffer
 
   // Cursor off
@@ -962,11 +963,7 @@ void main(void)
     __asm__("pla");
     __asm__("sta %v", cpu_status);
     if (!(cpu_status & 0x04)) {
-      print(10, 0, "error: cpu irq enabled");
-      while (1) {
-        POKE(0xD020, 1);
-        POKE(0xD020, 2);
-      }
+      stop_fatal("error: cpu irq enabled");
     }
     process();
   }
