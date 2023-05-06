@@ -27,6 +27,14 @@ entry:
 	and #$10
 	beq -
 
+rom_write_enable:
+	lda #$00
+	beq copy_data
+	lda #$02
+	sta $d641
+	clv
+
+copy_data:
 	sta $d707 ; trigger in-line DMA
 	.byte $80, $ff ; SRC MB is $FF
 	.byte $81
@@ -104,6 +112,7 @@ dest_bank:
 
 	; Set source IP last byte to 65
 	lda #$41
+	;lda #$06
 ;	lda #$ff ; XXX DEBUG - set it to broadcast to avoid IP/UDP header crc changes
 	sta $681d
 	; Set dest IP last byte to that of sender

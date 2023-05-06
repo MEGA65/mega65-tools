@@ -34,12 +34,6 @@ entry:
 	lda #$53
 	sta $d02f
 
-	ldx #$0b
-*	lda romfilename,x
-	sta $0200,x
-	dex
-	bpl -
-
 	; Disable C65 ROM write protection via Hypervisor trap
 	lda #$02
 	sta $d641
@@ -49,10 +43,15 @@ entry:
 	lda #$22
 	sta $d640
 	clv
-	; chdir root
-	lda #$3e
-	sta $d643
-	clv
+
+	lda enable_default_rom_load
+	beq mount_d81
+	; copy rom filename to bank 0
+	ldx #$0b
+*	lda romfilename,x
+	sta $0200,x
+	dex
+	bpl -
 	; set rom filename
 	ldy #$02
 	lda #$2e
@@ -67,6 +66,26 @@ entry:
 	sta $d640
 	clv
 
+mount_d81:
+	; mount d81
+	lda d81filename
+	beq copy_reset_routine
+	ldx #$17
+*	lda d81filename,x
+	sta $0200,x
+	dex
+	bpl -
+	; set d81 filename
+	ldy #$02
+	lda #$2e
+	sta $d640
+	clv
+	; attach d81 image
+	lda #$40
+	sta $d640
+	clv
+
+copy_reset_routine:
 	; copy reset routine to $0334
 	ldx #reset_c64_end - reset_c64
 *	lda reset_c64-1,x
@@ -99,6 +118,8 @@ entry:
 	map
 	eom
 
+	lda restore_prg
+	beq restore_write_protection
 	; backup and patch basic cold start vector
 	lda $a000
 	sta basic_cold_start_backup
@@ -109,6 +130,12 @@ entry:
 	sta $a000
 	lda #$07
 	sta $a001
+
+restore_write_protection:
+	; restore rom write protection
+	lda #$00
+	sta $d641
+	clv
 
 	; turn off mapping of upper 32kb region
 	lda #$80
@@ -189,10 +216,15 @@ entry:
 	jmp tmpbuffer
 
 romfilename:
-	.byte "MEGA65.ROM", $00
-
+	.byte "MEGA65.ROM", $00, $00
+d81filename:
+	.dword 0, 0, 0, 0
 enable_cart_signature:
 	.byte $00
+enable_default_rom_load:
+	.byte $01
+restore_prg:
+	.byte $01
 
 ; this routine resets all mappings and jumps into the c64 rom reset routine
 ; is copied to $334
@@ -254,6 +286,17 @@ autostart:
 	lda cartridge_backup
 	sta $8004
 
+	; Enable mega65 I/O personality
+	lda #$47
+	sta $d02f
+	lda #$53
+	sta $d02f
+
+	; Disable C65 ROM write protection via Hypervisor trap
+	lda #$02
+	sta $d641
+	clv
+
 	; restore basic cold start vector
 	lda basic_cold_start_backup
 	sta $a000
@@ -279,12 +322,6 @@ autostart:
 	sta $314
 	lda #>autostart_irq
 	sta $315
-
-	; Enable mega65 I/O personality
-	lda #$47
-	sta $d02f
-	lda #$53
-	sta $d02f
 
 	; restore rom write protection
 	lda #$00

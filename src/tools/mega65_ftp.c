@@ -22,6 +22,8 @@
 
 #define _GNU_SOURCE
 
+#include "etherload_common.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -43,6 +45,7 @@
 #include <stdio.h>
 
 #include "m65common.h"
+#include "etherload/ethlet_all_done_basic2_map.h"
 #include "filehost.h"
 #include "diskman.h"
 #include "dirtymock.h"
@@ -151,6 +154,11 @@ int sdhc_check(void);
 void request_remotesd_version(void);
 void request_quit(void);
 void mount_file(char *filename);
+int ethernet_get_packet_seq(uint8_t *payload, int len);
+int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len);
+int ethernet_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len);
+int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num);
+int ethernet_timeout_handler();
 #define CACHE_NO 0
 #define CACHE_YES 1
 int read_flash(const unsigned int sector_number, unsigned char *buffer);
@@ -179,13 +187,28 @@ int calculate_needed_direntries_for_vfat(char *filename);
 unsigned char lfn_checksum(const unsigned char *pFCBName);
 int get_cluster_count(char *filename);
 void wipe_direntries_of_current_file_or_dir(void);
+void determine_ethernet_window_size(void);
 
 int direct_sdcard_device = 0;
 FILE *fsdcard = NULL;
 
+int ethernet_mode = 0;
+int ethernet_window_size = 3;
+static int sockfd;
+static struct sockaddr_in *servaddr;
+static uint8_t eth_packet_queue[1024][1500];
+static uint16_t eth_packet_len[1024];
+int eth_num_packets = 0;
+uint32_t eth_batch_start_sector = 0;
+uint8_t eth_batch_size = 0;
+
 // Helper routine for faster sector writing
 extern unsigned int helperroutine_len;
 extern unsigned char helperroutine[];
+extern unsigned int helperroutine_eth_len;
+extern unsigned char helperroutine_eth[];
+extern char ethlet_all_done_basic2[];
+extern int ethlet_all_done_basic2_len;
 int helper_installed = 0;
 int job_done;
 int sectors_written;
@@ -208,6 +231,7 @@ int mode_report = 0;
 int serial_port_set = 0;
 char serial_port[1024] = "/dev/ttyUSB1";
 char device_name[1024] = "";
+char ip_address[16] = "";
 char *bitstream = NULL;
 char *username = NULL;
 char *password = NULL;
@@ -216,7 +240,8 @@ unsigned char *sd_read_buffer = NULL;
 int sd_read_offset = 0;
 
 int file_system_found = 0;
-unsigned int partition_start = 0xffffffff; // The absolute sector location of the start of the partition (in units of sectors)
+unsigned int partition_start = 0xffffffff; // The absolute sector location of the start of the partition (in units of
+                                           // sectors)
 unsigned int partition_size = 0;
 unsigned char sectors_per_cluster = 0;
 unsigned int sectors_per_fat = 0;
@@ -279,13 +304,14 @@ void usage(void)
 {
   fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
   fprintf(stderr, "version: %s\n\n", version_string);
-  fprintf(stderr,
-      "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>] [-s <230400|2000000|4000000>]  "
-      "[-b bitstream] [[-c command] ...]\n");
+  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>|-i <broadcast ip>] [-s "
+                  "<230400|2000000|4000000>]  "
+                  "[-b bitstream] [[-c command] ...]\n");
   fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n");
   fprintf(stderr, "  -F - force startup, even if other program is detected\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
-  fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx\n");
+  fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx)\n");
+  fprintf(stderr, "  -i - broadcast ip of ethernet interface to use (e.g. 192.168.1.255)\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Almost always 2000000 is the correct answer).\n");
   fprintf(stderr, "  -b - Name of bitstream file to load.\n");
@@ -482,6 +508,9 @@ int execute_command(char *cmd)
       request_quit();
       if (xemu_flag)
         usleep(30000);
+    }
+    if (ethernet_mode) {
+      etherload_finish();
     }
     exit(0);
   }
@@ -707,7 +736,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
   log_setup(stderr, LOG_NOTE);
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:0:nF")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:i:0:nF")) != -1) {
     switch (opt) {
     case '0':
       loglevel = log_parse_level(optarg);
@@ -728,6 +757,10 @@ int DIRTYMOCK(main)(int argc, char **argv)
     case 'd':
       strcpy(device_name, optarg);
       direct_sdcard_device = 1;
+      break;
+    case 'i':
+      strncpy(ip_address, optarg, sizeof(ip_address));
+      ethernet_mode = 1;
       break;
     case 's':
       serial_speed = atoi(optarg);
@@ -776,6 +809,56 @@ int DIRTYMOCK(main)(int argc, char **argv)
       log_error("could not open device '%s'", device_name);
       exit(-3);
     }
+  }
+  else if (ethernet_mode) {
+    unsigned char *helper_ptr = helperroutine_eth + 2;
+    int bytes = helperroutine_eth_len - 2;
+    int address = 0x0801;
+    int block_size = 1024;
+
+    if (etherload_init(ip_address)) {
+      log_error("Unable to initialize ethernet communication");
+      exit(-1);
+    }
+    ethl_setup_dmaload();
+    trigger_eth_hyperrupt();
+    usleep(100000);
+    log_info("Starting helper routine transfer...");
+    while (bytes > 0) {
+      if (bytes < block_size)
+        block_size = bytes;
+      send_mem(address, helper_ptr, block_size);
+      helper_ptr += block_size;
+      address += block_size;
+      bytes -= block_size;
+    }
+    wait_all_acks();
+    log_info("Helper routine transfer complete");
+
+    // patch in end address
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address] = 0x01;
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address + 1] = 0x08;
+
+    // patch in do_run
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_do_run] = 1;
+
+    // disable cartridge signature detection
+    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_enable_cart_signature] = 0;
+
+    send_ethlet((uint8_t *)ethlet_all_done_basic2, ethlet_all_done_basic2_len);
+
+    sockfd = ethl_get_socket();
+    servaddr = ethl_get_server_addr();
+
+    // setup callbacks for job queue protocol
+    ethl_setup_callbacks(&ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate,
+        &ethernet_embed_packet_seq, ethernet_timeout_handler);
+
+    // Give helper program time to initialize
+    usleep(700000);
+
+    determine_ethernet_window_size();
+    sdhc_check();
   }
   else {
     if (open_the_serial_port(serial_port))
@@ -1170,31 +1253,314 @@ void job_process_results(void)
   }
 }
 
-void queue_execute(void)
+uint8_t memory_read_buffer[256];
+uint8_t memory_read_buffer_len = 0;
+
+void ethernet_process_result(uint8_t *rx_payload, int rx_len)
 {
-  //  long long start = gettime_us();
+  uint8_t *p = &rx_payload[6];
+  uint32_t sector_number;
+  uint32_t memory_addr;
 
-  // Push queued jobs in one go
-  push_ram(0xc001, queue_addr - 0xc001, queue_cmds);
-  //  dump_bytes(0,"queue_cmds",queue_cmds,queue_addr-0xc001);
+  switch (*p) {
+  case 0x04: // sector read
+  {
+    sector_number = p[3] + (p[4] << 8) + (p[5] << 16) + (p[6] << 24);
+    log_debug("Received sector %d, batch start sector %d", sector_number, eth_batch_start_sector);
+    uint32_t index = sector_number - eth_batch_start_sector;
+    bcopy(&rx_payload[13], &queue_read_data[queue_read_len + index * 512], 512);
+    break;
+  }
 
-  // Then set number of jobs to execute them
-  // mega65_poke will try to read data after from on the
-  // serial interface, which messes up the protocol.
-  // so don't do that.
-  char cmd[1024];
-  snprintf(cmd, 1024, "sc000 %x\r", queue_jobs);
-  slow_write(fd, cmd, strlen(cmd));
+  case 0x11: // memory read
+    memory_read_buffer_len = p[1] + 1;
+    memory_addr = p[2] + (p[3] << 8) + (p[4] << 16) + (p[5] << 24);
+    log_debug("Received memory block at $%x (%d bytes)", memory_addr, memory_read_buffer_len);
+    bcopy(&rx_payload[12], memory_read_buffer, memory_read_buffer_len);
+    break;
+  }
+}
 
-  job_process_results();
-  queue_addr = 0xc001;
-  queue_jobs = 0;
+int ethernet_get_packet_seq(uint8_t *payload, int len)
+{
+  if (len < 6) {
+    return -1;
+  }
+
+  return payload[4] + (payload[5] << 8);
+}
+
+int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len)
+{
+  if (rx_len < 7 || tx_len < 7 || memcmp(rx_payload, "mrsp", 4) || memcmp(tx_payload, "mreq", 4)) {
+    return 0;
+  }
+
+  /*
+    if (rx_payload[4] != tx_payload[4] || rx_payload[5] != tx_payload[5]) {
+      return 0;
+    }
+  */
+
+  switch (rx_payload[6]) {
+  case 0x02: // write sector cmd
+    // rx_payload[7] is batch id
+    // rx_payload[8] is batch size
+    // rx_payload[9] is idx in batch
+    // ry_payload[10] is 4 bytes of sector number
+    if (rx_len != 14 || memcmp(&rx_payload[7], &tx_payload[7], 7) != 0) {
+      return 0;
+    }
+    log_debug("Received packet (write_sector ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    break;
+  case 0x04: // read sector cmd
+    // ry_payload[9] is 4 bytes of sector number
+    if (rx_len != 512 + 13 || memcmp(&rx_payload[9], &tx_payload[9], 4) != 0) {
+      return 0;
+    }
+    log_debug("Received packet (read_sector ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    ethernet_process_result(rx_payload, rx_len);
+    break;
+  case 0x11: // read memory cmd
+    // ry_payload[7] is number of bytes
+    // ry_payload[8] is 4 bytes of address
+    if (rx_len < 13 || memcmp(&rx_payload[7], &tx_payload[7], 5) != 0) {
+      return 0;
+    }
+    log_debug("Received packet (read_memory ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    ethernet_process_result(rx_payload, rx_len);
+    break;
+  case 0xff: // quit cmd
+    if (rx_len != 7) {
+      return 0;
+    }
+    log_debug("Received packet (quit ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    break;
+  default:
+    return 0;
+  }
+
+  return 1;
+}
+
+int ethernet_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len)
+{
+  return 0;
+}
+
+int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
+{
+  if (len < 7) {
+    return 0;
+  }
+  payload[4] = seq_num;
+  payload[5] = seq_num >> 8;
+  return 1;
+}
+
+const uint8_t ethernet_request_string[4] = { 'm', 'r', 'e', 'q' };
+
+int ethernet_timeout_handler()
+{
+  log_warn("ACK timeout, requesting ethernet controller reset from MEGA65");
+  const int packet_size = 7;
+  uint8_t payload[packet_size];
+  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+  payload[4] = 0;                              // no seq num for tx reset
+  payload[5] = 0;                              // no seq num for tx reset
+  payload[6] = 0xfe;                           // reset tx command
+  ethl_send_packet_unscheduled(payload, packet_size);
+  return 1;
 }
 
 uint32_t write_buffer_offset = 0;
 uint8_t write_data_buffer[65536];
 uint32_t write_sector_numbers[65536 / 512];
 uint8_t write_sector_count = 0;
+uint8_t write_batch_counter = 0;
+
+void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
+{
+  // Batches should not be mixed with single writes
+  // Make sure we start with an empty queue of pending packets before we
+  // start the next batch
+  if (batch_size > 1) {
+    wait_all_acks();
+  }
+
+  const int packet_size = 14 + 512;
+  int i;
+  uint8_t payload[packet_size];
+  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+  // bytes [4] and [5] will be filled with packet seq numbers
+  payload[6] = *job;
+  payload[7] = write_batch_counter;
+  payload[8] = (batch_size - 1) & 0xff;
+  memcpy(&payload[10], &job[5], 4); // start sector
+
+  for (i = 0; i < batch_size; ++i) {
+    int data_offset = job[1] + (job[2] << 8) + (job[3] << 16) + (job[4] << 24) - 0x50000;
+    payload[9] = i & 0xff; // slot index
+    bcopy(&write_data_buffer[data_offset], &payload[14], 512);
+    ethl_send_packet(payload, packet_size);
+    job += 9;
+  }
+
+  // Batches should not be mixed with single writes, so make sure the batch
+  // is applied completely before we do other batches or individual sector writes
+  if (batch_size > 1) {
+    wait_all_acks();
+  }
+
+  ++write_batch_counter;
+}
+
+void process_ethernet_read_sectors_job(uint8_t *job)
+{
+  int i;
+  uint8_t payload[13];
+  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+  memcpy(&payload[6], job, 7);                 // copy job bytes into packet
+
+  eth_batch_start_sector = payload[9] + (payload[10] << 8) + (payload[11] << 16) + (payload[12] << 24);
+  eth_batch_size = payload[7];
+  --payload[7];
+  if (payload[8] != 0) {
+    log_error("Unsupported batch size %d for ethernet mode", payload[7] + (payload[8] << 8));
+    exit(-1);
+  }
+
+  // We'll send a single request packet for a sector range, but will expect individual packets
+  // per sector as response (with the sector data in the payload). To detect dropped packets, we
+  // schedule an expected ack packet in the Etherload framework for each sector. Thus, we
+  // 'unroll' the request packet into multiple packets and schedule them. If a single response
+  // packet will be missing the framework will schedule resends for that single packet/sector
+  // automatically.
+  uint8_t payload_unrolled[13];
+  memcpy(payload_unrolled, payload, sizeof(payload));
+  payload_unrolled[7] = 1;
+  payload_unrolled[8] = 0;
+  uint32_t sector_number = eth_batch_start_sector;
+  wait_ack_slots_available(eth_batch_size);
+  uint16_t seq_num = ethl_get_current_seq_num();
+  for (i = 0; i < eth_batch_size; ++i) {
+    payload_unrolled[9] = sector_number >> 0;
+    payload_unrolled[10] = sector_number >> 8;
+    payload_unrolled[11] = sector_number >> 16;
+    payload_unrolled[12] = sector_number >> 24;
+    memcpy(eth_packet_queue[i], payload_unrolled, sizeof(payload_unrolled));
+    ++sector_number;
+    ethl_schedule_ack(payload_unrolled, sizeof(payload_unrolled));
+    eth_packet_len[i] = sizeof(payload_unrolled);
+  }
+  // We already scheduled the ack packages, so send the request without scheduling another
+  // expected response for it.
+  ethernet_embed_packet_seq(payload, sizeof(payload), seq_num);
+  ethl_send_packet_unscheduled(payload, sizeof(payload));
+}
+
+void process_jobs_ethernet(void)
+{
+  uint8_t *ptr = queue_cmds;
+  int i;
+  queue_read_len = 0;
+  uint8_t last_cmd = 0;
+  int write_batch_size = 0;
+
+  for (i = 0; i < queue_jobs; ++i) {
+    uint8_t cur_cmd = *ptr;
+    if (last_cmd != cur_cmd && i > 0) {
+      // If we switch command (read, write, ...) make sure the one before is completely
+      // done before we continue so we don't mix read/write commands
+      log_debug("Switch of command type, waiting for acks\n");
+      wait_all_acks();
+    }
+    last_cmd = cur_cmd;
+
+    switch (cur_cmd) {
+    case 0x02: // physical write sector
+    {
+      // We see a new write command, let's detect whether this is a batch of consecutive
+      // sectors
+      int j;
+      uint8_t *look_ahead_ptr = ptr;
+      write_batch_size = 1;
+      int sector_number = ptr[5] + (ptr[6] << 8) + (ptr[7] << 16) + (ptr[8] << 24);
+      for (j = i + 1; j < queue_jobs && write_batch_size <= 256; ++j) {
+        look_ahead_ptr += 9;
+        if (*look_ahead_ptr != *ptr) {
+          break;
+        }
+        int next_sector_number = look_ahead_ptr[5] + (look_ahead_ptr[6] << 8) + (look_ahead_ptr[7] << 16)
+                               + (look_ahead_ptr[8] << 24);
+        if (next_sector_number != sector_number + 1) {
+          break;
+        }
+        ++sector_number;
+        ++write_batch_size;
+      }
+      ethl_set_queue_length(ethernet_window_size);
+      process_ethernet_write_sectors_job(ptr, write_batch_size);
+      ptr += 9 * write_batch_size;
+      i += write_batch_size - 1;
+      write_batch_size = 0;
+      break;
+    }
+
+    case 0x04: // read sectors
+      ethl_set_queue_length(256);
+      process_ethernet_read_sectors_job(ptr);
+      ptr += 7;
+      break;
+
+    case 0x0f: // read flash
+      ptr += 7;
+      log_debug("read flash job not implemented for ethernet");
+      exit(-1);
+      break;
+    case 0x11: // read mem
+      ptr += 9;
+      log_debug("read mem job not implemented for ethernet");
+      exit(-1);
+      break;
+    default:
+      log_error("Queue cmd %d not implemented", *ptr);
+      exit(-1);
+    }
+  }
+
+  wait_all_acks();
+}
+
+void queue_execute(void)
+{
+  if (ethernet_mode) {
+    process_jobs_ethernet();
+  }
+  else {
+    //  long long start = gettime_us();
+
+    // Push queued jobs in one go
+    push_ram(0xc001, queue_addr - 0xc001, queue_cmds);
+    //  dump_bytes(0,"queue_cmds",queue_cmds,queue_addr-0xc001);
+
+    // Then set number of jobs to execute them
+    // mega65_poke will try to read data after from on the
+    // serial interface, which messes up the protocol.
+    // so don't do that.
+    char cmd[1024];
+    snprintf(cmd, 1024, "sc000 %x\r", queue_jobs);
+    slow_write(fd, cmd, strlen(cmd));
+
+    job_process_results();
+  }
+  queue_addr = 0xc001;
+  queue_jobs = 0;
+}
 
 void queue_physical_write_sector(uint32_t sector_number, uint32_t mega65_address)
 {
@@ -1219,16 +1585,19 @@ int execute_write_queue(void)
 
   int retVal = 0;
   do {
-    if (0)
-      log_debug("executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)", write_sector_count,
-          write_buffer_offset);
-    push_ram(0x50000, write_buffer_offset, &write_data_buffer[0]);
+    if (!ethernet_mode) {
+      if (0)
+        log_debug("executing write queue with %d sectors in the queue (write_buffer_offset=$%08x)", write_sector_count,
+            write_buffer_offset);
+      push_ram(0x50000, write_buffer_offset, &write_data_buffer[0]);
+    }
 
     // XXX - Sort sector number order and merge consecutive writes into
     // multi-sector writes would be a good idea here.
     for (int i = 0; i < write_sector_count; i++) {
       queue_physical_write_sector(write_sector_numbers[i], 0x50000 + (i << 9));
     }
+    // printf("Execute write queue with %d entries\n", write_sector_count);
     queue_execute();
 
     // Reset write queue
@@ -1439,7 +1808,7 @@ int DIRTYMOCK(write_sector)(const unsigned int sector_number, unsigned char *buf
     // With new method, we write the data, then schedule the write to happen with a job
 #if 0
     char cmd[1024];
-    // Clear pending input first    
+    // Clear pending input first
     int b=1;
     while(b>0){
       b=serialport_read(fd,(uint8_t *)cmd,1024);
@@ -1499,7 +1868,7 @@ int open_file_system(void)
     }
 
     if (partition_start == 0xffffffff && direct_sdcard_device) {
-      if (strncmp((const char*)&mbr[0x52], "FAT32", 5) == 0) {
+      if (strncmp((const char *)&mbr[0x52], "FAT32", 5) == 0) {
         partition_start = 0;
         partition_size = mbr[0x20] + (mbr[0x21] << 8) + (mbr[0x22] << 16) + (mbr[0x23] << 24);
         printf("Device is FAT32 partition, size=%d MB\n", partition_size / 2048);
@@ -3037,6 +3406,11 @@ int bit2mcs(int argc, char *argv[]);
 
 BOOL initial_flashing_checks(void)
 {
+  if (ethernet_mode) {
+    log_error("Flashing of .cor files not supported in Ethernet mode");
+    return FALSE;
+  }
+
   // assess if running in xemu. If so, exit
   if (xemu_flag) {
     printf("%d - This command is not available for xemu.\n", xemu_flag);
@@ -3861,6 +4235,7 @@ int upload_single_file(char *name, char *dest_name)
     int remaining_length = st.st_size;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
+    unsigned long long last_status_output = 0;
     unsigned int sector_number;
     FILE *f = fopen(name, "rb");
 
@@ -3908,8 +4283,12 @@ int upload_single_file(char *name, char *dest_name)
       if (0)
         printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
             bytes, sector_number, sector_number, file_cluster);
-      printf("\rUploaded %lld bytes.", (long long)st.st_size - remaining_length);
-      fflush(stdout);
+      unsigned long long now = gettime_ms();
+      if (now - last_status_output > 100) {
+        printf("\rUploaded %lld bytes.", (long long)st.st_size - remaining_length);
+        fflush(stdout);
+        last_status_output = now;
+      }
 
       if (write_sector(sector_number, buffer)) {
         printf("ERROR: Failed to write to sector %d\n", sector_number);
@@ -4624,11 +5003,59 @@ void petscify_text(char *text)
   }
 }
 
+unsigned char peek(unsigned long addr)
+{
+  if (ethernet_mode) {
+    wait_all_acks();
+    const int packet_size = 12;
+    uint8_t payload[packet_size];
+    memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+    // bytes [4] and [5] will be filled with packet seq numbers
+    payload[6] = 0x11; // read mem command
+    payload[7] = 0;    // number of bytes minus one
+    payload[8] = addr & 0xff;
+    payload[9] = (addr >> 8) & 0xff;
+    payload[10] = (addr >> 16) & 0xff;
+    payload[11] = (addr >> 24) & 0xff;
+    ethl_send_packet(payload, packet_size);
+    wait_all_acks();
+    if (memory_read_buffer_len != 1) {
+      log_error("Error reading memory data via Ethernet");
+      exit(-1);
+    }
+    return memory_read_buffer[0];
+  }
+  else {
+    return mega65_peek(addr);
+  }
+}
+
 void poke(unsigned long addr, unsigned char value)
 {
+  if (ethernet_mode) {
+    log_error("Serial monitor memory write access requested in Ethernet mode");
+    exit(-1);
+  }
   char cmd[16];
   sprintf(cmd, "s%lx %x\r", addr, value);
   slow_write(fd, cmd, strlen(cmd));
+}
+
+void determine_ethernet_window_size(void)
+{
+  uint8_t hardware_model_id = peek(0xFFD3629);
+  log_info("Hardware model id: $%02X - %s", hardware_model_id, get_model(hardware_model_id)->name);
+
+  switch (hardware_model_id) {
+  case 0x01:
+  case 0x03:
+  case 0x21:
+    ethernet_window_size = 28; // xc7a200t_0 models have more Ethernet receive buffers
+    break;
+  default:
+    ethernet_window_size = 3;
+  }
+  log_info("Ethernet window size: %d packets", ethernet_window_size);
 }
 
 void request_remotesd_version(void)
@@ -4639,8 +5066,20 @@ void request_remotesd_version(void)
 
 void request_quit(void)
 {
-  poke(0xc001, 0xff);
-  poke(0xc000, 0x01);
+  if (ethernet_mode) {
+    wait_all_acks();
+    const int packet_size = 7;
+    uint8_t payload[packet_size];
+    memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+    // bytes [4] and [5] will be filled with packet seq numbers
+    payload[6] = 0xff; // quit command
+    ethl_send_packet(payload, packet_size);
+    wait_all_acks();
+  }
+  else {
+    poke(0xc001, 0xff);
+    poke(0xc000, 0x01);
+  }
 }
 
 void mount_file(char *filename)
@@ -4709,6 +5148,7 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
     int remaining_bytes = de.d_filelen;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
+    unsigned long long last_status_output = 0;
     unsigned int sector_number;
     FILE *f = NULL;
 
@@ -4753,7 +5193,7 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
                       + sector_in_cluster;
 
         // We try to read-ahead a lot of sectors, because files are usually not very fragmented,
-        // so the extra read-ahead reduces the rount-trip time for scheduling each successive job
+        // so the extra read-ahead reduces the round-trip time for scheduling each successive job
         if (read_sector(sector_number, download_buffer, CACHE_YES, 128)) {
           printf("ERROR: Failed to read to sector %d\n", sector_number);
           retVal = -1;
@@ -4771,9 +5211,12 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
       if (0)
         printf("T+%lld : Read %d bytes from file, writing to sector $%x (%d) for cluster %d\n", gettime_us() - start_usec,
             (int)de.d_filelen, sector_number, sector_number, file_cluster);
-      if (!showClusters && !quietFlag)
+      unsigned long long now = gettime_ms();
+      if (!showClusters && !quietFlag && (now - last_status_output > 100)) {
         printf("\rDownloaded %lld bytes.", (long long)de.d_filelen - remaining_bytes);
-      fflush(stdout);
+        last_status_output = now;
+        fflush(stdout);
+      }
 
       //      printf("T+%lld : after write.\n",gettime_us()-start_usec);
 
