@@ -36,10 +36,13 @@ extern const char *version_string;
 #define ARG_CORENAME argv[3]
 #define ARG_COREVERSION argv[4]
 #define ARG_COREPATH argv[5]
+#define ARG_COREFLAGS argv[6]
 
 #define CORE_HEADER_SIZE 4096
 
 static unsigned char bitstream_data[MAX_MB * BYTES_IN_MEGABYTE];
+unsigned char core_file[8192 * 1024];
+int core_len = 0;
 
 typedef struct {
   char name[MAX_M65_TARGET_NAME_LEN];
@@ -52,7 +55,7 @@ static m65target_info m65targetgroups[] = {
   // Mega65 Target Name/s                           MB  FPGA Part
   { "nexys4|nexys4ddr|nexys4ddrwidget|megaphoner1", 4, "7a100tcsg324" },
   { "mega65r2",                                     4, "7a100tfgg484" },
-  { "mega65r1|mega65r3",                            8, "7a200tfbg484" },
+  { "mega65r1|mega65r3|mega65r4",                   8, "7a200tfbg484" },
   { "wukonga100t",                                  4, "7a100tfgg676" }
 };
 // clang-format on
@@ -63,33 +66,100 @@ static int m65targetgroup_count = sizeof(m65targetgroups) / sizeof(m65target_inf
 typedef struct {
   char name[MAX_M65_TARGET_NAME_LEN];
   int model_id;
+  unsigned int core_size;
 } m65target_to_model_id;
 
 // clang-format off
 static m65target_to_model_id map_m65target_to_model_id[] = {
   // Mega65 Target Name   // Model ID
-  { "mega65r1",           0x01 },
-  { "mega65r2",           0x02 },
-  { "mega65r3",           0x03 },
-  { "megaphoner1",        0x21 },
-  { "nexys4",             0x40 }, // aka 'nexys4psram'
-  { "nexys4ddr",          0x41 },
-  { "nexys4ddrwidget",    0x42 },
-  { "wukonga100t",        0xFD }
+  { "mega65r1",           0x01, 8192 },
+  { "mega65r2",           0x02, 4096 },
+  { "mega65r3",           0x03, 8192 },
+  { "mega65r4",           0x04, 8192 },
+  { "mega65r5",           0x05, 8192 },
+  { "mega65r6",           0x06, 8192 },
+  { "mega65r7",           0x07, 8192 },
+  { "mega65r8",           0x08, 8192 },
+  { "mega65r9",           0x09, 8192 },
+  { "megaphoner1",        0x21, 4096 },
+  { "nexys4",             0x40, 4096 }, // aka 'nexys4psram'
+  { "nexys4ddr",          0x41, 4096 },
+  { "nexys4ddrwidget",    0x42, 4096 },
+  { "wukonga100t",        0xFD, 4096 }
 };
 // clang-format on
 
 static int m65target_to_model_id_count = sizeof(map_m65target_to_model_id) / sizeof(m65target_to_model_id);
+unsigned int max_core_size = 8192;
 
 int get_model_id(const char *m65targetname)
 {
   for (int k = 0; k < m65target_to_model_id_count; k++) {
     if (strcmp(map_m65target_to_model_id[k].name, m65targetname) == 0) {
+      max_core_size = map_m65target_to_model_id[k].core_size;
+      fprintf(stderr, "INFO: CORE size set to %d KB\n", max_core_size);
       return map_m65target_to_model_id[k].model_id;
     }
   }
-  printf("ERROR: Failed to find model id for m65target of '%s'...", m65targetname);
+  fprintf(stderr, "ERROR: Failed to find model id for m65target of '%s'...\n", m65targetname);
   exit(1);
+}
+
+/* CORE capabilites and flags
+ *
+ * The core cpabilities is a 8 bit bitfield which defines which
+ * capabilities the core has. The lower bits tell if a slot is
+ * capable of running certain cartridge types. If the high bit is
+ * set, the core is unasable as a default core.
+ *
+ * The flags are a preset currently and should be changeable within
+ * MEGAFLASH while being installed into a slot. With those flags
+ * the bootup sequence will determine which slot to use if a certain
+ * cartridge is inserted.
+ */
+// clang-format off
+#define CORECAP_CART         0b00000111
+#define CORECAP_CART_C64     0b00000001
+#define CORECAP_CART_C128    0b00000010
+#define CORECAP_CART_M65     0b00000100
+#define CORECAP_UNDEFINED    0b01111000 // free for further expansion
+#define CORECAP_SLOT_DEFAULT 0b10000000 // in capabilities 1 means: prohibited use as default
+// clang-format on
+
+typedef struct {
+  char name[16];
+  unsigned char bits;
+} m65core_capabilities;
+
+// clang-format off
+static m65core_capabilities map_m65core_capability[] = {
+  { "default",  CORECAP_SLOT_DEFAULT },
+  { "c64cart",  CORECAP_CART_C64 },
+  { "c128cart", CORECAP_CART_C128 },
+  { "m65cart",  CORECAP_CART_M65 },
+  { "", 0 }
+};
+// clang-format on
+
+unsigned char parse_capability_bits(char *capstr)
+{
+  unsigned char capbits = 0, i;
+  char *part;
+
+  for (part = strtok(capstr, ","); part; part = strtok(NULL, ",")) {
+    for (i = 0; map_m65core_capability[i].name[0]; i++) {
+      if (!strncmp(part, map_m65core_capability[i].name, strlen(part))) {
+        capbits |= map_m65core_capability[i].bits;
+        break;
+      }
+    }
+    if (!map_m65core_capability[i].name[0]) {
+      fprintf(stderr, "ERROR: Failed to parse capability bits '%s'...\n", part);
+      exit(1);
+    }
+  }
+
+  return capbits;
 }
 
 #pragma pack(push, 1)
@@ -100,10 +170,21 @@ typedef union {
     char core_name[32];
     char core_version[32];
     char m65_target[32];
-    unsigned char model_id;
-    unsigned char banner_present;
-    unsigned char embed_file_count;
-    unsigned long embed_file_offset;
+    uint8_t model_id;
+    uint8_t banner_present;
+    uint8_t embed_file_count;
+    uint32_t embed_file_offset;
+    // embed_file_offset was unisigned long which is 64 bit on linux,
+    // so older core files have 4 garbage bytes:
+    uint32_t __backwards_compability1;
+    uint8_t core_bootcaps;
+    uint8_t core_bootflags;
+    // place size and crc32 at 0x80 - don't mess this up!
+    uint8_t __unused1;
+    uint16_t __unused2;
+    // this needs to be at 0x80 !!
+    uint32_t core_size;
+    uint32_t core_crc32;
   };
 } header_info;
 #pragma pack(pop)
@@ -136,7 +217,7 @@ void show_help(void)
       "MEGA65 bitstream to core file converter\n"
       "---------------------------------------\n"
       "Version: %s\n\n"
-      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor> [<file to embed> ...]\n"
+      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor> [=<caps>[+<flags>]] [<file to embed> ...]\n"
       "\n"
       "Note: 1st argument specifies your Mega65 target name, which can be either:\n\n",
       version_string);
@@ -149,6 +230,26 @@ void show_help(void)
                   "filename prefixed with a @ to specify a special list file. In it you\n"
                   "can list the filenames of files to embed that reside in the *same* path\n"
                   "as the list file. WARNING: there is no duplicate protection!\n"
+                  "\n"
+                  "The optional '=<caps>+<flag>' parameter is used to set the core\n"
+                  "capabilites, which define what flags can be set using MEGAFLASH.\n"
+                  "The <flag> part define which flags are set by default.\n"
+                  "\n"
+                  "  String       Capability        Flags\n"
+                  "  ------       ----------        -------\n"
+                  "  default      *NO DEFAULT*      default\n"
+                  "  c64cart      C64 Cartridge     C64 Cartridge\n"
+                  "  c128cart     C128 Cartridge    C128 Cartridge\n"
+                  "  m65cart      MEGA65 Cartridge  MEGA65 Cartridge\n"
+                  "\n"
+                  "Example: =default,c64cart+c64cart\n"
+                  "\n"
+                  "Result: '=default,c64cart'\n"
+                  "        In MEGAFLASH you will be able to set this core to DEFAULT or\n"
+                  "        as the slot to be used if a C64 style cartridge was detected.\n"
+                  "        '+c64cart'\n"
+                  "        The C64 cartridge boot flag will be set automatically when\n"
+                  "        installing this core.\n"
                   "\n");
 }
 
@@ -397,9 +498,10 @@ void write_core_file(int core_len, unsigned char *core_file, char *core_filename
   return;
 }
 
-void build_core_file(const int bit_size, int *core_len, unsigned char *core_file, const char *core_name,
-    const char *core_version, const char *m65target_name, const char *core_filename)
+int build_core_file(const int bit_size, int *core_len, unsigned char *core_file, const char *core_name,
+    const char *core_version, const char *m65target_name, const char *core_filename, char *core_caps)
 {
+  int offset = 0;
 
   // Write core file name and version
   header_info header_block;
@@ -408,29 +510,46 @@ void build_core_file(const int bit_size, int *core_len, unsigned char *core_file
 
   memset(header_block.data, 0, CORE_HEADER_SIZE);
 
-  for (int i = 0; i < 16; i++)
-    header_block.magic[i] = MAGIC_STR[i];
-
-  strcpy(header_block.core_name, core_name);
-  strcpy(header_block.core_version, core_version);
-  strcpy(header_block.m65_target, m65target_name);
+  memcpy(header_block.magic, MAGIC_STR, 16);
+  strncpy(header_block.core_name, core_name, 31);
+  strncpy(header_block.core_version, core_version, 31);
+  strncpy(header_block.m65_target, m65target_name, 31);
   header_block.model_id = get_model_id(m65target_name);
 
-  bcopy(header_block.data, core_file, CORE_HEADER_SIZE);
+  // parse core caps/flags
+  if (core_caps && core_caps[0] == '=') {
+    char *core_flags = strchr(core_caps, '+');
+    if (core_flags) {
+      *core_flags = 0;
+      core_flags++;
+    }
+    header_block.core_bootcaps = parse_capability_bits(core_caps + 1);
+    if (core_flags)
+      header_block.core_bootflags = parse_capability_bits(core_flags);
+    offset = 1;
+  }
+  fprintf(stderr, "INFO: bootcaps 0x%02X, bootflags 0x%02X\n",
+          header_block.core_bootcaps, header_block.core_bootflags);
+  if ((header_block.core_bootflags & header_block.core_bootcaps) != header_block.core_bootflags)
+    fprintf(stderr, "WARNING: bootflags are not supported by bootcaps!\n");
+
+  memcpy(core_file, header_block.data, CORE_HEADER_SIZE);
   *core_len = CORE_HEADER_SIZE;
-  if (bit_size + (*core_len) >= 8192 * 1024) {
+  if (bit_size + (*core_len) >= max_core_size * 1024) {
     fprintf(stderr, "ERROR: Bitstream + header > 8MB\n");
     exit(-1);
   }
-  bcopy(bitstream_data, &core_file[*core_len], bit_size);
+  memcpy(&core_file[*core_len], bitstream_data, bit_size);
   *core_len += bit_size;
+
+  return offset;
 }
 
-unsigned long htoc64l(unsigned long v)
+uint32_t htoc64l(unsigned long v)
 {
   union {
     unsigned char c[4];
-    unsigned long l;
+    uint32_t l;
   } conv;
 
   conv.c[0] = (v >> 0) & 0xff;
@@ -508,14 +627,14 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
     fprintf(stderr, "INFO: Embedding banner file in last 32KB of slot.\n");
     header_block->banner_present = 1;
     banner_present = 1;
-    bcopy(file_data, &core_file[(8192 - 32) * 1024], file_len);
+    memcpy(&core_file[(max_core_size - 32) * 1024], file_data, file_len);
   }
 
   // Write embedded file
   unsigned int this_offset = last_file_offset;
   unsigned int next_offset = this_offset + 4 + 4 + 32 + file_len;
 
-  if (next_offset >= 8192 * 1024 - 4) {
+  if (next_offset >= (max_core_size - (banner_present ? 32 : 0)) * 1024 - 4) {
     fprintf(stderr, "ERROR: COR files must be less than 8MB\n");
     exit(-1);
   }
@@ -530,9 +649,9 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
   core_file[this_offset + 6] = file_len >> 16;
   core_file[this_offset + 7] = file_len >> 24;
 
-  bcopy(basename, &core_file[this_offset + 4 + 4], 32);
+  strncpy((char *)&core_file[this_offset + 4 + 4], basename, 32);
 
-  bcopy(file_data, &core_file[this_offset + 4 + 4 + 32], file_len);
+  memcpy(&core_file[this_offset + 4 + 4 + 32], file_data, file_len);
 
   header_block->embed_file_count++;
 
@@ -589,18 +708,65 @@ void embed_file_list(int *core_len, unsigned char *core_file, char *filename)
   free(filepath);
 }
 
+uint32_t rc_crc32(uint32_t crc, const char *buf, size_t len)
+{
+	static uint32_t table[256];
+	static int have_table = 0;
+	uint32_t rem;
+	uint8_t octet;
+	int i, j;
+	const char *p, *q;
+
+	/* This check is not thread safe; there is no mutex. */
+	if (have_table == 0) {
+		/* Calculate CRC table. */
+		for (i = 0; i < 256; i++) {
+			rem = i;  /* remainder from polynomial division */
+			for (j = 0; j < 8; j++) {
+				if (rem & 1) {
+					rem >>= 1;
+					rem ^= 0xedb88320;
+				} else
+					rem >>= 1;
+			}
+			table[i] = rem;
+		}
+		have_table = 1;
+	}
+
+	crc = ~crc;
+	q = buf + len;
+	for (p = buf; p < q; p++) {
+		octet = *p;  /* Cast to unsigned octet. */
+		crc = (crc >> 8) ^ table[(crc & 0xff) ^ octet];
+	}
+	return ~crc;
+}
+
+void calculate_core_crc32(int core_len, unsigned char *core_file)
+{
+  uint32_t crc;
+  header_info *header_block = (header_info *)core_file;
+
+  header_block->core_size = core_len;
+  header_block->core_crc32 = 0xf0f0f0f0;
+
+  crc = rc_crc32(0, (char *)core_file, core_len);
+
+  fprintf(stderr, "INFO: CRC32 = %08X\n", crc);
+
+  header_block->core_crc32 = crc;
+}
+
 char *find_fpga_part_from_m65targetname(const char *m65targetname)
 {
   m65target_info *m65target = find_m65targetinfo_from_m65targetname(m65targetname);
   return m65target->fpga_part;
 }
 
-unsigned char core_file[8192 * 1024];
-int core_len = 0;
-
 int DIRTYMOCK(main)(int argc, char **argv)
 {
-  int err;
+  int err, offset;
 
   if (argc < 6) {
     show_help();
@@ -615,8 +781,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
   if (err != 0)
     return err;
 
-  build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH);
-  for (int i = 6; i < argc; i++) {
+  offset = build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH, argc > 6 ? ARG_COREFLAGS : NULL);
+  for (int i = 6 + offset; i < argc; i++) {
     //    fprintf(stderr,"Embedding file '%s'\n",argv[i]);
     if (argv[i][0] == '@')
       embed_file_list(&core_len, core_file, argv[i] + 1);
@@ -625,15 +791,17 @@ int DIRTYMOCK(main)(int argc, char **argv)
   }
 
   if (banner_present) {
-    if (core_len >= (8192 - 32) * 1024 - 4) {
+    if (core_len >= (max_core_size - 32) * 1024 - 4) {
       fprintf(stderr, "ERROR: Insufficient room to place BANNER.M65 at end of slot.\n");
       exit(-1);
     }
-    core_len = 8192 * 1024;
+    core_len = max_core_size * 1024;
   }
   else
     // Leave 4 extra zero bytes at end for end of embedded file chain
     core_len += 4;
+
+  calculate_core_crc32(core_len, core_file);
 
   write_core_file(core_len, core_file, ARG_COREPATH);
 
