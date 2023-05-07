@@ -1,19 +1,16 @@
-include(profile_mingw-w64)
-target_host=x86_64-w64-mingw32
-cc_compiler=gcc
-cxx_compiler=g++
+{% import "profile_mingw-w64" as vars %}
 
-[env]
-CONAN_CMAKE_FIND_ROOT_PATH=$toolchain  # Optional, for CMake to find things in that folder
-CONAN_CMAKE_SYSROOT=$toolchain  # Optional, if we want to define sysroot
-CHOST=$target_host
-AR=$target_host-ar
-AS=$target_host-as
-RANLIB=$target_host-ranlib
-CC=$target_host-$cc_compiler
-CXX=$target_host-$cxx_compiler
-STRIP=$target_host-strip
-RC=$target_host-windres
+[buildenv]
+CONAN_CMAKE_FIND_ROOT_PATH={{ vars.toolchain }}  # Optional, for CMake to find things in that folder
+CONAN_CMAKE_SYSROOT={{ vars.toolchain }}  # Optional, if we want to define sysroot
+CHOST=x86_64-w64-mingw32
+AR=x86_64-w64-mingw32-ar
+AS=x86_64-w64-mingw32-as
+RANLIB=x86_64-w64-mingw32-ranlib
+CC=x86_64-w64-mingw32-gcc
+CXX=x86_64-w64-mingw32-g++
+STRIP=x86_64-w64-mingw32-strip
+RC=x86_64-w64-mingw32-windres
 
 [settings]
 # We are cross-building to Windows
@@ -22,6 +19,6 @@ arch=x86_64
 compiler=gcc
 
 # Adjust to the gcc version of your MinGW package
-compiler.version=$cc_version
+compiler.version={{ vars.cc_version }}
 compiler.libcxx=libstdc++11
 build_type=Release
