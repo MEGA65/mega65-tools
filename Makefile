@@ -323,8 +323,15 @@ conan_mac: conanfile.txt conan/profile_macos_10.14_intel conan/profile_macos_11_
 	
 	@conan_version=$$(echo `conan --version` | sed "s/^Conan version \([[:digit:]]*\).*/\1/"); \
 	if [[ "$${conan_version}" -eq "1" ]]; then \
+		echo "Conan version 1.x detected"; \
 		conan_intel_flags="-if $(PKGDIR)/macos_intel"; \
 		conan_arm_flags="-if $(PKGDIR)/macos_arm"; \
+	else \
+		echo "Conan version 2.x detected"; \
+		if [[ ! -e "$${HOME}/.conan2/profiles/default" ]]; then \
+			echo "No default conan profile available - detecting default settings"; \
+			conan profile detect; \
+		fi; \
 	fi; \
 	conan install $${conan_intel_flags} -of $(PKGDIR)/macos_intel conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_10.14_intel; \
 	conan install $${conan_arm_flags} -of $(PKGDIR)/macos_arm conanfile.txt --build=missing -pr:b=default -pr:h=default -pr:h=conan/profile_macos_11_arm
