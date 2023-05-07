@@ -334,16 +334,19 @@ conan_mac: conanfile.txt conan/profile_macos_10.14_intel conan/profile_macos_11_
 	$(eval MACARMCOPT   := $(MACCOPT) -target arm64-apple-macos11 \
 	                       `pkg-config --cflags --libs $(PKGDIR)/macos_arm/libpng.pc $(PKGDIR)/macos_arm/libusb-1.0.pc $(PKGDIR)/macos_arm/zlib.pc`)
 
-conan_win: conanfile.txt conan/profile_linux_to_win.jinja Makefile
+conan_win: conanfile.txt conan/profile_linux_to_win conan/profile_linux_to_win_1 Makefile
 	mkdir -p $(PKGDIR)/win
-	echo "{% set toolchain = \"/usr/x86_64-w64-mingw32\" %}" > conan/profile_mingw-w64.jinja
-	echo "{% set cc_version = \"`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\(\.[[:digit:]]\+\)\?\).*$$/\1/'`\" %}" >> conan/profile_mingw-w64.jinja
 
 	conan_version=$$(echo `conan --version` | sed "s/^Conan version \([[:digit:]]*\).*/\1/"); \
 	if [[ "$${conan_version}" -eq "1" ]]; then \
-		conan_flags="-if $(PKGDIR)/win"; \
+		echo "toolchain=/usr/x86_64-w64-mingw32" > conan/profile_mingw-w64; \
+		echo "cc_version=`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\(\.[[:digit:]]\+\)\?\).*$$/\1/'`" >> conan/profile_mingw-w64; \
+		conan install -if $(PKGDIR)/win -of $(PKGDIR)/win conanfile.txt --build=missing -pr:b=default -pr:h=conan/profile_linux_to_win_1; \
+	else \
+		echo "{% set toolchain = \"/usr/x86_64-w64-mingw32\" %}" > conan/profile_mingw-w64; \
+		echo "{% set cc_version = \"`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\(\.[[:digit:]]\+\)\?\).*$$/\1/'`\" %}" >> conan/profile_mingw-w64; \
+		conan install -of $(PKGDIR)/win conanfile.txt --build=missing -pr:b=default -pr:h=conan/profile_linux_to_win; \
 	fi; \
-	conan install $${conan_flags} -of $(PKGDIR)/win conanfile.txt --build=missing -pr:b=default -pr:h=conan/profile_linux_to_win.jinja; \
 	$(eval WINCOPT := $(WINCOPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1 \
 	                  `pkg-config --cflags --libs $(PKGDIR)/win/libpng.pc $(PKGDIR)/win/libusb-1.0.pc $(PKGDIR)/win/zlib.pc`)
 
