@@ -1,4 +1,4 @@
-{% import "profile_mingw-w64.jinja" as vars %}
+{% import "profile_mingw-w64" as vars %}
 
 [buildenv]
 CONAN_CMAKE_FIND_ROOT_PATH={{ vars.toolchain }}  # Optional, for CMake to find things in that folder

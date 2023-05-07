@@ -319,7 +319,7 @@ test.exe: win_build_check conan_win $(GTESTFILESEXE)
 ## Prerequisites
 ##
 conan_mac: conanfile.txt conan/profile_macos_10.14_intel conan/profile_macos_11_arm Makefile
-	mkdir -p $(PKGDIR)/macos_intel $(PKGDIR)/macos_arm
+	@mkdir -p $(PKGDIR)/macos_intel $(PKGDIR)/macos_arm
 	
 	@conan_version=$$(echo `conan --version` | sed "s/^Conan version \([[:digit:]]*\).*/\1/"); \
 	if [[ "$${conan_version}" -eq "1" ]]; then \
@@ -335,17 +335,23 @@ conan_mac: conanfile.txt conan/profile_macos_10.14_intel conan/profile_macos_11_
 	                       `pkg-config --cflags --libs $(PKGDIR)/macos_arm/libpng.pc $(PKGDIR)/macos_arm/libusb-1.0.pc $(PKGDIR)/macos_arm/zlib.pc`)
 
 conan_win: conanfile.txt conan/profile_linux_to_win conan/profile_linux_to_win_1 Makefile
-	mkdir -p $(PKGDIR)/win
+	@mkdir -p $(PKGDIR)/win
 
-	conan_version=$$(echo `conan --version` | sed "s/^Conan version \([[:digit:]]*\).*/\1/"); \
+	@conan_version=$$(echo `conan --version` | sed "s/^Conan version \([[:digit:]]*\).*/\1/"); \
 	if [[ "$${conan_version}" -eq "1" ]]; then \
+		echo "Conan version 1.x detected"; \
 		echo "toolchain=/usr/x86_64-w64-mingw32" > conan/profile_mingw-w64; \
 		echo "cc_version=`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\(\.[[:digit:]]\+\)\?\).*$$/\1/'`" >> conan/profile_mingw-w64; \
 		conan install -if $(PKGDIR)/win -of $(PKGDIR)/win conanfile.txt --build=missing -pr:b=default -pr:h=conan/profile_linux_to_win_1; \
 	else \
+		echo "Conan version 2.x detected"; \
 		echo "{% set toolchain = \"/usr/x86_64-w64-mingw32\" %}" > conan/profile_mingw-w64; \
 		echo "{% set cc_version = \"`$(WINCC) -dumpversion | sed 's/^\([[:digit:]]\+\(\.[[:digit:]]\+\)\?\).*$$/\1/'`\" %}" >> conan/profile_mingw-w64; \
-		conan install -of $(PKGDIR)/win conanfile.txt --build=missing -pr:b=default -pr:h=conan/profile_linux_to_win; \
+		if [[ ! -e "$${HOME}/.conan2/profiles/default" ]]; then \
+			echo "No default conan profile available - detecting default settings"; \
+			conan profile detect; \
+		fi; \
+		conan install -of $(PKGDIR)/win conanfile.txt --build=missing -pr:h=conan/profile_linux_to_win; \
 	fi; \
 	$(eval WINCOPT := $(WINCOPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1 \
 	                  `pkg-config --cflags --libs $(PKGDIR)/win/libpng.pc $(PKGDIR)/win/libusb-1.0.pc $(PKGDIR)/win/zlib.pc`)
