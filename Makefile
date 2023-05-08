@@ -186,7 +186,7 @@ GTESTFILESEXE=	$(GTESTBINDIR)/mega65_ftp.test.exe \
 
 # all dependencies
 MEGA65LIBCDIR= $(SRCDIR)/mega65-libc/cc65
-MEGA65LIBC= $(MEGA65LIBCDIR) $(wildcard $(MEGA65LIBCDIR)/src/*.c) $(wildcard $(MEGA65LIBCDIR)/src/*.s) $(wildcard $(MEGA65LIBCDIR)/include/*.h)
+MEGA65LIBC= $(MEGA65LIBCDIR)/libmega65.a
 
 # TOOLS omits TOOLSMAC. Linux users can make all. To make Mac binaries, use
 # a Mac to make allmac. See README.md.
@@ -287,7 +287,13 @@ clean:	cleantest
 
 cleanall:	clean
 	for path in `git submodule | awk '{ print "./" $$2 }'`; do \
-		if [ -e $$path/Makefile ]; then make -C $$path clean; fi; \
+		if [ -e $$path/Makefile ]; then \
+			if [[ $$path =~ src/mega65-libc ]]; then \
+				make -C $$path cleanall; \
+			else \
+				make -C $$path clean; \
+			fi; \
+		fi; \
 	done
 
 cleantest:
@@ -378,6 +384,8 @@ $(CBMCONVERT):
 
 $(MEGA65LIBC):
 	$(SUBMODULEUPDATE)
+	make -C src/mega65-libc cc65
+	make -C src/mega65-libc clean
 
 /usr/bin/convert:
 	echo "Could not find the program 'convert'. Try the following:"
@@ -430,7 +438,7 @@ $(BINDIR)/%.osx:	$(BINDIR)/%_intel.osx $(BINDIR)/%_arm.osx
 #
 # common test rule
 $(TESTDIR)/%.prg:	$(TESTDIR)/%.c include/*.h $(CC65) $(MEGA65LIBC)
-	$(CL65) -I include/ -I $(SRCDIR)/mega65-libc/cc65/include -O -o $(TESTDIR)/$*.prg --mapfile $(TESTDIR)/$*.map $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+	$(CL65) -I include/ -I $(SRCDIR)/mega65-libc/cc65/include -O -o $(TESTDIR)/$*.prg --mapfile $(TESTDIR)/$*.map $< $(MEGA65LIBC)
 
 # asm test rule
 $(TESTDIR)/%.prg:       $(TESTDIR)/%.s $(TESTDIR)/unittestlog.s
@@ -438,22 +446,22 @@ $(TESTDIR)/%.prg:       $(TESTDIR)/%.s $(TESTDIR)/unittestlog.s
 
 # tests that need additional pices of code
 $(TESTDIR)/vicii.prg:       $(TESTDIR)/vicii.c $(TESTDIR)/vicii_asm.s $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/vicii_asm.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/vicii_asm.s $(MEGA65LIBC)
 
 $(TESTDIR)/test_290.prg:       $(TESTDIR)/test_290.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/random.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(TESTDIR)/test_585.prg:       $(TESTDIR)/test_585.c $(TESTDIR)/test_585_asm.s $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/test_585_asm.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/test_585_asm.s $(MEGA65LIBC)
 
 $(TESTDIR)/test_604.prg:       $(TESTDIR)/test_604.c $(TESTDIR)/test_604_asm.s $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/test_604_asm.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/test_604_asm.s $(MEGA65LIBC)
 
 $(TESTDIR)/test_646.prg:       $(TESTDIR)/test_646.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -Iinclude/ -O -o $*.prg --mapfile $*.map $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/hal.c $(SRCDIR)/mega65-libc/cc65/src/targets.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -Iinclude/ -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(TESTDIR)/pulseoxy.prg:       $(TESTDIR)/pulseoxy.c $(CC65) $(MEGA65LIBC)
 	$(CL65) -O -o $*.prg --mapfile $*.map $<
@@ -465,25 +473,25 @@ $(TESTDIR)/instructiontiming.prg:       $(TESTDIR)/instructiontiming.c $(TESTDIR
 	$(CL65) -O -o $*.prg --mapfile $*.map $< $(TESTDIR)/instructiontiming_asm.s
 
 $(TESTDIR)/floppytest.prg:       $(TESTDIR)/floppytest.c $(TESTDIR)/floppyread.s $(UTILDIR)/c65toc64wrapper.prg $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o temp.prg --mapfile $*.map $< $(TESTDIR)/floppyread.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/hal.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o temp.prg --mapfile $*.map $< $(TESTDIR)/floppyread.s $(MEGA65LIBC)
 	cat src/utilities/c65toc64wrapper.prg temp.prg > $*.prg
 
 $(TESTDIR)/floppydrivetest.prg:       $(TESTDIR)/floppydrivetest.c $(TESTDIR)/floppyread.s $(UTILDIR)/c65toc64wrapper.prg $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o temp.prg --mapfile $*.map $< $(TESTDIR)/floppyread.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/hal.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o temp.prg --mapfile $*.map $< $(TESTDIR)/floppyread.s $(MEGA65LIBC)
 	cat src/utilities/c65toc64wrapper.prg temp.prg > $*.prg
 
 $(TESTDIR)/floppycapacity.prg:       $(TESTDIR)/floppycapacity.c $(TESTDIR)/floppyread.s $(UTILDIR)/c65toc64wrapper.prg $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o temp.prg --mapfile $*.map $< $(TESTDIR)/floppyread.s $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/hal.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o temp.prg --mapfile $*.map $< $(TESTDIR)/floppyread.s $(MEGA65LIBC)
 	cat $(UTILDIR)/c65toc64wrapper.prg temp.prg > $*.prg
 
 $(TESTDIR)/r3_production_test.prg:       $(TESTDIR)/r3_production_test.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(TESTDIR)/ultrasoundtest.prg:       $(TESTDIR)/ultrasoundtest.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(TESTDIR)/hyperramtest.prg:       $(TESTDIR)/hyperramtest.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(wildcard $(SRCDIR)/mega65-libc/cc65/src/*.c) $(wildcard $(SRCDIR)/mega65-libc/cc65/src/*.s)
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 ##
 ## Examples
@@ -492,20 +500,20 @@ $(EXAMPLEDIR)/unicorns.prg:       $(EXAMPLEDIR)/unicorns.c $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
 $(EXAMPLEDIR)/bmpview.prg:       $(EXAMPLEDIR)/bmpview.c $(CC65)
-	$(CL65)  -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65)  -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(EXAMPLEDIR)/modplay.prg:       $(EXAMPLEDIR)/modplay.c $(CC65)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(EXAMPLEDIR)/raycaster.prg:       $(EXAMPLEDIR)/raycaster.c $(CC65)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(EXAMPLEDIR)/verticalrasters.prg:	$(EXAMPLEDIR)/verticalrasters.asm $(ACME)
 	$(ACME) --setpc 0x0801 --cpu m65 --format cbm --outfile $(EXAMPLEDIR)/verticalrasters.prg $(EXAMPLEDIR)/verticalrasters.asm
 
 # is this still an example?
 $(B65DIR)/wirekrill.prg:       $(EXAMPLEDIR)/wirekrill.c $(CC65)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(BINDIR)/wirekrill:	$(EXAMPLEDIR)/wirekrill.c
 	$(CC) $(COPT) -DNATIVE_TEST -I/usr/local/include -L/usr/local/lib -o $(BINDIR)/wirekrill $(EXAMPLEDIR)/wirekrill.c -lpcap
@@ -519,7 +527,7 @@ $(BINDIR)/wirekrill:	$(EXAMPLEDIR)/wirekrill.c
 	$(OPHIS) $(OPHISOPT) utilities/$< -l $*.list -m $*.map -o $*.prg
 
 $(UTILDIR)/gmod2-tools.prg:       $(UTILDIR)/gmod2-tools.c $(CC65)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(UTILDIR)/mega65_config.o:      $(UTILDIR)/mega65_config.s $(UTILDIR)/mega65_config.inc $(CC65)
 	$(CA65) $< -l $*.list
@@ -528,10 +536,10 @@ $(UTILDIR)/mega65_config.prg:       $(UTILDIR)/mega65_config.o $(CC65)
 	$(LD65) $< --mapfile $*.map -o $*.prg
 
 $(UTILDIR)/megaflash.prg:       $(UTILDIR)/megaflash.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(UTILDIR)/megaphonenorflash.prg:       $(UTILDIR)/megaphonenorflash.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(UTILDIR)/c65toc64wrapper.prg:	$(UTILDIR)/c65toc64wrapper.asm $(ACME)
 	$(ACME) --setpc 0x2001 --cpu m65 --format cbm --outfile $(UTILDIR)/c65toc64wrapper.prg $(UTILDIR)/c65toc64wrapper.asm
@@ -540,16 +548,16 @@ $(UTILDIR)/fastload_demo.prg:	$(UTILDIR)/fastload_demo.asm $(ACME)
 	$(ACME) --setpc 0x0801 --cpu m65 --format cbm --outfile $(UTILDIR)/fastload_demo.prg $(UTILDIR)/fastload_demo.asm
 
 $(UTILDIR)/fastload.prg:       $(UTILDIR)/fastload.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(UTILDIR)/avtest.prg:       $(UTILDIR)/avtest.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(UTILDIR)/i2clist.prg:       $(UTILDIR)/i2clist.c $(CC65)
 	$(CL65) $< --mapfile $*.map -o $*.prg
 
 $(UTILDIR)/i2cstatus.prg:       $(UTILDIR)/i2cstatus.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(UTILDIR)/floppystatus.prg:       $(UTILDIR)/floppystatus.c $(CC65)
 	$(CL65) $< --mapfile $*.map -o $*.prg
@@ -564,10 +572,10 @@ $(B65DIR)/ethertest.prg:	$(UTILDIR)/ethertest.a65 $(OPHIS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
 
 $(B65DIR)/cartload.prg:       $(UTILDIR)/cartload.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/memory.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(B65DIR)/rompatch.prg:       $(UTILDIR)/rompatch.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $<  $(SRCDIR)/mega65-libc/cc65/src/*.c $(SRCDIR)/mega65-libc/cc65/src/*.s
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBC)
 
 $(B65DIR)/etherload.prg:	$(UTILDIR)/etherload.a65 $(OPHIS)
 	$(OPHIS) $(OPHISOPT) $< -l $*.list -m $*.map -o $*.prg
@@ -710,13 +718,13 @@ $(LIBEXECDIR)/ftphelper.bin:	$(TOOLDIR)/ftphelper.a65
 	$(OPHIS) $(OPHISOPT) $(TOOLDIR)/ftphelper.a65
 
 $(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $<  $(SRCDIR)/mega65-libc/cc65/src/memory.c
+	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --listing $*.list --mapfile $*.map --add-source $< $(MEGA65LIBC)
 
 $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
 $(UTILDIR)/remotesd_eth.prg:       $(UTILDIR)/remotesd_eth.c $(UTILDIR)/checksum.s $(UTILDIR)/ip_checksum_recv.s $(CC65) $(MEGA65LIBC)
-	$(CL65ONLY) --config $(UTILDIR)/remotesd_eth_cl65.cfg -I $(SRCDIR)/mega65-libc/cc65/include -O -g -o $*.prg --listing $*.list --mapfile $*.map --add-source $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/random.c $(SRCDIR)/mega65-libc/cc65/src/debug.c $(SRCDIR)/mega65-libc/cc65/src/time.c $(SRCDIR)/mega65-libc/cc65/src/hal.c $(SRCDIR)/mega65-libc/cc65/src/targets.c $(UTILDIR)/checksum.s $(UTILDIR)/ip_checksum_recv.s $<
+	$(CL65ONLY) --config $(UTILDIR)/remotesd_eth_cl65.cfg -I $(SRCDIR)/mega65-libc/cc65/include -O -g -o $*.prg --listing $*.list --mapfile $*.map --add-source $(UTILDIR)/checksum.s $(UTILDIR)/ip_checksum_recv.s $< $(MEGA65LIBC)
 
 
 $(TOOLDIR)/ftphelper_eth.c:	$(UTILDIR)/remotesd_eth.prg $(TOOLDIR)/bin2c
