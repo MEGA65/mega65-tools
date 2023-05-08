@@ -38,7 +38,10 @@ endif # WIN_CROSS_BUILD
 ##
 ## Linux native build setup
 ##
-COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3 -march=x86-64
+COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3
+ifneq ($(OS), Darwin)
+COPT:=$(COPT) -march=x86-64
+endif
 
 ##
 ## Tools build setup
@@ -583,7 +586,7 @@ $(B65DIR)/etherload.prg:	$(UTILDIR)/etherload.a65 $(OPHIS)
 
 $(TOOLDIR)/ascii_font.c:	$(BINDIR)/asciifont.bin
 	echo "unsigned char ascii_font[4097]={" > $(TOOLDIR)/ascii_font.c
-	hexdump -v -e '/1 "0x%02X, "' -e '8/1 """\n"' $(BINDIR)/asciifont.bin >> $(TOOLDIR)/ascii_font.c
+	hexdump -v -e '/1 "0x%02X, "' -e '8/1 " ""\n"' $(BINDIR)/asciifont.bin >> $(TOOLDIR)/ascii_font.c
 	echo "0};" >>$(TOOLDIR)/ascii_font.c
 
 $(BINDIR)/asciifont.bin:	$(BINDIR)/pngprepare $(ASSETS)/ascii00-ff.png
@@ -605,7 +608,7 @@ $(BINDIR)/pnghcprepare:	$(TOOLDIR)/pngprepare/pnghcprepare.c Makefile
 
 # Utility to make prerendered H65 pages from markdopwn source files
 $(BINDIR)/md2h65:	$(TOOLDIR)/pngprepare/md2h65.c Makefile $(TOOLDIR)/ascii_font.c
-	$(CC) $(COPT) -I/usr/local/include -I/usr/include/freetype2 -L/usr/local/lib -o $(BINDIR)/md2h65 $(TOOLDIR)/pngprepare/md2h65.c $(TOOLDIR)/ascii_font.c -lpng -lfreetype
+	$(CC) $(COPT) -I/usr/local/include -I/usr/include/freetype2 -I/opt/homebrew/include/freetype2 -L/usr/local/lib -L/opt/homebrew/lib -o $(BINDIR)/md2h65 $(TOOLDIR)/pngprepare/md2h65.c $(TOOLDIR)/ascii_font.c -lpng -lfreetype
 
 $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
 	$(CC) $(COPT) -o $(BINDIR)/utilpacker $(TOOLDIR)/utilpacker/utilpacker.c
