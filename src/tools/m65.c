@@ -2967,7 +2967,7 @@ int main(int argc, char **argv)
       else
         log_debug("vF011: select true");
       if (FD_ISSET(STDIN_FILENO, &read_set) && fgetc(stdin) == 'q') {
-        log_crit("exit requested, please power cycle your MEGA65");
+        log_crit("exit requested (power cycle might be required)");
         break;
       }
       if (!FD_ISSET(fd, &read_set))
@@ -3002,8 +3002,8 @@ int main(int argc, char **argv)
       fclose(fd81);
     }
     // disable vF011
+    mega65_poke(0xffd368b, 0x06);
     mega65_poke(0xffd3659, 0x00);
-    mega65_poke(0xffd368b, 0x07);
     do_exit(0);
   }
   do_exit(0);
