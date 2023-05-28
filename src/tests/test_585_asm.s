@@ -28,6 +28,21 @@ tm_loop_val:
 	lda test_val,x
 	nop
 	sta (farptr),z
+
+	pha
+
+	;; Bust cache
+	phz
+	tza
+	eor #$80
+	and #$80
+	taz
+	nop
+	lda (farptr),z
+	plz
+
+	pla
+	
 	nop
 	cmp (farptr),z
 	bne tm_fail	;; fail
