@@ -143,6 +143,7 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_671.prg \
 		$(TESTDIR)/test_675.prg \
 		$(TESTDIR)/test_682.prg \
+		$(TESTDIR)/test_685.prg \
 		$(TESTDIR)/test_mandelbrot.prg \
 		$(TESTDIR)/eth_rxd_test.prg \
 
@@ -473,8 +474,11 @@ $(TESTDIR)/test_671.prg:       $(TESTDIR)/test_671.c $(CC65) $(MEGA65LIBCLIB)
 $(TESTDIR)/test_675.prg:       $(TESTDIR)/test_675.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
-$(TESTDIR)/test_682.prg:       $(TESTDIR)/test_682.c $(CC65) $(MEGA65LIBC)
-	$(CL65) -I $(SRCDIR)/mega65-libc/cc65/include -O -o $*.prg --mapfile $*.map $< $(SRCDIR)/mega65-libc/cc65/src/memory.c $(SRCDIR)/mega65-libc/cc65/src/tests.c
+$(TESTDIR)/test_682.prg:       $(TESTDIR)/test_682.c $(CC65) $(MEGA65LIBCLIB)
+	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
+
+$(TESTDIR)/test_685.prg:       $(TESTDIR)/test_685.c $(CC65) $(MEGA65LIBCLIB)
+	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
 $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -Iinclude/ -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
