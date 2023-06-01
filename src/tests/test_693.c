@@ -36,7 +36,7 @@ void main(void)
     long_address = 0xFFDE800ul + idx;
     address = 0xD800u + idx;
 
-    data_28 = qpeek(long_address);
+    data_28 = lpeek(long_address);
     data_16 = PEEK(address);
 
     if (data_28 != data_16) {
