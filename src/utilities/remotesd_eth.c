@@ -120,7 +120,7 @@ typedef union {
 uint8_t cpu_status;
 char msg[80];
 uint8_t quit_requested = 0;
-uint8_t eth_controller_reset_done = 0;
+uint16_t last_eth_controller_reset_seq_no = 0;
 PACKET reply_template;
 PACKET recv_buf;
 uint8_t sector_buf[512];
@@ -199,6 +199,15 @@ void stop_fatal(char *text)
   }
 }
 
+/**
+ * @brief Dump an array of bytes to the screen.
+ *
+ * This function takes an array of bytes and prints them to the screen in hexadecimal format.
+ *
+ * @param data Pointer to the array of bytes to be dumped.
+ * @param n Number of bytes to be dumped.
+ * @param screen_line The line number on the screen where the dump should start.
+ */
 void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line)
 {
   char *msg_ptr = msg;
@@ -372,6 +381,10 @@ uint8_t check_ip_checksum(uint8_t *hdr)
   return 0;
 }
 
+/**
+ * Checks the UDP checksum of the received packet (recv_buf).
+ * @return 1 if the checksum is correct, 0 otherwise.
+ */
 uint8_t check_udp_checksum()
 {
   static uint16_t udp_length;
@@ -417,9 +430,10 @@ uint8_t check_udp_checksum()
 
 void wait_for_sd_ready()
 {
-  while (PEEK(0xD680) & 0x03)
+  while (PEEK(0xD680) & 0x03) {
     //POKE(0xD020, PEEK(0xD020) + 1);
     continue;
+  }
 }
 
 void init_new_write_batch()
@@ -476,6 +490,17 @@ void multi_sector_write_next()
   POKE(0xD680, cmd);
   write_cache_offset += 512;
   ++slots_written;
+}
+
+uint8_t is_received_batch_counter_outdated(uint8_t previous_id, uint8_t received_id)
+{
+  if (received_id == previous_id) {
+    return 0;
+  }
+  if (received_id - previous_id < ((uint8_t)0x80)) {
+    return 1;
+  }
+  return 0;
 }
 
 void handle_batch_write()
@@ -652,8 +677,18 @@ void get_new_job()
            * Single sector write request
            */
           if (write_batch_active) {
+            // usually, the sender will take care that packets for a new batch are only
+            // sent out if all packets of the previous batch have been acknowledged.
+            // However, it can happen that we already have retransmissions of old
+            // packets in the queue that show up after a new batch has already started.
+            // In this case, we have to ignore the old packets.
+            if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
+              continue;
+            }
             stop_fatal("error: single/multi write conflict");
           }
+
+          current_batch_counter = recv_buf.write_sector.batch_counter;
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
               sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
@@ -694,6 +729,12 @@ void get_new_job()
           if (recv_buf.write_sector.slot_index > write_batch_max_id) {
             stop_fatal("error: write slot out of range");
           }
+
+          if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
+            continue;
+          }
+
+          current_batch_counter = recv_buf.write_sector.batch_counter;
           handle_batch_write();
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
@@ -785,25 +826,24 @@ void get_new_job()
         /*
          * Reset TX request
          */
-        if (!eth_controller_reset_done) {
+        if (last_eth_controller_reset_seq_no != recv_buf.ftp.seq_num) {
           // Reset Ethernet controller tx, it seemed to stop sending packets
-          POKE(0xD6E0, 0x00);
           wait_100ms();
-          wait_100ms();
-          wait_100ms();
-          wait_100ms();
+          POKE(0xD6EF, 1);
+          sprintf(msg, "tx state: %02x tx idle: %02x", PEEK(0xD6EF), PEEK(0xD6E0));
+          print(22, 0, msg);
+          POKE(0xD6EF, 2);
+          sprintf(msg, "tx count: %02x", PEEK(0xD6EF));
+          print(23, 0, msg);
+          POKE(0xD6E0, 0x01);
           wait_100ms();
           POKE(0xD6E0, 0x03);
           wait_100ms();
-          wait_100ms();
-          wait_100ms();
-          wait_100ms();
-          wait_100ms();
-          POKE(0xD6E1, 3);
-          POKE(0xD6E1, 0);
+          //POKE(0xD6E1, 3);
+          //POKE(0xD6E1, 0);
           ++tx_reset_cnt;
           update_counters();
-          eth_controller_reset_done = 1;
+          last_eth_controller_reset_seq_no = recv_buf.ftp.seq_num;
         }
         return;
 
@@ -832,6 +872,14 @@ void get_new_job()
   }
 }
 
+
+/**
+ * @brief     Process pipeline work, eg. send packets, read/write sectors, etc.
+ *      
+ * @details   The goal is to keep the pipeline full, so that the CPU is not waiting for I/O operations.
+ *            Especially, sending packets and reading data from SD are operations that can happen in the background.
+ * @note      This function is called from the main loop.
+ */
 void process()
 {
   if (send_buf_size > 0) {
@@ -850,8 +898,6 @@ void process()
 
     // Send packet
     POKE(0xD6E4, 0x01); // TX now
-
-    eth_controller_reset_done = 0;
 
     send_buf_size = 0;
   }

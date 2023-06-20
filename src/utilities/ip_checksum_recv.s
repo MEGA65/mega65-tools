@@ -8,12 +8,14 @@
         ; dma copy with eth I/O personality enabled
         .export _dma_copy_eth_io
 
+        .p02
         .include        "zeropage.inc"
         .p4510
+        .import incsp4
 
         .segment        "CODE"
 
-_dma_copy_eth_io:
+.proc   _dma_copy_eth_io: near
         .p02
         sta dma_copy_count
         stx dma_copy_count+1
@@ -29,7 +31,8 @@ _dma_copy_eth_io:
         iny
         lda (sp),y
         sta dma_copy_src+1
-
+        
+        .p4510
         lda #$45
         sta $d02f 
         lda #$54
@@ -49,15 +52,10 @@ dma_copy_dst:
 	.byte $00      ; cmd hi
 	.word $0000    ; modulo / ignored
 
-        lda sp
-        clc
-        adc #$04
-        sta sp
-        .p4510
+        jmp incsp4
+.endproc
 
-        rts
-
-_ip_checksum_recv:
+.proc   _ip_checksum_recv: near
         lda #$45
         sta $d02f 
         lda #$54
@@ -97,10 +95,11 @@ _ip_checksum_recv:
         bne :+                  ; still carry?
         iny                     ; increase chks lo again
 :
-        tax                     ; keep in x as return value
+        tax                     ; X = chks hi
         tya                     ; A = chks lo
         rts                     ; return chks (AX)
 
         .segment        "DATA"
 result:
         .dword 0
+.endproc

@@ -1281,6 +1281,18 @@ void ethernet_process_result(uint8_t *rx_payload, int rx_len)
   }
 }
 
+/**
+ * @brief Extracts the packet sequence number from an Ethernet payload.
+ *
+ * This function extracts the packet sequence number from an Ethernet payload.
+ * The packet sequence number is a 16-bit little-endian value that is stored in the fifth and
+ * sixth bytes of the payload.
+ *
+ * @param[in] payload A pointer to the Ethernet payload.
+ * @param[in] len The length of the Ethernet payload.
+ *
+ * @return The packet sequence number, or -1 if the payload is too short.
+ */
 int ethernet_get_packet_seq(uint8_t *payload, int len)
 {
   if (len < 6) {
@@ -1290,6 +1302,22 @@ int ethernet_get_packet_seq(uint8_t *payload, int len)
   return payload[4] + (payload[5] << 8);
 }
 
+bool packet_received = false;
+
+/**
+ * @brief Matches received Ethernet payloads with expected payloads.
+ *
+ * This function matches received Ethernet payloads with expected payloads. It checks if the received payload
+ * matches the expected payload based on the command type and the payload contents. If the received payload matches
+ * the expected payload, it processes the result accordingly.
+ *
+ * @param[in] rx_payload A pointer to the received Ethernet payload.
+ * @param[in] rx_len The length of the received Ethernet payload.
+ * @param[in] tx_payload A pointer to the expected Ethernet payload.
+ * @param[in] tx_len The length of the expected Ethernet payload.
+ *
+ * @return 1 if the received payload matches the expected payload, 0 otherwise.
+ */
 int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len)
 {
   if (rx_len < 7 || tx_len < 7 || memcmp(rx_payload, "mrsp", 4) || memcmp(tx_payload, "mreq", 4)) {
@@ -1301,6 +1329,8 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
       return 0;
     }
   */
+
+  packet_received = true;
 
   switch (rx_payload[6]) {
   case 0x02: // write sector cmd
@@ -1352,6 +1382,16 @@ int ethernet_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int c
   return 0;
 }
 
+/**
+ * This function embeds the sequence number into the Ethernet payload. It sets the sequence number in the 5th and 6th
+ * bytes of the payload.
+ *
+ * @param[in] payload A pointer to the Ethernet payload.
+ * @param[in] len The length of the Ethernet payload.
+ * @param[in] seq_num The sequence number to embed in the payload.
+ *
+ * @return 1 if the sequence number was successfully embedded, 0 otherwise.
+ */
 int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
 {
   if (len < 7) {
@@ -1364,14 +1404,27 @@ int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
 
 const uint8_t ethernet_request_string[4] = { 'm', 'r', 'e', 'q' };
 
+/**
+ * This function is called when an ACK timeout occurs. It requests an Ethernet 
+ * controller reset from MEGA65 by sending a reset command packet to the Ethernet controller.
+ *
+ * @return 1 if the reset command packet was successfully sent, 0 otherwise.
+ */
 int ethernet_timeout_handler()
 {
-  log_warn("ACK timeout, requesting ethernet controller reset from MEGA65");
+  static uint16_t reset_seq_num = 0;
+
+  if (packet_received) {
+    ++reset_seq_num;
+    packet_received = false;
+  }
+
+  log_warn("ACK timeout, requesting ethernet controller reset from MEGA65, seq_no %u", reset_seq_num);
   const int packet_size = 7;
   uint8_t payload[packet_size];
   memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
-  payload[4] = 0;                              // no seq num for tx reset
-  payload[5] = 0;                              // no seq num for tx reset
+  payload[4] = reset_seq_num & 0xFF;
+  payload[5] = reset_seq_num >> 8;
   payload[6] = 0xfe;                           // reset tx command
   ethl_send_packet_unscheduled(payload, packet_size);
   return 1;
@@ -1383,6 +1436,14 @@ uint32_t write_sector_numbers[65536 / 512];
 uint8_t write_sector_count = 0;
 uint8_t write_batch_counter = 0;
 
+/**
+ * This function processes a job for writing multiple sectors over Ethernet. 
+ *
+ * @param[in] job A pointer to the job to be processed.
+ * @param[in] batch_size The number of sectors to be written in a batch.
+ *
+ * @return void
+ */
 void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
 {
   // Batches should not be mixed with single writes
@@ -1457,12 +1518,11 @@ void process_ethernet_read_sectors_job(uint8_t *job)
     ethl_schedule_ack(payload_unrolled, sizeof(payload_unrolled));
     eth_packet_len[i] = sizeof(payload_unrolled);
   }
-  // We already scheduled the ack packages, so send the request without scheduling another
-  // expected response for it.
+
+  // Send the request without scheduling another expected response for it
   ethernet_embed_packet_seq(payload, sizeof(payload), seq_num);
   ethl_send_packet_unscheduled(payload, sizeof(payload));
 }
-
 void process_jobs_ethernet(void)
 {
   uint8_t *ptr = queue_cmds;
