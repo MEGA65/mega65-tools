@@ -1302,7 +1302,7 @@ int ethernet_get_packet_seq(uint8_t *payload, int len)
   return payload[4] + (payload[5] << 8);
 }
 
-bool packet_received = false;
+BOOL packet_received = FALSE;
 
 /**
  * @brief Matches received Ethernet payloads with expected payloads.
@@ -1330,7 +1330,7 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
     }
   */
 
-  packet_received = true;
+  packet_received = TRUE;
 
   switch (rx_payload[6]) {
   case 0x02: // write sector cmd
@@ -1416,7 +1416,7 @@ int ethernet_timeout_handler()
 
   if (packet_received) {
     ++reset_seq_num;
-    packet_received = false;
+    packet_received = FALSE;
   }
 
   log_warn("ACK timeout, requesting ethernet controller reset from MEGA65, seq_no %u", reset_seq_num);
