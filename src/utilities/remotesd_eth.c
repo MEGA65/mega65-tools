@@ -777,7 +777,7 @@ void get_new_job()
         reply_template.read_sector.num_sectors_minus_one = 0;
 
         batch_left = recv_buf.read_sector.num_sectors_minus_one;
-        if (batch_left > 64) {
+        if (batch_left > 127) {
           stop_fatal("batchleft out of bounds");
         }
         ++batch_left;
