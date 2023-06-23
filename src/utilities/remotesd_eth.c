@@ -972,7 +972,7 @@ void main(void)
   POKE(0xD02F, 0x54);
 
     // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM on
-  POKE(0xD6E5, 0x75);
+  POKE(0xD6E5, 0x55);
   
   POKE(0xD689, PEEK(0xD689) | 128); // Enable SD card buffers instead of Floppy buffer
 
