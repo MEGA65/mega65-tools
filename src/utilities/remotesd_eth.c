@@ -497,7 +497,7 @@ uint8_t is_received_batch_counter_outdated(uint8_t previous_id, uint8_t received
   if (received_id == previous_id) {
     return 0;
   }
-  if (received_id - previous_id < ((uint8_t)0x80)) {
+  if ((uint8_t)(received_id - previous_id) < ((uint8_t)0x80)) {
     return 1;
   }
   return 0;
@@ -725,16 +725,16 @@ void get_new_job()
               init_new_write_batch();
             }
           }
-
+          else {
+            if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
+              continue;
+            }
+          }
+          
           if (recv_buf.write_sector.slot_index > write_batch_max_id) {
             stop_fatal("error: write slot out of range");
           }
 
-          if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
-            continue;
-          }
-
-          current_batch_counter = recv_buf.write_sector.batch_counter;
           handle_batch_write();
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
@@ -971,7 +971,7 @@ void main(void)
   POKE(0xD02F, 0x45);
   POKE(0xD02F, 0x54);
 
-    // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM on
+    // RXPH 1, MCST off, BCST on, TXPH 1, NOCRC off, NOPROM on
   POKE(0xD6E5, 0x55);
   
   POKE(0xD689, PEEK(0xD689) | 128); // Enable SD card buffers instead of Floppy buffer
