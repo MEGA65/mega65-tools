@@ -24,14 +24,20 @@ tm_loop_val:
 	bpl tm_loop_val
 tm_next:
 	inz
-    cpz #$80
+    cpz #$08
 	bne tm_loop
 	rts
 
 tm_fail:
-    inc _test_status
+    tza
+    tax
+    lda test_bit, x
+    ora _test_status
+    sta _test_status
     bra tm_next
 
 	;; test pattern (alternating bit sets)
 test_val:
 	.byte $00, $ff, $55, $aa
+test_bit:
+    .byte $01, $02, $04, $08, $10, $20, $40, $80

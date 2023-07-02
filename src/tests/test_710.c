@@ -25,7 +25,7 @@ long test_address[NUM_TESTS] = {
 };
 
 // in test_585_asm.s
-int8_t test_status = -1;
+uint8_t test_status = -1;
 extern void test_memory(void);
 
 void main(void)
@@ -58,11 +58,11 @@ void main(void)
     *(unsigned long *)0xa5 = test_address[i];
     test_memory();
 
-    if (test_status > 0) {
+    if (test_status != 0) {
       address = *(unsigned long *)0xa5;
-      snprintf(msg, 40, "attic ram test $%07lx - %d fail", address, test_status);
+      snprintf(msg, 40, "attic ram test $%07lx - %02x fail", address, test_status);
       unit_test_fail(msg);
-      printf("%c%d addresses failed at $%07lx%c\n", 28, test_status, test_address[i], 5);
+      printf("%cfailed %02X at $%07lx%c\n", 28, test_status, test_address[i], 5);
     }
     else {
       snprintf(msg, 40, "attic ram test $%07lx", test_address[i]);
