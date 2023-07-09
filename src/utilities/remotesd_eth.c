@@ -497,7 +497,7 @@ uint8_t is_received_batch_counter_outdated(uint8_t previous_id, uint8_t received
   if (received_id == previous_id) {
     return 0;
   }
-  if ((uint8_t)(received_id - previous_id) < ((uint8_t)0x80)) {
+  if ((uint8_t)(previous_id - received_id) < ((uint8_t)0x80)) {
     return 1;
   }
   return 0;
@@ -682,9 +682,9 @@ void get_new_job()
             // However, it can happen that we already have retransmissions of old
             // packets in the queue that show up after a new batch has already started.
             // In this case, we have to ignore the old packets.
-            if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
-              continue;
-            }
+            //if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
+            //  continue;
+            //}
             stop_fatal("error: single/multi write conflict");
           }
 
@@ -725,16 +725,7 @@ void get_new_job()
               init_new_write_batch();
             }
           }
-          else {
-            if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
-              continue;
-            }
-          }
           
-          if (recv_buf.write_sector.slot_index > write_batch_max_id) {
-            stop_fatal("error: write slot out of range");
-          }
-
           handle_batch_write();
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
