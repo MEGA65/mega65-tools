@@ -248,7 +248,21 @@ void dump_bytes(char *msg, unsigned char *b, int len)
   return;
 }
 
-void load_file(int fd, int start_addr)
+/**
+ * @brief Loads a file into memory at the specified address.
+ *
+ * This function reads a file from the specified file descriptor and loads it into memory
+ * starting at the specified address. It also updates the progress screen to show the current
+ * loading state.
+ *
+ * @param fd The file descriptor of the file to load.
+ * @param start_addr The address to start loading the file into memory.
+ * @return Number of bytes loaded.
+ *
+ * @note This function assumes that the progress screen and colour RAM have already been initialized.
+ * @note This function assumes that the filename variable has already been set.
+ */
+int load_file(int fd, int start_addr)
 {
   char msg[80];
   unsigned char buffer[1024];
@@ -297,6 +311,8 @@ void load_file(int fd, int start_addr)
   progress_print(0, 16, msg);
   progress_line(0, 17, 40);
   send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
+
+  return address - start_addr;
 }
 
 int main(int argc, char **argv)
@@ -489,7 +505,7 @@ int main(int argc, char **argv)
   trigger_eth_hyperrupt();
 
   if (filename) {
-    load_file(fd, start_addr);
+    address = start_addr + load_file(fd, start_addr);
     close(fd);
     log_note("Sent %s to %s on port %d.", filename, ethl_get_ip_address(), ethl_get_port());
   }

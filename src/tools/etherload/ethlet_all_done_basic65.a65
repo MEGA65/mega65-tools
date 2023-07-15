@@ -83,9 +83,30 @@ mount_d81:
 	sty $11b1	; filename length
 
 map_crom:
-	; map $c000 interface rom
-	lda #$20
-	sta $d030
+	; Disable $c000 mapping via $d030 as we want to write to interface rom.
+	; Writing to rom is not possible via $d030. We'll use map for writing instead.
+	lda #%00100000
+	trb $d030
+
+	; unmap maphmb, while keeping maplmb
+	; this is to keep our own routine available at $6000 (mapped from $ffde000)
+	lda #$ff
+	ldx #$0f
+	ldy #$00
+	ldz #$0f
+	map
+
+	; keep mapping of $ffde000-$ffdffff at $6000
+	; MAPs are offset based, so we need to subtract $6000 from the target address
+	; $de000 - $6000 = $d8000
+	lda #$80
+	ldx #$8d
+	; mapping of interface rom $2c000 at $c000
+	; (enables writing to rom, but also hides i/o for now as a side effect)
+	ldy #$00
+	ldz #$42
+	map
+	eom
 
 	; copy autostart routine to $c700
 	ldx #autostart_end - autostart_target
@@ -122,6 +143,16 @@ map_crom:
 	neg
 	sta basic_program_start_backup
 
+	; backup cartridge signature byte
+	lda $8004
+	sta cartridge_backup
+	lda enable_cart_signature
+	bne +
+	lda #$00
+	sta $8004
+*
+
+	; only execute following code if we actually want to load a prg
 	lda restore_prg
 	beq finalize
 	; patch basic irq vector at $32007 to jump into our autostart code
@@ -137,6 +168,19 @@ map_crom:
 	sta (<basic_irq_pointer),z
 
 finalize:
+	; unmap $c000 rom to make I/O available again
+	; while keeping ourselves mapped at $6000
+	lda #$80
+	ldx #$8d
+	ldy #$00
+	ldz #$00
+	map
+	eom
+
+	; activate $c000 rom read-only again via $d030
+	lda #%00100000
+	tsb $d030
+	
 	; restore rom write protection
 	lda #$00
 	sta $d641
@@ -229,7 +273,6 @@ reset_mega65:
 	ldy #$00
 	ldz #$0f
 	map
-	eom
 
 	lda #$00
 	ldx #$00
@@ -238,14 +281,6 @@ reset_mega65:
 	map
 	eom
 
-	; backup cartridge signature byte
-	lda $8004
-	sta cartridge_backup
-	lda enable_cart_signature
-	bne +
-	lda #$00
-	sta $8004
-*
 	jmp ($fffc)
 
 autostart_entry:
