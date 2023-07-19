@@ -55,10 +55,16 @@ typedef struct {
   IPV4 dest_ip;
 } ARP_HDR;
 
+#define IPV4_PSEUDO_HDR_SIZE 12
+#define IPV4_HDR_SIZE 20
+#define UDP_HDR_SIZE 8
+#define FTP_HDR_SIZE 7
+
 /**
  * IP Header format.
  */
 typedef struct {
+  // IPv4 header
   uint8_t ver_length;    ///< Protocol version (4) and header size (32 bits units).
   uint8_t tos;           ///< Type of Service.
   uint16_t ip_length;    ///< Total packet length.
@@ -69,10 +75,12 @@ typedef struct {
   uint16_t checksum_ip;  ///< Header checksum.
   IPV4 source;           ///< Source host address.
   IPV4 destination;      ///< Destination host address.
+  // UDP header
   uint16_t src_port;     ///< Source application address.
   uint16_t dst_port;     ///< Destination application address.
   uint16_t udp_length;   ///< UDP packet size.
   uint16_t checksum_udp; ///< Packet checksum, with pseudo-header.
+  // mega65_ftp protocol header
   uint32_t ftp_magic;
   uint16_t seq_num;
   uint8_t opcode;
@@ -246,6 +254,10 @@ void print_mac_address(void)
       mac_local.b[4], mac_local.b[5]);
   print(3, 0, "local");
   print(4, 0, msg);
+
+  if ((mac_local.b[0] | mac_local.b[1] | mac_local.b[2] | mac_local.b[3] | mac_local.b[4] | mac_local.b[5]) == 0) {
+    stop_fatal("no mac address! please configure first.");
+  }
 }
 
 void print_ip_informtaion(void)
@@ -421,10 +433,6 @@ uint8_t check_udp_checksum()
   sprintf(msg, "udp chks   rx: %04x act: %04x len: %04x", ref_chks, chks.u, udp_length + 12);
   print(23, 0, msg);
   
-  ++udp_chks_err_cnt;
-  update_counters();
-  update_rx_invalid_counter();
-
   return 0;
 }
 
@@ -525,10 +533,63 @@ void handle_batch_write()
   }
 
   slot_ids_received[id] = 1;
-  lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB), cache_position, 512);
+  //lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB), cache_position, 512);
+  lcopy(0xC800UL + IPV4_PSEUDO_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB), cache_position, 512);
   --batch_left;
 
   multi_sector_write_next();
+}
+
+void check_rx_buffer_integrity()
+{
+  static const uint16_t total_size = UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB) + 512;
+  static uint16_t i;
+
+  lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + IPV4_HDR_SIZE, 
+        0xC00CUL, 
+        total_size);
+  POKE(0xC012, 0);
+  POKE(0xC013, 0);
+  for (i = 0; i < total_size; ++i) {
+    if (PEEK(0xC00C + i) != PEEK(0xC80C + i)) {
+      sprintf(msg, "rx buffer corrupted at %d", i);
+      stop_fatal(msg);
+    }
+  }
+
+}
+
+void wait_rasters(uint16_t num_rasters)
+{
+  static unsigned char b;
+  while (num_rasters)
+  {
+    b = PEEK(0xD012U);
+    while (b == PEEK(0xD012U))
+      continue;
+    --num_rasters;
+  }
+}
+
+void verify_sector()
+{
+  static uint16_t i;
+  uint16_t comp_data = 0xC800UL + IPV4_PSEUDO_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB);
+
+  wait_rasters(2);
+  wait_for_sd_ready();
+  *(uint32_t *)0xD681 = recv_buf.write_sector.start_sector_number;
+  POKE(0xD680, 0x02);
+  wait_rasters(2);
+  wait_for_sd_ready();
+
+  lcopy(0xffd6e00UL, 0xC000UL, 512);
+
+  for (i = 0; i < 512; ++i) {
+    if (PEEK(0xC000 + i) != PEEK(comp_data + i)) {
+      stop_fatal("sector verification failed");
+    }
+  }
 }
 
 void wait_100ms(void)
@@ -682,12 +743,15 @@ void get_new_job()
             // However, it can happen that we already have retransmissions of old
             // packets in the queue that show up after a new batch has already started.
             // In this case, we have to ignore the old packets.
-            //if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
-            //  continue;
-            //}
+            if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
+              continue;
+            }
             stop_fatal("error: single/multi write conflict");
           }
 
+          if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
+            stop_fatal("error: outdated batch counter");
+          }
           current_batch_counter = recv_buf.write_sector.batch_counter;
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
@@ -709,12 +773,15 @@ void get_new_job()
           ++ip_id;
           send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB);
 
+          check_rx_buffer_integrity();
           wait_for_sd_ready();
-          lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB), 0xffd6e00, 512);
+          //lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB), 0xffd6e00, 512);
+          lcopy(0xC800UL + IPV4_PSEUDO_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB), 0xffd6e00, 512);
           recv_buf.write_sector.start_sector_number += recv_buf.write_sector.slot_index;
           *(uint32_t *)0xD681 = recv_buf.write_sector.start_sector_number;
           POKE(0xD680, 0x57); // Open write gate
           POKE(0xD680, 0x03); // Single sector write command
+          verify_sector();
         }
         else {
           /*
@@ -724,8 +791,15 @@ void get_new_job()
             if (recv_buf.write_sector.batch_counter != current_batch_counter) {
               init_new_write_batch();
             }
+            else {
+              continue;
+            }
           }
           
+          if (recv_buf.write_sector.batch_counter != current_batch_counter) {
+            stop_fatal("error: batch counter mismatch");
+          }
+
           handle_batch_write();
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,

@@ -324,7 +324,7 @@ void usage(void)
 #define WRITE_SECTOR_BUFFER_ADDRESS 0xFFD6e00
 
 int queued_command_count = 0;
-#define MAX_QUEUED_COMMANDS 64
+#define MAX_QUEUED_COMMANDS 512
 char *queued_commands[MAX_QUEUED_COMMANDS];
 
 int queue_command(char *c)
@@ -1446,12 +1446,8 @@ uint8_t write_batch_counter = 0;
  */
 void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
 {
-  // Batches should not be mixed with single writes
-  // Make sure we start with an empty queue of pending packets before we
-  // start the next batch
-  if (batch_size > 1) {
-    wait_all_acks();
-  }
+  // always clear queue before starting new write operations
+  wait_all_acks();
 
   const int packet_size = 14 + 512;
   int i;
@@ -1471,11 +1467,8 @@ void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
     job += 9;
   }
 
-  // Batches should not be mixed with single writes, so make sure the batch
-  // is applied completely before we do other batches or individual sector writes
-  if (batch_size > 1) {
-    wait_all_acks();
-  }
+  // make sure all packets are acknowledged before continuing after a write operatiopn
+  wait_all_acks();
 
   ++write_batch_counter;
 }
@@ -1523,6 +1516,7 @@ void process_ethernet_read_sectors_job(uint8_t *job)
   ethernet_embed_packet_seq(payload, sizeof(payload), seq_num);
   ethl_send_packet_unscheduled(payload, sizeof(payload));
 }
+
 void process_jobs_ethernet(void)
 {
   uint8_t *ptr = queue_cmds;
