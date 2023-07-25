@@ -11,7 +11,7 @@
 
         .segment        "CODE"
 
-_checksum_fast:
+.proc   _checksum_fast: near
         tay                     ; keep data size lo in y
         stx tmp1
         ldz tmp1                ; remember sizehi in z
@@ -144,3 +144,4 @@ sizehi:
         .byte 0
 result:
         .dword 0
+.endproc

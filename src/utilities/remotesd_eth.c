@@ -20,7 +20,24 @@
 
 uint16_t fastcall ip_checksum_recv();
 uint16_t fastcall checksum_fast(uint16_t size);
+
+/**
+ * @brief Copy a memory area using DMA with ETH I/O personality enabled.
+ *
+ * The function will enable the ETH I/O personality, copy the memory area and leave the ETH
+ * I/O personality enabled. That personality allows reading and writing of the ETH RX/TX
+ * buffers at $D800-$DFFF, so src and dst can use this memory area for read/write.
+ *
+ * @param src Source address.
+ * @param dst Destination address.
+ * @param size Number of bytes to copy.
+ *
+ * @note The function is implemented in assembly language in ip_checksum_recv.s.
+*/
 void fastcall dma_copy_eth_io(void *src, void *dst, uint16_t size);
+
+uint8_t fastcall cmp_c000_c200();
+uint8_t fastcall cmp_c000_c800();
 
 typedef struct {
   uint8_t b[6];
@@ -55,8 +72,9 @@ typedef struct {
   IPV4 dest_ip;
 } ARP_HDR;
 
-#define IPV4_PSEUDO_HDR_SIZE 12
+#define ETH_HDR_SIZE 14
 #define IPV4_HDR_SIZE 20
+#define IPV4_PSEUDO_HDR_SIZE 12
 #define UDP_HDR_SIZE 8
 #define FTP_HDR_SIZE 7
 
@@ -153,7 +171,7 @@ uint16_t ip_id = 0;
 
 uint32_t chks_err_cnt = 0;
 uint32_t udp_chks_err_cnt = 0;
-uint32_t retrans_cnt = 0;
+uint32_t outdated_cnt = 0;
 uint32_t dup_cnt = 0;
 uint32_t tx_reset_cnt = 0;
 uint32_t rx_invalid_cnt = 0;
@@ -167,7 +185,90 @@ chks_t chks;
 static uint8_t _a, _b, _c;
 static unsigned int _b16;
 
+void init(void);
+void init_screen(void);
+void print(uint8_t row, uint8_t col, char *text);
 void stop_fatal(char *text);
+void print_mac_address(void);
+void print_ip_informtaion(void);
+void update_counters(void);
+void update_rx_invalid_counter(void);
+void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line);
+//int memcmp_highlow(uint32_t addr1, uint16_t addr2, uint16_t num_bytes);
+void checksum(uint8_t *buf, uint16_t size);
+void add_checksum(uint16_t v);
+uint8_t check_ip_checksum(uint8_t *hdr);
+uint8_t check_udp_checksum(void);
+void wait_for_sd_ready(void);
+void init_new_write_batch(void);
+void multi_sector_write_next(void);
+uint8_t is_received_batch_counter_outdated(uint8_t previous_id, uint8_t received_id);
+void handle_batch_write(void);
+void check_rx_buffer_integrity(void);
+void wait_rasters(uint16_t num_rasters);
+void verify_sector(void);
+void wait_100ms(void);
+void get_new_job(void);
+
+void init(void)
+{
+  // Fast CPU, M65 Ethernet I/O (eth buffer @ $d800)
+  POKE(0, 65);
+  POKE(0xD02F, 0x45);
+  POKE(0xD02F, 0x54);
+
+    // RXPH 1, MCST off, BCST on, TXPH 1, NOCRC off, NOPROM on
+  POKE(0xD6E5, 0x55);
+  
+  POKE(0xD689, PEEK(0xD689) | 128); // Enable SD card buffers instead of Floppy buffer
+
+  init_screen();
+
+  sector_reading = 0;
+  sector_buffered = 0;
+  send_buf_size = 0;
+  wait_for_sd_ready();
+
+  // Prepare response packet
+  lcopy((uint32_t)&mac_local, (uint32_t)&reply_template.eth.source, sizeof(EUI48));
+  reply_template.eth.type = 0x0008;
+  reply_template.ftp.ver_length = 0x45;
+  reply_template.ftp.tos = 0;
+  reply_template.ftp.frag = 0;
+  reply_template.ftp.ttl = 64;
+  reply_template.ftp.protocol = 17;
+  reply_template.ftp.checksum_ip = 0;
+  reply_template.ftp.source.d = 0;
+  reply_template.ftp.src_port = HTONS(4510);
+  reply_template.ftp.checksum_udp = 0;
+  reply_template.ftp.ftp_magic = 0x7073726d; // 'mrsp' big endian
+}
+
+void init_screen()
+{
+  // Cursor off
+  POKE(204, 0x80);
+
+  POKE(0xD020, 0);
+  POKE(0xD021, 0);
+  // clear screen memory
+  lfill(0x400, 0x20, 1000);
+  // clear color ram
+  lfill(0xff80000, 5, 1000);
+
+  print(1, 0, "mega65 ethernet file transfer helper.");
+
+  print_mac_address();
+
+  print(10, 0, "ip chks err count:  0");
+  print(11, 0, "udp chks err count: 0");
+  print(12, 0, "outdated packet:    0");
+  print(13, 0, "duplicate packets:  0");
+  print(14, 0, "tx resets:          0");
+  print(15, 0, "rx invalid packets: 0");
+
+  update_counters();
+}
 
 void print(uint8_t row, uint8_t col, char *text)
 {
@@ -183,21 +284,6 @@ void print(uint8_t row, uint8_t col, char *text)
   }
 }
 
-void init(void)
-{
-  POKE(0xD020, 0);
-  POKE(0xD021, 0);
-  lfill(0x400, 0x20, 1000);
-  lfill(0xff80000, 5, 1000);
-
-  print(10, 0, "ip chks err count:  0");
-  print(11, 0, "udp chks err count: 0");
-  print(12, 0, "retrans detected:   0");
-  print(13, 0, "duplicate packets:  0");
-  print(14, 0, "tx resets:          0");
-  print(15, 0, "rx invalid packets: 0");
-}
-
 void stop_fatal(char *text)
 {
   print(2, 0, text);
@@ -205,6 +291,54 @@ void stop_fatal(char *text)
     POKE(0xD020, 1);
     POKE(0xD020, 2);
   }
+}
+
+void print_mac_address(void)
+{
+  // Read MAC address
+  lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
+  sprintf(msg, "mac: %02x:%02x:%02x:%02x:%02x:%02x", mac_local.b[0], mac_local.b[1], mac_local.b[2], mac_local.b[3],
+      mac_local.b[4], mac_local.b[5]);
+  print(3, 0, "local");
+  print(4, 0, msg);
+
+  if ((mac_local.b[0] | mac_local.b[1] | mac_local.b[2] | mac_local.b[3] | mac_local.b[4] | mac_local.b[5]) == 0) {
+    stop_fatal("no mac address! please configure first.");
+  }
+}
+
+void print_ip_informtaion(void)
+{
+  sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.source.b[0], reply_template.ftp.source.b[1],
+      reply_template.ftp.source.b[2], reply_template.ftp.source.b[3]);
+  print(5, 0, msg);
+  print(7, 0, "remote");
+  sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
+      reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3]);
+  print(8, 0, msg);
+}
+
+void update_counters(void)
+{
+  static const uint8_t col = 20;
+
+  sprintf(msg, "%lu", chks_err_cnt);
+  print(10, col, msg);
+  sprintf(msg, "%lu", udp_chks_err_cnt);
+  print(11, col, msg);
+  sprintf(msg, "%lu", outdated_cnt);
+  print(12, col, msg);
+  sprintf(msg, "%lu", dup_cnt);
+  print(13, col, msg);
+  sprintf(msg, "%lu", tx_reset_cnt);
+  print(14, col, msg);
+}
+
+void update_rx_invalid_counter()
+{
+  ++rx_invalid_cnt;
+  sprintf(msg, "%lu", rx_invalid_cnt);
+  print(15, 20, msg);
 }
 
 /**
@@ -246,53 +380,6 @@ void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line)
   print(screen_line, 0, msg);
 }
 
-void print_mac_address(void)
-{
-  // Read MAC address
-  lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
-  sprintf(msg, "mac: %02x:%02x:%02x:%02x:%02x:%02x", mac_local.b[0], mac_local.b[1], mac_local.b[2], mac_local.b[3],
-      mac_local.b[4], mac_local.b[5]);
-  print(3, 0, "local");
-  print(4, 0, msg);
-
-  if ((mac_local.b[0] | mac_local.b[1] | mac_local.b[2] | mac_local.b[3] | mac_local.b[4] | mac_local.b[5]) == 0) {
-    stop_fatal("no mac address! please configure first.");
-  }
-}
-
-void print_ip_informtaion(void)
-{
-  sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.source.b[0], reply_template.ftp.source.b[1],
-      reply_template.ftp.source.b[2], reply_template.ftp.source.b[3]);
-  print(5, 0, msg);
-  print(7, 0, "remote");
-  sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
-      reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3]);
-  print(8, 0, msg);
-}
-
-void update_rx_invalid_counter()
-{
-  ++rx_invalid_cnt;
-  sprintf(msg, "%lu", rx_invalid_cnt);
-  print(15, 20, msg);
-}
-
-void update_counters(void)
-{
-  static const uint8_t col = 20;
-
-  sprintf(msg, "%lu", chks_err_cnt);
-  print(10, col, msg);
-  sprintf(msg, "%lu", udp_chks_err_cnt);
-  print(11, col, msg);
-  sprintf(msg, "%lu", retrans_cnt);
-  print(12, col, msg);
-  sprintf(msg, "%lu", dup_cnt);
-  print(13, col, msg);
-  sprintf(msg, "%lu", tx_reset_cnt);
-  print(14, col, msg);
-}
 
 /**
  * Calculate checksum for a memory area (must be word-aligned).
@@ -414,8 +501,8 @@ uint8_t check_udp_checksum()
     stop_fatal("udp length too small");
   }
   *(uint16_t *)0xC80A = recv_buf.ftp.udp_length;
-  //lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + 20, 0xC80CU, udp_length);
-  dma_copy_eth_io((void *)(0xD800U + 2 + sizeof(ETH_HEADER) + 20), (void *)(0xC80CU), udp_length);
+  //lcopy(ETH_RX_BUFFER + 2 + ETH_HDR_SIZE + IPV4_HDR_SIZE, 0xC80CU, udp_length);
+  dma_copy_eth_io((void *)(0xD800U + 2 + ETH_HDR_SIZE + IPV4_HDR_SIZE), (void *)(0xC80CU), udp_length);
   
   ref_chks = *(uint16_t *)0xC812;
   *(uint16_t *)0xC812 = 0; // reset checksum field
@@ -470,6 +557,10 @@ void init_new_write_batch()
 
 void multi_sector_write_next()
 {
+  static uint32_t verify_sector_number = 0;
+  static uint32_t verify_cache_position = 0x40000ul;
+  static uint8_t i;
+
   int cmd = 5; // Multi-sector mid
 
   if (slots_written > write_batch_max_id) {
@@ -478,8 +569,6 @@ void multi_sector_write_next()
 
   if (!slot_ids_received[slots_written]) {
     // print(2, 0, "retransmission detected");
-    ++retrans_cnt;
-    update_counters();
     return;
   }
 
@@ -498,6 +587,35 @@ void multi_sector_write_next()
   POKE(0xD680, cmd);
   write_cache_offset += 512;
   ++slots_written;
+
+  if (slots_written <= write_batch_max_id) {
+    return;
+  }
+
+  // verify complete batch written against cache
+  verify_sector_number = sector_number_write;
+  verify_cache_position = 0x40000ul;
+  wait_for_sd_ready();
+  // read first sector to verify
+  *(uint32_t *)0xD681 = verify_sector_number;
+  POKE(0xD680, 0x02);
+  for (i = 0; i < slots_written; ++i) {
+    wait_for_sd_ready();
+    lcopy(0xffd6e00UL, 0xC200, 512);
+    // we saved the sector data to sector_buf, now already trigger read of the next sector
+    // so it can happen in the background while we verify the last one
+    if (i != slots_written - 1) {
+      ++verify_sector_number;
+      *(uint32_t *)0xD681 = verify_sector_number;
+      POKE(0xD680, 0x02);
+    }
+    lcopy(verify_cache_position, 0xC000UL, 512);
+    if (cmp_c000_c200()) {
+      sprintf(msg, "verify batch failed at block %05lx", verify_cache_position);
+      stop_fatal(msg);
+    }
+    verify_cache_position += 512;
+  }
 }
 
 uint8_t is_received_batch_counter_outdated(uint8_t previous_id, uint8_t received_id)
@@ -527,6 +645,11 @@ void handle_batch_write()
 
   if (slot_ids_received[id] != 0) {
     // print(2, 0, "duplicate packet");
+    // verify received data matches cache
+    lcopy(cache_position, 0xC000U, 512);
+    if (cmp_c000_c800()) {
+      stop_fatal("duplicate packet with different data");
+    }
     ++dup_cnt;
     update_counters();
     return;
@@ -744,6 +867,8 @@ void get_new_job()
             // packets in the queue that show up after a new batch has already started.
             // In this case, we have to ignore the old packets.
             if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
+              ++outdated_cnt;
+              update_counters();
               continue;
             }
             stop_fatal("error: single/multi write conflict");
@@ -789,9 +914,15 @@ void get_new_job()
            */
           if (!write_batch_active) {
             if (recv_buf.write_sector.batch_counter != current_batch_counter) {
+              //snprintf(msg, 80, "new batch %d, size %d\n", recv_buf.write_sector.batch_counter, recv_buf.write_sector.num_sectors_minus_one + 1);
+              //debug_msg(msg);
               init_new_write_batch();
             }
             else {
+              //snprintf(msg, 80, "outdated batch %d (current %d)\n", recv_buf.write_sector.batch_counter, current_batch_counter);
+              //debug_msg(msg);
+              ++dup_cnt;
+              update_counters();
               continue;
             }
           }
@@ -819,13 +950,13 @@ void get_new_job()
         return;
 
       case 0x04:
-        if (write_batch_active) {
-          stop_fatal("error: read/write requests mixed up");
-        }
-
         /*
          * Read sectors request
          */
+         
+        if (write_batch_active) {
+          stop_fatal("error: read/write requests mixed up");
+        }
 
         if (udp_length != 21) {
           update_rx_invalid_counter();
@@ -947,7 +1078,9 @@ void get_new_job()
  */
 void process()
 {
+  // send_buf_size > 0 indicates we need to send out a packet,
   if (send_buf_size > 0) {
+    // Check if TX controller is busy
     if (!(PEEK(0xD6E0) & 0x80)) {
       return;
     }
@@ -956,17 +1089,21 @@ void process()
       stop_fatal("send_buf_size out of bounds");
     }
     lcopy((uint32_t)&send_buf, ETH_TX_BUFFER, send_buf_size);
+    //dma_copy_eth_io(&send_buf, (void*)0xD800U, send_buf_size);
 
     // Set packet length
     POKE(0xD6E2, send_buf_size & 0xff);
     POKE(0xD6E3, send_buf_size >> 8);
 
-    // Send packet
+    // Send packet, will be sent immediately in the background
     POKE(0xD6E4, 0x01); // TX now
 
+    // Indicate we sent the data
     send_buf_size = 0;
   }
 
+  // We received all sectors of a batch, but there still are some slots left to be written
+  // to the SD card.
   if (batch_left == 0 && write_batch_active) {
     while (slots_written <= write_batch_max_id) {
       multi_sector_write_next();
@@ -1029,47 +1166,14 @@ void process()
 
 void main(void)
 {
+  // Disable all interrupts
   asm("sei");
 
-  // Fast CPU, M65 Ethernet I/O (eth buffer @ $d800)
-  POKE(0, 65);
-  POKE(0xD02F, 0x45);
-  POKE(0xD02F, 0x54);
-
-    // RXPH 1, MCST off, BCST on, TXPH 1, NOCRC off, NOPROM on
-  POKE(0xD6E5, 0x55);
-  
-  POKE(0xD689, PEEK(0xD689) | 128); // Enable SD card buffers instead of Floppy buffer
-
-  // Cursor off
-  POKE(204, 0x80);
-
   init();
-  print(1, 0, "mega65 ethernet file transfer helper.");
-
-  print_mac_address();
-  update_counters();
-
-  sector_reading = 0;
-  sector_buffered = 0;
-  send_buf_size = 0;
-  wait_for_sd_ready();
-
-  // Prepare response packet
-  lcopy((uint32_t)&mac_local, (uint32_t)&reply_template.eth.source, sizeof(EUI48));
-  reply_template.eth.type = 0x0008;
-  reply_template.ftp.ver_length = 0x45;
-  reply_template.ftp.tos = 0;
-  reply_template.ftp.frag = 0;
-  reply_template.ftp.ttl = 64;
-  reply_template.ftp.protocol = 17;
-  reply_template.ftp.checksum_ip = 0;
-  reply_template.ftp.source.d = 0;
-  reply_template.ftp.src_port = HTONS(4510);
-  reply_template.ftp.checksum_udp = 0;
-  reply_template.ftp.ftp_magic = 0x7073726d; // 'mrsp' big endian
 
   while (1) {
+    // continuously check whether irqs are still disabled
+    // as these would mess up our program flow
     __asm__("php");
     __asm__("pla");
     __asm__("sta %v", cpu_status);

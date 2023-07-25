@@ -187,10 +187,10 @@ void update_retx_interval(void)
   // int num_unacked = get_num_unacked_frames();
   // int seq_gap = (packet_seq - last_rx_seq);
   retx_interval = 2000 + retx_cnt * last_rx_intv;
-  if (retx_interval < 10000)
-    retx_interval = 10000;
-  if (retx_interval > 500000)
-    retx_interval = 500000;
+  if (retx_interval < 50000)
+    retx_interval = 50000;
+  if (retx_interval > 1000000)
+    retx_interval = 1000000;
   // printf("  retx interval=%dusec (cnt=%d last_rx_intv=%lld)\n", retx_interval, retx_cnt, last_rx_intv);
 }
 
