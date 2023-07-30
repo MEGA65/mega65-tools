@@ -1,13 +1,3 @@
-/*
-  Remote SD card access tool for mega65_ftp to more quickly
-  send and receive files.
-
-  It implements a simple protocol with pre-emptive sending
-  of read data in raw mode at 4mbit = 40KB/sec.  Can do this
-  while writing jobs to the SD card etc to hide latency.
-
-*/
-
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -189,6 +179,7 @@ void init(void);
 void init_screen(void);
 void print(uint8_t row, uint8_t col, char *text);
 void stop_fatal(char *text);
+void print_core_commit();
 void print_mac_address(void);
 void print_ip_informtaion(void);
 void update_counters(void);
@@ -259,6 +250,7 @@ void init_screen()
   print(1, 0, "mega65 ethernet file transfer helper.");
 
   print_mac_address();
+  print_core_commit();
 
   print(10, 0, "ip chks err count:  0");
   print(11, 0, "udp chks err count: 0");
@@ -278,7 +270,7 @@ void print(uint8_t row, uint8_t col, char *text)
   while (*text) {
     *((char *)addr++) = *text++;
     
-    if (addr > 0x7bf) {
+    if (addr > 0x7e8) {
       stop_fatal("print out of bounds error");
     }
   }
@@ -293,7 +285,15 @@ void stop_fatal(char *text)
   }
 }
 
-void print_mac_address(void)
+void print_core_commit()
+{
+  uint8_t commit[4];
+  lcopy(0xffd3632UL, (uint32_t)&commit, 4);
+  sprintf(msg, "%02x%02x%02x%02x", commit[3], commit[2], commit[1], commit[0]);
+  print(24, 32, msg);
+}
+
+void print_mac_address()
 {
   // Read MAC address
   lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
@@ -1180,6 +1180,8 @@ void main(void)
     if (!(cpu_status & 0x04)) {
       stop_fatal("error: cpu irq enabled");
     }
+    
+    // main loop function
     process();
   }
 }
