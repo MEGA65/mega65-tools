@@ -62,6 +62,7 @@ int do_jump = 0;
 int jump_addr = 0;
 int use_binary = 0;
 int bin_load_addr = 0;
+int file_offset = 0;
 char *ip_address = NULL;
 char *filename = NULL;
 char *d81_image = NULL;
@@ -189,6 +190,7 @@ void init_cmd_options(void)
   CMD_OPTION("halt",        no_argument,       &halt,        1,     "",     "Halt and wait for next transfer after completion.");
   CMD_OPTION("jump",        required_argument, 0,            'j', "addr",   "Jump to provided address <addr> after loading (hex notation).");
   CMD_OPTION("bin",         required_argument, 0,            'b', "addr",   "Treat <prgname> as binary file and load at address <addr> (hex notation).");
+  CMD_OPTION("offset",      required_argument, 0,            'o', "bytes",  "Skip first <bytes> bytes (hex notation) when loading the file.");
   CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
   CMD_OPTION("mount",       required_argument, 0,            'm', "file",   "Mount d81 file image <file> from SD card (eg. MEGA65.D81).");
   // clang-format on
@@ -264,53 +266,17 @@ void dump_bytes(char *msg, unsigned char *b, int len)
  */
 int load_file(int fd, int start_addr)
 {
-  char msg[80];
   unsigned char buffer[1024];
   int offset = 0;
   int bytes;
   int address = start_addr;
 
-  // Clear screen first
-  log_debug("Clearing screen");
-  memset(colour_ram, 0x01, 1000);
-  memset(progress_screen, 0x20, 1000);
-  send_mem(0x1f800, colour_ram, 1000);
-  send_mem(0x0400, progress_screen, 1000);
-  wait_all_acks();
-  log_debug("Screen cleared.");
-
-  progress_line(0, 0, 40);
-  snprintf(msg, 40, "Loading \"%s\" at $%07X", filename, address);
-  progress_print(0, 1, msg);
-  progress_line(0, 2, 40);
-
   while ((bytes = read(fd, buffer, 1024)) != 0) {
     log_debug("Read %d bytes at offset %d", bytes, offset);
-
     offset += bytes;
-
-    // Send screen with current loading state
-    progress_line(0, 10, 40);
-    snprintf(msg, 40, "Loading block @ $%07X", address);
-    progress_print(0, 11, msg);
-    progress_line(0, 12, 40);
-
-    // Update screen, but only if we are not still waiting for a previous update
-    // so that we don't get stuck in lock-step
-    if (dmaload_no_pending_ack(0x0400 + 4 * 40))
-      send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
-
     send_mem(address, buffer, bytes);
-
     address += bytes;
   }
-
-  memset(progress_screen, 0x20, 1000);
-  snprintf(msg, 40, "Loaded $%04X - $%04X", start_addr, address);
-  progress_line(0, 15, 40);
-  progress_print(0, 16, msg);
-  progress_line(0, 17, 40);
-  send_mem(0x0400 + 4 * 40, &progress_screen[4 * 40], 1000 - 4 * 40);
 
   return address - start_addr;
 }
@@ -328,7 +294,7 @@ int main(int argc, char **argv)
     usage(-3, "No arguments given!");
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "i:rR:45hj:b:m:0:", cmd_opts, &opt_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "i:rR:45hj:b:o:m:0:", cmd_opts, &opt_index)) != -1) {
     if (opt == 0) {
       if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
         log_setup(stderr, loglevel);
@@ -359,6 +325,12 @@ int main(int argc, char **argv)
       use_binary = 1;
       if (sscanf(optarg, "%x", &bin_load_addr) != 1) {
         log_crit("-b option needs hex addr");
+        exit(-1);
+      }
+      break;
+    case 'o':
+      if (sscanf(optarg, "%x", &file_offset) != 1) {
+        log_crit("-o option needs hex offset");
         exit(-1);
       }
       break;
@@ -491,7 +463,11 @@ int main(int argc, char **argv)
         exit(-1);
       }
     }
+
+    lseek(fd, file_offset, SEEK_SET);
+    start_addr += file_offset;
   }
+
 
   if (d81_image && strlen(d81_image) > 23) {
     d81_image[24] = '\0';

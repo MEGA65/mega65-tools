@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/errno.h>
 
 #include <logging.h>
 
@@ -461,8 +462,11 @@ int dmaload_embed_packet_seq(uint8_t *payload, int len, int seq_num)
 
 int ethl_send_packet(uint8_t *payload, int len)
 {
+  int ret = 0;
   expect_ack(payload, len);
-  sendto(sockfd, (char *)payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  do {
+    ret = sendto(sockfd, (char *)payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+  } while (ret < 0 && errno == EAGAIN);
   return 0;
 }
 
@@ -515,9 +519,6 @@ int send_mem(unsigned int address, unsigned char *buffer, int bytes)
   else {
     payload[ethlet_dma_load_offset_rom_write_enable + 1] = 0;
   }
-
-  // Set position of marker to draw in 1KB units
-  payload[3] = address >> 10;
 
   // Set load address of packet
   payload[ethlet_dma_load_offset_dest_address] = address & 0xff;

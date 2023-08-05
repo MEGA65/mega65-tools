@@ -12,7 +12,6 @@
 entry:
 	; Routine that copies packet contents by DMA
 	lda #$00 ; Dummy LDA #$xx for signature detection
-	inc $0400 ; Draw a marker on the screen to indicate frames loaded
 
 	; Debug: wait for $d610 key press on each data frame
 ;*
