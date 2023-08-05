@@ -9,7 +9,9 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/time.h>
+#ifndef WINDOWS
 #include <sys/errno.h>
+#endif
 
 #include <logging.h>
 
