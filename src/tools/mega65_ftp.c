@@ -1427,7 +1427,7 @@ int ethernet_timeout_handler()
   payload[5] = reset_seq_num >> 8;
   payload[6] = 0xfe;                           // reset tx command
   ethl_send_packet_unscheduled(payload, packet_size);
-  return 1;
+  exit(-1);
 }
 
 uint32_t write_buffer_offset = 0;
