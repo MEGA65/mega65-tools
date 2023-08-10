@@ -165,6 +165,8 @@ uint32_t outdated_cnt = 0;
 uint32_t dup_cnt = 0;
 uint32_t tx_reset_cnt = 0;
 uint32_t rx_invalid_cnt = 0;
+uint32_t rx_valid_cnt = 0;
+uint32_t tx_cnt = 0;
 
 typedef union {
   uint16_t u;
@@ -257,7 +259,7 @@ void init_screen()
   print(12, 0, "outdated packet:    0");
   print(13, 0, "duplicate packets:  0");
   print(14, 0, "tx resets:          0");
-  print(15, 0, "rx invalid packets: 0");
+  print(15, 0, "rx/tx/invalid:      0/0/0");
 
   update_counters();
 }
@@ -334,10 +336,9 @@ void update_counters(void)
   print(14, col, msg);
 }
 
-void update_rx_invalid_counter()
+void update_rx_tx_counters()
 {
-  ++rx_invalid_cnt;
-  sprintf(msg, "%lu", rx_invalid_cnt);
+  sprintf(msg, "%lu/%lu/%lu", rx_valid_cnt, tx_cnt, rx_invalid_cnt);
   print(15, 20, msg);
 }
 
@@ -814,7 +815,8 @@ void get_new_job()
 
         ++chks_err_cnt;
         update_counters();
-        update_rx_invalid_counter();
+        ++rx_invalid_cnt;
+        update_rx_tx_counters();
         continue;
       }
 
@@ -836,7 +838,8 @@ void get_new_job()
 
       if (recv_buf.ftp.ftp_magic != 0x7165726d /* 'mreq' big endian*/) {
         // printf("Non matching magic bytes: %x", recv_buf.ftp.ftp_magic);
-        update_rx_invalid_counter();
+        ++rx_invalid_cnt;
+        update_rx_tx_counters();
         continue;
       }
 
@@ -846,14 +849,16 @@ void get_new_job()
       {
         ++udp_chks_err_cnt;
         update_counters();
-        update_rx_invalid_counter();
+        ++rx_invalid_cnt;
+        update_rx_tx_counters();
         continue;
       }
 
       switch (recv_buf.ftp.opcode) {
       case 0x02: // write sector
         if (udp_length != 534) {
-          update_rx_invalid_counter();
+          ++rx_invalid_cnt;
+          update_rx_tx_counters();
           continue;
         }
         if (recv_buf.write_sector.num_sectors_minus_one == 0) {
@@ -873,6 +878,9 @@ void get_new_job()
             }
             stop_fatal("error: single/multi write conflict");
           }
+
+          ++rx_valid_cnt;
+          update_rx_tx_counters();
 
           if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
             stop_fatal("error: outdated batch counter");
@@ -931,6 +939,9 @@ void get_new_job()
             stop_fatal("error: batch counter mismatch");
           }
 
+          ++rx_valid_cnt;
+          update_rx_tx_counters();
+
           handle_batch_write();
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
@@ -959,12 +970,16 @@ void get_new_job()
         }
 
         if (udp_length != 21) {
-          update_rx_invalid_counter();
+          ++rx_invalid_cnt;
+          update_rx_tx_counters();
           continue;
         }
         if (recv_buf.read_sector.unused_1 != 0) {
           stop_fatal("error: sector count > 255 not supported");
         }
+
+        ++rx_valid_cnt;
+        update_rx_tx_counters();
 
         reply_template.ftp.ip_length = HTONS(20 + 8 + 13 + 512);
         reply_template.ftp.udp_length = HTONS(8 + 13 + 512);
@@ -989,7 +1004,8 @@ void get_new_job()
          */
 
         if (udp_length != 20) {
-          update_rx_invalid_counter();
+          ++rx_invalid_cnt;
+          update_rx_tx_counters();
           continue;
         }
         num_bytes = recv_buf.read_memory.num_bytes_minus_one;
@@ -1097,6 +1113,9 @@ void process()
 
     // Send packet, will be sent immediately in the background
     POKE(0xD6E4, 0x01); // TX now
+
+    tx_cnt++;
+    update_counters();
 
     // Indicate we sent the data
     send_buf_size = 0;
