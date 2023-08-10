@@ -464,7 +464,7 @@ int main(int argc, char **argv)
       }
     }
 
-    lseek(fd, file_offset, SEEK_SET);
+    lseek(fd, file_offset, SEEK_CUR);
     start_addr += file_offset;
   }
 
