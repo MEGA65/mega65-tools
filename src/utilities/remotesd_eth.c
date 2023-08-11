@@ -167,6 +167,7 @@ uint32_t tx_reset_cnt = 0;
 uint32_t rx_invalid_cnt = 0;
 uint32_t rx_valid_cnt = 0;
 uint32_t tx_cnt = 0;
+uint32_t unauth_cnt = 0;
 
 typedef union {
   uint16_t u;
@@ -183,7 +184,7 @@ void print(uint8_t row, uint8_t col, char *text);
 void stop_fatal(char *text);
 void print_core_commit();
 void print_mac_address(void);
-void print_ip_informtaion(void);
+void print_ip_information(void);
 void update_counters(void);
 void update_rx_invalid_counter(void);
 void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line);
@@ -233,6 +234,7 @@ void init(void)
   reply_template.ftp.checksum_ip = 0;
   reply_template.ftp.source.d = 0;
   reply_template.ftp.src_port = HTONS(4510);
+  reply_template.ftp.dst_port = 0;
   reply_template.ftp.checksum_udp = 0;
   reply_template.ftp.ftp_magic = 0x7073726d; // 'mrsp' big endian
 }
@@ -260,6 +262,7 @@ void init_screen()
   print(13, 0, "duplicate packets:  0");
   print(14, 0, "tx resets:          0");
   print(15, 0, "rx/tx/invalid:      0/0/0");
+  print(16, 0, "unauthorized:       0");
 
   update_counters();
 }
@@ -309,14 +312,14 @@ void print_mac_address()
   }
 }
 
-void print_ip_informtaion(void)
+void print_ip_information(void)
 {
   sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.source.b[0], reply_template.ftp.source.b[1],
       reply_template.ftp.source.b[2], reply_template.ftp.source.b[3]);
   print(5, 0, msg);
   print(7, 0, "remote");
-  sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
-      reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3]);
+  sprintf(msg, "ip : %d.%d.%d.%d:%u", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
+      reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3], NTOHS(reply_template.ftp.dst_port));
   print(8, 0, msg);
 }
 
@@ -334,6 +337,8 @@ void update_counters(void)
   print(13, col, msg);
   sprintf(msg, "%lu", tx_reset_cnt);
   print(14, col, msg);
+  sprintf(msg, "%lu", unauth_cnt);
+  print(16, col, msg);
 }
 
 void update_rx_tx_counters()
@@ -824,7 +829,6 @@ void get_new_job()
         lcopy((uint32_t)&recv_buf.eth.source, (uint32_t)&reply_template.eth.destination, sizeof(EUI48));
         reply_template.ftp.source.d = recv_buf.ftp.destination.d;
         reply_template.ftp.destination.d = recv_buf.ftp.source.d;
-        reply_template.ftp.dst_port = recv_buf.ftp.src_port;
 
         // init pseudo header bytes in udp recv checksum buffer
         *(uint32_t *)0xC800 = recv_buf.ftp.source.d;
@@ -833,7 +837,7 @@ void get_new_job()
         *(uint8_t *)0xC809 = recv_buf.ftp.protocol;
 
         ip_addr_set = 1;
-        print_ip_informtaion();
+        print_ip_information();
       }
 
       if (recv_buf.ftp.ftp_magic != 0x7165726d /* 'mreq' big endian*/) {
@@ -853,6 +857,21 @@ void get_new_job()
         update_rx_tx_counters();
         continue;
       }
+
+      if (reply_template.ftp.dst_port != 0) {
+        if (recv_buf.ftp.src_port != reply_template.ftp.dst_port) {
+          print(21, 0, "detected multiple clients active");
+          continue;
+        }
+      }
+      else {
+        if (recv_buf.ftp.opcode != 0xfd) {
+          ++unauth_cnt;
+          update_counters();
+          continue;
+        }
+      }
+
 
       switch (recv_buf.ftp.opcode) {
       case 0x02: // write sector
@@ -901,7 +920,6 @@ void get_new_job()
           chks.u = 0;
           checksum((uint8_t *)&send_buf.ftp, 20);
           send_buf.ftp.checksum_ip = ~chks.u;
-          send_buf.ftp.checksum_udp = 0;
 
           ++ip_id;
           send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB);
@@ -953,7 +971,6 @@ void get_new_job()
           chks.u = 0;
           checksum((uint8_t *)&send_buf.ftp, 20);
           send_buf.ftp.checksum_ip = ~chks.u;
-          send_buf.ftp.checksum_udp = 0;
 
           ++ip_id;
           send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB);
@@ -1013,6 +1030,8 @@ void get_new_job()
         if (num_bytes > 600) {
           stop_fatal("num_bytes out of range");
         }
+        ++rx_valid_cnt;
+        update_rx_tx_counters();
         lcopy(
             (uint32_t)&reply_template, (uint32_t)&send_buf, sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB));
         lcopy(recv_buf.read_memory.address,
@@ -1027,10 +1046,36 @@ void get_new_job()
         chks.u = 0;
         checksum((uint8_t *)&send_buf.ftp, 20);
         send_buf.ftp.checksum_ip = ~chks.u;
-        send_buf.ftp.checksum_udp = 0;
 
         ++ip_id;
         send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB) + num_bytes;
+
+        return;
+
+      case 0xfd:
+        /*
+         * Hello request
+         */
+        if (reply_template.ftp.dst_port != 0) {
+          if (recv_buf.ftp.src_port != reply_template.ftp.dst_port) {
+            stop_fatal("hello requests from multiple clients");
+          }
+          continue;
+        }
+        reply_template.ftp.dst_port = recv_buf.ftp.src_port;
+        print_ip_information();
+        lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
+              sizeof(ETH_HEADER) + sizeof(FTP_PKT)); // copy header incl. opcode
+        send_buf.ftp.id = ip_id;
+        send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
+        send_buf.ftp.ip_length = HTONS(20 + 8 + 7);
+        send_buf.ftp.udp_length = HTONS(8 + 7);
+        send_buf.ftp.opcode = 0xfd;
+        chks.u = 0;
+        checksum((uint8_t *)&send_buf.ftp, 20);
+        send_buf.ftp.checksum_ip = ~chks.u;
+
+        send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT);
 
         return;
 
@@ -1074,7 +1119,6 @@ void get_new_job()
         chks.u = 0;
         checksum((uint8_t *)&send_buf.ftp, 20);
         send_buf.ftp.checksum_ip = ~chks.u;
-        send_buf.ftp.checksum_udp = 0;
 
         send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT);
 
@@ -1115,7 +1159,7 @@ void process()
     POKE(0xD6E4, 0x01); // TX now
 
     tx_cnt++;
-    update_counters();
+    update_rx_tx_counters();
 
     // Indicate we sent the data
     send_buf_size = 0;

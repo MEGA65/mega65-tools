@@ -154,6 +154,7 @@ int sdhc_check(void);
 void request_remotesd_version(void);
 void request_quit(void);
 void mount_file(char *filename);
+void ethernet_login();
 int ethernet_get_packet_seq(uint8_t *payload, int len);
 int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len);
 int ethernet_is_duplicate(uint8_t *payload, int len, uint8_t *cmp_payload, int cmp_len);
@@ -857,6 +858,9 @@ int DIRTYMOCK(main)(int argc, char **argv)
     // Give helper program time to initialize
     usleep(700000);
 
+    ethernet_login();
+    log_info("Login successful");
+
     determine_ethernet_window_size();
     sdhc_check();
   }
@@ -1253,6 +1257,21 @@ void job_process_results(void)
   }
 }
 
+const uint8_t ethernet_request_string[4] = { 'm', 'r', 'e', 'q' };
+
+void ethernet_login()
+{
+  const int packet_size = 7;
+  uint8_t payload[packet_size];
+  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+  // bytes [4] and [5] will be filled with packet seq numbers
+  payload[6] = 0xfd;  // hello request
+  ethl_send_packet(payload, packet_size);
+
+  // wait for response to hello request
+  wait_all_acks();
+}
+
 uint8_t memory_read_buffer[256];
 uint8_t memory_read_buffer_len = 0;
 
@@ -1363,6 +1382,13 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
         (tx_payload[4] + (tx_payload[5] << 8)));
     ethernet_process_result(rx_payload, rx_len);
     break;
+  case 0xfd: // hello cmd
+    if (rx_len != 7) {
+      return 0;
+    }
+    log_debug("Received packet (hello ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    break;
   case 0xff: // quit cmd
     if (rx_len != 7) {
       return 0;
@@ -1401,8 +1427,6 @@ int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
   payload[5] = seq_num >> 8;
   return 1;
 }
-
-const uint8_t ethernet_request_string[4] = { 'm', 'r', 'e', 'q' };
 
 /**
  * This function is called when an ACK timeout occurs. It requests an Ethernet 
