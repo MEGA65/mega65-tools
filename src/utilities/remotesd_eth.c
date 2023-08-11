@@ -1,3 +1,4 @@
+#include <debug.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -940,27 +941,24 @@ void get_new_job()
            */
           if (!write_batch_active) {
             if (recv_buf.write_sector.batch_counter != current_batch_counter) {
-              //snprintf(msg, 80, "new batch %d, size %d\n", recv_buf.write_sector.batch_counter, recv_buf.write_sector.num_sectors_minus_one + 1);
-              //debug_msg(msg);
+              snprintf(msg, 80, "new batch %d, size %d\n", recv_buf.write_sector.batch_counter, recv_buf.write_sector.num_sectors_minus_one + 1);
+              debug_msg(msg);
               init_new_write_batch();
             }
             else {
-              //snprintf(msg, 80, "outdated batch %d (current %d)\n", recv_buf.write_sector.batch_counter, current_batch_counter);
-              //debug_msg(msg);
-              ++dup_cnt;
+              snprintf(msg, 80, "outdated batch %d (current %d)\n", recv_buf.write_sector.batch_counter, current_batch_counter);
+              debug_msg(msg);
+              ++outdated_cnt;
               update_counters();
-              continue;
             }
           }
           
-          if (recv_buf.write_sector.batch_counter != current_batch_counter) {
-            stop_fatal("error: batch counter mismatch");
-          }
-
           ++rx_valid_cnt;
           update_rx_tx_counters();
 
-          handle_batch_write();
+          if (recv_buf.write_sector.batch_counter == current_batch_counter) {
+            handle_batch_write();
+          }
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
               sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
