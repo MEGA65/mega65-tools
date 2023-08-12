@@ -187,7 +187,7 @@ void print_core_commit();
 void print_mac_address(void);
 void print_ip_information(void);
 void update_counters(void);
-void update_rx_invalid_counter(void);
+void update_rx_tx_counters(void);
 void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line);
 //int memcmp_highlow(uint32_t addr1, uint16_t addr2, uint16_t num_bytes);
 void checksum(uint8_t *buf, uint16_t size);
@@ -342,7 +342,7 @@ void update_counters(void)
   print(16, col, msg);
 }
 
-void update_rx_tx_counters()
+void update_rx_tx_counters(void)
 {
   sprintf(msg, "%lu/%lu/%lu", rx_valid_cnt, tx_cnt, rx_invalid_cnt);
   print(15, 20, msg);
@@ -900,7 +900,6 @@ void get_new_job()
           }
 
           ++rx_valid_cnt;
-          update_rx_tx_counters();
 
           if (is_received_batch_counter_outdated(current_batch_counter, recv_buf.write_sector.batch_counter)) {
             stop_fatal("error: outdated batch counter");
@@ -954,7 +953,6 @@ void get_new_job()
           }
           
           ++rx_valid_cnt;
-          update_rx_tx_counters();
 
           if (recv_buf.write_sector.batch_counter == current_batch_counter) {
             handle_batch_write();
@@ -994,7 +992,6 @@ void get_new_job()
         }
 
         ++rx_valid_cnt;
-        update_rx_tx_counters();
 
         reply_template.ftp.ip_length = HTONS(20 + 8 + 13 + 512);
         reply_template.ftp.udp_length = HTONS(8 + 13 + 512);
@@ -1029,7 +1026,6 @@ void get_new_job()
           stop_fatal("num_bytes out of range");
         }
         ++rx_valid_cnt;
-        update_rx_tx_counters();
         lcopy(
             (uint32_t)&reply_template, (uint32_t)&send_buf, sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB));
         lcopy(recv_buf.read_memory.address,
@@ -1157,7 +1153,6 @@ void process()
     POKE(0xD6E4, 0x01); // TX now
 
     tx_cnt++;
-    update_rx_tx_counters();
 
     // Indicate we sent the data
     send_buf_size = 0;
@@ -1227,6 +1222,9 @@ void process()
 
 void main(void)
 {
+  static uint8_t frame_cnt = 0;
+  static uint8_t last_frame_cnt = 0;
+
   // Disable all interrupts
   asm("sei");
 
@@ -1244,5 +1242,11 @@ void main(void)
     
     // main loop function
     process();
+
+    frame_cnt = PEEK(0xD7FA);
+    if (frame_cnt != last_frame_cnt) {
+      last_frame_cnt = frame_cnt;
+      update_rx_tx_counters();
+    }
   }
 }
