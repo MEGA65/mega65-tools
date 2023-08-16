@@ -254,15 +254,11 @@ void dump_bytes(char *msg, unsigned char *b, int len)
  * @brief Loads a file into memory at the specified address.
  *
  * This function reads a file from the specified file descriptor and loads it into memory
- * starting at the specified address. It also updates the progress screen to show the current
- * loading state.
+ * starting at the specified address.
  *
  * @param fd The file descriptor of the file to load.
  * @param start_addr The address to start loading the file into memory.
  * @return Number of bytes loaded.
- *
- * @note This function assumes that the progress screen and colour RAM have already been initialized.
- * @note This function assumes that the filename variable has already been set.
  */
 int load_file(int fd, int start_addr)
 {
@@ -480,6 +476,9 @@ int main(int argc, char **argv)
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
   trigger_eth_hyperrupt();
 
+  // allow overwriting of ROM area
+  set_send_mem_rom_write_enable();
+
   if (filename) {
     address = start_addr + load_file(fd, start_addr);
     close(fd);
@@ -487,7 +486,6 @@ int main(int argc, char **argv)
   }
 
   if (rom_file) {
-    set_send_mem_rom_write_enable();
     int fd = open(rom_file, open_flags);
     load_file(fd, 0x20000);
     close(fd);
