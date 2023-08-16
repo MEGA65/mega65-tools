@@ -257,13 +257,13 @@ void init_screen()
   print_mac_address();
   print_core_commit();
 
-  print(10, 0, "ip chks err count:  0");
-  print(11, 0, "udp chks err count: 0");
-  print(12, 0, "outdated packet:    0");
-  print(13, 0, "duplicate packets:  0");
-  print(14, 0, "tx resets:          0");
-  print(15, 0, "rx/tx/invalid:      0/0/0");
-  print(16, 0, "unauthorized:       0");
+  print(10, 0, "ip chks:       0");
+  print(11, 0, "udp chks:      0");
+  print(12, 0, "outdated:      0");
+  print(13, 0, "duplicate:     0");
+  print(14, 0, "tx resets:     0");
+  print(15, 0, "rx/tx/invalid: 0/0/0");
+  print(16, 0, "unauthorized:  0");
 
   update_counters();
 }
@@ -326,7 +326,7 @@ void print_ip_information(void)
 
 void update_counters(void)
 {
-  static const uint8_t col = 20;
+  static const uint8_t col = 15;
 
   sprintf(msg, "%lu", chks_err_cnt);
   print(10, col, msg);
@@ -345,7 +345,7 @@ void update_counters(void)
 void update_rx_tx_counters(void)
 {
   sprintf(msg, "%lu/%lu/%lu", rx_valid_cnt, tx_cnt, rx_invalid_cnt);
-  print(15, 20, msg);
+  print(15, 15, msg);
 }
 
 /**
@@ -924,7 +924,7 @@ void get_new_job()
           ++ip_id;
           send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB);
 
-          check_rx_buffer_integrity();
+          //check_rx_buffer_integrity();
           wait_for_sd_ready();
           //lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB), 0xffd6e00, 512);
           lcopy(0xC800UL + IPV4_PSEUDO_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB), 0xffd6e00, 512);
@@ -1142,8 +1142,8 @@ void process()
     if (send_buf_size > 600) {
       stop_fatal("send_buf_size out of bounds");
     }
-    lcopy((uint32_t)&send_buf, ETH_TX_BUFFER, send_buf_size);
-    //dma_copy_eth_io(&send_buf, (void*)0xD800U, send_buf_size);
+    //lcopy((uint32_t)&send_buf, ETH_TX_BUFFER, send_buf_size);
+    dma_copy_eth_io(&send_buf, (void*)0xD800U, send_buf_size);
 
     // Set packet length
     POKE(0xD6E2, send_buf_size & 0xff);
