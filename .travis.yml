@@ -11,10 +11,10 @@ matrix:
       os: osx
       osx_image: xcode14.1
       before_script:
-      - HOMEBREW_NO_AUTO_UPDATE=1 brew install conan cc65 p7zip
+      - HOMEBREW_NO_AUTO_UPDATE=1 brew install conan p7zip
       - pip3 install requests
       script:
-      - make USE_LOCAL_CC65=1 arcmac
+      - make arcmac
       - wget https://raw.githubusercontent.com/MEGA65/builder-docker/main/megabuild/filehost-upload
       - |
         if [[ "$TRAVIS_BRANCH" == "master" ]]; then
