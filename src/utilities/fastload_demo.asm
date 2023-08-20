@@ -527,6 +527,8 @@ fl_read_from_first_half:
 	bne fl_1st_half_full_sector
 fl_1st_half_partial_sector:
 	lda fastload_sector_buffer+1
+	sec
+	sbc #$01
 	sta fl_bytes_to_copy	
 	;; Mark end of loading
 	lda #$00
@@ -544,6 +546,8 @@ fl_read_from_second_half:
 	bne fl_2nd_half_full_sector
 fl_2nd_half_partial_sector:
 	lda fastload_sector_buffer+$101
+	sec
+	sbc #$01
 	sta fl_bytes_to_copy
 	;; Mark end of loading
 	lda #$00
