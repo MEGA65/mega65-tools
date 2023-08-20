@@ -732,8 +732,6 @@ int DIRTYMOCK(main)(int argc, char **argv)
     case 's':
       serial_speed = atoi(optarg);
       break;
-      }
-      break;
     case 'b':
       bitstream = strdup(optarg);
       break;
