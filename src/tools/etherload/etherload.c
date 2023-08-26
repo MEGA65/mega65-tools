@@ -420,10 +420,11 @@ int main(int argc, char **argv)
   int address;
   int start_addr;
 
-  if (filename) {
 #ifdef WINDOWS
     open_flags |= O_BINARY;
 #endif
+
+  if (filename) {
     fd = open(filename, open_flags);
     
     if (!use_binary) {
