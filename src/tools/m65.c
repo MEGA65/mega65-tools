@@ -1737,6 +1737,15 @@ void enterTestMode()
   do_exit(UT_RES_TIMEOUT);
 }
 
+void goto_reset_vector(void)
+{
+  char str[8];
+  sprintf(str, "g%02X%02X\r", mega65_peek(0x3FFFCL), mega65_peek(0x3FFFDL));
+  slow_write(fd, str, 6);
+  monitor_sync();
+  start_cpu();
+}
+
 int main(int argc, char **argv)
 {
   int opt_index;
@@ -2237,6 +2246,9 @@ int main(int argc, char **argv)
         load_file(charromfile, 0xFF7E000, 0);
       }
       return_from_hypervisor_mode();
+    }
+    if (romfile) {
+    	goto_reset_vector();	// to boot back into new rom
     }
 
     if (colourramfile) {
