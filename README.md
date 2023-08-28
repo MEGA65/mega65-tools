@@ -34,7 +34,7 @@ If you want to cross-build the tools for **Windows**, you'll also need:
 
 ```
 sudo apt-get update
-sudo install -y gcc-mingw-w64 mingw-w64-common libz-mingw-w64-dev cmake python3-pip
+sudo apt install -y gcc-mingw-w64 mingw-w64-common libz-mingw-w64-dev cmake python3-pip libusb-1.0-0-dev libgif-dev libcairo2-dev
 pip install conan
 ```
 
