@@ -1,4 +1,5 @@
 #include "etherload_common.h"
+#include "ethlet_set_ip_address_map.h"
 #include "ethlet_dma_load_map.h"
 
 #include <stdlib.h>
@@ -11,10 +12,23 @@
 #include <sys/time.h>
 #include <errno.h>
 
+#ifdef WINDOWS
+#include <winsock2.h>
+#include <iphlpapi.h>
+#include <ws2tcpip.h>
+#else
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <netdb.h>
+#endif // WINDOWS
+
 #include <logging.h>
 
 static int sockfd;
 static struct sockaddr_in servaddr;
+static struct sockaddr_in broadcast_addr;
 
 #define PORTNUM 4510
 #define MAX_UNACKED_FRAMES 256
@@ -41,7 +55,9 @@ static is_duplicate_callback_t is_duplicate = NULL;
 static embed_packet_seq_callback_t embed_packet_seq = NULL;
 static timeout_handler_callback_t timeout_handler = NULL;
 
-extern char ethlet_dma_load[];
+extern unsigned char ethlet_set_ip_address[];
+extern int ethlet_set_ip_address_len;
+extern unsigned char ethlet_dma_load[];
 extern int ethlet_dma_load_len;
 
 static int dma_load_rom_write_enable = 0;
@@ -54,7 +70,9 @@ unsigned char magic_string[12] = {
   0x00, 0x80              // Magic key code $8000 = ethernet hypervisor trap
 };
 
-int etherload_init(const char *broadcast_address)
+uint32_t get_broadcast_ip_for_dst_ip(uint32_t unicast_dst_ip);
+
+int etherload_init(const char *target_ip_address, const char *broadcast_ip_address)
 {
 #ifdef WINDOWS
   WSADATA wsa_data;
@@ -80,16 +98,38 @@ int etherload_init(const char *broadcast_address)
 
   memset(&servaddr, 0, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
-  servaddr.sin_addr.s_addr = inet_addr(broadcast_address);
+  servaddr.sin_addr.s_addr = inet_addr(target_ip_address);
   servaddr.sin_port = htons(PORTNUM);
 
   if (servaddr.sin_addr.s_addr == INADDR_NONE) {
-    log_crit("Invalid IP address provided: %s", broadcast_address);
+    log_crit("Invalid target IP address provided: %s", target_ip_address);
     return -1;
   }
 
   log_debug("Using dst-addr: %s", inet_ntoa(servaddr.sin_addr));
   log_debug("Using src-port: %d", ntohs(servaddr.sin_port));
+
+  memset(&broadcast_addr, 0, sizeof(servaddr));
+  broadcast_addr.sin_family = AF_INET;
+  broadcast_addr.sin_port = htons(PORTNUM);
+
+  if (broadcast_ip_address == NULL) {
+    broadcast_addr.sin_addr.s_addr = get_broadcast_ip_for_dst_ip(servaddr.sin_addr.s_addr);
+    if (broadcast_addr.sin_addr.s_addr == 0) {
+      log_crit("Unable to determine broadcast address for %s\n", inet_ntoa(broadcast_addr.sin_addr));
+      return -1;
+    }
+    char ip_address_str[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &servaddr.sin_addr, ip_address_str, INET_ADDRSTRLEN);
+    log_note("Determined %s as broadcast address for %s\n", inet_ntoa(broadcast_addr.sin_addr), ip_address_str);
+  }
+  else {
+    broadcast_addr.sin_addr.s_addr = inet_addr(broadcast_ip_address);
+    if (broadcast_addr.sin_addr.s_addr == INADDR_NONE) {
+      log_crit("Invalid broadcast IP address provided: %s", broadcast_ip_address);
+      return -1;
+    }
+  }
 
   return 0;
 }
@@ -134,21 +174,63 @@ static long long gettime_us(void)
   return retVal;
 }
 
+int set_ip_address(void)
+{
+  unsigned char ackbuf[8192];
+  struct sockaddr_in src_address;
+  socklen_t addr_len = sizeof(src_address);
+
+  int ip_as_int = servaddr.sin_addr.s_addr;
+  memcpy(ethlet_set_ip_address + ethlet_set_ip_address_offset_ip_address, &ip_as_int, 4);
+  sendto(sockfd, (char *)ethlet_set_ip_address, ethlet_set_ip_address_len, 0, (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
+
+  sendto(sockfd, (char *)ethlet_set_ip_address, ethlet_set_ip_address_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+
+  long long start = gettime_us();
+
+  while (gettime_us() - start < 500000) {
+    int r = recvfrom(sockfd, (void *)ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
+    if (r > -1) {
+      if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
+        log_debug("Dropping unexpected packet from %s:%d", inet_ntoa(src_address.sin_addr), ntohs(src_address.sin_port));
+        continue;
+      }
+      if (r > 0) {
+        if (memcmp(ackbuf, ethlet_set_ip_address, ethlet_set_ip_address_len) == 0) {
+          log_debug("Received ack for set_ip_address");
+          return 0;
+        }
+      }
+    }
+    usleep(500);
+  }
+
+  return -1;
+}
+
 int trigger_eth_hyperrupt(void)
 {
   int offset = 0x38;
-  memcpy(&hyperrupt_trigger[offset], magic_string, 12);
+  int retries = 3;
 
-  sendto(sockfd, (void *)hyperrupt_trigger, sizeof hyperrupt_trigger, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-  usleep(10000);
+  memcpy(&hyperrupt_trigger[offset], magic_string, 12);
+  
+  while (retries-- > 0) {
+    sendto(sockfd, (void *)hyperrupt_trigger, sizeof(hyperrupt_trigger), 0, (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
+    usleep(10000);
+
+    if (set_ip_address() == 0) {
+      break;
+    }
+  }
+
+  if (retries < 0) {
+    log_crit("No response from MEGA65");
+    return -1;
+  }
 
   start_time = gettime_us();
   last_resend_time = gettime_us();
-
-  // Adapt ip address (modify last byte to use ip x.y.z.65 as dest address)
-  servaddr.sin_addr.s_addr &= 0x00ffffff;
-  servaddr.sin_addr.s_addr |= (65 << 24);
-  // servaddr.sin_addr.s_addr |= (6 << 24);
 
   return 0;
 }
@@ -556,4 +638,66 @@ int dmaload_no_pending_ack(int addr)
     }
   }
   return 1;
+}
+
+uint32_t get_broadcast_ip_for_dst_ip(uint32_t unicast_dst_ip)
+{
+#ifdef WINDOWS
+  uint32_t broadcast_address = 0;
+  DWORD dwRetVal;
+  ULONG outBufLen = 15000;
+  PIP_ADAPTER_ADDRESSES pAdresses = (IP_ADAPTER_ADDRESSES *) malloc(outBufLen);
+  dwRetVal = GetAdaptersAddresses(AF_INET, 0, NULL, pAdresses, &outBufLen);
+  if (dwRetVal != NO_ERROR) {
+    log_crit("GetAdaptersAdresses failed with error: %lu", dwRetVal);
+    free(pAdresses);
+    return broadcast_address;
+  }
+
+  PIP_ADAPTER_UNICAST_ADDRESS pUni = NULL;
+  for (PIP_ADAPTER_ADDRESSES pCurrAddresses = pAdresses; pCurrAddresses; pCurrAddresses = pCurrAddresses->Next) {
+    log_debug("Found network adapter: %s", pCurrAddresses->AdapterName);
+
+    for (pUni = pCurrAddresses->FirstUnicastAddress; pUni != NULL; pUni = pUni->Next) {
+      struct sockaddr_in *addr = (struct sockaddr_in *)pUni->Address.lpSockaddr;
+      ULONG mask = 0;
+      ConvertLengthToIpv4Mask(pUni->OnLinkPrefixLength, &mask);
+      
+      // If the target IP is within this network range
+      if ((unicast_dst_ip & mask) == (addr->sin_addr.s_addr & mask)) {
+        // Return broadcast address
+        broadcast_address = addr->sin_addr.s_addr | ~(mask);
+      }
+    }
+  }
+
+  free(pAdresses);
+  return broadcast_address;
+#else // WINDOWS
+    struct ifaddrs *ifaddr, *ifa;
+    uint32_t broadcast_address = 0;
+
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        exit(EXIT_FAILURE);
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET) {
+            continue;
+        }
+
+        struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
+        struct sockaddr_in *mask = (struct sockaddr_in *)ifa->ifa_netmask;
+
+        // If the target IP is within this network range
+        if ((unicast_dst_ip & mask->sin_addr.s_addr) == (addr->sin_addr.s_addr & mask->sin_addr.s_addr)) {
+          // Return broadcast address
+          broadcast_address = addr->sin_addr.s_addr | ~(mask->sin_addr.s_addr);
+        }
+    }
+
+    freeifaddrs(ifaddr);
+    return broadcast_address;
+#endif // !(WINDOWS)
 }

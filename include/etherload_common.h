@@ -16,7 +16,7 @@ typedef int (*is_duplicate_callback_t)(uint8_t *payload, int len, uint8_t *cmp_p
 typedef int (*embed_packet_seq_callback_t)(uint8_t *payload, int len, int seq_num);
 typedef int (*timeout_handler_callback_t)();
 
-int etherload_init(const char *broadcast_address);
+int etherload_init(const char *target_ip_address, const char *broadcast_ip_address);
 void etherload_finish(void);
 
 void ethl_setup_dmaload(void);

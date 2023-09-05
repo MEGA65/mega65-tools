@@ -198,6 +198,13 @@ finalize:
 	lda #$d7
 	trb $d054
 
+	; reset palette selections
+	lda #$00
+	sta $d070
+
+	; disable SPRENV400
+	sta $d076
+	
 	; 40 column mode normal C64 screen
 	lda #$00
 	sta $d031

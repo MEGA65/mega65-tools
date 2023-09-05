@@ -156,6 +156,7 @@ uint16_t seq_num;
 uint32_t write_cache_offset;
 
 EUI48 mac_local;
+IPV4 ip_local;
 uint8_t ip_addr_set = 0;
 
 uint16_t ip_id = 0;
@@ -218,6 +219,8 @@ void init(void)
   POKE(0xD689, PEEK(0xD689) | 128); // Enable SD card buffers instead of Floppy buffer
 
   init_screen();
+
+  lcopy(0xFF87FFC, (unsigned long)&ip_local.b[0], sizeof(IPV4));
 
   sector_reading = 0;
   sector_buffered = 0;
@@ -798,7 +801,7 @@ void get_new_job()
           sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
 
       if (ip_addr_set == 0) {
-        if (recv_buf.ftp.destination.b[3] != 65) {
+        if (recv_buf.ftp.destination.d != ip_local.d) {
           continue;
         }
       }
