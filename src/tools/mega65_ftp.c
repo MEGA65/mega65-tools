@@ -312,7 +312,7 @@ void usage(void)
   fprintf(stderr, "  -F - force startup, even if other program is detected\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx)\n");
-  fprintf(stderr, "  -i - broadcast ip of ethernet interface to use (e.g. 192.168.1.255)\n");
+  fprintf(stderr, "  -i - ip address to be used by MEGA65 (e.g. 192.168.1.2)\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Almost always 2000000 is the correct answer).\n");
   fprintf(stderr, "  -b - Name of bitstream file to load.\n");
@@ -817,12 +817,16 @@ int DIRTYMOCK(main)(int argc, char **argv)
     int address = 0x0801;
     int block_size = 1024;
 
-    if (etherload_init(ip_address)) {
+    if (etherload_init(ip_address, NULL)) {
       log_error("Unable to initialize ethernet communication");
       exit(-1);
     }
     ethl_setup_dmaload();
-    trigger_eth_hyperrupt();
+    // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
+    if (trigger_eth_hyperrupt() < 0) {
+      etherload_finish();
+      exit(-1);
+    }
     usleep(100000);
     log_info("Starting helper routine transfer...");
     while (bytes > 0) {
@@ -1274,6 +1278,7 @@ void ethernet_login()
 
 uint8_t memory_read_buffer[256];
 uint8_t memory_read_buffer_len = 0;
+uint8_t mount_file_response = 0;
 
 void ethernet_process_result(uint8_t *rx_payload, int rx_len)
 {
@@ -1297,6 +1302,12 @@ void ethernet_process_result(uint8_t *rx_payload, int rx_len)
     log_debug("Received memory block at $%x (%d bytes)", memory_addr, memory_read_buffer_len);
     bcopy(&rx_payload[12], memory_read_buffer, memory_read_buffer_len);
     break;
+
+  case 0x12: // mount file
+    mount_file_response = p[1];
+    log_debug("Received mount file response: %d", mount_file_response);
+    break;
+
   }
 }
 
@@ -1379,6 +1390,15 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
       return 0;
     }
     log_debug("Received packet (read_memory ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
+        (tx_payload[4] + (tx_payload[5] << 8)));
+    ethernet_process_result(rx_payload, rx_len);
+    break;
+  case 0x12:
+    // ry_payload[7] is mount result
+    if (rx_len != 8) {
+      return 0;
+    }
+    log_debug("Received packet (mount_file ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
         (tx_payload[4] + (tx_payload[5] << 8)));
     ethernet_process_result(rx_payload, rx_len);
     break;
@@ -1541,6 +1561,39 @@ void process_ethernet_read_sectors_job(uint8_t *job)
   ethl_send_packet_unscheduled(payload, sizeof(payload));
 }
 
+int process_ethernet_mount_file_job(uint8_t *job)
+{
+  wait_all_acks();
+  const int max_packet_size = 70;
+  uint8_t payload[max_packet_size];
+  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
+  int packet_size = 6; // bytes 4+5 will be sequence id
+  while (packet_size < max_packet_size) {
+    payload[packet_size] = job[packet_size - 6];
+    if (payload[packet_size] == 0) break;
+    ++packet_size;
+  }
+  if (packet_size == max_packet_size) {
+    log_error("internal error: filename in mount file job too long");
+    exit(-1);
+  }
+  ++packet_size;
+  mount_file_response = 0xff;
+  ethl_send_packet(payload, packet_size);
+  wait_all_acks();
+  switch (mount_file_response) {
+    case 0:
+      printf("Image mounted successfully\n");
+      break;
+    case 1:
+      printf("Error mounting image\n");
+      break;
+    default:
+      log_error("Internal error executing mount file job");
+  }
+  return packet_size;
+}
+
 void process_jobs_ethernet(void)
 {
   uint8_t *ptr = queue_cmds;
@@ -1600,11 +1653,21 @@ void process_jobs_ethernet(void)
       log_debug("read flash job not implemented for ethernet");
       exit(-1);
       break;
+    
     case 0x11: // read mem
       ptr += 9;
       log_debug("read mem job not implemented for ethernet");
       exit(-1);
       break;
+
+    case 0x12: // mount file
+    {
+      ethl_set_queue_length(ethernet_window_size);
+      int job_size = process_ethernet_mount_file_job(ptr);
+      ptr += job_size;
+      break;
+    }
+
     default:
       log_error("Queue cmd %d not implemented", *ptr);
       exit(-1);
@@ -5095,6 +5158,8 @@ unsigned char peek(unsigned long addr)
     payload[9] = (addr >> 8) & 0xff;
     payload[10] = (addr >> 16) & 0xff;
     payload[11] = (addr >> 24) & 0xff;
+    // reset receive buffer length so we can check whether it was set by a response packet
+    memory_read_buffer_len = 0;
     ethl_send_packet(payload, packet_size);
     wait_all_acks();
     if (memory_read_buffer_len != 1) {

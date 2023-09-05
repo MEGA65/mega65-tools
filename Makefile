@@ -27,7 +27,7 @@ else
 ifeq (, $(shell which conan))
 $(info WARNING: Found $(WINCC), but no conan executable found in PATH, can't build windows binaries)
 else
-WINCOPT:=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1 -mno-sse3 -march=x86-64
+WINCOPT:=$(COPT) -DWINDOWS -D__USE_MINGW_ANSI_STDIO=1 -D_WIN32_WINNT=0x0600 -DWINVER=0x0600 -mno-sse3 -march=x86-64
 endif # conan detection
 endif # mingw-w64 detection
 endif # Linux
@@ -783,10 +783,12 @@ MEGA65FTP_SRC=	$(TOOLDIR)/mega65_ftp.c \
 		$(TOOLDIR)/diskman.c \
 		$(TOOLDIR)/bit2mcs.c \
 		$(TOOLDIR)/etherload/etherload_common.c \
+		$(TOOLDIR)/etherload/ethlet_set_ip_address.c \
 		$(TOOLDIR)/etherload/ethlet_dma_load.c \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic2.c
 
-MEGA65FTP_HDR=	$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
+MEGA65FTP_HDR=	$(TOOLDIR)/etherload/ethlet_set_ip_address_map.h \
+		$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h
 
 # Gives two targets of:
@@ -806,7 +808,7 @@ $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/versio
 	$(CC) $(COPT) -Iinclude $(LIBUSBINC) -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp.exe: win_build_check $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h conan_win Makefile
-	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
+	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -liphlpapi -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp_intel.osx: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h conan_mac Makefile
 	$(CC) $(MACINTELCOPT) -D__APPLE__ -D_FILE_OFFSET_BITS=64 -o $@ -Iinclude $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lpthread -lreadline -DINCLUDE_BIT2MCS
@@ -853,13 +855,15 @@ $(BINDIR)/m65dbg.exe:	win_build_check $(M65DBG_SOURCES) $(M65DBG_HEADERS) conan_
 ##
 ETHERLOAD_SOURCES=	$(TOOLDIR)/etherload/etherload.c \
 			$(TOOLDIR)/etherload/etherload_common.c \
+			$(TOOLDIR)/etherload/ethlet_set_ip_address.c \
 			$(TOOLDIR)/etherload/ethlet_dma_load.c \
 			$(TOOLDIR)/etherload/ethlet_all_done_basic2.c \
 			$(TOOLDIR)/etherload/ethlet_all_done_basic65.c \
 			$(TOOLDIR)/etherload/ethlet_all_done_jump.c \
 			$(TOOLDIR)/logging.c \
 			$(TOOLDIR)/version.c
-ETHERLOAD_HEADERS=	$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
+ETHERLOAD_HEADERS=	$(TOOLDIR)/etherload/ethlet_set_ip_address_map.h \
+			$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
 			$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h \
 			$(TOOLDIR)/etherload/ethlet_all_done_basic65_map.h \
 			$(TOOLDIR)/etherload/ethlet_all_done_jump_map.h
@@ -882,4 +886,4 @@ $(BINDIR)/etherload_arm.osx:	$(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) conan_mac
 	$(CC) $(MACARMCOPT) -Iinclude -o $@ $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES)
 
 $(BINDIR)/etherload.exe:	win_build_check $(ETHERLOAD_SOURCES) $(ETHERLOAD_HEADERS) include/*.h conan_win Makefile
-	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32
+	$(WINCC) $(WINCOPT) -o $(BINDIR)/etherload $(ETHERLOAD_SOURCES) $(ETHERLOAD_INCLUDES) $(ETHERLOAD_LIBRARIES) -lwsock32 -liphlpapi -lws2_32

@@ -137,6 +137,19 @@ restore_write_protection:
 	sta $d641
 	clv
 
+	; bank in c65 kernel rom to make available init_palette routine
+	lda #$80
+	ldx #$8d
+	ldy #$00
+	ldz #$83
+	map
+	eom
+
+	; reset palette
+	lda #$00
+	sta $d070 ; reset palette indices
+	jsr $e027 ; init_palette
+
 	; turn off mapping of upper 32kb region
 	lda #$80
 	ldx #$8d
@@ -174,6 +187,9 @@ restore_write_protection:
 	; disable seam
 	lda #$d7
 	trb $d054
+
+	; disable SPRENV400
+	sta $d076	
 
 	; 40 column mode normal C64 screen
 	lda #$00

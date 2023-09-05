@@ -182,7 +182,7 @@ void init_cmd_options(void)
   cmd_log_end = cmd_count;
   CMD_OPTION("log",         required_argument, 0,            '0', "level",  "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
-  CMD_OPTION("ip",          required_argument, 0,            'i', "ipaddr", "Set IPv4 broadcast address of the subnet where MEGA65 is connected (eg. 192.168.1.255).");
+  CMD_OPTION("ip",          required_argument, 0,            'i', "ipaddr", "Set IPv4 address to be assigned to MEGA65 (eg. 192.168.1.2).");
   CMD_OPTION("run",         no_argument,       0,            'r',   "",     "Automatically RUN programme after loading.");
   CMD_OPTION("rom",         required_argument, 0,            'R', "file",   "Upload and use ROM <file> instead of the default one on SD card (prgname is optional in this case).");
   CMD_OPTION("c64mode",     no_argument,       0,            '4',   "",     "Reset to C64 mode after transfer.");
@@ -470,12 +470,18 @@ int main(int argc, char **argv)
     d81_image[24] = '\0';
   }
 
-  etherload_init(ip_address);
+  if (etherload_init(ip_address, NULL)) {
+    log_error("Unable to initialize ethernet communication");
+    exit(-1);
+  }
   ethl_setup_dmaload();
   ethl_set_queue_length(32);
 
   // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
-  trigger_eth_hyperrupt();
+  if (trigger_eth_hyperrupt() < 0) {
+    etherload_finish();
+    exit(-1);
+  }
 
   // allow overwriting of ROM area
   set_send_mem_rom_write_enable();
