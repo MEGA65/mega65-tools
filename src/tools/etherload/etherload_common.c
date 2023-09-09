@@ -107,7 +107,7 @@ int etherload_init(const char *target_ip_address, const char *broadcast_ip_addre
   }
 
   log_debug("Using dst-addr: %s", inet_ntoa(servaddr.sin_addr));
-  log_debug("Using src-port: %d", ntohs(servaddr.sin_port));
+  log_debug("Using dst-port: %d", ntohs(servaddr.sin_port));
 
   memset(&broadcast_addr, 0, sizeof(servaddr));
   broadcast_addr.sin_family = AF_INET;
@@ -182,13 +182,19 @@ int set_ip_address(void)
 
   int ip_as_int = servaddr.sin_addr.s_addr;
   memcpy(ethlet_set_ip_address + ethlet_set_ip_address_offset_ip_address, &ip_as_int, 4);
-  sendto(sockfd, (char *)ethlet_set_ip_address, ethlet_set_ip_address_len, 0, (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
-
-  sendto(sockfd, (char *)ethlet_set_ip_address, ethlet_set_ip_address_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
   long long start = gettime_us();
+  long long last_request = start;
+  long long now = gettime_us();
 
-  while (gettime_us() - start < 500000) {
+  while (now - start < 500000) {
+    if (now - last_request > 100000) {
+      last_request = now;
+      log_debug("Sending set_ip_address");
+      sendto(sockfd, (char *)ethlet_set_ip_address, ethlet_set_ip_address_len, 0, (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
+      sendto(sockfd, (char *)ethlet_set_ip_address, ethlet_set_ip_address_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    }
+
     int r = recvfrom(sockfd, (void *)ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
     if (r > -1) {
       if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
@@ -202,7 +208,8 @@ int set_ip_address(void)
         }
       }
     }
-    usleep(500);
+    usleep(1000);
+    now = gettime_us();
   }
 
   return -1;

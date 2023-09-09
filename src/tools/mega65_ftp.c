@@ -827,7 +827,6 @@ int DIRTYMOCK(main)(int argc, char **argv)
       etherload_finish();
       exit(-1);
     }
-    usleep(100000);
     log_info("Starting helper routine transfer...");
     while (bytes > 0) {
       if (bytes < block_size)

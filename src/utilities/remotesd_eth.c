@@ -1227,6 +1227,7 @@ void main(void)
 {
   static uint8_t frame_cnt = 0;
   static uint8_t last_frame_cnt = 0;
+  static uint8_t frames_elapsed = 0;
 
   // Disable all interrupts
   asm("sei");
@@ -1249,7 +1250,11 @@ void main(void)
     frame_cnt = PEEK(0xD7FA);
     if (frame_cnt != last_frame_cnt) {
       last_frame_cnt = frame_cnt;
-      update_rx_tx_counters();
+      ++frames_elapsed;
+      if (frames_elapsed > 10) {
+        frames_elapsed = 0;
+        update_rx_tx_counters();
+      }
     }
   }
 }
