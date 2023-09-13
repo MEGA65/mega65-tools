@@ -58,19 +58,18 @@ dma_copy_dst:
 .proc  _cmp_c000_c200: near
         lda #$c0
         tab
-        ldy #$00
+        ldx #$00
 loop1:
-        lda $c200,y
-        cmp $00,y
+        lda $c200,x
+        cmp $00,x
         bne not_equal
         iny
         bne loop1
         lda #$c1
         tab
-        ldy #$00
 loop2:
-        lda $c300,y
-        cmp $00,y
+        lda $c300,x
+        cmp $00,x
         bne not_equal
         iny
         bne loop2
@@ -81,26 +80,26 @@ loop2:
 not_equal:
         lda #$00
         tab
-        ldx #$01
+        tax
+        lda #$01
         rts
 .endproc
 
 .proc  _cmp_c000_c800: near
         lda #$c0
         tab
-        ldy #$00
+        ldx #$00
 loop1:
-        lda $c823,y
-        cmp $00,y
+        lda $c822,x
+        cmp $00,x
         bne not_equal
         iny
         bne loop1
         lda #$c1
         tab
-        ldy #$00
 loop2:
-        lda $c923,y
-        cmp $00,y
+        lda $c922,x
+        cmp $00,x
         bne not_equal
         iny
         bne loop2
@@ -111,6 +110,7 @@ loop2:
 not_equal:
         lda #$00
         tab
-        ldx #$01
+        tax
+        lda #$01
         rts
 .endproc
