@@ -990,7 +990,18 @@ void do_type_key(unsigned char key)
     c1 = 0x7f;
   }
   //  fprintf(stderr,"keys $%02x $%02x\n",c1,c2);
-  snprintf(cmd, 1024, "sffd3615 %02x %02x\n", c1, c2);
+  if (c2 == 0x7f) {
+    snprintf(cmd, 1024, "sffd3615 %02x 7f\n", c1);
+  } else {
+    // With the hardware accelerated keyboard scanner, simply doing Shift in
+    // one virtual keyboard register and the key in the other doesn't reliably
+    // trigger Shift. Setting them in separate "set" commands works around
+    // this.
+    snprintf(cmd, 1024, "sffd3615 %02x 7f\n", c2);
+    slow_write(fd, cmd, strlen(cmd));
+    usleep(20000);
+    snprintf(cmd, 1024, "sffd3615 %02x %02x\n", c2, c1);
+  }
   slow_write(fd, cmd, strlen(cmd));
 
   // Allow time for a keyboard scan interrupt to occur
