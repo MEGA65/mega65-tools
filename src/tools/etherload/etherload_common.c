@@ -1,3 +1,6 @@
+#ifdef __linux__
+#define _GNU_SOURCE
+#endif
 #include "etherload_common.h"
 #include "ethlet_set_ip_address_map.h"
 #include "ethlet_dma_load_map.h"
@@ -18,17 +21,26 @@
 #include <ws2tcpip.h>
 #else
 #include <ifaddrs.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <netdb.h>
+#include <net/if.h>
 #endif // WINDOWS
 
 #include <logging.h>
 
-static int sockfd;
-static struct sockaddr_in servaddr;
-static struct sockaddr_in broadcast_addr;
+#ifdef WINDOWS
+typedef SOCKET SOCKETTYPE;
+#else
+typedef int SOCKETTYPE;
+#endif
+
+#ifdef WINDOWS
+static int wsa_init_done = 0;
+#endif
+static SOCKETTYPE sockfd;
+static struct sockaddr_in6 servaddr;
+static struct sockaddr_in6 broadcast_addr;
+#define MAX_INTERFACES 256
+static struct sockaddr_in6 if_addrs[MAX_INTERFACES];
+
 
 #define PORTNUM 4510
 #define MAX_UNACKED_FRAMES 256
@@ -70,66 +82,63 @@ unsigned char magic_string[12] = {
   0x00, 0x80              // Magic key code $8000 = ethernet hypervisor trap
 };
 
-uint32_t get_broadcast_ip_for_dst_ip(uint32_t unicast_dst_ip);
+int ethl_configure_ip_address_and_interface(const char *ip_address, const char *ifname);
+int close_socket(SOCKETTYPE fd);
+int enumerate_interfaces(void);
 
-int etherload_init(const char *target_ip_address, const char *broadcast_ip_address)
+int set_socket_non_blocking(int fd)
 {
 #ifdef WINDOWS
-  WSADATA wsa_data;
-  if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
-    log_crit("unable to start-up Winsock v2.2");
-    return -1;
-  }
-#endif
-
-  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-  int broadcast_enable = 1;
-  setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, (char *)&broadcast_enable, sizeof(broadcast_enable));
-
-#ifdef WINDOWS
   u_long non_blocking = 1;
-  if (ioctlsocket(sockfd, FIONBIO, &non_blocking) != NO_ERROR) {
+  if (ioctlsocket(fd, FIONBIO, &non_blocking) != NO_ERROR) {
     log_crit("unable to set non-blocking socket operation");
     return -1;
   }
 #else
-  fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, NULL) | O_NONBLOCK);
+  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, NULL) | O_NONBLOCK);
+#endif
+  return 0;
+}
+
+int etherload_init(const char *target_ip_address, const char *ifname)
+{
+#ifdef WINDOWS
+  if (!wsa_init_done) {
+    WSADATA wsa_data;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
+      log_crit("unable to start-up Winsock v2.2");
+      return -1;
+    }
+    wsa_init_done = 1;
+  }
 #endif
 
   memset(&servaddr, 0, sizeof(servaddr));
-  servaddr.sin_family = AF_INET;
-  servaddr.sin_addr.s_addr = inet_addr(target_ip_address);
-  servaddr.sin_port = htons(PORTNUM);
+  servaddr.sin6_family = AF_INET6;
+  servaddr.sin6_port = htons(PORTNUM);
 
-  if (servaddr.sin_addr.s_addr == INADDR_NONE) {
-    log_crit("Invalid target IP address provided: %s", target_ip_address);
-    return -1;
-  }
-
-  log_debug("Using dst-addr: %s", inet_ntoa(servaddr.sin_addr));
-  log_debug("Using dst-port: %d", ntohs(servaddr.sin_port));
-
-  memset(&broadcast_addr, 0, sizeof(servaddr));
-  broadcast_addr.sin_family = AF_INET;
-  broadcast_addr.sin_port = htons(PORTNUM);
-
-  if (broadcast_ip_address == NULL) {
-    broadcast_addr.sin_addr.s_addr = get_broadcast_ip_for_dst_ip(servaddr.sin_addr.s_addr);
-    if (broadcast_addr.sin_addr.s_addr == 0) {
-      log_crit("Unable to determine broadcast address for %s\n", inet_ntoa(broadcast_addr.sin_addr));
+  if (target_ip_address == NULL) {
+    if (probe_mega65_ipv6_address(2500) < 0) {
+      log_crit("Unable to find a mega65 on the local network");
       return -1;
     }
-    char ip_address_str[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &servaddr.sin_addr, ip_address_str, INET_ADDRSTRLEN);
-    log_note("Determined %s as broadcast address for %s\n", inet_ntoa(broadcast_addr.sin_addr), ip_address_str);
   }
   else {
-    broadcast_addr.sin_addr.s_addr = inet_addr(broadcast_ip_address);
-    if (broadcast_addr.sin_addr.s_addr == INADDR_NONE) {
-      log_crit("Invalid broadcast IP address provided: %s", broadcast_ip_address);
+    if (ethl_configure_ip_address_and_interface(target_ip_address, ifname) < 0) {
+      log_crit("Unable to configure IP address and interface");
       return -1;
     }
   }
+
+  sockfd = socket(AF_INET6, SOCK_DGRAM, 0);
+  setsockopt(sockfd, IPPROTO_IPV6, IPV6_MULTICAST_IF, (void *)&servaddr.sin6_scope_id, sizeof(servaddr.sin6_scope_id));
+  set_socket_non_blocking(sockfd);
+
+  memset(&broadcast_addr, 0, sizeof(broadcast_addr));
+  broadcast_addr.sin6_family = AF_INET6;
+  broadcast_addr.sin6_port = htons(PORTNUM);
+  inet_pton(AF_INET6, "ff02::1", &broadcast_addr.sin6_addr);
+  broadcast_addr.sin6_scope_id = servaddr.sin6_scope_id;
 
   return 0;
 }
@@ -137,7 +146,9 @@ int etherload_init(const char *target_ip_address, const char *broadcast_ip_addre
 void etherload_finish(void)
 {
 #ifdef WINDOWS
-  WSACleanup();
+  if (wsa_init_done) {
+    WSACleanup();
+  }
 #endif
 }
 
@@ -174,82 +185,204 @@ static long long gettime_us(void)
   return retVal;
 }
 
-int set_ip_address(void)
+int parse_ipv6_and_interface(const char *in_ip_address_and_interface, char *out_ip_address, char *out_network_interface)
 {
-  unsigned char ackbuf[8192];
-  struct sockaddr_in src_address;
-  socklen_t addr_len = sizeof(src_address);
-
-  int ip_as_int = servaddr.sin_addr.s_addr;
-  memcpy(ethlet_set_ip_address + ethlet_set_ip_address_offset_ip_address, &ip_as_int, 4);
-
-  long long start = gettime_us();
-  long long last_request = start;
-  long long now = gettime_us();
-
-  while (now - start < 500000) {
-    if (now - last_request > 100000) {
-      last_request = now;
-      log_debug("Sending set_ip_address");
-      sendto(sockfd, (char *)ethlet_set_ip_address, ethlet_set_ip_address_len, 0, (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
-      sendto(sockfd, (char *)ethlet_set_ip_address, ethlet_set_ip_address_len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    }
-
-    int r = recvfrom(sockfd, (void *)ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
-    if (r > -1) {
-      if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
-        log_debug("Dropping unexpected packet from %s:%d", inet_ntoa(src_address.sin_addr), ntohs(src_address.sin_port));
-        continue;
-      }
-      if (r > 0) {
-        if (memcmp(ackbuf, ethlet_set_ip_address, ethlet_set_ip_address_len) == 0) {
-          log_debug("Received ack for set_ip_address");
-          return 0;
-        }
-      }
-    }
-    usleep(1000);
-    now = gettime_us();
+  char *temp = strdup(in_ip_address_and_interface);
+  char *ip_address = strtok(temp, "%");
+  char *network_interface = strtok(NULL, "%");
+  if (ip_address == NULL || network_interface == NULL) {
+    log_error("Invalid IP address and interface format: %s", in_ip_address_and_interface);
+    free(temp);
+    return -1;
   }
-
-  return -1;
+  strcpy(out_ip_address, ip_address);
+  strcpy(out_network_interface, network_interface);
+  free(temp);
+  return 0;
 }
 
-int trigger_eth_hyperrupt(void)
+int probe_mega65_ipv6_address(int timeout_ms)
 {
-  int offset = 0x38;
-  int retries = 3;
+  long long start, now;
+  int return_code = -1;
 
-  memcpy(&hyperrupt_trigger[offset], magic_string, 12);
-  
-  while (retries-- > 0) {
-    sendto(sockfd, (void *)hyperrupt_trigger, sizeof(hyperrupt_trigger), 0, (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
-    usleep(10000);
+#ifdef WINDOWS
+  if (!wsa_init_done) {
+    WSADATA wsa_data;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
+      log_crit("unable to start-up Winsock v2.2");
+      return -1;
+    }
+    wsa_init_done = 1;
+  }
+#endif
 
-    if (set_ip_address() == 0) {
-      break;
+  int num_if = enumerate_interfaces();
+  if (num_if == 0) {
+    log_crit("Discovery of MEGA65 needs to have IPv6 enabled on the interface connected with the MEGA65 network.");
+    return -1;
+  }
+  SOCKETTYPE discoverfd[MAX_INTERFACES];
+  memset(discoverfd, 0, sizeof(discoverfd));
+
+  for (int idx = 0; idx < num_if; ++idx) {
+    // creating an IPv6 UDP server socket and listen on port 4510 for incoming packets
+    discoverfd[idx] = socket(AF_INET6, SOCK_DGRAM, 0);
+    if (discoverfd < 0) {
+      log_crit("Unable to create socket");
+      goto leave_probe_mega65;
+    }
+    set_socket_non_blocking(discoverfd[idx]);
+    int enable = 1;
+    if (setsockopt(discoverfd[idx], IPPROTO_IPV6, IPV6_V6ONLY, (void *)&enable, sizeof(int)) < 0) {
+      log_crit("Unable to set IPV6_V6ONLY");
+      goto leave_probe_mega65;
+    }
+    if (setsockopt(discoverfd[idx], SOL_SOCKET, SO_REUSEADDR, (void *)&enable, sizeof(int)) < 0) {
+      log_crit("setsockopt(SO_REUSEADDR) failed");
+      goto leave_probe_mega65;
+    }
+#ifndef WINDOWS
+    if (setsockopt(discoverfd[idx], SOL_SOCKET, SO_REUSEPORT, (void *)&enable, sizeof(int)) < 0) {
+      log_crit("setsockopt(SO_REUSEPORT) failed");
+      goto leave_probe_mega65;
+    }
+#endif
+    struct ipv6_mreq mreq;
+    memset(&mreq, 0, sizeof(mreq));
+    mreq.ipv6mr_interface = if_addrs[idx].sin6_scope_id;
+    inet_pton(AF_INET6, "ff02::1", &mreq.ipv6mr_multiaddr);
+    if (setsockopt(discoverfd[idx], IPPROTO_IPV6, IPV6_JOIN_GROUP, (char*)&mreq, sizeof(mreq)) < 0) {
+        log_crit("setsockopt(IPV6_JOIN_GROUP) failed");
+        goto leave_probe_mega65;
+    }
+    struct sockaddr_in6 listen_addr;
+    memset(&listen_addr, 0, sizeof(listen_addr));
+    listen_addr.sin6_family = AF_INET6;
+    listen_addr.sin6_port = htons(PORTNUM);
+    listen_addr.sin6_addr = in6addr_any;
+    if (bind(discoverfd[idx], (struct sockaddr *)&listen_addr, sizeof(listen_addr)) < 0) {
+      log_crit("Unable to bind socket");
+      goto leave_probe_mega65;
     }
   }
 
-  if (retries < 0) {
-    log_crit("No response from MEGA65");
+  // Buffer to hold received data
+  char buffer[8192];
+
+  // sockaddr_in6 struct to hold the source address
+  struct sockaddr_in6 src_addr;
+  socklen_t addr_len = sizeof(src_addr);
+
+  start = gettime_us();
+  do {
+
+    for (int idx = 0; idx < num_if; ++idx) {
+      // Receive the packet and obtain the source address
+      ssize_t num_bytes = recvfrom(discoverfd[idx], buffer, sizeof(buffer), 0,
+                                  (struct sockaddr *)&src_addr, &addr_len);
+#ifdef WINDOWS
+      if (num_bytes == SOCKET_ERROR) {
+        int error_code = WSAGetLastError();
+        if (error_code == WSAEWOULDBLOCK) {
+          // No data available yet
+          usleep(1000);
+          now = gettime_us();
+          continue;
+        } else {
+          log_crit("Error receiving packet: %d\n", WSAGetLastError());
+          goto leave_probe_mega65;
+        }
+      }
+#else
+      if (num_bytes < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // No data available yet
+          usleep(1000);
+          now = gettime_us();
+          continue;
+        }
+        else {
+          log_crit("Error receiving packet, error code: %d", errno);
+          goto leave_probe_mega65;
+        }
+      }
+#endif
+      if (num_bytes == 6 && memcmp(buffer, "mega65", 6) == 0) {
+        log_debug("Found mega65 discover packet");
+
+        // set etherload server address and interface
+        memcpy(&servaddr.sin6_addr, &src_addr.sin6_addr, sizeof(servaddr.sin6_addr));
+        servaddr.sin6_scope_id = src_addr.sin6_scope_id;
+        return_code = 0;
+        goto leave_probe_mega65;
+      }
+    
+    } // for (int idx = 0; idx < num_if; ++idx)
+
+    usleep(1000);
+    now = gettime_us();
+
+  } while (now - start < timeout_ms * 1000);
+
+leave_probe_mega65:
+  for (int idx = 0; idx < num_if; ++idx) {
+    if (discoverfd[idx] == 0) {
+      break;
+    }
+    close_socket(discoverfd[idx]);
+  }
+  return return_code;
+}
+
+int ethl_configure_ip_address_and_interface(const char *ip_address, const char *ifname)
+{
+  int result;
+
+  result = inet_pton(AF_INET6, ip_address, &servaddr.sin6_addr);
+  if (result <= 0) {
+    log_error("Invalid IP address format: %s", ip_address);
     return -1;
   }
 
+  int ifindex = if_nametoindex(ifname);
+  if (ifindex == 0) {
+    log_error("Unable to find interface %s", ifname);
+    return -1;
+  }
+  servaddr.sin6_scope_id = ifindex;
+
+  return 0;
+}
+
+int trigger_eth_hyperrupt()
+{
+  int offset = 0x24;
+  memcpy(&hyperrupt_trigger[offset], magic_string, 12);
+  sendto(sockfd, (void *)hyperrupt_trigger, sizeof(hyperrupt_trigger), 0, (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
+  usleep(10000);
   start_time = gettime_us();
   last_resend_time = gettime_us();
-
   return 0;
 }
 
 char *ethl_get_ip_address(void)
 {
-  return inet_ntoa(servaddr.sin_addr);
+  static char ip_address[INET6_ADDRSTRLEN];
+  inet_ntop(AF_INET6, &(servaddr.sin6_addr), ip_address, INET6_ADDRSTRLEN);
+  return ip_address;
+}
+
+char *ethl_get_interface_name(void)
+{
+  static char ifname[IF_NAMESIZE];
+  if_indextoname(servaddr.sin6_scope_id, ifname);
+  return ifname;
 }
 
 uint16_t ethl_get_port(void)
 {
-  return ntohs(servaddr.sin_port);
+  return ntohs(servaddr.sin6_port);
 }
 
 int ethl_get_socket(void)
@@ -257,7 +390,7 @@ int ethl_get_socket(void)
   return sockfd;
 }
 
-struct sockaddr_in *ethl_get_server_addr(void)
+struct sockaddr_in6 *ethl_get_server_addr(void)
 {
   return &servaddr;
 }
@@ -316,8 +449,9 @@ int check_if_ack(uint8_t *rx_payload, int len)
 
 void maybe_send_ack(void);
 
-int expect_ack(uint8_t *payload, int len)
+int expect_ack(uint8_t *payload, int len, int timeout_ms)
 {
+  long long start = gettime_us();
   while (1) {
     int duplicate = -1;
     int free_slot = -1;
@@ -353,14 +487,16 @@ int expect_ack(uint8_t *payload, int len)
     unsigned char ackbuf[8192];
     // int count = 0;
     int r = 0;
-    struct sockaddr_in src_address;
+    struct sockaddr_in6 src_address;
     socklen_t addr_len = sizeof(src_address);
 
     while (r > -1 /*&& count++ < 100*/) {
       r = recvfrom(sockfd, (void *)ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
       if (r > -1) {
-        if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
-          log_debug("Dropping unexpected packet from %s:%d", inet_ntoa(src_address.sin_addr), ntohs(src_address.sin_port));
+        if (memcmp(&(src_address.sin6_addr), &(servaddr.sin6_addr), 16) != 0 || src_address.sin6_port != htons(PORTNUM)) {
+          char str[INET6_ADDRSTRLEN];
+          inet_ntop(AF_INET6, &(src_address.sin6_addr), str, INET6_ADDRSTRLEN);
+          log_debug("Dropping unexpected packet from %s:%d", str, ntohs(src_address.sin6_port));
           continue;
         }
         if (r > 0)
@@ -375,6 +511,11 @@ int expect_ack(uint8_t *payload, int len)
     usleep(20);
     // XXX DEBUG slow things down
     //    usleep(10000);
+
+    if (gettime_us() - start > timeout_ms * 1000) {
+      log_debug("Timeout waiting for new ack slot");
+      return -1;
+    }
   }
   return 0;
 }
@@ -442,9 +583,10 @@ void maybe_send_ack(void)
   }
 }
 
-int wait_ack_slots_available(int num_free_slots_needed)
+int wait_ack_slots_available(int num_free_slots_needed, int timeout_ms)
 {
-  while (1) {
+  long long start = gettime_us();
+  while (gettime_us() - start < timeout_ms * 1000) {
     int num_free_slots = queue_length - get_num_unacked_frames();
     if (num_free_slots >= num_free_slots_needed)
       return 0;
@@ -453,14 +595,16 @@ int wait_ack_slots_available(int num_free_slots_needed)
     unsigned char ackbuf[8192];
     // int count = 0;
     int r = 0;
-    struct sockaddr_in src_address;
+    struct sockaddr_in6 src_address;
     socklen_t addr_len = sizeof(src_address);
 
     while (r > -1 /*&& count++ < 100*/) {
       r = recvfrom(sockfd, (void *)ackbuf, sizeof(ackbuf), 0, (struct sockaddr *)&src_address, &addr_len);
       if (r > -1) {
-        if (src_address.sin_addr.s_addr != servaddr.sin_addr.s_addr || src_address.sin_port != htons(PORTNUM)) {
-          log_debug("Dropping unexpected packet from %s:%d", inet_ntoa(src_address.sin_addr), ntohs(src_address.sin_port));
+        if (memcmp(&(src_address.sin6_addr), &(servaddr.sin6_addr), 16) != 0 || src_address.sin6_port != htons(PORTNUM)) {
+          char str[INET6_ADDRSTRLEN];
+          inet_ntop(AF_INET6, &(src_address.sin6_addr), str, INET6_ADDRSTRLEN);
+          log_debug("Dropping unexpected packet from %s:%d", str, ntohs(src_address.sin6_port));
           continue;
         }
         if (r > 0)
@@ -473,12 +617,12 @@ int wait_ack_slots_available(int num_free_slots_needed)
     // Finally wait a short period of time
     usleep(20);
   }
-  return 0;
+  return -1;
 }
 
-int wait_all_acks(void)
+int wait_all_acks(int timeout_ms)
 {
-  return wait_ack_slots_available(queue_length);
+  return wait_ack_slots_available(queue_length, timeout_ms);
 }
 
 int send_ethlet(const uint8_t data[], const int bytes)
@@ -549,10 +693,13 @@ int dmaload_embed_packet_seq(uint8_t *payload, int len, int seq_num)
   return 1;
 }
 
-int ethl_send_packet(uint8_t *payload, int len)
+int ethl_send_packet(uint8_t *payload, int len, int timeout_ms)
 {
   int ret = 0;
-  expect_ack(payload, len);
+  if (expect_ack(payload, len, timeout_ms) < 0) {
+    log_debug("Timeout waiting for new ack slot");
+    return -1;
+  }
   do {
     ret = sendto(sockfd, (char *)payload, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
   } while (ret < 0 && errno == EAGAIN);
@@ -565,9 +712,12 @@ int ethl_send_packet_unscheduled(uint8_t *payload, int len)
   return 0;
 }
 
-int ethl_schedule_ack(uint8_t *payload, int len)
+int ethl_schedule_ack(uint8_t *payload, int len, int timeout_ms)
 {
-  expect_ack(payload, len);
+  if (expect_ack(payload, len, timeout_ms) < 0) {
+    log_debug("Timeout waiting for new ack slot");
+    return -1;
+  }
   return 0;
 }
 
@@ -594,7 +744,7 @@ void set_send_mem_rom_write_enable()
   dma_load_rom_write_enable = 1;
 }
 
-int send_mem(unsigned int address, unsigned char *buffer, int bytes)
+int send_mem(unsigned int address, unsigned char *buffer, int bytes, int timeout_ms)
 {
   static int rom_write_enabled = 0;
 
@@ -624,7 +774,10 @@ int send_mem(unsigned int address, unsigned char *buffer, int bytes)
   if (0)
     log_info("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...", gettime_us() - start_time, address, packet_seq,
         payload[ethlet_dma_load_offset_data], payload[ethlet_dma_load_offset_data + 1]);
-  ethl_send_packet(payload, dmaload_len);
+  if (ethl_send_packet(payload, dmaload_len, timeout_ms) < 0) {
+    log_error("Unable to send new packet");
+    return -1;
+  }
   return 0;
 }
 
@@ -647,64 +800,91 @@ int dmaload_no_pending_ack(int addr)
   return 1;
 }
 
-uint32_t get_broadcast_ip_for_dst_ip(uint32_t unicast_dst_ip)
+int close_socket(SOCKETTYPE sockfd)
 {
 #ifdef WINDOWS
-  uint32_t broadcast_address = 0;
-  DWORD dwRetVal;
-  ULONG outBufLen = 15000;
-  PIP_ADAPTER_ADDRESSES pAdresses = (IP_ADAPTER_ADDRESSES *) malloc(outBufLen);
-  dwRetVal = GetAdaptersAddresses(AF_INET, 0, NULL, pAdresses, &outBufLen);
-  if (dwRetVal != NO_ERROR) {
-    log_crit("GetAdaptersAdresses failed with error: %lu", dwRetVal);
-    free(pAdresses);
-    return broadcast_address;
+  return closesocket(sockfd);
+#else
+  return close(sockfd);
+#endif
+}
+
+/**
+ * @brief Enumerate all IPv6 interfaces on the system
+ * 
+ * Fills the if_addrs array with the IPv6 addresses of all active interfaces.
+ * 
+ * @return int The number of interfaces found
+ */
+int enumerate_interfaces()
+{
+  memset(if_addrs, 0, sizeof(if_addrs));
+  int cur_if = 0;
+
+#ifdef WINDOWS
+  PIP_ADAPTER_ADDRESSES addresses = NULL;
+  ULONG outBufLen = 0;
+  GetAdaptersAddresses(AF_INET6, 0, NULL, addresses, &outBufLen);
+  addresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
+
+  if (GetAdaptersAddresses(AF_INET6, 0, NULL, addresses, &outBufLen) == NO_ERROR) {
+    PIP_ADAPTER_ADDRESSES currAdapterAddresses = addresses;
+    while (currAdapterAddresses) {
+      if (currAdapterAddresses->OperStatus != IfOperStatusUp) {
+        log_debug("Skipping interface (down): %s (%ls)", currAdapterAddresses->AdapterName, currAdapterAddresses->FriendlyName);
+        currAdapterAddresses = currAdapterAddresses->Next;
+        continue;
+      }
+      log_debug("\nFound active adapter: %s (%ls)\n", currAdapterAddresses->AdapterName, currAdapterAddresses->FriendlyName);
+      PIP_ADAPTER_UNICAST_ADDRESS currUnicastAddress = currAdapterAddresses->FirstUnicastAddress;
+      while (currUnicastAddress) {
+        struct sockaddr_in6 *sockAddr6 = (struct sockaddr_in6 *)currUnicastAddress->Address.lpSockaddr;
+        if (sockAddr6->sin6_family == AF_INET6 && IN6_IS_ADDR_LINKLOCAL(&sockAddr6->sin6_addr)) {
+          char strBuffer[INET6_ADDRSTRLEN] = {0};
+          if (InetNtop(AF_INET6, &sockAddr6->sin6_addr, strBuffer, INET6_ADDRSTRLEN) != NULL) {
+            log_debug("  IPv6 Address: %s\n", strBuffer);
+            char ifname[MAX_INTERFACE_NAME_LEN];
+            if_indextoname(sockAddr6->sin6_scope_id, ifname);
+            log_debug("  Interface: %s (id %d)\n", ifname, sockAddr6->sin6_scope_id);
+            if (cur_if < MAX_INTERFACES) {
+              memcpy(&if_addrs[cur_if], sockAddr6, sizeof(struct sockaddr_in6));
+              cur_if++;
+            }
+          }
+        }
+        currUnicastAddress = currUnicastAddress->Next;
+      }
+      currAdapterAddresses = currAdapterAddresses->Next;
+    }
   }
 
-  PIP_ADAPTER_UNICAST_ADDRESS pUni = NULL;
-  for (PIP_ADAPTER_ADDRESSES pCurrAddresses = pAdresses; pCurrAddresses; pCurrAddresses = pCurrAddresses->Next) {
-    log_debug("Found network adapter: %s", pCurrAddresses->AdapterName);
+  free(addresses);
+#else
+  // Linux / macOS implementation:
+  struct ifaddrs *ifaddr, *ifa;
 
-    for (pUni = pCurrAddresses->FirstUnicastAddress; pUni != NULL; pUni = pUni->Next) {
-      struct sockaddr_in *addr = (struct sockaddr_in *)pUni->Address.lpSockaddr;
-      ULONG mask = 0;
-      ConvertLengthToIpv4Mask(pUni->OnLinkPrefixLength, &mask);
-      
-      // If the target IP is within this network range
-      if ((unicast_dst_ip & mask) == (addr->sin_addr.s_addr & mask)) {
-        // Return broadcast address
-        broadcast_address = addr->sin_addr.s_addr | ~(mask);
+  if (getifaddrs(&ifaddr) == -1) {
+    perror("getifaddrs");
+    exit(EXIT_FAILURE);
+  }
+
+  for (ifa = ifaddr; ifa != NULL && cur_if < MAX_INTERFACES; ifa = ifa->ifa_next) {
+    if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET6) {
+        continue;
+    }
+
+    if (ifa->ifa_addr->sa_family == AF_INET6 && (ifa->ifa_flags & IFF_UP)) {
+      struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)ifa->ifa_addr;
+      // Ensure it's a link-local address
+      if (IN6_IS_ADDR_LINKLOCAL(&addr6->sin6_addr)) {
+        memcpy(&if_addrs[cur_if], addr6, sizeof(struct sockaddr_in6));
+        ++cur_if;
       }
     }
   }
 
-  free(pAdresses);
-  return broadcast_address;
-#else // WINDOWS
-    struct ifaddrs *ifaddr, *ifa;
-    uint32_t broadcast_address = 0;
+  freeifaddrs(ifaddr);
 
-    if (getifaddrs(&ifaddr) == -1) {
-        perror("getifaddrs");
-        exit(EXIT_FAILURE);
-    }
-
-    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET) {
-            continue;
-        }
-
-        struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
-        struct sockaddr_in *mask = (struct sockaddr_in *)ifa->ifa_netmask;
-
-        // If the target IP is within this network range
-        if ((unicast_dst_ip & mask->sin_addr.s_addr) == (addr->sin_addr.s_addr & mask->sin_addr.s_addr)) {
-          // Return broadcast address
-          broadcast_address = addr->sin_addr.s_addr | ~(mask->sin_addr.s_addr);
-        }
-    }
-
-    freeifaddrs(ifaddr);
-    return broadcast_address;
-#endif // !(WINDOWS)
+#endif
+  return cur_if;
 }

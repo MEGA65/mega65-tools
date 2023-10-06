@@ -5,9 +5,9 @@
 	; mapped at $6800
 	; Packet size:      2 bytes
 	; Ethernet header: 14 bytes
-	; IPv4 header:     20 bytes
+	; IPv6 header:     40 bytes
 	; UDP header:       8 bytes
-	.org $6800 + 2 + 14 + 20 + 8
+	.org $6800 + 2 + 14 + 40 + 8
 
 	.alias tmpbuffer $334
 

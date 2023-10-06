@@ -10,7 +10,9 @@
 #define ARP_REPLY 0x0200   // big-endian for 0x0002
 
 uint16_t fastcall ip_checksum_recv();
+// from checksum.s:
 uint16_t fastcall checksum_fast(uint16_t size);
+extern uint16_t chks_pseudo_hdr, chks_pseudo_length;
 
 /**
  * @brief Copy a memory area using DMA with ETH I/O personality enabled.
@@ -28,16 +30,21 @@ uint16_t fastcall checksum_fast(uint16_t size);
 void fastcall dma_copy_eth_io(void *src, void *dst, uint16_t size);
 
 uint8_t fastcall cmp_c000_c200();
-uint8_t fastcall cmp_c000_c800();
+uint8_t fastcall cmp_c000_c816();
+
+#define ETH_HDR_SIZE 14
+#define IPV6_HDR_SIZE 40
+#define IPV6_PSEUDO_HDR_SIZE 40
+#define UDP_HDR_SIZE 8
+#define FTP_HDR_SIZE 7
 
 typedef struct {
   uint8_t b[6];
 } EUI48;
 
-typedef union {
-  uint32_t d;
-  uint8_t b[4];
-} IPV4;
+typedef struct { 
+  uint8_t b[16]; 
+} IPV6;
 
 /**
  * Ethernet frame header.
@@ -49,41 +56,36 @@ typedef struct {
 } ETH_HEADER;
 
 /**
- * ARP message format.
+ * IPv6 header
  */
 typedef struct {
-  uint16_t hardware;
-  uint16_t protocol;
-  uint8_t hw_size;
-  uint8_t pr_size;
-  uint16_t opcode;
-  EUI48 orig_hw;
-  IPV4 orig_ip;
-  EUI48 dest_hw;
-  IPV4 dest_ip;
-} ARP_HDR;
-
-#define ETH_HDR_SIZE 14
-#define IPV4_HDR_SIZE 20
-#define IPV4_PSEUDO_HDR_SIZE 12
-#define UDP_HDR_SIZE 8
-#define FTP_HDR_SIZE 7
+  // IPv6 header
+  uint32_t ver_cls_flow; ///< Version (4 bits), Traffic Class (8 bits), and Flow Label (20 bits)
+  uint16_t ip_length;    ///< Length of the payload
+  uint8_t next_header;   ///< Identifies the type of header immediately following the IPv6 header
+  uint8_t hop_limit;     ///< Specifies the maximum number of hops (i.e., links) that the packet may be forwarded on toward its destination
+  IPV6 source;           ///< 16 bytes: Source IPv6 address
+  IPV6 destination;      ///< 16 bytes: Destination IPv6 address
+} IPV6_HEADER;
 
 /**
- * IP Header format.
+ * ICMPv6 ND Solicit/Advertise message format.
  */
 typedef struct {
-  // IPv4 header
-  uint8_t ver_length;    ///< Protocol version (4) and header size (32 bits units).
-  uint8_t tos;           ///< Type of Service.
-  uint16_t ip_length;    ///< Total packet length.
-  uint16_t id;           ///< Message identifier.
-  uint16_t frag;         ///< Fragmentation index (not used).
-  uint8_t ttl;           ///< Time-to-live.
-  uint8_t protocol;      ///< Transport protocol identifier.
-  uint16_t checksum_ip;  ///< Header checksum.
-  IPV4 source;           ///< Source host address.
-  IPV4 destination;      ///< Destination host address.
+  uint8_t icmpv6_type;
+  uint8_t icmpv6_code;
+  uint16_t checksum;
+  uint32_t flags;
+  IPV6 target_address;
+  uint8_t link_layer_type;
+  uint8_t link_layer_length;
+  EUI48 link_layer_address;
+} NEIGHBOR_DISCOVERY;
+
+/**
+ * FTP Header format.
+ */
+typedef struct {
   // UDP header
   uint16_t src_port;     ///< Source application address.
   uint16_t dst_port;     ///< Destination application address.
@@ -117,8 +119,9 @@ typedef union {
   uint8_t b[1500];
   struct {
     ETH_HEADER eth;
+    IPV6_HEADER ipv6;
     union {
-      ARP_HDR arp;
+      NEIGHBOR_DISCOVERY nd;
       struct {
         FTP_PKT ftp;
         union {
@@ -140,8 +143,18 @@ uint8_t quit_requested = 0;
 uint16_t last_eth_controller_reset_seq_no = 0;
 PACKET reply_template;
 PACKET recv_buf;
+uint16_t udp_length;
 uint8_t sector_buf[512];
-PACKET send_buf;
+#pragma bss-name (push, "SENDBUF")
+/*
+ We want this to be in segment SENDBUF, so it will be at $C7CA
+ The reason is we want the fast checksum routine to operate starting
+ at $c800, which will be the first byte of the IPv6 payload.
+ The Ethernet header (14 bytes) will be at $C7CA-$C7D7, the
+ IPv6 header will be at $C7D8-$C7FF.
+*/
+PACKET send_buf; 
+#pragma bss-name (pop)
 uint16_t send_buf_size;
 uint8_t sector_reading, sector_buffered;
 uint32_t sector_number_read, sector_number_buf, sector_number_write;
@@ -156,12 +169,8 @@ uint16_t seq_num;
 uint32_t write_cache_offset;
 
 EUI48 mac_local;
-IPV4 ip_local;
-uint8_t ip_addr_set = 0;
+IPV6 ip_local;
 
-uint16_t ip_id = 0;
-
-uint32_t chks_err_cnt = 0;
 uint32_t udp_chks_err_cnt = 0;
 uint32_t outdated_cnt = 0;
 uint32_t dup_cnt = 0;
@@ -176,12 +185,17 @@ typedef union {
   uint8_t b[2];
 } chks_t;
 chks_t chks;
+chks_t chks_pseudo_hdr_udp;
+chks_t chks_pseudo_hdr_ndp;
 
 static uint8_t _a, _b, _c;
 static unsigned int _b16;
 
 void init(void);
 void init_screen(void);
+void init_own_ipv6_address(void);
+void init_pseudo_checksum_ndp(void);
+void init_pseudo_checksum_udp(void);
 void print(uint8_t row, uint8_t col, char *text);
 void stop_fatal(char *text);
 void print_core_commit();
@@ -190,17 +204,16 @@ void print_ip_information(void);
 void update_counters(void);
 void update_rx_tx_counters(void);
 void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line);
-//int memcmp_highlow(uint32_t addr1, uint16_t addr2, uint16_t num_bytes);
+const char *ipv6_to_str(const uint8_t *addr);
 void checksum(uint8_t *buf, uint16_t size);
 void add_checksum(uint16_t v);
-uint8_t check_ip_checksum(uint8_t *hdr);
 uint8_t check_udp_checksum(void);
+void calculate_send_buf_udp_checksum(uint16_t size);
 void wait_for_sd_ready(void);
 void init_new_write_batch(void);
 void multi_sector_write_next(void);
 uint8_t is_received_batch_counter_outdated(uint8_t previous_id, uint8_t received_id);
 void handle_batch_write(void);
-void check_rx_buffer_integrity(void);
 void wait_rasters(uint16_t num_rasters);
 void verify_sector(void);
 void wait_100ms(void);
@@ -213,14 +226,14 @@ void init(void)
   POKE(0xD02F, 0x45);
   POKE(0xD02F, 0x54);
 
-    // RXPH 1, MCST off, BCST on, TXPH 1, NOCRC off, NOPROM on
-  POKE(0xD6E5, 0x55);
+    // RXPH 1, MCST on, BCST on, TXPH 1, NOCRC off, NOPROM on
+  POKE(0xD6E5, 0x75);
   
   POKE(0xD689, PEEK(0xD689) | 128); // Enable SD card buffers instead of Floppy buffer
 
   init_screen();
 
-  lcopy(0xFF87FFC, (unsigned long)&ip_local.b[0], sizeof(IPV4));
+  init_own_ipv6_address();
 
   sector_reading = 0;
   sector_buffered = 0;
@@ -229,14 +242,11 @@ void init(void)
 
   // Prepare response packet
   lcopy((uint32_t)&mac_local, (uint32_t)&reply_template.eth.source, sizeof(EUI48));
-  reply_template.eth.type = 0x0008;
-  reply_template.ftp.ver_length = 0x45;
-  reply_template.ftp.tos = 0;
-  reply_template.ftp.frag = 0;
-  reply_template.ftp.ttl = 64;
-  reply_template.ftp.protocol = 17;
-  reply_template.ftp.checksum_ip = 0;
-  reply_template.ftp.source.d = 0;
+  reply_template.eth.type = 0xdd86; // little endian for eth type IPv6 (86dd)
+  reply_template.ipv6.ver_cls_flow = 0x60; // IPv6 version 6, traffic class 0, flow label 0, little endian
+  reply_template.ipv6.next_header = 17; // UDP
+  reply_template.ipv6.hop_limit = 64;
+  memcpy(reply_template.ipv6.source.b, ip_local.b, 16);
   reply_template.ftp.src_port = HTONS(4510);
   reply_template.ftp.dst_port = 0;
   reply_template.ftp.checksum_udp = 0;
@@ -260,7 +270,6 @@ void init_screen()
   print_mac_address();
   print_core_commit();
 
-  print(10, 0, "ip chks:       0");
   print(11, 0, "udp chks:      0");
   print(12, 0, "outdated:      0");
   print(13, 0, "duplicate:     0");
@@ -269,6 +278,58 @@ void init_screen()
   print(16, 0, "unauthorized:  0");
 
   update_counters();
+}
+
+void init_own_ipv6_address()
+{
+  uint8_t i;
+
+  // Generate IPv6 address from MAC address
+  ip_local.b[0] = 0xfe;
+  ip_local.b[1] = 0x80;
+  for (i = 2; i < 8; ++i) {
+    ip_local.b[i] = 0;
+  }
+  ip_local.b[8] = mac_local.b[0] ^ 0x02;
+  ip_local.b[9] = mac_local.b[1];
+  ip_local.b[10] = mac_local.b[2];
+  ip_local.b[11] = 0xff;
+  ip_local.b[12] = 0xfe;
+  ip_local.b[13] = mac_local.b[3];
+  ip_local.b[14] = mac_local.b[4];
+  ip_local.b[15] = mac_local.b[5];
+}
+
+void init_pseudo_checksum_ndp(void)
+{
+  uint8_t pseudo_hdr[36];
+
+  lcopy((uint32_t)&ip_local, (uint32_t)&pseudo_hdr[0], 16);
+  lcopy((uint32_t)&send_buf.ipv6.destination, (uint32_t)&pseudo_hdr[16], 16);
+  pseudo_hdr[32] = 0;
+  pseudo_hdr[33] = 0;
+  pseudo_hdr[34] = 0;
+  pseudo_hdr[35] = 58; // ICMPv6
+
+  chks.u = 0;
+  checksum(pseudo_hdr, 36);
+  chks_pseudo_hdr_ndp.u = chks.u;
+}
+
+void init_pseudo_checksum_udp(void)
+{
+  uint8_t pseudo_hdr[36];
+
+  lcopy((uint32_t)&ip_local, (uint32_t)&pseudo_hdr[0], 16);
+  lcopy((uint32_t)&reply_template.ipv6.destination, (uint32_t)&pseudo_hdr[16], 16);
+  pseudo_hdr[32] = 0;
+  pseudo_hdr[33] = 0;
+  pseudo_hdr[34] = 0;
+  pseudo_hdr[35] = 17; // UDP
+
+  chks.u = 0;
+  checksum(pseudo_hdr, 36);
+  chks_pseudo_hdr_udp.u = chks.u;
 }
 
 void print(uint8_t row, uint8_t col, char *text)
@@ -318,12 +379,10 @@ void print_mac_address()
 
 void print_ip_information(void)
 {
-  sprintf(msg, "ip : %d.%d.%d.%d", reply_template.ftp.source.b[0], reply_template.ftp.source.b[1],
-      reply_template.ftp.source.b[2], reply_template.ftp.source.b[3]);
+  sprintf(msg, "ip : %s", ipv6_to_str(ip_local.b));
   print(5, 0, msg);
   print(7, 0, "remote");
-  sprintf(msg, "ip : %d.%d.%d.%d:%u", reply_template.ftp.destination.b[0], reply_template.ftp.destination.b[1],
-      reply_template.ftp.destination.b[2], reply_template.ftp.destination.b[3], NTOHS(reply_template.ftp.dst_port));
+  sprintf(msg, "ip : %s:%u", ipv6_to_str(reply_template.ipv6.destination.b), NTOHS(reply_template.ftp.dst_port));
   print(8, 0, msg);
 }
 
@@ -331,8 +390,6 @@ void update_counters(void)
 {
   static const uint8_t col = 15;
 
-  sprintf(msg, "%lu", chks_err_cnt);
-  print(10, col, msg);
   sprintf(msg, "%lu", udp_chks_err_cnt);
   print(11, col, msg);
   sprintf(msg, "%lu", outdated_cnt);
@@ -388,6 +445,71 @@ void dump_bytes(uint8_t *data, uint8_t n, uint8_t screen_line)
   *msg_ptr = 0;
 
   print(screen_line, 0, msg);
+}
+
+const char *ipv6_to_str(const uint8_t *addr)
+{
+  uint8_t i, curpos, curlen, run;
+  int8_t maxpos, maxlen;
+  char hextet[5];
+  static char result[40];
+
+  result[0] = '\0';
+  maxpos = -1;
+  maxlen = -1;
+  run = 0;
+
+  for (i = 0; i < 16; i += 2) {
+    if (addr[i] == 0 && addr[i+1] == 0) {
+      if (!run) {
+        curpos = i;
+        curlen = 0;
+        run = 1;
+      }
+      curlen += 2;
+    }
+    else {
+      if (run) {
+        if (curlen > maxlen) {
+          maxlen = curlen;
+          maxpos = curpos;
+        }
+        run = 0;
+      }
+    }
+  }
+
+  if (run) {
+    if (curlen > maxlen) {
+      maxlen = curlen;
+      maxpos = curpos;
+    }
+  }
+
+  if (maxlen == 16) {
+    return "::";
+  }
+
+  for (i = 0; i < 16; i += 2){
+    sprintf(hextet, "%x", (((uint16_t)addr[i] << 8) + addr[i+1]));
+    if (i == maxpos) {
+      if (i == 0) {
+        strcat(result, "::");
+      }
+      else {
+        strcat(result, ":");
+      }
+      i += maxlen - 2;
+    }
+    else {
+      strcat(result, hextet);
+      if (i < 14) {
+        strcat(result, ":");
+      }
+    }
+  }
+
+  return result;
 }
 
 
@@ -472,34 +594,13 @@ void add_checksum(uint16_t v)
   }
 }
 
-uint8_t check_ip_checksum(uint8_t *hdr)
-{
-  static chks_t ref_chks;
-
-  chks.u = ip_checksum_recv();
-  //chks.u = 0;
-  //checksum(hdr, 20);
-  if (chks.u == 0xffffU) {
-    return 1;
-  }
-
-  ref_chks.b[0] = hdr[10];
-  ref_chks.b[1] = hdr[11];
-  sprintf(msg, "ip chks    rx: %04x  act: %04x", ref_chks.u, chks.u);
-  print(20, 0, msg);
-  return 0;
-}
-
 /**
  * Checks the UDP checksum of the received packet (recv_buf).
  * @return 1 if the checksum is correct, 0 otherwise.
  */
 uint8_t check_udp_checksum()
 {
-  static uint16_t udp_length;
   static uint16_t ref_chks;
-
-  udp_length = NTOHS(recv_buf.ftp.udp_length);
 
   if (udp_length > 1400)
   {
@@ -510,16 +611,16 @@ uint8_t check_udp_checksum()
   {
     stop_fatal("udp length too small");
   }
-  *(uint16_t *)0xC80A = recv_buf.ftp.udp_length;
-  //lcopy(ETH_RX_BUFFER + 2 + ETH_HDR_SIZE + IPV4_HDR_SIZE, 0xC80CU, udp_length);
-  dma_copy_eth_io((void *)(0xD800U + 2 + ETH_HDR_SIZE + IPV4_HDR_SIZE), (void *)(0xC80CU), udp_length);
+  dma_copy_eth_io((void *)(0xD800U + 2 + ETH_HDR_SIZE + IPV6_HDR_SIZE), (void *)(0xC800U), udp_length);
   
-  ref_chks = *(uint16_t *)0xC812;
-  *(uint16_t *)0xC812 = 0; // reset checksum field
+  ref_chks = *(uint16_t *)0xC806;
+  *(uint16_t *)0xC806 = 0; // reset checksum field
 
-  chks.u = checksum_fast(udp_length + 12);
+  chks_pseudo_hdr = chks_pseudo_hdr_udp.u;
+  chks_pseudo_length = recv_buf.ftp.udp_length;
+  chks.u = checksum_fast(udp_length);
   //chks.u = 0;
-  //checksum((uint8_t *)0xC800U, udp_length + 12);
+  //checksum((uint8_t *)0xC800U, udp_length);
 
   if (chks.u == 0) {
     chks.u = 0xffffU;
@@ -527,10 +628,21 @@ uint8_t check_udp_checksum()
   if (chks.u == ref_chks) {
     return 1;
   }
-  sprintf(msg, "udp chks   rx: %04x act: %04x len: %04x", ref_chks, chks.u, udp_length + 12);
+  sprintf(msg, "udp chks   rx: %04x act: %04x len: %04x", ref_chks, chks.u, udp_length + 40);
   print(23, 0, msg);
   
   return 0;
+}
+
+void calculate_send_buf_udp_checksum(uint16_t size)
+{
+  chks_pseudo_hdr = chks_pseudo_hdr_udp.u;
+  chks_pseudo_length = send_buf.ftp.udp_length;
+  // checksum field should alredy be zero (it was set to zero in the reply_template)
+  send_buf.ftp.checksum_udp = checksum_fast(size);
+  if (send_buf.ftp.checksum_udp == 0) {
+    send_buf.ftp.checksum_udp = 0xffff;
+  }
 }
 
 void wait_for_sd_ready()
@@ -558,8 +670,9 @@ void init_new_write_batch()
   current_batch_counter = recv_buf.write_sector.batch_counter;
   // printf("batch #%d size %d sector %ld\n", current_batch_counter, batch_left, sector_number_write);
 
-  reply_template.ftp.ip_length = HTONS(20 + 8 + 14);
-  reply_template.ftp.udp_length = HTONS(8 + 14);
+  reply_template.ipv6.ip_length = HTONS(UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB));
+  reply_template.ipv6.next_header = 17; // UDP
+  reply_template.ftp.udp_length = reply_template.ipv6.ip_length;
   reply_template.ftp.opcode = 2;
   reply_template.write_sector.num_sectors_minus_one = write_batch_max_id;
   reply_template.write_sector.start_sector_number = sector_number_write;
@@ -657,7 +770,7 @@ void handle_batch_write()
     // print(2, 0, "duplicate packet");
     // verify received data matches cache
     lcopy(cache_position, 0xC000U, 512);
-    if (cmp_c000_c800()) {
+    if (cmp_c000_c816()) {
       stop_fatal("duplicate packet with different data");
     }
     ++dup_cnt;
@@ -666,30 +779,11 @@ void handle_batch_write()
   }
 
   slot_ids_received[id] = 1;
-  //lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB), cache_position, 512);
-  lcopy(0xC800UL + IPV4_PSEUDO_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB), cache_position, 512);
+  //lcopy(ETH_RX_BUFFER + 2 + ETH_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB), cache_position, 512);
+  lcopy(0xC800UL + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB), cache_position, 512);
   --batch_left;
 
   multi_sector_write_next();
-}
-
-void check_rx_buffer_integrity()
-{
-  static const uint16_t total_size = UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB) + 512;
-  static uint16_t i;
-
-  lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + IPV4_HDR_SIZE, 
-        0xC00CUL, 
-        total_size);
-  POKE(0xC012, 0);
-  POKE(0xC013, 0);
-  for (i = 0; i < total_size; ++i) {
-    if (PEEK(0xC00C + i) != PEEK(0xC80C + i)) {
-      sprintf(msg, "rx buffer corrupted at %d", i);
-      stop_fatal(msg);
-    }
-  }
-
 }
 
 void wait_rasters(uint16_t num_rasters)
@@ -706,9 +800,6 @@ void wait_rasters(uint16_t num_rasters)
 
 void verify_sector()
 {
-  static uint16_t i;
-  uint16_t comp_data = 0xC800UL + IPV4_PSEUDO_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB);
-
   wait_rasters(2);
   wait_for_sd_ready();
   *(uint32_t *)0xD681 = recv_buf.write_sector.start_sector_number;
@@ -717,11 +808,8 @@ void verify_sector()
   wait_for_sd_ready();
 
   lcopy(0xffd6e00UL, 0xC000UL, 512);
-
-  for (i = 0; i < 512; ++i) {
-    if (PEEK(0xC000 + i) != PEEK(comp_data + i)) {
-      stop_fatal("sector verification failed");
-    }
+  if (cmp_c000_c816()) {
+    stop_fatal("sector verification failed");
   }
 }
 
@@ -743,105 +831,99 @@ void get_new_job()
     POKE(0xD6E1, 0x01);
     POKE(0xD6E1, 0x03);
 
-    lcopy(ETH_RX_BUFFER + 2L, (uint32_t)&recv_buf.eth, sizeof(ETH_HEADER));
+    // We read the header and job data. Since we don't know the exact job, yet, copy the worst case
+    // (largest job) which is the write sector command.
+    lcopy(ETH_RX_BUFFER + 2L, (uint32_t)&recv_buf, ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB));
+
     /*
      * Check destination address.
      */
 
-    if ((recv_buf.eth.destination.b[0] & recv_buf.eth.destination.b[1] & recv_buf.eth.destination.b[2]
-            & recv_buf.eth.destination.b[3] & recv_buf.eth.destination.b[4] & recv_buf.eth.destination.b[5])
-        != 0xff) {
-      /*
-       * Not broadcast, check if it matches the local address.
-       */
-      if (memcmp(&recv_buf.eth.destination, &mac_local, sizeof(EUI48)))
-        continue;
+    if (memcmp(&recv_buf.eth.destination, &mac_local, sizeof(EUI48))) {
+      // Not unicast for us, check if multicast for NDP
+      if (recv_buf.eth.destination.b[0] != 0x33 || 
+          recv_buf.eth.destination.b[1] != 0x33 || 
+          recv_buf.eth.destination.b[2] != 0xff ||
+          recv_buf.eth.destination.b[3] != mac_local.b[3] || 
+          recv_buf.eth.destination.b[4] != mac_local.b[4] ||
+          recv_buf.eth.destination.b[5] != mac_local.b[5]) {
+        // Not unicast nor NDP multicast, check if broadcast
+        if ((recv_buf.eth.destination.b[0] & recv_buf.eth.destination.b[1] & recv_buf.eth.destination.b[2]
+              & recv_buf.eth.destination.b[3] & recv_buf.eth.destination.b[4] & recv_buf.eth.destination.b[5])
+            != 0xff) {
+          continue;
+        }
+      }
     }
 
-    if (recv_buf.eth.type == 0x0608) { // big-endian for 0x0806
+    if (recv_buf.eth.type != 0xdd86) { // big-endian for 0x86dd
+      continue;
+    }
+
+    if (recv_buf.ipv6.next_header == 58 &&  // ICMPv6
+        recv_buf.nd.icmpv6_type == 135 &&   // NDP Neighbor Solicitation
+        HTONS(recv_buf.ipv6.ip_length) >= sizeof(NEIGHBOR_DISCOVERY)) {   
       /*
-       * ARP packet.
+       * ND solicitation packet.
        */
       lcopy((uint32_t)&recv_buf.eth.source, (uint32_t)&send_buf.eth.destination, sizeof(EUI48));
       lcopy((uint32_t)&mac_local, (uint32_t)&send_buf.eth.source, sizeof(EUI48));
-      send_buf.eth.type = 0x0608;
-      lcopy(ETH_RX_BUFFER + 2 + 14, (uint32_t)&send_buf.arp, sizeof(ARP_HDR));
-      if (send_buf.arp.opcode != ARP_REQUEST) {
+      send_buf.eth.type = 0xdd86;
+      lcopy(ETH_RX_BUFFER + 2 + ETH_HDR_SIZE, (uint32_t)&send_buf.ipv6, IPV6_HDR_SIZE + sizeof(NEIGHBOR_DISCOVERY));
+      if (memcmp(send_buf.nd.target_address.b, ip_local.b, 16)) {
         continue;
       }
-      if (ip_addr_set) {
-        if (send_buf.arp.dest_ip.d != reply_template.ftp.source.d) {
-          continue;
-        }
+      // prepare IPv6 header
+      send_buf.ipv6.ip_length = HTONS(sizeof(NEIGHBOR_DISCOVERY));
+      lcopy((uint32_t)&send_buf.ipv6.source, (uint32_t)&send_buf.ipv6.destination, sizeof(IPV6));
+      lcopy((uint32_t)&ip_local, (uint32_t)&send_buf.ipv6.source, sizeof(IPV6));
+      // prepare ICMPv6 header
+      send_buf.nd.icmpv6_type = 136; // NDP Neighbor Advertisement
+      send_buf.nd.checksum = 0; // clear checksum field
+      send_buf.nd.flags = HTONS(0x6000); // Solicited flag
+      // option type 2: target link layer address
+      send_buf.nd.link_layer_type = 2; // Target link layer address
+      send_buf.nd.link_layer_length = 1; // 6 bytes
+      lcopy((uint32_t)&mac_local, (uint32_t)&send_buf.nd.link_layer_address, sizeof(EUI48));
+
+      // calculate ICMPv6 checksum
+      init_pseudo_checksum_ndp();
+      chks.u = 0;
+      chks_pseudo_hdr = chks_pseudo_hdr_ndp.u;
+      chks_pseudo_length = HTONS(32);
+      send_buf.nd.checksum = checksum_fast(sizeof(NEIGHBOR_DISCOVERY));
+      if (send_buf.nd.checksum == 0) {
+        send_buf.nd.checksum = 0xffff;
       }
-      else {
-        if (send_buf.arp.dest_ip.b[3] != 65) {
-          continue;
-        }
-        reply_template.ftp.source.d = send_buf.arp.dest_ip.d;
-      }
-      lcopy((uint32_t)&send_buf.arp.orig_hw, (uint32_t)&send_buf.arp.dest_hw, sizeof(EUI48));
-      lcopy((uint32_t)&mac_local, (uint32_t)&send_buf.arp.orig_hw, sizeof(EUI48));
-      send_buf.arp.dest_ip.d = send_buf.arp.orig_ip.d;
-      send_buf.arp.orig_ip.d = reply_template.ftp.source.d;
-      send_buf.arp.opcode = ARP_REPLY;
-      send_buf_size = sizeof(ETH_HEADER) + sizeof(ARP_HDR);
+      send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + sizeof(NEIGHBOR_DISCOVERY);
       return;
     }
-    else if (recv_buf.eth.type == 0x0008) { // big-endian for 0x0800
+    else if (recv_buf.ipv6.next_header == 17) { // udp
       /*
-       * IP packet.
+       * UDP packet.
        */
-      uint16_t udp_length;
       uint16_t num_bytes;
 
-      // We read the header and job data. Since we don't know the exact job, yet, copy the worst case
-      // (largest job) which is the write sector command.
-      lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER), (uint32_t)&recv_buf.ftp.ver_length,
-          sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
+      if (memcmp(recv_buf.ipv6.destination.b, ip_local.b, 16)) {
+        continue;
+      }
+      
+      if (NTOHS(recv_buf.ftp.dst_port) != 4510) {
+        continue;
+      }
 
-      if (ip_addr_set == 0) {
-        if (recv_buf.ftp.destination.d != ip_local.d) {
-          continue;
-        }
+      if (reply_template.ftp.dst_port == 0) {
+        // dst_port is unknown, so we have don't have an authenticated connection yet
+        lcopy((uint32_t)&recv_buf.eth.source, (uint32_t)&reply_template.eth.destination, sizeof(EUI48));
+        lcopy((uint32_t)&recv_buf.ipv6.source, (uint32_t)&reply_template.ipv6.destination, sizeof(IPV6));
+        init_pseudo_checksum_udp();
       }
       else {
-        if (recv_buf.ftp.destination.d != reply_template.ftp.source.d
-            || recv_buf.ftp.source.d != reply_template.ftp.destination.d) {
+        // dst_port is known, so we have an authenticated connection
+        // reject packets from other clients
+        if (memcmp(recv_buf.ipv6.source.b, reply_template.ipv6.destination.b, 16)) {
           continue;
         }
-      }
-
-      if (recv_buf.ftp.protocol != 17 /*udp*/ || NTOHS(recv_buf.ftp.dst_port) != 4510) {
-        continue;
-      }
-
-      if (!check_ip_checksum((uint8_t *)&recv_buf.ftp)) {
-        uint8_t *data_ptr = (uint8_t *)&recv_buf.ftp;
-        print(17, 0, "wrong ip checksum detected");
-        dump_bytes(data_ptr, 10, 18);
-        dump_bytes(data_ptr + 10, 10, 19);
-
-        ++chks_err_cnt;
-        update_counters();
-        ++rx_invalid_cnt;
-        update_rx_tx_counters();
-        continue;
-      }
-
-      if (ip_addr_set == 0) {
-        lcopy((uint32_t)&recv_buf.eth.source, (uint32_t)&reply_template.eth.destination, sizeof(EUI48));
-        reply_template.ftp.source.d = recv_buf.ftp.destination.d;
-        reply_template.ftp.destination.d = recv_buf.ftp.source.d;
-
-        // init pseudo header bytes in udp recv checksum buffer
-        *(uint32_t *)0xC800 = recv_buf.ftp.source.d;
-        *(uint32_t *)0xC804 = recv_buf.ftp.destination.d;
-        *(uint8_t *)0xC808 = 0;
-        *(uint8_t *)0xC809 = recv_buf.ftp.protocol;
-
-        ip_addr_set = 1;
-        print_ip_information();
       }
 
       if (recv_buf.ftp.ftp_magic != 0x7165726d /* 'mreq' big endian*/) {
@@ -909,33 +991,28 @@ void get_new_job()
           }
           current_batch_counter = recv_buf.write_sector.batch_counter;
 
+          wait_for_sd_ready();
+          lcopy(ETH_RX_BUFFER + 2 + ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB), 0xffd6e00, 512);
+          recv_buf.write_sector.start_sector_number += recv_buf.write_sector.slot_index;
+          *(uint32_t *)0xD681 = recv_buf.write_sector.start_sector_number;
+          POKE(0xD680, 0x57); // Open write gate
+          POKE(0xD680, 0x03); // Single sector write command
+          verify_sector();
+
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
-              sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
-          send_buf.ftp.id = ip_id;
-          send_buf.ftp.ip_length = HTONS(20 + 8 + 14);
-          send_buf.ftp.udp_length = HTONS(8 + 14);
+              ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB));
+          send_buf.ipv6.ip_length = HTONS(UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB));
+          send_buf.ftp.udp_length = send_buf.ipv6.ip_length;
           send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
           send_buf.ftp.opcode = 2;
           send_buf.write_sector.batch_counter = recv_buf.write_sector.batch_counter;
           send_buf.write_sector.num_sectors_minus_one = 0;
           send_buf.write_sector.slot_index = 0;
           send_buf.write_sector.start_sector_number = recv_buf.write_sector.start_sector_number;
-          chks.u = 0;
-          checksum((uint8_t *)&send_buf.ftp, 20);
-          send_buf.ftp.checksum_ip = ~chks.u;
 
-          ++ip_id;
-          send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB);
+          calculate_send_buf_udp_checksum(UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB));
 
-          //check_rx_buffer_integrity();
-          wait_for_sd_ready();
-          //lcopy(ETH_RX_BUFFER + 2 + sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB), 0xffd6e00, 512);
-          lcopy(0xC800UL + IPV4_PSEUDO_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB), 0xffd6e00, 512);
-          recv_buf.write_sector.start_sector_number += recv_buf.write_sector.slot_index;
-          *(uint32_t *)0xD681 = recv_buf.write_sector.start_sector_number;
-          POKE(0xD680, 0x57); // Open write gate
-          POKE(0xD680, 0x03); // Single sector write command
-          verify_sector();
+          send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB);
         }
         else {
           /*
@@ -962,17 +1039,14 @@ void get_new_job()
           }
 
           lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
-              sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB));
-          send_buf.ftp.id = ip_id;
+              ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB));
           send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
           send_buf.write_sector.batch_counter = recv_buf.write_sector.batch_counter;
           send_buf.write_sector.slot_index = recv_buf.write_sector.slot_index;
-          chks.u = 0;
-          checksum((uint8_t *)&send_buf.ftp, 20);
-          send_buf.ftp.checksum_ip = ~chks.u;
+          
+          calculate_send_buf_udp_checksum(UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB));
 
-          ++ip_id;
-          send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(WRITE_SECTOR_JOB);
+          send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(WRITE_SECTOR_JOB);
         }
         return;
 
@@ -996,8 +1070,8 @@ void get_new_job()
 
         ++rx_valid_cnt;
 
-        reply_template.ftp.ip_length = HTONS(20 + 8 + 13 + 512);
-        reply_template.ftp.udp_length = HTONS(8 + 13 + 512);
+        reply_template.ipv6.ip_length = HTONS(UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_SECTOR_JOB) + 512);
+        reply_template.ftp.udp_length = reply_template.ipv6.ip_length;
         reply_template.ftp.opcode = 4;
         reply_template.read_sector.unused_1 = 0;
         reply_template.read_sector.num_sectors_minus_one = 0;
@@ -1030,22 +1104,19 @@ void get_new_job()
         }
         ++rx_valid_cnt;
         lcopy(
-            (uint32_t)&reply_template, (uint32_t)&send_buf, sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB));
+            (uint32_t)&reply_template, (uint32_t)&send_buf, ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_MEMORY_JOB));
         lcopy(recv_buf.read_memory.address,
-            (uint32_t)&send_buf.b[sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB)], num_bytes);
-        send_buf.ftp.id = ip_id;
-        send_buf.ftp.ip_length = HTONS(20 + 8 + 12 + num_bytes);
-        send_buf.ftp.udp_length = HTONS(8 + 12 + num_bytes);
+            (uint32_t)&send_buf.b[ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_MEMORY_JOB)], num_bytes);
+        send_buf.ipv6.ip_length = HTONS(UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_MEMORY_JOB) + num_bytes);
+        send_buf.ftp.udp_length = send_buf.ipv6.ip_length;
         send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
         send_buf.ftp.opcode = 0x11;
         send_buf.read_memory.num_bytes_minus_one = recv_buf.read_memory.num_bytes_minus_one;
         send_buf.read_memory.address = recv_buf.read_memory.address;
-        chks.u = 0;
-        checksum((uint8_t *)&send_buf.ftp, 20);
-        send_buf.ftp.checksum_ip = ~chks.u;
+        
+        calculate_send_buf_udp_checksum(UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_MEMORY_JOB) + num_bytes);
 
-        ++ip_id;
-        send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_MEMORY_JOB) + num_bytes;
+        send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_MEMORY_JOB) + num_bytes;
 
         return;
 
@@ -1062,17 +1133,15 @@ void get_new_job()
         reply_template.ftp.dst_port = recv_buf.ftp.src_port;
         print_ip_information();
         lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
-              sizeof(ETH_HEADER) + sizeof(FTP_PKT)); // copy header incl. opcode
-        send_buf.ftp.id = ip_id;
+              ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE); // copies header incl. opcode (will patch it below)
         send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
-        send_buf.ftp.ip_length = HTONS(20 + 8 + 7);
-        send_buf.ftp.udp_length = HTONS(8 + 7);
+        send_buf.ipv6.ip_length = HTONS(UDP_HDR_SIZE + FTP_HDR_SIZE);
+        send_buf.ftp.udp_length = send_buf.ipv6.ip_length;
         send_buf.ftp.opcode = 0xfd;
-        chks.u = 0;
-        checksum((uint8_t *)&send_buf.ftp, 20);
-        send_buf.ftp.checksum_ip = ~chks.u;
+        
+        calculate_send_buf_udp_checksum(UDP_HDR_SIZE + FTP_HDR_SIZE);
 
-        send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT);
+        send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE;
 
         return;
 
@@ -1107,17 +1176,15 @@ void get_new_job()
          */
         quit_requested = 1;
         lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
-            sizeof(ETH_HEADER) + sizeof(FTP_PKT)); // copy header incl. opcode
-        send_buf.ftp.id = ip_id;
+            ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE); // copies header incl. opcode (will patch it below)
         send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
-        send_buf.ftp.ip_length = HTONS(20 + 8 + 7);
-        send_buf.ftp.udp_length = HTONS(8 + 7);
+        send_buf.ipv6.ip_length = HTONS(UDP_HDR_SIZE + FTP_HDR_SIZE);
+        send_buf.ftp.udp_length = send_buf.ipv6.ip_length;
         send_buf.ftp.opcode = 0xff;
-        chks.u = 0;
-        checksum((uint8_t *)&send_buf.ftp, 20);
-        send_buf.ftp.checksum_ip = ~chks.u;
 
-        send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT);
+        calculate_send_buf_udp_checksum(UDP_HDR_SIZE + FTP_HDR_SIZE);
+
+        send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE;
 
         return;
       }
@@ -1172,19 +1239,16 @@ void process()
 
   if (sector_buffered) {
     lcopy((uint32_t)&reply_template, (uint32_t)&send_buf,
-        sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_SECTOR_JOB)); // copy header incl. opcode
-    send_buf.ftp.id = ip_id;
+        ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_SECTOR_JOB)); // copy header incl. opcode
     send_buf.ftp.seq_num = seq_num;
     send_buf.read_sector.sector_number = sector_number_buf;
-    lcopy((uint32_t)&sector_buf, (uint32_t)&send_buf.b[sizeof(ETH_HEADER) + 41], 0x200);
-    chks.u = 0;
-    checksum((uint8_t *)&send_buf.ftp, 20);
-    send_buf.ftp.checksum_ip = ~chks.u;
+    lcopy((uint32_t)&sector_buf, (uint32_t)&send_buf.b[ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_SECTOR_JOB)], 0x200);
+    
+    calculate_send_buf_udp_checksum(UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_SECTOR_JOB) + 512);
 
-    ++ip_id;
     ++seq_num;
     sector_buffered = 0;
-    send_buf_size = sizeof(ETH_HEADER) + sizeof(FTP_PKT) + sizeof(READ_SECTOR_JOB) + 512;
+    send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_SECTOR_JOB) + 512;
   }
 
   if (sector_reading) {

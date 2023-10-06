@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <unistd.h>
+#include <libgen.h>
+#include <limits.h> // PATH_MAX
 
 #include <logging.h>
 
@@ -63,7 +65,8 @@ int jump_addr = 0;
 int use_binary = 0;
 int bin_load_addr = 0;
 int file_offset = 0;
-char *ip_address = NULL;
+char ip_address[40];
+char network_interface[256];
 char *filename = NULL;
 char *d81_image = NULL;
 char *rom_file = NULL;
@@ -182,7 +185,8 @@ void init_cmd_options(void)
   cmd_log_end = cmd_count;
   CMD_OPTION("log",         required_argument, 0,            '0', "level",  "Set log <level> to argument (0-5, critical, error, warning, notice, info, debug).");
 
-  CMD_OPTION("ip",          required_argument, 0,            'i', "ipaddr", "Set IPv4 address to be assigned to MEGA65 (eg. 192.168.1.2).");
+  CMD_OPTION("discover",    no_argument,       0,            'D',   "",     "Autodetect MEGA65 on local network, output IPv6 address and interface, and exit.");
+  CMD_OPTION("ip",          required_argument, 0,            'i', "ipaddr", "IPv6 address and interface (eg. fe80::12ff:fe34:56%eth0) of MEGA65. Autodetected if not specified.");
   CMD_OPTION("run",         no_argument,       0,            'r',   "",     "Automatically RUN programme after loading.");
   CMD_OPTION("rom",         required_argument, 0,            'R', "file",   "Upload and use ROM <file> instead of the default one on SD card (prgname is optional in this case).");
   CMD_OPTION("c64mode",     no_argument,       0,            '4',   "",     "Reset to C64 mode after transfer.");
@@ -196,58 +200,55 @@ void init_cmd_options(void)
   // clang-format on
 }
 
-int progress_print(int x, int y, char *msg)
-{
-  int ofs = y * 40 + x;
-  for (int i = 0; msg[i]; i++) {
-    if (msg[i] >= 'A' && msg[i] <= 'Z')
-      progress_screen[ofs] = msg[i] - 0x40;
-    else if (msg[i] >= 'a' && msg[i] <= 'z')
-      progress_screen[ofs] = msg[i] - 0x60;
-    else
-      progress_screen[ofs] = msg[i];
-    ofs++;
-    if (ofs > 999)
-      ofs = 999;
-  }
-  return 0;
+const char *absolute_program_path(const char *program_path) {
+    static char abs_path[PATH_MAX];
+    char *temp_path = strdup(program_path);
+    char *temp_path2 = strdup(program_path);
+
+    if (!temp_path || !temp_path2) {
+        perror("strdup");
+        free(temp_path);  // Free in case one succeeded
+        free(temp_path2);  // Free in case one succeeded
+        return NULL;
+    }
+
+    char *dir_path = dirname(temp_path);
+    char *base_name = basename(temp_path2);
+
+    char full_path[PATH_MAX];
+    snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, base_name);
+
+#ifdef WINDOWS
+    if (!_fullpath(abs_path, full_path, sizeof(abs_path))) {
+        perror("_fullpath");
+        free(temp_path);
+        free(temp_path2);
+        return NULL;
+    }
+#else
+    if (!realpath(full_path, abs_path)) {
+        perror("realpath");
+        free(temp_path);
+        free(temp_path2);
+        return NULL;
+    }
+#endif
+
+    free(temp_path);
+    free(temp_path2);
+    return abs_path;
 }
 
-int progress_line(int x, int y, int len)
+void discover_mega65(const char *progname)
 {
-  int ofs = y * 40 + x;
-  for (int i = 0; i < len; i++) {
-    progress_screen[ofs] = 67;
-    ofs++;
-    if (ofs > 999)
-      ofs = 999;
+  if (probe_mega65_ipv6_address(3000) != 0) {
+    log_error("Unable to discover MEGA65 on local network");
+    log_error("Please make sure the MEGA65 remote control is enabled via SHIFT+POUND.");
+    log_error("The power LED should be flashing green/yellow.");
+    log_error("If still having issues, please make sure your firewall is accepting UDP packets on port 4510 for application:\n\"%s\"", absolute_program_path(progname));
+    exit(-1);
   }
-  return 0;
-}
-
-void dump_bytes(char *msg, unsigned char *b, int len)
-{
-  fprintf(stderr, "%s:\n", msg);
-  for (int i = 0; i < len; i += 16) {
-    fprintf(stderr, "%04x:", i);
-    int max = 16;
-    if ((i + max) > len)
-      max = len = i;
-    for (int j = 0; j < max; j++) {
-      fprintf(stderr, " %02x", b[i + j]);
-    }
-    for (int j = max; j < 16; j++)
-      fprintf(stderr, "   ");
-    fprintf(stderr, "  ");
-    for (int j = 0; j < max; j++) {
-      if (b[i + j] >= 0x20 && b[i + j] < 0x7f)
-        fprintf(stderr, "%c", b[i + j]);
-      else
-        fprintf(stderr, "?");
-    }
-    fprintf(stderr, "\n");
-  }
-  return;
+  printf("MEGA65 found at %s%%%s\n", ethl_get_ip_address(), ethl_get_interface_name());
 }
 
 /**
@@ -260,7 +261,7 @@ void dump_bytes(char *msg, unsigned char *b, int len)
  * @param start_addr The address to start loading the file into memory.
  * @return Number of bytes loaded.
  */
-int load_file(int fd, int start_addr)
+int load_file(int fd, int start_addr, int timeout_ms)
 {
   unsigned char buffer[1024];
   int offset = 0;
@@ -270,7 +271,10 @@ int load_file(int fd, int start_addr)
   while ((bytes = read(fd, buffer, 1024)) != 0) {
     log_debug("Read %d bytes at offset %d", bytes, offset);
     offset += bytes;
-    send_mem(address, buffer, bytes);
+    if (send_mem(address, buffer, bytes, timeout_ms) < 0) {
+      log_error("Failed to send data to MEGA65");
+      return -1;
+    }
     address += bytes;
   }
 
@@ -280,6 +284,9 @@ int load_file(int fd, int start_addr)
 int main(int argc, char **argv)
 {
   int opt_index;
+  int result;
+  ip_address[0] = '\0';
+  network_interface[0] = '\0';
 
   init_cmd_options();
 
@@ -290,7 +297,7 @@ int main(int argc, char **argv)
     usage(-3, "No arguments given!");
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "i:rR:45hj:b:o:m:0:", cmd_opts, &opt_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "Di:rR:45hj:b:o:m:0:", cmd_opts, &opt_index)) != -1) {
     if (opt == 0) {
       if (opt_index >= cmd_log_start && opt_index < cmd_log_end)
         log_setup(stderr, loglevel);
@@ -307,8 +314,13 @@ int main(int argc, char **argv)
       break;
     case 'h':
       usage(0, NULL);
+    case 'D':
+      discover_mega65(argv[0]);
+      exit(0);
     case 'i':
-      ip_address = strdup(optarg);
+      if (parse_ipv6_and_interface(optarg, ip_address, network_interface) != 0) {
+        exit(-1);
+      }
       break;
     case 'j':
       do_jump = 1;
@@ -368,11 +380,6 @@ int main(int argc, char **argv)
   log_debug("parameter parsing done");
 
   log_note("%s %s", TOOLNAME, version_string);
-
-  if (ip_address == NULL) {
-    log_crit("broadcast ip address not specified, aborting.");
-    exit(1);
-  }
 
   // check reset options
   if (halt) {
@@ -470,7 +477,13 @@ int main(int argc, char **argv)
     d81_image[24] = '\0';
   }
 
-  if (etherload_init(ip_address, NULL)) {
+  if (ip_address[0] == '\0') {
+    result = etherload_init(NULL, NULL);
+  }
+  else {
+    result = etherload_init(ip_address, network_interface);
+  }
+  if (result < 0) {
     log_error("Unable to initialize ethernet communication");
     exit(-1);
   }
@@ -487,19 +500,30 @@ int main(int argc, char **argv)
   set_send_mem_rom_write_enable();
 
   if (filename) {
-    address = start_addr + load_file(fd, start_addr);
+    address = start_addr + load_file(fd, start_addr, 2000);
+    if (address < 0) {
+      log_error("Timeout while sending data to MEGA65");
+      etherload_finish();
+      close(fd);
+      exit(-1);
+    }
     close(fd);
     log_note("Sent %s to %s on port %d.", filename, ethl_get_ip_address(), ethl_get_port());
   }
 
   if (rom_file) {
     int fd = open(rom_file, open_flags);
-    load_file(fd, 0x20000);
+    if (load_file(fd, 0x20000, 2000) < 0) {
+      log_error("Timeout while sending data to MEGA65");
+      etherload_finish();
+      close(fd);
+      exit(-1);
+    }
     close(fd);
     log_note("Sent ROM %s to %s on port %d.", rom_file, ethl_get_ip_address(), ethl_get_port());
   }
 
-  wait_all_acks();
+  wait_all_acks(2000);
 
   log_info("Now telling MEGA65 that we are all done...");
 

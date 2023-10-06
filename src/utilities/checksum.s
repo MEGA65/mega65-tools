@@ -3,7 +3,7 @@
         ; Data size needs to be provided in AX (A lo, X hi)
         ; Result checksum is returned in AX (A lo, X hi)
 
-        .export _checksum_fast
+        .export _checksum_fast, _chks_pseudo_hdr, _chks_pseudo_length
 
         .include        "zeropage.inc"
         
@@ -119,6 +119,9 @@ next_page:
 done:
         neg
         neg
+        adc _chks_pseudo_hdr    ; add initial checksum
+        neg
+        neg
         sta result              ; chks lo = result[0] + result[2]
         adc result+2
         tay                     ; Y = chks lo
@@ -145,3 +148,7 @@ sizehi:
 result:
         .dword 0
 .endproc
+_chks_pseudo_hdr:
+        .word 0
+_chks_pseudo_length:
+        .word 0

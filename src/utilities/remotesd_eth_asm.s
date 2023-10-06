@@ -6,7 +6,7 @@
         ; compare 0xc000-0xc1ff with 0xc200-0xc3ff
         ; return 0 if equal, 1 if not equal
         .export _cmp_c000_c200
-        .export _cmp_c000_c800
+        .export _cmp_c000_c816
 
         .p02
         .include        "zeropage.inc"
@@ -85,12 +85,12 @@ not_equal:
         rts
 .endproc
 
-.proc  _cmp_c000_c800: near
+.proc  _cmp_c000_c816: near
         lda #$c0
         tab
         ldx #$00
 loop1:
-        lda $c822,x
+        lda $c816,x
         cmp $00,x
         bne not_equal
         iny
@@ -98,7 +98,7 @@ loop1:
         lda #$c1
         tab
 loop2:
-        lda $c922,x
+        lda $c916,x
         cmp $00,x
         bne not_equal
         iny

@@ -193,10 +193,10 @@ void determine_ethernet_window_size(void);
 int direct_sdcard_device = 0;
 FILE *fsdcard = NULL;
 
+#define ETHERNET_TIMEOUT 3000
 int ethernet_mode = 0;
 int ethernet_window_size = 3;
 static int sockfd;
-static struct sockaddr_in *servaddr;
 static uint8_t eth_packet_queue[1024][1500];
 static uint16_t eth_packet_len[1024];
 int eth_num_packets = 0;
@@ -232,7 +232,7 @@ int mode_report = 0;
 int serial_port_set = 0;
 char serial_port[1024] = "/dev/ttyUSB1";
 char device_name[1024] = "";
-char ip_address[16] = "";
+char ip_address_and_interface[256] = "";
 char *bitstream = NULL;
 char *username = NULL;
 char *password = NULL;
@@ -312,7 +312,8 @@ void usage(void)
   fprintf(stderr, "  -F - force startup, even if other program is detected\n");
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx)\n");
-  fprintf(stderr, "  -i - ip address to be used by MEGA65 (e.g. 192.168.1.2)\n");
+  fprintf(stderr, "  -e - Use Ethernet for communication. If -i is not provided, will perform auto-discovery of the MEGA65.\n");
+  fprintf(stderr, "  -i - IPv6 address and interface to connect to MEGA65 (e.g. fe80::d5ff:fe16:0%%en0). Automatically implies -e\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Almost always 2000000 is the correct answer).\n");
   fprintf(stderr, "  -b - Name of bitstream file to load.\n");
@@ -737,7 +738,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
   log_setup(stderr, LOG_NOTE);
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:i:0:nF")) != -1) {
+  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:ei:0:nF")) != -1) {
     switch (opt) {
     case '0':
       loglevel = log_parse_level(optarg);
@@ -759,8 +760,11 @@ int DIRTYMOCK(main)(int argc, char **argv)
       strcpy(device_name, optarg);
       direct_sdcard_device = 1;
       break;
+    case 'e':
+      ethernet_mode = 1;
+      break;
     case 'i':
-      strncpy(ip_address, optarg, sizeof(ip_address));
+      strncpy(ip_address_and_interface, optarg, sizeof(ip_address_and_interface));
       ethernet_mode = 1;
       break;
     case 's':
@@ -817,9 +821,23 @@ int DIRTYMOCK(main)(int argc, char **argv)
     int address = 0x0801;
     int block_size = 1024;
 
-    if (etherload_init(ip_address, NULL)) {
-      log_error("Unable to initialize ethernet communication");
-      exit(-1);
+    if (ip_address_and_interface[0] == '\0') {
+      if (etherload_init(NULL, NULL)) {
+        log_error("Unable to initialize ethernet communication");
+        exit(-1);
+      }
+    }
+    else {
+      char ip_address[40];
+      char if_name[256];
+      if (parse_ipv6_and_interface(ip_address_and_interface, ip_address, if_name)) {
+        log_error("Unable to parse IPv6 address and interface");
+        exit(-1);
+      }
+      if (etherload_init(ip_address, if_name)) {
+        log_error("Unable to initialize ethernet communication");
+        exit(-1);
+      }
     }
     ethl_setup_dmaload();
     // Try to get MEGA65 to trigger the ethernet remote control hypperrupt
@@ -831,12 +849,15 @@ int DIRTYMOCK(main)(int argc, char **argv)
     while (bytes > 0) {
       if (bytes < block_size)
         block_size = bytes;
-      send_mem(address, helper_ptr, block_size);
+      if (send_mem(address, helper_ptr, block_size, ETHERNET_TIMEOUT)) {
+        log_error("No response from MEGA65.");
+        exit(-1);
+      }
       helper_ptr += block_size;
       address += block_size;
       bytes -= block_size;
     }
-    wait_all_acks();
+    wait_all_acks(3000);
     log_info("Helper routine transfer complete");
 
     // patch in end address
@@ -852,7 +873,6 @@ int DIRTYMOCK(main)(int argc, char **argv)
     send_ethlet((uint8_t *)ethlet_all_done_basic2, ethlet_all_done_basic2_len);
 
     sockfd = ethl_get_socket();
-    servaddr = ethl_get_server_addr();
 
     // setup callbacks for job queue protocol
     ethl_setup_callbacks(&ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate,
@@ -1269,10 +1289,10 @@ void ethernet_login()
   memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
   // bytes [4] and [5] will be filled with packet seq numbers
   payload[6] = 0xfd;  // hello request
-  ethl_send_packet(payload, packet_size);
+  ethl_send_packet(payload, packet_size, ETHERNET_TIMEOUT);
 
   // wait for response to hello request
-  wait_all_acks();
+  wait_all_acks(ETHERNET_TIMEOUT);
 }
 
 uint8_t memory_read_buffer[256];
@@ -1490,7 +1510,7 @@ uint8_t write_batch_counter = 0;
 void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
 {
   // always clear queue before starting new write operations
-  wait_all_acks();
+  wait_all_acks(ETHERNET_TIMEOUT);
 
   const int packet_size = 14 + 512;
   int i;
@@ -1506,12 +1526,12 @@ void process_ethernet_write_sectors_job(uint8_t *job, int batch_size)
     int data_offset = job[1] + (job[2] << 8) + (job[3] << 16) + (job[4] << 24) - 0x50000;
     payload[9] = i & 0xff; // slot index
     bcopy(&write_data_buffer[data_offset], &payload[14], 512);
-    ethl_send_packet(payload, packet_size);
+    ethl_send_packet(payload, packet_size, ETHERNET_TIMEOUT);
     job += 9;
   }
 
   // make sure all packets are acknowledged before continuing after a write operatiopn
-  wait_all_acks();
+  wait_all_acks(ETHERNET_TIMEOUT);
 
   ++write_batch_counter;
 }
@@ -1542,7 +1562,7 @@ void process_ethernet_read_sectors_job(uint8_t *job)
   payload_unrolled[7] = 1;
   payload_unrolled[8] = 0;
   uint32_t sector_number = eth_batch_start_sector;
-  wait_ack_slots_available(eth_batch_size);
+  wait_ack_slots_available(eth_batch_size, ETHERNET_TIMEOUT);
   uint16_t seq_num = ethl_get_current_seq_num();
   for (i = 0; i < eth_batch_size; ++i) {
     payload_unrolled[9] = sector_number >> 0;
@@ -1551,7 +1571,7 @@ void process_ethernet_read_sectors_job(uint8_t *job)
     payload_unrolled[12] = sector_number >> 24;
     memcpy(eth_packet_queue[i], payload_unrolled, sizeof(payload_unrolled));
     ++sector_number;
-    ethl_schedule_ack(payload_unrolled, sizeof(payload_unrolled));
+    ethl_schedule_ack(payload_unrolled, sizeof(payload_unrolled), ETHERNET_TIMEOUT);
     eth_packet_len[i] = sizeof(payload_unrolled);
   }
 
@@ -1562,7 +1582,7 @@ void process_ethernet_read_sectors_job(uint8_t *job)
 
 int process_ethernet_mount_file_job(uint8_t *job)
 {
-  wait_all_acks();
+  wait_all_acks(ETHERNET_TIMEOUT);
   const int max_packet_size = 70;
   uint8_t payload[max_packet_size];
   memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
@@ -1578,8 +1598,8 @@ int process_ethernet_mount_file_job(uint8_t *job)
   }
   ++packet_size;
   mount_file_response = 0xff;
-  ethl_send_packet(payload, packet_size);
-  wait_all_acks();
+  ethl_send_packet(payload, packet_size, ETHERNET_TIMEOUT);
+  wait_all_acks(ETHERNET_TIMEOUT);
   switch (mount_file_response) {
     case 0:
       printf("Image mounted successfully\n");
@@ -1607,7 +1627,7 @@ void process_jobs_ethernet(void)
       // If we switch command (read, write, ...) make sure the one before is completely
       // done before we continue so we don't mix read/write commands
       log_debug("Switch of command type, waiting for acks\n");
-      wait_all_acks();
+      wait_all_acks(ETHERNET_TIMEOUT);
     }
     last_cmd = cur_cmd;
 
@@ -1673,7 +1693,7 @@ void process_jobs_ethernet(void)
     }
   }
 
-  wait_all_acks();
+  wait_all_acks(ETHERNET_TIMEOUT);
 }
 
 void queue_execute(void)
@@ -5146,7 +5166,7 @@ void petscify_text(char *text)
 unsigned char peek(unsigned long addr)
 {
   if (ethernet_mode) {
-    wait_all_acks();
+    wait_all_acks(ETHERNET_TIMEOUT);
     const int packet_size = 12;
     uint8_t payload[packet_size];
     memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
@@ -5159,8 +5179,8 @@ unsigned char peek(unsigned long addr)
     payload[11] = (addr >> 24) & 0xff;
     // reset receive buffer length so we can check whether it was set by a response packet
     memory_read_buffer_len = 0;
-    ethl_send_packet(payload, packet_size);
-    wait_all_acks();
+    ethl_send_packet(payload, packet_size, ETHERNET_TIMEOUT);
+    wait_all_acks(ETHERNET_TIMEOUT);
     if (memory_read_buffer_len != 1) {
       log_error("Error reading memory data via Ethernet");
       exit(-1);
@@ -5191,6 +5211,7 @@ void determine_ethernet_window_size(void)
   switch (hardware_model_id) {
   case 0x01:
   case 0x03:
+  case 0x04:
   case 0x21:
     ethernet_window_size = 28; // xc7a200t_0 models have more Ethernet receive buffers
     break;
@@ -5209,14 +5230,14 @@ void request_remotesd_version(void)
 void request_quit(void)
 {
   if (ethernet_mode) {
-    wait_all_acks();
+    wait_all_acks(ETHERNET_TIMEOUT);
     const int packet_size = 7;
     uint8_t payload[packet_size];
     memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
     // bytes [4] and [5] will be filled with packet seq numbers
     payload[6] = 0xff; // quit command
-    ethl_send_packet(payload, packet_size);
-    wait_all_acks();
+    ethl_send_packet(payload, packet_size, ETHERNET_TIMEOUT);
+    wait_all_acks(ETHERNET_TIMEOUT);
   }
   else {
     poke(0xc001, 0xff);
