@@ -205,6 +205,12 @@ int probe_mega65_ipv6_address(int timeout_ms)
 {
   long long start, now;
   int return_code = -1;
+  // Buffer to hold received data
+  char buffer[8192];
+  struct sockaddr_in6 listen_addr;
+  struct sockaddr_in6 src_addr;
+  socklen_t addr_len = sizeof(src_addr);
+  struct ipv6_mreq mreq;
 
 #ifdef WINDOWS
   if (!wsa_init_done) {
@@ -248,7 +254,6 @@ int probe_mega65_ipv6_address(int timeout_ms)
       goto leave_probe_mega65;
     }
 #endif
-    struct ipv6_mreq mreq;
     memset(&mreq, 0, sizeof(mreq));
     mreq.ipv6mr_interface = if_addrs[idx].sin6_scope_id;
     inet_pton(AF_INET6, "ff02::1", &mreq.ipv6mr_multiaddr);
@@ -256,7 +261,6 @@ int probe_mega65_ipv6_address(int timeout_ms)
         log_crit("setsockopt(IPV6_JOIN_GROUP) failed");
         goto leave_probe_mega65;
     }
-    struct sockaddr_in6 listen_addr;
     memset(&listen_addr, 0, sizeof(listen_addr));
     listen_addr.sin6_family = AF_INET6;
     listen_addr.sin6_port = htons(PORTNUM);
@@ -267,12 +271,6 @@ int probe_mega65_ipv6_address(int timeout_ms)
     }
   }
 
-  // Buffer to hold received data
-  char buffer[8192];
-
-  // sockaddr_in6 struct to hold the source address
-  struct sockaddr_in6 src_addr;
-  socklen_t addr_len = sizeof(src_addr);
 
   start = gettime_us();
   do {
