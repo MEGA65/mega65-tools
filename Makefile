@@ -441,6 +441,7 @@ $(SDCARD_DIR)/M65TESTS.D81:	$(CBMCONVERT) $(TESTS)
 
 $(BINDIR)/%.osx:	$(BINDIR)/%_intel.osx $(BINDIR)/%_arm.osx
 	lipo -create -output $@ $(BINDIR)/$*_intel.osx $(BINDIR)/$*_arm.osx
+	codesign --force --sign - $@
 
 ##
 ## TESTS
