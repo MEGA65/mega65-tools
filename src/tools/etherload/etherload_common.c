@@ -2,7 +2,6 @@
 #define _GNU_SOURCE
 #endif
 #include "etherload_common.h"
-#include "ethlet_set_ip_address_map.h"
 #include "ethlet_dma_load_map.h"
 
 #include <stdlib.h>
@@ -67,8 +66,6 @@ static is_duplicate_callback_t is_duplicate = NULL;
 static embed_packet_seq_callback_t embed_packet_seq = NULL;
 static timeout_handler_callback_t timeout_handler = NULL;
 
-extern unsigned char ethlet_set_ip_address[];
-extern int ethlet_set_ip_address_len;
 extern unsigned char ethlet_dma_load[];
 extern int ethlet_dma_load_len;
 
