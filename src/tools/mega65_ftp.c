@@ -845,12 +845,17 @@ int DIRTYMOCK(main)(int argc, char **argv)
       etherload_finish();
       exit(-1);
     }
+    if (ethl_ping(3000) < 0) {
+      log_error("No response from MEGA65");
+      etherload_finish();
+      exit(-1);
+    }
     log_info("Starting helper routine transfer...");
     while (bytes > 0) {
       if (bytes < block_size)
         block_size = bytes;
       if (send_mem(address, helper_ptr, block_size, ETHERNET_TIMEOUT)) {
-        log_error("No response from MEGA65.");
+        log_error("No response from MEGA65");
         exit(-1);
       }
       helper_ptr += block_size;
@@ -870,16 +875,16 @@ int DIRTYMOCK(main)(int argc, char **argv)
     // disable cartridge signature detection
     ethlet_all_done_basic2[ethlet_all_done_basic2_offset_enable_cart_signature] = 0;
 
-    send_ethlet((uint8_t *)ethlet_all_done_basic2, ethlet_all_done_basic2_len);
+    if (ethl_single_command((uint8_t *)ethlet_all_done_basic2, ethlet_all_done_basic2_len, 2000) < 0) {
+      log_error("No response from MEGA65");
+      exit(-1);
+    }
 
     sockfd = ethl_get_socket();
 
     // setup callbacks for job queue protocol
     ethl_setup_callbacks(&ethernet_get_packet_seq, &ethernet_match_payloads, &ethernet_is_duplicate,
         &ethernet_embed_packet_seq, ethernet_timeout_handler);
-
-    // Give helper program time to initialize
-    usleep(700000);
 
     ethernet_login();
     log_info("Login successful");
