@@ -496,6 +496,8 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
+  usleep(300000);
+
   // allow overwriting of ROM area
   set_send_mem_rom_write_enable();
 
