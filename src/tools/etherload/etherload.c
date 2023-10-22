@@ -496,7 +496,13 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
-  usleep(300000);
+  // Send echo packet to MEGA65, will be re-sent until MEGA65 responds
+  // Once MEGA65 responds, we know ETHLOAD.M65 is running and ready to receive data
+  if (ethl_ping(3000) < 0) {
+    log_error("No response from MEGA65");
+    etherload_finish();
+    exit(-1);
+  }
 
   // allow overwriting of ROM area
   set_send_mem_rom_write_enable();

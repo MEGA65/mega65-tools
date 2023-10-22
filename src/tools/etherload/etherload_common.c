@@ -3,6 +3,7 @@
 #endif
 #include "etherload_common.h"
 #include "ethlet_dma_load_map.h"
+#include "ethlet_echo_map.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -68,6 +69,8 @@ static timeout_handler_callback_t timeout_handler = NULL;
 
 extern unsigned char ethlet_dma_load[];
 extern int ethlet_dma_load_len;
+extern unsigned char ethlet_echo[];
+extern int ethlet_echo_len;
 
 static int dma_load_rom_write_enable = 0;
 
@@ -623,6 +626,47 @@ int wait_all_acks(int timeout_ms)
 int send_ethlet(const uint8_t data[], const int bytes)
 {
   return sendto(sockfd, (char *)data, bytes, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
+}
+
+int echo_get_packet_seq(uint8_t *payload, int len)
+{
+  if (len != ethlet_echo_len) {
+    return -1;
+  }
+  return payload[ethlet_echo_offset_seq_num] + (payload[ethlet_echo_offset_seq_num + 1] << 8);
+}
+
+int echo_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len)
+{
+  if (rx_len != ethlet_echo_len || tx_len != ethlet_echo_len) {
+    return 0;
+  }
+  return 1;
+}
+
+int ethl_ping(int timeout_ms)
+{
+  // Make sure no other packets are left in the queue
+  wait_all_acks(timeout_ms);
+
+  // Swap out the callbacks to use the echo ones
+  get_packet_seq_callback_t orig_get_packet_seq = get_packet_seq;
+  match_payloads_callback_t orig_match_payloads = match_payloads;
+  get_packet_seq = echo_get_packet_seq;
+  match_payloads = echo_match_payloads;
+
+  int result = ethl_send_packet(ethlet_echo, ethlet_echo_len, timeout_ms);
+  if (result < 0) {
+    log_debug("Timeout waiting for ping response");
+    return -1;
+  }
+  result = wait_all_acks(timeout_ms);
+
+  // Swap back the callbacks
+  get_packet_seq = orig_get_packet_seq;
+  match_payloads = orig_match_payloads;
+
+  return result;
 }
 
 long dmaload_parse_load_addr(uint8_t *payload)
