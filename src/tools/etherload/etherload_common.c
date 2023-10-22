@@ -628,45 +628,63 @@ int send_ethlet(const uint8_t data[], const int bytes)
   return sendto(sockfd, (char *)data, bytes, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 }
 
-int echo_get_packet_seq(uint8_t *payload, int len)
+int singlecmd_get_packet_seq(uint8_t *payload, int len)
 {
-  if (len != ethlet_echo_len) {
+  if (len != 1024) {
     return -1;
   }
-  return payload[ethlet_echo_offset_seq_num] + (payload[ethlet_echo_offset_seq_num + 1] << 8);
+  return payload[1022] + (payload[1023] << 8);
 }
 
-int echo_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len)
+int singlecmd_embed_packet_seq(uint8_t *payload, int len, int seq_num)
 {
-  if (rx_len != ethlet_echo_len || tx_len != ethlet_echo_len) {
+  if (len != 1024) {
+    return 0;
+  }
+  payload[1022] = seq_num;
+  payload[1023] = seq_num >> 8;
+  return 1;
+}
+
+int singlecmd_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload, int tx_len)
+{
+  if (rx_len != 1024 || tx_len != 1024) {
     return 0;
   }
   return 1;
 }
 
-int ethl_ping(int timeout_ms)
+int ethl_single_command(uint8_t *payload, int len, int timeout_ms)
 {
   // Make sure no other packets are left in the queue
   wait_all_acks(timeout_ms);
 
   // Swap out the callbacks to use the echo ones
+  embed_packet_seq_callback_t orig_embed_packet_seq = embed_packet_seq;
   get_packet_seq_callback_t orig_get_packet_seq = get_packet_seq;
   match_payloads_callback_t orig_match_payloads = match_payloads;
-  get_packet_seq = echo_get_packet_seq;
-  match_payloads = echo_match_payloads;
+  embed_packet_seq = singlecmd_embed_packet_seq;
+  get_packet_seq = singlecmd_get_packet_seq;
+  match_payloads = singlecmd_match_payloads;
 
-  int result = ethl_send_packet(ethlet_echo, ethlet_echo_len, timeout_ms);
+  int result = ethl_send_packet(payload, len, timeout_ms);
   if (result < 0) {
-    log_debug("Timeout waiting for ping response");
+    log_debug("Timeout waiting for command response");
     return -1;
   }
   result = wait_all_acks(timeout_ms);
 
   // Swap back the callbacks
+  embed_packet_seq = orig_embed_packet_seq;
   get_packet_seq = orig_get_packet_seq;
   match_payloads = orig_match_payloads;
 
   return result;
+}
+
+int ethl_ping(int timeout_ms)
+{
+  return ethl_single_command(ethlet_echo, ethlet_echo_len, timeout_ms);
 }
 
 long dmaload_parse_load_addr(uint8_t *payload)

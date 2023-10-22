@@ -7,7 +7,8 @@
 	; Ethernet header: 14 bytes
 	; IPv6 header:     40 bytes
 	; UDP header:       8 bytes
-	.org $6800 + 2 + 14 + 40 + 8
+	.alias start_address $6800 + 2 + 14 + 40 + 8
+	.org start_address
 
 	.alias tmpbuffer $334
 
@@ -33,6 +34,96 @@ entry:
 	sta $d02f
 	lda #$53
 	sta $d02f
+
+	; Wait for TX ready
+*
+	lda $d6e1
+	and #$10
+	beq -
+
+	sta $d707 ; trigger in-line DMA
+	; Use chained DMA to copy packet to TX buffer, and then send it
+	; so that we can get what will effectively be an ACK to each
+	; packet received by the MEGA65.
+	.byte $80, $ff
+	.byte $81, $ff
+	.byte $00      ; DMA end of option list
+	.byte $04      ; DMA copy, chained
+	.word $043e    ; DMA byte count 
+	.word $e802    ; DMA source address (bottom 16 bits) 
+	.byte $8d      ; DMA source bank and flags ($8x = I/O enabled)
+	.word $e800    ; DMA destination address (bottom 16 bits)
+	.byte $8d      ; DMA destination bank and flags
+	.byte $00      ; DMA sub command
+	.word $0000    ; DMA modulo (ignored)
+
+	; Use DMA to swap MAC addresses
+	.byte $00      ; DMA end of option list
+	.byte $04      ; DMA copy, chained
+	.word $0006    ; DMA byte count 
+	.word $e808    ; DMA source address (bottom 16 bits) 
+	.byte $8d      ; DMA source bank and flags ($8x = I/O enabled)
+	.word $e800    ; DMA destination address (bottom 16 bits)
+	.byte $8d      ; DMA destination bank and flags
+	.byte $00      ; DMA sub command
+	.word $0000    ; DMA modulo (ignored)
+
+	.byte $00      ; DMA end of option list
+	.byte $00      ; DMA copy, end of chain
+	.word $0006    ; DMA byte count 
+	.word $36e9    ; DMA source address (bottom 16 bits), ffd36e9 = MACADDRx registers
+	.byte $8d      ; DMA source bank and flags ($8x = I/O enabled)
+	.word $e806    ; DMA destination address (bottom 16 bits)
+	.byte $8d      ; DMA destination bank and flags
+	.byte $00      ; DMA sub command
+	.word $0000    ; DMA modulo (ignored)
+
+	; Code resumes after DMA list here
+
+	; basepage = $68xx, so we can use basepage addressing for reading/writing the ethernet buffer
+	lda #$68
+	tab
+
+	; Reverse port numbers
+	; Note that reading is accessing rx buffer (starts at 6802), while writing
+	; accesses the tx buffer (starts at 6800).
+	lda $38
+	sta $38
+	lda $39
+	sta $39
+
+	lda $3a
+	sta $36
+	lda $3b
+	sta $37
+
+	; Set packet len
+	lda #$3e
+	sta $d6e2
+	lda #$04
+	sta $d6e3
+
+	; swap src/dst ip addresses (no need to recalc ip chks as this change won't alter it)
+	; $1c - $1f = rx src ip
+	; $20 - $23 = rx dst ip
+	; $1a - $1d = tx src ip
+	; $1e - $21 = tx dst ip
+	ldx #$0f
+*
+	lda $18,x
+	sta $26,x
+	lda $28,x
+	sta $16,x
+	dex
+	bpl -	
+
+	; 5. TX packet
+	lda #$01
+	sta $d6e4
+
+	; restore basepage
+	lda #$00
+	tab
 
 	; Disable C65 ROM write protection via Hypervisor trap
 	lda #$02
@@ -449,3 +540,8 @@ main_exit:
 
 autostart_end:
 	.checkpc $400
+
+	.org data_end_address + autostart_end - autostart_exit + 3
+	.advance start_address + $3fe, $00
+seq_num:
+	.advance start_address + $400, $00

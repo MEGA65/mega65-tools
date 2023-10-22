@@ -7,7 +7,8 @@
 	; Ethernet header: 14 bytes
 	; IPv6 header:     40 bytes
 	; UDP header:       8 bytes
-	.org $6800 + 2 + 14 + 40 + 8
+	.alias start_address $6800 + 2 + 14 + 40 + 8
+	.org start_address
 
 entry:
 	; Routine echoing the received data back to the sender
@@ -39,7 +40,7 @@ entry:
 	.byte $81, $ff
 	.byte $00      ; DMA end of option list
 	.byte $04      ; DMA copy, chained
-	.word $00fe    ; DMA byte count 
+	.word $043e    ; DMA byte count 
 	.word $e802    ; DMA source address (bottom 16 bits) 
 	.byte $8d      ; DMA source bank and flags ($8x = I/O enabled)
 	.word $e800    ; DMA destination address (bottom 16 bits)
@@ -88,9 +89,9 @@ entry:
 	sta $37
 
 	; Set packet len
-	lda #$fe
+	lda #$3e
 	sta $d6e2
-	lda #$00
+	lda #$04
 	sta $d6e3
 
 	; swap src/dst ip addresses (no need to recalc ip chks as this change won't alter it)
@@ -118,6 +119,6 @@ entry:
 	; Return to packet wait loop
 	rts
 
-	.advance $68fe, $00
+	.advance start_address + $3fe, $00
 seq_num:
-	.advance $6900, $00
+	.advance start_address + $400, $00

@@ -362,16 +362,13 @@ int main(int argc, char **argv)
     }
   }
 
-  if (!argv[optind] && !rom_file) {
-    usage(-3, "Filename for upload not specified, aborting.");
+  if (do_run && !argv[optind]) {
+    usage(-3, "RUN requested but filename for upload not specified, aborting.");
   }
 
   if (argv[optind]) {
     filename = strdup(argv[optind]);
     check_file_access(filename, "programme");
-  }
-  else if(!rom_file) {
-    usage(-3, "Filename for upload not specified, aborting.");
   }
 
   if (argc - optind > 1)
@@ -535,9 +532,6 @@ int main(int argc, char **argv)
 
   log_info("Now telling MEGA65 that we are all done...");
 
-  // XXX - We don't check that this last packet has arrived, as it doesn't have an ACK mechanism (yet)
-  // XXX - We should make it ACK as well.
-
   if (reset64) {
     log_note("Reset to C64 mode");
     // patch in end address
@@ -565,8 +559,11 @@ int main(int argc, char **argv)
       ethlet_all_done_basic2[ethlet_all_done_basic2_offset_restore_prg] = 0;
     }
 
-
-    send_ethlet(ethlet_all_done_basic2, ethlet_all_done_basic2_len);
+    if (ethl_single_command(ethlet_all_done_basic2, ethlet_all_done_basic2_len, 2000)) {
+      log_error("Timeout while sending data to MEGA65");
+      etherload_finish();
+      exit(-1);
+    }
   }
   else if (reset65) {
     log_note("Reset to MEGA65 mode");
@@ -595,7 +592,11 @@ int main(int argc, char **argv)
       ethlet_all_done_basic65[ethlet_all_done_basic65_offset_restore_prg] = 0;
     }
 
-    send_ethlet(ethlet_all_done_basic65, ethlet_all_done_basic65_len);
+    if (ethl_single_command(ethlet_all_done_basic65, ethlet_all_done_basic65_len, 2000) < 0) {
+      log_error("Timeout while sending data to MEGA65");
+      etherload_finish();
+      exit(-1);
+    }
   }
   else if (do_jump) {
     // patch in jump address
@@ -608,7 +609,11 @@ int main(int argc, char **argv)
       memcpy(&ethlet_all_done_jump[ethlet_all_done_jump_offset_d81filename], d81_image, strlen(d81_image));
     }
 
-    send_ethlet(ethlet_all_done_jump, ethlet_all_done_jump_len);
+    if (ethl_single_command(ethlet_all_done_jump, ethlet_all_done_jump_len, 2000) < 0) {
+      log_error("Timeout while sending data to MEGA65");
+      etherload_finish();
+      exit(-1);
+    }
   }
 
   etherload_finish();
