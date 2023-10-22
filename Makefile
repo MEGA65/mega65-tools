@@ -789,7 +789,7 @@ MEGA65FTP_SRC=	$(TOOLDIR)/mega65_ftp.c \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic2.c
 
 MEGA65FTP_HDR=	$(TOOLDIR)/etherload/ethlet_dma_load_map.h \
-		$(TOOLDIR)/etherload/ethlet_echo.h \
+		$(TOOLDIR)/etherload/ethlet_echo_map.h \
 		$(TOOLDIR)/etherload/ethlet_all_done_basic2_map.h
 
 # Gives two targets of:
