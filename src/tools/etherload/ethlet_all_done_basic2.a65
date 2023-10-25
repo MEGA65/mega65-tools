@@ -282,6 +282,25 @@ restore_write_protection:
 	; disable SPRENV400
 	sta $d076	
 
+	; NOBUGCOMPAT
+	lda #%00100000
+	trb $d07a
+
+	; HOTREG enable & RSTDELEN
+	lda #%11000000
+	tsb $d05d
+
+	; set PAL/NTSC
+	lda #$80
+	ldx set_video_mode
+	beq ++		; no change
+	bmi +
+	trb $d06f	; PAL
+	bra ++
+*
+	tsb $d06f	; NTSC
+*
+
 	; 40 column mode normal C64 screen
 	lda #$00
 	sta $d030
@@ -332,6 +351,8 @@ enable_default_rom_load:
 	.byte $01
 restore_prg:
 	.byte $01
+set_video_mode:
+	.byte $00	; $00 = no change, $01 = PAL, $ff = NTSC
 
 ; this routine resets all mappings and jumps into the c64 rom reset routine
 ; is copied to $334

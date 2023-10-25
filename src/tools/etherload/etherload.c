@@ -60,6 +60,8 @@ int reset65 = 0;
 int do_run = 0;
 int cart_detect = 0;
 int halt = 0;
+int set_pal = 0;
+int set_ntsc = 0;
 int do_jump = 0;
 int jump_addr = 0;
 int use_binary = 0;
@@ -197,6 +199,8 @@ void init_cmd_options(void)
   CMD_OPTION("offset",      required_argument, 0,            'o', "bytes",  "Skip first <bytes> bytes (hex notation) when loading the file.");
   CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
   CMD_OPTION("mount",       required_argument, 0,            'm', "file",   "Mount d81 file image <file> from SD card (eg. MEGA65.D81).");
+  CMD_OPTION("pal",         no_argument,       &set_pal,     1,     "",     "Set PAL video mode when doing reset.");
+  CMD_OPTION("ntsc",        no_argument,       &set_ntsc,    1,     "",     "Set NTSC video mode when doing reset.");
   // clang-format on
 }
 
@@ -419,6 +423,17 @@ int main(int argc, char **argv)
     }
   }
 
+  // check video mode
+  if (set_ntsc && set_pal) {
+    log_crit("options --pal and --ntsc can't be specified together, aborting.");
+    exit(1);
+  }
+
+  if (!reset64 && !reset65 && (set_ntsc || set_pal)) {
+    log_crit("options --pal and --ntsc can only be specified together with reset options, aborting.");
+    exit(1);
+  }
+
   int open_flags = O_RDONLY;
   int fd;
   int address;
@@ -559,6 +574,14 @@ int main(int argc, char **argv)
       ethlet_all_done_basic2[ethlet_all_done_basic2_offset_restore_prg] = 0;
     }
 
+    // patch in video mode
+    if (set_pal) {
+      ethlet_all_done_basic2[ethlet_all_done_basic2_offset_set_video_mode] = 0x01;
+    }
+    else if (set_ntsc) {
+      ethlet_all_done_basic2[ethlet_all_done_basic2_offset_set_video_mode] = 0xff;
+    }
+
     if (ethl_single_command(ethlet_all_done_basic2, ethlet_all_done_basic2_len, 2000)) {
       log_error("Timeout while sending data to MEGA65");
       etherload_finish();
@@ -590,6 +613,14 @@ int main(int argc, char **argv)
     // patch in disabling of prg restore
     if (!filename) {
       ethlet_all_done_basic65[ethlet_all_done_basic65_offset_restore_prg] = 0;
+    }
+
+    // patch in video mode
+    if (set_pal) {
+      ethlet_all_done_basic65[ethlet_all_done_basic65_offset_set_video_mode] = 0x01;
+    }
+    else if (set_ntsc) {
+      ethlet_all_done_basic65[ethlet_all_done_basic65_offset_set_video_mode] = 0xff;
     }
 
     if (ethl_single_command(ethlet_all_done_basic65, ethlet_all_done_basic65_len, 2000) < 0) {
