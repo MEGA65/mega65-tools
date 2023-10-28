@@ -57,5 +57,5 @@ graph_info.json
 .nova
 .vscode
 test.wxs
-cbmconvert
+
 bin/*.dSYM
