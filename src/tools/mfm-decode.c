@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-int show_gaps = 1;
-int show_bits = 1;
-int show_quantised_gaps = 1;
+int show_gaps = 0;
+int show_bits = 0;
+int show_quantised_gaps = 0;
 int show_post_correction = 0;
 
 // MEGA65 floppies contain a track info block that is always written at DD data rate.
@@ -148,13 +148,13 @@ void describe_data(void)
       printf("CRC Calc over:");
       for (int i = 0; i < 3; i++) {
         crc = crc16(crc, 0xa1);
-        printf(" $%02x", 0xa1);
+        printf(" ;$%02x", 0xa1);
       }
       for (int i = 0; i < 7; i++) {
         if (i == 5)
           crc_calc = crc;
         crc = crc16(crc, data_field[i]);
-        printf(" $%02x", data_field[i]);
+        printf(" `$%02x", data_field[i]);
       }
       printf("\n");
       if (crc)
@@ -234,6 +234,21 @@ void describe_data(void)
     // Clear sector between operations
     bzero(data_field, 512);
     break;
+  case 0xff:
+    printf("\nFound Amiga sector (type = $%02X)\n",data_field[0]);
+    unsigned int odd_bits = (data_field[0]<<8) + data_field[1];
+    unsigned int even_bits = (data_field[2]<<8) + data_field[3];
+    unsigned int out = 0;
+    printf("  First bytes = $%02X $%02X $%02X $%02x\n",
+	   data_field[0],data_field[1],data_field[2],data_field[3]);
+    for(int bit=0;bit<16;bit++) {
+      int e = (even_bits>>bit)&1;
+      int o = (even_bits>>bit)&1;
+      out |= ((o<<1)+e)<<(bit<<1);
+    }
+    printf("  Header first bytes = $%08X\n",out);
+    field_ofs = 0;
+    break;
   default:
     fprintf(stdout, "WARNING: Unknown data field type $%02x\n", data_field[0]);
     break;
@@ -261,9 +276,10 @@ void emit_bit(int b)
       data_field[0] = byte;
     }
     else {
-      printf(" $%02x", byte);
+      printf(" :$%02x", byte);
       if (field_ofs < 1024)
         data_field[field_ofs++] = byte;
+      else printf("!");
       if (data_field[0] == 0x65 && field_ofs == 7)
         describe_data();
     }
