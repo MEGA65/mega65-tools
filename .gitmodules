@@ -7,7 +7,7 @@
 [submodule "cbmconvert"]
 	path = cbmconvert
 	url = https://github.com/sasq64/cbmconvert.git
-	ignore = dirty
+	ignore = untracked
 [submodule "src/mega65-libc"]
 	path = src/mega65-libc
 	url = https://github.com/MEGA65/mega65-libc.git
