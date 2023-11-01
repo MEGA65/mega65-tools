@@ -280,7 +280,8 @@ restore_write_protection:
 	trb $d054
 
 	; disable SPRENV400
-	sta $d076	
+	lda #$00
+	sta $d076
 
 	; NOBUGCOMPAT
 	lda #%00100000
