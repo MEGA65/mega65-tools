@@ -55,7 +55,7 @@ static m65target_info m65targetgroups[] = {
   // Mega65 Target Name/s                           MB  FPGA Part
   { "nexys4|nexys4ddr|nexys4ddrwidget|megaphoner1", 4, "7a100tcsg324" },
   { "mega65r2",                                     4, "7a100tfgg484" },
-  { "mega65r1|mega65r3|mega65r4",                   8, "7a200tfbg484" },
+  { "mega65r1|mega65r3|mega65r4|mega65r5",          8, "7a200tfbg484" },
   { "wukonga100t",                                  4, "7a100tfgg676" }
 };
 // clang-format on
