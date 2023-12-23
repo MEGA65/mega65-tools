@@ -760,7 +760,7 @@ $(UTILDIR)/remotesd.prg:       $(UTILDIR)/remotesd.c $(CC65) $(MEGA65LIBCLIB)
 $(TOOLDIR)/ftphelper.c:	$(UTILDIR)/remotesd.prg $(TOOLDIR)/bin2c
 	$(TOOLDIR)/bin2c $(UTILDIR)/remotesd.prg helperroutine $(TOOLDIR)/ftphelper.c
 
-$(UTILDIR)/remotesd_eth.prg:       $(UTILDIR)/remotesd_eth.c $(UTILDIR)/remotesd_eth_asm.s $(UTILDIR)/checksum.s $(UTILDIR)/ip_checksum_recv.s $(CC65) $(MEGA65LIBCLIB)
+$(UTILDIR)/remotesd_eth.prg:       $(UTILDIR)/remotesd_eth.c $(UTILDIR)/remotesd_eth_asm.s $(UTILDIR)/checksum.s $(UTILDIR)/ip_checksum_recv.s $(CC65) $(UTILDIR)/remotesd_eth_cl65.cfg $(MEGA65LIBCLIB)
 	$(CL65ONLY) --config $(UTILDIR)/remotesd_eth_cl65.cfg $(MEGA65LIBCINC) -O -g -o $*.prg --listing $*.list --mapfile $*.map --add-source $(UTILDIR)/remotesd_eth_asm.s $(UTILDIR)/checksum.s $(UTILDIR)/ip_checksum_recv.s $< $(MEGA65LIBCLIB)
 
 

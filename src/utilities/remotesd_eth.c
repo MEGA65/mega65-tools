@@ -379,10 +379,10 @@ void print_mac_address()
 
 void print_ip_information(void)
 {
-  sprintf(msg, "ip : %s", ipv6_to_str(ip_local.b));
+  sprintf(msg, "ip : \x1b%s\x1d", ipv6_to_str(ip_local.b));
   print(5, 0, msg);
   print(7, 0, "remote");
-  sprintf(msg, "ip : %s:%u", ipv6_to_str(reply_template.ipv6.destination.b), NTOHS(reply_template.ftp.dst_port));
+  sprintf(msg, "ip : \x1b%s\x1d:%u", ipv6_to_str(reply_template.ipv6.destination.b), NTOHS(reply_template.ftp.dst_port));
   print(8, 0, msg);
 }
 
