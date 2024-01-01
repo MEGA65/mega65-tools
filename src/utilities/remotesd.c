@@ -277,6 +277,15 @@ void mount_file(void)
   strcpy((char *)0x0400, filename);
   *((char *)0x400 + strlen(filename)) = 0x00;
 
+  // Get current drive & cdrootdir
+  __asm__("LDA #$04");  // hyppo_getcurrentdrive (returns drive in A)
+  __asm__("STA $D640");
+  __asm__("NOP");
+  __asm__("TAX");
+  __asm__("LDA #$3C");  // hyppo_cdrootdir (expects drive in X)
+  __asm__("STA $D640");
+  __asm__("NOP");
+
   // Call dos_setname()
   __asm__("LDY #$04");
   __asm__("LDX #$00");

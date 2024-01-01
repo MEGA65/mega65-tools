@@ -161,7 +161,7 @@ mount_d81:
 	; mount d81
 	lda d81filename
 	beq copy_reset_routine
-	ldx #$17
+	ldx #$3f
 *	lda d81filename,x
 	sta $0200,x
 	dex
@@ -345,7 +345,8 @@ restore_write_protection:
 romfilename:
 	.byte "MEGA65.ROM", $00, $00
 d81filename:
-	.dword 0, 0, 0, 0
+	; reserve 64 bytes for max. filename length
+	.dword 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 enable_cart_signature:
 	.byte $00
 enable_default_rom_load:

@@ -198,7 +198,7 @@ void init_cmd_options(void)
   CMD_OPTION("bin",         required_argument, 0,            'b', "addr",   "Treat <prgname> as binary file and load at address <addr> (hex notation).");
   CMD_OPTION("offset",      required_argument, 0,            'o', "bytes",  "Skip first <bytes> bytes (hex notation) when loading the file.");
   CMD_OPTION("cart-detect", no_argument,       &cart_detect, 1,     "",     "Enable detection of cartridge signature CBM80 at $8004 on reset.");
-  CMD_OPTION("mount",       required_argument, 0,            'm', "file",   "Mount d81 file image <file> from SD card (eg. MEGA65.D81).");
+  CMD_OPTION("mount",       required_argument, 0,            'm', "file",   "Mount d81 file image <file> from SD card root folder (eg. MEGA65.D81).");
   CMD_OPTION("pal",         no_argument,       &set_pal,     1,     "",     "Set PAL video mode when doing reset.");
   CMD_OPTION("ntsc",        no_argument,       &set_ntsc,    1,     "",     "Set NTSC video mode when doing reset.");
   // clang-format on
@@ -485,8 +485,19 @@ int main(int argc, char **argv)
   }
 
 
-  if (d81_image && strlen(d81_image) > 23) {
-    d81_image[24] = '\0';
+  if (d81_image) {
+    if (strlen(d81_image) > 63) {
+      d81_image[64] = '\0';
+    }
+
+    // convert to petscii
+    for (int i = 0; i < strlen(d81_image); ++i) {
+      char c = d81_image[i] & 0xdf;
+      // switch lower and upper-case
+      if (c >= 0x41 && c <= 0x5a) {
+        d81_image[i] = d81_image[i] ^ 0x20;
+      }
+    }
   }
 
   if (ip_address[0] == '\0') {

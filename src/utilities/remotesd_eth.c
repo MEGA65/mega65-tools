@@ -115,6 +115,13 @@ typedef struct {
   uint32_t address;
 } READ_MEMORY_JOB;
 
+typedef struct {
+  union {
+    uint8_t filename_buffer[64];
+    uint8_t response_status;
+  };
+} MOUNT_JOB;
+
 typedef union {
   uint8_t b[1500];
   struct {
@@ -128,6 +135,7 @@ typedef union {
           READ_SECTOR_JOB read_sector;
           WRITE_SECTOR_JOB write_sector;
           READ_MEMORY_JOB read_memory;
+          MOUNT_JOB mount;
         };
       };
     };
@@ -137,6 +145,15 @@ typedef union {
 #define NTOHS(x) (((uint16_t)x >> 8) | ((uint16_t)x << 8))
 #define HTONS(x) (((uint16_t)x >> 8) | ((uint16_t)x << 8))
 
+#pragma bss-name (push, "HYPPODAT")
+/*
+ This buffer holds 256 bytes for data exchange with the hyppo. It needs to be in segment HYPPODAT,
+ so it will be aligned to a page boundary and in the lower 32kb of bank 0.
+*/
+char hyppo_data[256];
+#pragma bss-name (pop)
+char last_mount_filename[64];
+uint16_t last_mount_seqnum = 0;
 uint8_t cpu_status;
 char msg[80];
 uint8_t quit_requested = 0;
@@ -234,6 +251,8 @@ void init(void)
   init_screen();
 
   init_own_ipv6_address();
+
+  memset(last_mount_filename, 0, 64);
 
   sector_reading = 0;
   sector_buffered = 0;
@@ -825,6 +844,46 @@ void wait_100ms(void)
   }
 }
 
+
+#pragma optimize(off)
+/**
+ * @brief Switches to root directory of current drive and mounts a D81 disk image
+ * 
+ * The function expects the filename already provided as null-terminated string in 
+ * hyppo_data.
+ */
+uint8_t mount_file(void)
+{
+  // Get current drive & cdrootdir
+  __asm__("lda #$04");  // hyppo_getcurrentdrive (returns drive in A)
+  __asm__("sta $d640");
+  __asm__("clv");
+  __asm__("tax");
+  __asm__("lda #$3c");  // hyppo_cdrootdir (expects drive in X)
+  __asm__("sta $d640");
+  __asm__("clv");
+  __asm__("bcc MOUNT_FILE_ERROR");
+
+  // Call dos_setname()
+  __asm__("ldy #>%v", hyppo_data);
+  __asm__("lda #$2e");
+  __asm__("sta $d640");
+  __asm__("clv");
+  __asm__("bcc MOUNT_FILE_ERROR");
+
+  // Try to attach it
+  __asm__("lda #$40");
+  __asm__("sta $d640");
+  __asm__("clv");
+  __asm__("bcc MOUNT_FILE_ERROR");
+
+  return 0; // If we get here, no error occurred
+
+  __asm__("MOUNT_FILE_ERROR:");
+  return 1;
+}
+#pragma optimize(on)
+
 void get_new_job()
 {
   while (PEEK(0xD6E1) & 0x20) {
@@ -903,6 +962,7 @@ void get_new_job()
        * UDP packet.
        */
       uint16_t num_bytes;
+      uint8_t i;
 
       if (memcmp(recv_buf.ipv6.destination.b, ip_local.b, 16)) {
         continue;
@@ -1119,6 +1179,59 @@ void get_new_job()
         send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + sizeof(READ_MEMORY_JOB) + num_bytes;
 
         return;
+
+
+      case 0x12:
+        /*
+         * Mount request
+         */
+        if (udp_length < 17 || udp_length > 79) {
+          ++rx_invalid_cnt;
+          update_rx_tx_counters();
+          continue;
+        }
+
+        // copy to hyppo buffer
+        lcopy(ETH_RX_BUFFER + 2 + ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE, (uint32_t)hyppo_data, udp_length - 15);
+        for (i = 0; i < 64; ++i) {
+          if (hyppo_data[i] == '\0') {
+            break;
+          }
+        }
+        if (i == 64) {
+          // filename is not null-terminated, treat packet as invalid and discard it
+          ++rx_invalid_cnt;
+          update_rx_tx_counters();
+          continue;
+        }
+
+        if (recv_buf.ftp.seq_num == last_mount_seqnum && strcmp((char *)hyppo_data, last_mount_filename) == 0) {
+          // duplicate mount request, ignore it
+          ++dup_cnt;
+          update_counters();
+          continue;
+        }
+
+        ++rx_valid_cnt;
+
+        lcopy(
+            (uint32_t)&reply_template, (uint32_t)&send_buf, ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE);
+        send_buf.ipv6.ip_length = HTONS(UDP_HDR_SIZE + FTP_HDR_SIZE + 1);
+        send_buf.ftp.udp_length = send_buf.ipv6.ip_length;
+        send_buf.ftp.seq_num = recv_buf.ftp.seq_num;
+        send_buf.ftp.opcode = 0x12;
+        send_buf.mount.response_status = mount_file();
+        if (send_buf.mount.response_status == 0) {
+          strcpy(last_mount_filename, hyppo_data);
+          last_mount_seqnum = recv_buf.ftp.seq_num;
+        }
+
+        calculate_send_buf_udp_checksum(UDP_HDR_SIZE + FTP_HDR_SIZE + 1);
+
+        send_buf_size = ETH_HDR_SIZE + IPV6_HDR_SIZE + UDP_HDR_SIZE + FTP_HDR_SIZE + 1;
+
+        return;
+
 
       case 0xfd:
         /*

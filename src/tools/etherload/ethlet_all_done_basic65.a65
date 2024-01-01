@@ -162,16 +162,22 @@ mount_d81:
 	sta $d640
 	clv
 	; set default d81 image name
-	ldy #$00
-*	lda d81filename,y
-	beq +
-	sta $11b2,y	; filename buffer (basic65 uses this on boot-up)
-	iny
-	cpy #$0c
-	bmi -
-*	lda #$00
-	sta $11b2,y
-	sty $11b1	; filename length
+	lda d81filename
+	beq map_crom
+	ldx #$3f
+*	lda d81filename,x
+	sta $0200,x
+	dex
+	bpl -
+	; set d81 filename
+	ldy #$02
+	lda #$2e
+	sta $d640
+	clv
+	; attach d81 image
+	lda #$40
+	sta $d640
+	clv
 
 map_crom:
 	; Disable $c000 mapping via $d030 as we want to write to interface rom.
@@ -352,7 +358,8 @@ finalize:
 romfilename:
 	.byte "MEGA65.ROM", 0, 0
 d81filename:
-	.dword 0, 0, 0, 0, 0
+	; reserve 64 bytes for max. filename length
+	.dword 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 enable_default_rom_load:
 	.byte $01
 restore_prg:

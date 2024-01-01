@@ -655,7 +655,7 @@ int execute_command(char *cmd)
     printf("cd <dirname> - change directory on the SD card. (aka. 'chdir')\n");
     printf("rename <oldname> <newname> - rename a file on the SD card.\n");
     printf("clusters <file> - show cluster chain of specified file.\n");
-    printf("mount <d81file> - Mount the specified .d81 file (which resides on the SD card).\n");
+    printf("mount <d81file> - Mount the specified .d81 file (which resides in the root of the SD card).\n");
     printf("sector <number|$hex number> - display the contents of the specified sector.\n");
     printf("getslot <slot> <destination name> - download a freeze slot.\n");
     printf("dirent_raw 0|1|2 - flag to hide/show 32-byte dump of directory entries. (2=more verbose)\n");
@@ -1392,7 +1392,7 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
     // rx_payload[8] is batch size
     // rx_payload[9] is idx in batch
     // ry_payload[10] is 4 bytes of sector number
-    if (rx_len != 14 || memcmp(&rx_payload[7], &tx_payload[7], 7) != 0) {
+    if (rx_len != 14 || memcmp(&rx_payload[7], &tx_payload[7], 7) != 0 || memcmp(&rx_payload[10], &tx_payload[10], 4) != 0) {
       return 0;
     }
     log_debug("Received packet (write_sector ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
@@ -1419,7 +1419,7 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
     break;
   case 0x12:
     // ry_payload[7] is mount result
-    if (rx_len != 8) {
+    if (rx_len != 8 || memcmp(&rx_payload[4], &tx_payload[4], 2) != 0) {
       return 0;
     }
     log_debug("Received packet (mount_file ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),
@@ -1588,7 +1588,7 @@ void process_ethernet_read_sectors_job(uint8_t *job)
 int process_ethernet_mount_file_job(uint8_t *job)
 {
   wait_all_acks(ETHERNET_TIMEOUT);
-  const int max_packet_size = 70;
+  const int max_packet_size = 71;
   uint8_t payload[max_packet_size];
   memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
   int packet_size = 6; // bytes 4+5 will be sequence id
@@ -5138,13 +5138,12 @@ int is_fragmented(char *filename)
 
 int queue_mount_file(char *filename)
 {
-  uint8_t job[66]; // for now, I made a max filename size of 64 bytes
-                   // (1 byte for job-id, 1 byte for null-terminator)
+  uint8_t job[65]; // Hyppo supports max filename size of 63 bytes
+                   // (need to add 1 byte for job-id, 1 byte for null-terminator)
   int len = strlen(filename);
 
-  if (len > 64) {
-    printf("ERROR: For now, maximum filename is limited to 64 bytes\n"
-           "       (this is a hardcoded limit for mount that we can change later, if needbe)\n");
+  if (len > 63) {
+    printf("ERROR: Maximum filename is limited to 63 bytes\n");
     return FALSE;
   }
 
@@ -5252,6 +5251,11 @@ void request_quit(void)
 
 void mount_file(char *filename)
 {
+  if (strcmp(current_dir, "/") != 0) {
+    printf("ERROR: Mounting of files in subdirectories not yet implemented.\n");
+    return;
+  }
+
   if (!safe_open_dir())
     return;
 
