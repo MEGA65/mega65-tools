@@ -847,6 +847,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
     }
     if (ethl_ping(3000) < 0) {
       log_error("No response from MEGA65");
+      log_error("Please make sure ETHLOAD.M65 is available in the root folder of the SD card.");
       etherload_finish();
       exit(-1);
     }
@@ -1392,7 +1393,7 @@ int ethernet_match_payloads(uint8_t *rx_payload, int rx_len, uint8_t *tx_payload
     // rx_payload[8] is batch size
     // rx_payload[9] is idx in batch
     // ry_payload[10] is 4 bytes of sector number
-    if (rx_len != 14 || memcmp(&rx_payload[7], &tx_payload[7], 7) != 0 || memcmp(&rx_payload[10], &tx_payload[10], 4) != 0) {
+    if (rx_len != 14 || memcmp(&rx_payload[7], &tx_payload[7], 7) != 0) {
       return 0;
     }
     log_debug("Received packet (write_sector ack) #%d matches expected packet #%d", (rx_payload[4] + (rx_payload[5] << 8)),

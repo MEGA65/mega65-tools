@@ -1,4 +1,4 @@
-#include <debug.h>
+//#include <debug.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -1080,13 +1080,13 @@ void get_new_job()
            */
           if (!write_batch_active) {
             if (recv_buf.write_sector.batch_counter != current_batch_counter) {
-              snprintf(msg, 80, "new batch %d, size %d\n", recv_buf.write_sector.batch_counter, recv_buf.write_sector.num_sectors_minus_one + 1);
-              debug_msg(msg);
+              //snprintf(msg, 80, "new batch %d, size %d\n", recv_buf.write_sector.batch_counter, recv_buf.write_sector.num_sectors_minus_one + 1);
+              //debug_msg(msg);
               init_new_write_batch();
             }
             else {
-              snprintf(msg, 80, "outdated batch %d (current %d)\n", recv_buf.write_sector.batch_counter, current_batch_counter);
-              debug_msg(msg);
+              //snprintf(msg, 80, "outdated batch %d (current %d)\n", recv_buf.write_sector.batch_counter, current_batch_counter);
+              //debug_msg(msg);
               ++outdated_cnt;
               update_counters();
             }

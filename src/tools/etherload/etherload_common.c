@@ -120,6 +120,9 @@ int etherload_init(const char *target_ip_address, const char *ifname)
   if (target_ip_address == NULL) {
     if (probe_mega65_ipv6_address(2500) < 0) {
       log_crit("Unable to find a mega65 on the local network");
+      log_crit("Please ensure remote control mode is active on MEGA65:");
+      log_crit("  1. DIP switch 2 is set to ON");
+      log_crit("  2. Power LED is blinking green-yellow after pressing SHIFT+POUND");
       return -1;
     }
   }
@@ -356,7 +359,8 @@ int ethl_configure_ip_address_and_interface(const char *ip_address, const char *
 int trigger_eth_hyperrupt()
 {
   int offset = 0x24;
-  memcpy(&hyperrupt_trigger[offset], magic_string, 12);
+  memset(hyperrupt_trigger, 0, sizeof(hyperrupt_trigger));
+  memcpy(&hyperrupt_trigger[offset], magic_string, sizeof(magic_string));
   sendto(sockfd, (void *)hyperrupt_trigger, sizeof(hyperrupt_trigger), 0, (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
   usleep(10000);
   start_time = gettime_us();

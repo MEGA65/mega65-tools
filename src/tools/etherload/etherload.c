@@ -247,9 +247,11 @@ void discover_mega65(const char *progname)
 {
   if (probe_mega65_ipv6_address(3000) != 0) {
     log_error("Unable to discover MEGA65 on local network");
-    log_error("Please make sure the MEGA65 remote control is enabled via SHIFT+POUND.");
-    log_error("The power LED should be flashing green/yellow.");
-    log_error("If still having issues, please make sure your firewall is accepting UDP packets on port 4510 for application:\n\"%s\"", absolute_program_path(progname));
+    log_error("Please ensure remote control mode is active on MEGA65:");
+    log_error("  1. DIP switch 2 is set to ON");
+    log_error("  2. Power LED is blinking green-yellow after pressing SHIFT+POUND");
+    log_error("If still having issues, please make sure your firewall is accepting UDP");
+    log_error("packets on port 4510 for application:\n\"%s\"", absolute_program_path(progname));
     exit(-1);
   }
   printf("MEGA65 found at %s%%%s\n", ethl_get_ip_address(), ethl_get_interface_name());
@@ -523,6 +525,7 @@ int main(int argc, char **argv)
   // Once MEGA65 responds, we know ETHLOAD.M65 is running and ready to receive data
   if (ethl_ping(3000) < 0) {
     log_error("No response from MEGA65");
+    log_error("Please make sure ETHLOAD.M65 is available in the root folder of the SD card.");
     etherload_finish();
     exit(-1);
   }
