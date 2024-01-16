@@ -40,6 +40,7 @@ rom_write_enable:
 
 copy_data:
 	sta $d707 ; trigger in-line DMA
+	.byte $0b	   ; enforce F018B format
 	.byte $80, $ff ; SRC MB is $FF
 	.byte $81
 dest_mb:

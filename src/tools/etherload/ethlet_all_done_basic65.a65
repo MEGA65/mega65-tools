@@ -43,6 +43,7 @@ entry:
 	; Use chained DMA to copy packet to TX buffer, and then send it
 	; so that we can get what will effectively be an ACK to each
 	; packet received by the MEGA65.
+	.byte $0b	   ; enforce F018B format
 	.byte $80, $ff
 	.byte $81, $ff
 	.byte $00      ; DMA end of option list
