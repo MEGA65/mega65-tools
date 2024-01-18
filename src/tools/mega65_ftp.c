@@ -353,15 +353,21 @@ int parse_string_param(char **src, char *dest)
 {
   int cnt = 0;
   char *srcptr = *src;
-  char endchar = ' ';
-  if (*srcptr == '\"') {
+  char default_endchar = ' ';
+  char endchar = default_endchar;
+  char nextchar = *srcptr;
+  if (nextchar == '\"') {
     endchar = '\"';
+  } else if (nextchar == '\'') {
+    endchar = '\'';
+  }
+  if (endchar != default_endchar) {
     srcptr++;
     *src = srcptr;
   }
 
   while (*srcptr != endchar && *srcptr != '\0') {
-    if (*srcptr == '\0' && endchar == '\"')
+    if (*srcptr == '\0' && endchar != default_endchar)
       return RET_NOT_FOUND;
     srcptr++;
     cnt++;
@@ -373,7 +379,7 @@ int parse_string_param(char **src, char *dest)
   strncpy(dest, *src, cnt);
   dest[cnt] = '\0';
 
-  if (endchar == '\"')
+  if (endchar != default_endchar)
     srcptr++;
 
   *src = srcptr;
