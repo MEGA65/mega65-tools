@@ -1001,7 +1001,7 @@ int render_codepoints(int *code_points, int num)
       printf("  encoding tile (%d,%d) using card $%04x\n", x, y, card_number);
       // Write tile details into accline_screen_ram and accline_colour_ram
       accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] = card_number >> 0;
-      accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (card_number >> 8) + (trim_pixels << 5);
+      accword_screen_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (card_number >> 8) + (this_trim << 5);
       accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] = 0x20 + 0x08; // ALPHA + NCM glyph
       if (!y) {
         accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = text_colour + attributes;
@@ -1010,7 +1010,7 @@ int render_codepoints(int *code_points, int num)
         // Do not apply underline to other than the base row
         accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (text_colour + attributes) & 0x7f;
       }
-      if (trim_pixels & 8)
+      if (this_trim & 8)
         accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] |= 0x04; // Trim 8 more pixels
     }
     accword_len++;
