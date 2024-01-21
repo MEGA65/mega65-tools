@@ -37,6 +37,7 @@ extern const char *version_string;
 #define ARG_COREVERSION argv[4]
 #define ARG_COREPATH argv[5]
 #define ARG_COREFLAGS argv[6]
+#define ARG_INSTALLFLAGS argv[7]
 
 #define CORE_HEADER_SIZE 4096
 
@@ -129,10 +130,10 @@ int get_model_id(const char *m65targetname)
 typedef struct {
   char name[16];
   unsigned char bits;
-} m65core_capabilities;
+} m65core_capabilities_t;
 
 // clang-format off
-static m65core_capabilities map_m65core_capability[] = {
+static m65core_capabilities_t map_m65core_capability[] = {
   { "default",  CORECAP_SLOT_DEFAULT },
   { "c64cart",  CORECAP_CART_C64 },
   { "c128cart", CORECAP_CART_C128 },
@@ -141,19 +142,32 @@ static m65core_capabilities map_m65core_capability[] = {
 };
 // clang-format on
 
-unsigned char parse_capability_bits(char *capstr)
+// clang-format off
+#define COREINST_FACTORY 0b00000001
+#define COREINST_AUTO    0b00000010
+#define COREINST_FORCE   0b10000000
+
+static m65core_capabilities_t map_m65core_installflags[] = {
+  { "factory", COREINST_FACTORY },
+  { "auto",    COREINST_AUTO },
+  { "force",   COREINST_FORCE },
+  { "", 0 }
+};
+// clang-format on
+
+unsigned char parse_capability_bits(char *capstr, m65core_capabilities_t *capdef)
 {
   unsigned char capbits = 0, i;
   char *part;
 
   for (part = strtok(capstr, ","); part; part = strtok(NULL, ",")) {
-    for (i = 0; map_m65core_capability[i].name[0]; i++) {
-      if (!strncmp(part, map_m65core_capability[i].name, strlen(part))) {
-        capbits |= map_m65core_capability[i].bits;
+    for (i = 0; capdef[i].name[0]; i++) {
+      if (!strncmp(part, capdef[i].name, strlen(part))) {
+        capbits |= capdef[i].bits;
         break;
       }
     }
-    if (!map_m65core_capability[i].name[0]) {
+    if (!capdef[i].name[0]) {
       fprintf(stderr, "ERROR: Failed to parse capability bits '%s'...\n", part);
       exit(1);
     }
@@ -174,13 +188,16 @@ typedef union {
     uint8_t banner_present;
     uint8_t embed_file_count;
     uint32_t embed_file_offset;
-    // embed_file_offset was unisigned long which is 64 bit on linux,
+    // embed_file_offset was unsigned long which is 64 bit on linux,
     // so older core files have 4 garbage bytes:
     uint32_t __backwards_compability1;
+    // bootcaps are the capabilities the core has (see CORECAP_*)
     uint8_t core_bootcaps;
+    // bootflags are capabilities switched on by default
     uint8_t core_bootflags;
+    // special handling through MEGAFLASH
+    uint8_t core_installflags;
     // place size and crc32 at 0x80 - don't mess this up!
-    uint8_t __unused1;
     uint16_t __unused2;
     // this needs to be at 0x80 !!
     uint32_t core_size;
@@ -217,7 +234,7 @@ void show_help(void)
       "MEGA65 bitstream to core file converter\n"
       "---------------------------------------\n"
       "Version: %s\n\n"
-      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor> [=<caps>[+<flags>]] [<file to embed> ...]\n"
+      "Usage: <m65target> <foo.bit> <core name> <core version> <out.cor> [=<caps>[+<flags>]] [+<iflags>] [<file to embed> ...]\n"
       "\n"
       "Note: 1st argument specifies your Mega65 target name, which can be either:\n\n",
       version_string);
@@ -250,7 +267,17 @@ void show_help(void)
                   "        '+c64cart'\n"
                   "        The C64 cartridge boot flag will be set automatically when\n"
                   "        installing this core.\n"
-                  "\n");
+                  "\n"
+                  "The optional '+<iflags>' parameter sets install flags for the core.\n"
+                  "Multiple options can be seperated with a comma. Valid options are:\n"
+                  "\n"
+                  "  String     Install-Flag\n"
+                  "  ------     ------------\n"
+                  "  factory    Suitable as Slot 0 Factory Core\n"
+                  "  auto       Automatically CONFIRM all questions\n"
+                  "  force      Overwrite exisiting core\n"
+                  "\n"
+                  "NOTE: Install flags are only valid for <core name> = MEGA65!\n\n");
 }
 
 int is_match_on_m65targetname_string(const char *m65target, const char *m65targetstring)
@@ -290,13 +317,13 @@ m65target_info *find_m65targetinfo_from_fpga_part(char *fpga_part)
     fpga_part += 2;
   for (int idx = 0; idx < m65targetgroup_count; idx++) {
     if (strncmp(fpga_part, m65targetgroups[idx].fpga_part, MAX_M65_PART_NAME_LEN) == 0) {
-      printf("This bitstream's FPGA part is suitable for the following mega65 targets: \"%s\" (FPGA part: %s)\n",
+      printf("INFO: This bitstream's FPGA part is suitable for the following mega65 targets: \"%s\" (FPGA part: %s)\n",
           m65targetgroups[idx].name, m65targetgroups[idx].fpga_part);
       return &m65targetgroups[idx];
     }
   }
 
-  printf("This bitstream's FPGA part is for an unknown mega65 target: \"???\" (FPGA part: %s)\"\n", fpga_part);
+  printf("INFO: This bitstream's FPGA part is for an unknown mega65 target: \"???\" (FPGA part: %s)\"\n", fpga_part);
   return NULL;
 }
 
@@ -304,8 +331,8 @@ void show_warning_if_multiple_m65targets(m65target_info *m65target)
 {
   if (strchr(m65target->name, '|') != NULL) {
     fprintf(stderr, "WARNING: Can-not distinguish between these multiple mega65 targets based on FPGA part.\n"
-                    "         Please make your own external confirmations that you have used the correct bitstream for your "
-                    "mega65 target.\n");
+                    "         Please make your own external confirmations that you have used the correct\n"
+                    "         bitstream for your mega65 target.\n");
   }
 }
 
@@ -322,7 +349,7 @@ void xilinx_error_exit(int fieldid, char *str, ...)
 void assert_field_length_equals(int fieldid, short int expected, short int actual)
 {
   if (actual != expected)
-    xilinx_error_exit(fieldid, "has incorrect length of 0x%02X (expected 0x%02X)", actual, expected);
+    xilinx_error_exit(fieldid, "has incorrect length of $%02X (expected $%02X)", actual, expected);
 }
 
 void assert_magic_char_equals(int fieldid, char expected, char actual)
@@ -348,13 +375,13 @@ void check_magic_header_field(unsigned char **ptr, int *fieldid, unsigned char *
   unsigned char *actual = *ptr;
   if (memcmp(expected, *ptr, fieldlength) != 0) {
     xilinx_error_exit(*fieldid,
-        "Xilinx header - Field %d - has invalid magic header\n"
+        "WARNING: Xilinx header - Field %d - has invalid magic header\n"
         "  expected: [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X]\n",
         "    actual: [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X] [%02X]", expected[0], expected[1], expected[2],
         expected[3], expected[4], expected[5], expected[6], expected[7], expected[8], expected[9], actual[0], actual[1],
         actual[2], actual[3], actual[4], actual[5], actual[6], actual[7], actual[8], actual[9]);
   }
-  printf("Xilinx header - Field %d - verified ok (magic header)\n", *fieldid);
+  printf("INFO: Xilinx header - Field %d - verified ok (magic header)\n", *fieldid);
 
   *ptr += fieldlength;
   *fieldid = *fieldid + 1;
@@ -374,7 +401,7 @@ char check_magic_char_field(unsigned char **ptr, int *fieldid, char expected)
 {
   char actual = check_magic_char(ptr, fieldid, expected);
 
-  printf("Xilinx header - Field %d - verified ok (char='%c')\n", *fieldid, actual);
+  printf("INFO: Xilinx header - Field %d - verified ok (char='%c')\n", *fieldid, actual);
 
   *ptr = *ptr + 1;
   *fieldid = *fieldid + 1;
@@ -389,7 +416,7 @@ char *check_string_field(unsigned char **ptr, int *fieldid)
   if ((*ptr)[fieldlength - 1] != 0)
     xilinx_error_exit(*fieldid, "failed to find null terminator in string");
   else
-    printf("Xilinx header - Field %d - verified ok (\"%s\")\n", *fieldid, actual);
+    printf("INFO: Xilinx header - Field %d - verified ok (\"%s\")\n", *fieldid, actual);
 
   *ptr += fieldlength;
   *fieldid = *fieldid + 1;
@@ -452,7 +479,7 @@ int read_bitstream_file(const char *filename)
   int bit_size = fread(bitstream_data, 1, MAX_MB * BYTES_IN_MEGABYTE, bf);
   fclose(bf);
 
-  printf("Bitstream file is %d bytes long.\n", bit_size);
+  printf("INFO: Bitstream file is %d bytes long.\n", bit_size);
 
   return bit_size;
 }
@@ -499,7 +526,7 @@ void write_core_file(int core_len, unsigned char *core_file, char *core_filename
 }
 
 int build_core_file(const int bit_size, int *core_len, unsigned char *core_file, const char *core_name,
-    const char *core_version, const char *m65target_name, const char *core_filename, char *core_caps)
+    const char *core_version, const char *m65target_name, const char *core_filename, char *core_caps, char *install_flags)
 {
   int offset = 0;
 
@@ -523,15 +550,25 @@ int build_core_file(const int bit_size, int *core_len, unsigned char *core_file,
       *core_flags = 0;
       core_flags++;
     }
-    header_block.core_bootcaps = parse_capability_bits(core_caps + 1);
+    header_block.core_bootcaps = parse_capability_bits(core_caps + 1, map_m65core_capability);
     if (core_flags)
-      header_block.core_bootflags = parse_capability_bits(core_flags);
+      header_block.core_bootflags = parse_capability_bits(core_flags, map_m65core_capability);
     offset = 1;
   }
-  fprintf(stderr, "INFO: bootcaps 0x%02X, bootflags 0x%02X\n",
+  fprintf(stderr, "INFO: bootcaps $%02X, bootflags $%02X\n",
           header_block.core_bootcaps, header_block.core_bootflags);
   if ((header_block.core_bootflags & header_block.core_bootcaps) != header_block.core_bootflags)
     fprintf(stderr, "WARNING: bootflags are not supported by bootcaps!\n");
+  // parse core install flags
+  if (install_flags && install_flags[0] == '+') {
+    header_block.core_installflags = parse_capability_bits(install_flags + 1, map_m65core_installflags);
+    offset = 2;
+    if (header_block.core_installflags && strcmp(core_name, "MEGA65")) {
+      header_block.core_installflags = 0;
+      fprintf(stderr, "WARNING: installflags invalid for '%s' core, forcing 0\n", core_name);
+    }
+  }
+  fprintf(stderr, "INFO: installflags $%02X\n", header_block.core_installflags);
 
   memcpy(core_file, header_block.data, CORE_HEADER_SIZE);
   *core_len = CORE_HEADER_SIZE;
@@ -578,13 +615,8 @@ int banner_present = 0;
 void embed_file(int *core_len, unsigned char *core_file, char *filename)
 {
   header_info *header_block = (header_info *)core_file;
-  if (!header_block->embed_file_offset) {
-    fprintf(stderr, "INFO: Embedding first file. Setting embed_file_offset to current COR file length.\n");
-    header_block->embed_file_offset = htoc64l(*core_len);
-    last_file_offset = *core_len;
-  }
-
   char *basename = strrchr(filename, '/');
+
   if (basename == NULL) {
     // no slash in filename
     basename = filename;
@@ -615,10 +647,10 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
   int file_len = fread(file_data, 1, 1024 * 1024, f);
   fclose(f);
 
-  fprintf(stderr, "INFO: Writing file '%s' at offset $%06x, len=%d\n", basename, last_file_offset, file_len);
-
-  // XXX - And banner file if present gets put in the last 32KB of the slot so that a future update to HYPPO can
+  // And banner file if present gets put in the last 32KB of the slot so that a future update to HYPPO can
   // read it there instantly on boot.
+  // TODO: this is put both in the incrementing list of files as well as into the last 32kb. We should
+  // be able to gfet rid of the first, put fdisk populate will not use the banner from the end of the core!
   if (!strcmp(basename, "BANNER.M65")) {
     if (file_len > 32 * 1024) {
       fprintf(stderr, "ERROR: BANNER.M65 file must be <= 32KB\n");
@@ -629,6 +661,14 @@ void embed_file(int *core_len, unsigned char *core_file, char *filename)
     banner_present = 1;
     memcpy(&core_file[(max_core_size - 32) * 1024], file_data, file_len);
   }
+
+  if (!header_block->embed_file_offset) {
+    fprintf(stderr, "INFO: first file embed_file_offset = $%06X\n", *core_len);
+    header_block->embed_file_offset = htoc64l(*core_len);
+    last_file_offset = *core_len;
+  }
+
+  fprintf(stderr, "INFO: Writing file '%s' at offset $%06X, len=%d\n", basename, last_file_offset, file_len);
 
   // Write embedded file
   unsigned int this_offset = last_file_offset;
@@ -753,7 +793,7 @@ void calculate_core_crc32(int core_len, unsigned char *core_file)
 
   crc = rc_crc32(0, (char *)core_file, core_len);
 
-  fprintf(stderr, "INFO: CRC32 = %08X\n", crc);
+  fprintf(stderr, "INFO: setting CRC32 = $%08X\n", crc);
 
   header_block->core_crc32 = crc;
 }
@@ -781,7 +821,9 @@ int DIRTYMOCK(main)(int argc, char **argv)
   if (err != 0)
     return err;
 
-  offset = build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH, argc > 6 ? ARG_COREFLAGS : NULL);
+  // this needs to have better commandline parsing of arguments!
+  offset = build_core_file(bit_size, &core_len, core_file, ARG_CORENAME, ARG_COREVERSION, ARG_M65TARGETNAME, ARG_BITSTREAMPATH,
+                           (argc > 6 ? ARG_COREFLAGS : NULL), (argc > 7 ? ARG_INSTALLFLAGS : NULL));
   for (int i = 6 + offset; i < argc; i++) {
     //    fprintf(stderr,"Embedding file '%s'\n",argv[i]);
     if (argv[i][0] == '@')
