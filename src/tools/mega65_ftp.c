@@ -1474,28 +1474,12 @@ int ethernet_embed_packet_seq(uint8_t *payload, int len, int seq_num)
 }
 
 /**
- * This function is called when an ACK timeout occurs. It requests an Ethernet 
- * controller reset from MEGA65 by sending a reset command packet to the Ethernet controller.
- *
- * @return 1 if the reset command packet was successfully sent, 0 otherwise.
+ * This function is called when an ACK timeout occurs.
  */
 int ethernet_timeout_handler()
 {
-  static uint16_t reset_seq_num = 0;
-
-  if (packet_received) {
-    ++reset_seq_num;
-    packet_received = FALSE;
-  }
-
-  log_warn("ACK timeout, requesting ethernet controller reset from MEGA65, seq_no %u", reset_seq_num);
-  const int packet_size = 7;
-  uint8_t payload[packet_size];
-  memcpy(payload, ethernet_request_string, 4); // 'mreq' magic string
-  payload[4] = reset_seq_num & 0xFF;
-  payload[5] = reset_seq_num >> 8;
-  payload[6] = 0xfe;                           // reset tx command
-  ethl_send_packet_unscheduled(payload, packet_size);
+  printf("\n");
+  log_crit("Timeout error in communication with MEGA65!");
   exit(-1);
 }
 
