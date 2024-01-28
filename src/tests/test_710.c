@@ -12,16 +12,16 @@ Issue #585 - Some bitstream builds result in faulty attic ram reads
 
 #define NUM_TESTS 10
 long test_address[NUM_TESTS] = {
-    0x85300a1,
-    0x8185963,
     0x8000000,
-    0x8575efe,
-    0x82be383,
-    0x8018b2d,
-    0x843fffd,
-    0x8000000,
-    0x833350a,
-    0x877c35b,
+    0x8000001,
+    0x8000002,
+    0x8000003,
+    0x8000004,
+    0x8000005,
+    0x8000006,
+    0x8000007,
+    0x8000008,
+    0x8000009,
 };
 
 // in test_585_asm.s

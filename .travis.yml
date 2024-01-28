@@ -16,10 +16,9 @@ matrix:
       script:
       - make arcmac
       - wget https://raw.githubusercontent.com/MEGA65/builder-docker/main/megabuild/filehost-upload
-      - echo "$TRAVIS_PULL_REQUEST-$TRAVIS_BRANCH"
       - |
-        if [[ "$TRAVIS_PULL_REQUEST" ]]; then
-          true
+        if [[ "$TRAVIS_PULL_REQUEST" != "false" ]]; then
+          echo "PR build: skipping publish."
         elif [[ "$TRAVIS_BRANCH" == "master" ]]; then
           python3 filehost-upload -i 57f855b9-a758-49df-ba7c-d120c4d1241d -a addversion -V $TRAVIS_BUILD_NUMBER -I "`git log -1 --pretty=tformat:'master@%h: %s'`" m65tools-*-macos.7z
         elif [[ "$TRAVIS_BRANCH" == "development" ]]; then
