@@ -16,6 +16,7 @@ matrix:
       script:
       - make arcmac
       - wget https://raw.githubusercontent.com/MEGA65/builder-docker/main/megabuild/filehost-upload
+      - echo "$TRAVIS_PULL_REQUEST-$TRAVIS_BRANCH"
       - |
         if [[ "$TRAVIS_PULL_REQUEST" ]]; then
           true
