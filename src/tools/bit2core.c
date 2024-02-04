@@ -252,17 +252,17 @@ int count_sync_words(void *data, int length)
 int create_erase_list(void *data, int length)
 {
   int count = 0, offset = 0;
-  void *pos = data, *new;
+  char *pos = data, *new_pos;
   header_info *header_block = (header_info *)core_file;
 
   memset(header_block->erase_list, 0xff, 16);
   while (pos != NULL && length > 0 && count < 16) {
-    new = memsearch(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
-    if (new == NULL)
+    new_pos = memsearch(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
+    if (new_pos == NULL)
       break;
-    offset = new - pos;
+    offset = new_pos - pos;
     length -= offset;
-    pos = new + 4;
+    pos = new_pos + 4;
     if (((offset >> 16) & 0xff))
       header_block->erase_list[count++] = (uint8_t)((offset >> 16) & 0xff);
   }
