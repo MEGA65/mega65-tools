@@ -235,7 +235,8 @@ void *memsearch(const void *haystack_start, size_t haystack_len, const void *nee
 int count_sync_words(void *data, int length)
 {
   int count = 0;
-  void *pos = data, *new;
+  void *pos = data;
+  void *new;
 
   while (pos != NULL && length > 0) {
     new = memsearch(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
