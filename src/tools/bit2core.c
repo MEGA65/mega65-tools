@@ -212,13 +212,33 @@ typedef union {
 } header_info;
 #pragma pack(pop)
 
+void *memsearch(const void *haystack_start, size_t haystack_len, const void *needle_start, size_t needle_len)
+{
+  void *haystack = (void *)haystack_start;
+  void *needle = (void *)needle_start;
+
+  if (needle_len == 0)
+    return (void *) haystack;
+  
+  if (haystack_len < needle_len)
+    return NULL;
+
+  while (needle_len <= haystack_len) {
+    if (!memcmp(haystack, needle, needle_len))
+      return haystack;
+    haystack++;
+    haystack_len--;
+  }
+  return NULL;
+}
+
 int count_sync_words(void *data, int length)
 {
   int count = 0;
   void *pos = data, *new;
 
   while (pos != NULL && length > 0) {
-    new = memmem(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
+    new = memsearch(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
     if (new == NULL)
       break;
     length -= (new - pos);
@@ -237,7 +257,7 @@ int create_erase_list(void *data, int length)
 
   memset(header_block->erase_list, 0xff, 16);
   while (pos != NULL && length > 0 && count < 16) {
-    new = memmem(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
+    new = memsearch(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
     if (new == NULL)
       break;
     offset = new - pos;

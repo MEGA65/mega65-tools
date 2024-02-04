@@ -694,15 +694,15 @@ $(BINDIR)/vcdgraph:	$(TOOLDIR)/vcdgraph.c Makefile
 # arg2 = pre-requisites
 define TRIPLE_TARGET
 $(1): $(2) $(TOOLDIR)/version.c Makefile
-	$$(CC) -g -Wall -D_GNU_SOURCE -Iinclude -o $$@ $$(filter %.c,$$^)
+	$$(CC) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
 $(1).exe: $(2) win_build_check $(TOOLDIR)/version.c conan_win Makefile
-	$$(WINCC) $$(WINCOPT) -g -Wall -D_GNU_SOURCE -Iinclude -o $$@ $$(filter %.c,$$^)
+	$$(WINCC) $$(WINCOPT) -g -Wall -Iinclude -o $$@ $$(filter %.c,$$^)
 
 $(1)_intel.osx: $(2) $(TOOLDIR)/version.c conan_mac Makefile
-	$(CC) $$(MACINTELCOPT) -D_GNU_SOURCE -Iinclude -o $$@ $$(filter %.c,$$^)
+	$(CC) $$(MACINTELCOPT) -Iinclude -o $$@ $$(filter %.c,$$^)
 $(1)_arm.osx: $(2) $(TOOLDIR)/version.c conan_mac Makefile
-	$(CC) $$(MACARMCOPT) -D_GNU_SOURCE -Iinclude -o $$@ $$(filter %.c,$$^)
+	$(CC) $$(MACARMCOPT) -Iinclude -o $$@ $$(filter %.c,$$^)
 endef
 
 # Creates 2 targets:
