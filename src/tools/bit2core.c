@@ -45,6 +45,9 @@ static unsigned char bitstream_data[MAX_MB * BYTES_IN_MEGABYTE];
 unsigned char core_file[8192 * 1024];
 int core_len = 0;
 
+#define SYNC_WORD_LENGTH 4
+static uint8_t bitstream_sync_word[SYNC_WORD_LENGTH] = { 0xaa, 0x99, 0x55, 0x66 };
+
 typedef struct {
   char name[MAX_M65_TARGET_NAME_LEN];
   int max_core_mb_size;
@@ -140,12 +143,11 @@ static m65core_capabilities_t map_m65core_capability[] = {
   { "m65cart",  CORECAP_CART_M65 },
   { "", 0 }
 };
-// clang-format on
 
-// clang-format off
-#define COREINST_FACTORY 0b00000001
-#define COREINST_AUTO    0b00000010
-#define COREINST_FORCE   0b10000000
+#define COREINST_FACTORY   0b00000001
+#define COREINST_AUTO      0b00000010
+#define COREINST_ERASELIST 0b01000000
+#define COREINST_FORCE     0b10000000
 
 static m65core_capabilities_t map_m65core_installflags[] = {
   { "factory", COREINST_FACTORY },
@@ -202,9 +204,55 @@ typedef union {
     // this needs to be at 0x80 !!
     uint32_t core_size;
     uint32_t core_crc32;
+    // skip to 0xf0
+    uint32_t __unused3[26];
+    // 64k sectors containing sync words
+    uint8_t erase_list[16];
   };
 } header_info;
 #pragma pack(pop)
+
+int count_sync_words(void *data, int length)
+{
+  int count = 0;
+  void *pos = data, *new;
+
+  while (pos != NULL && length > 0) {
+    new = memmem(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
+    if (new == NULL)
+      break;
+    length -= (new - pos);
+    pos = new + 4;
+    count++;
+  }
+
+  return count;
+}
+
+int create_erase_list(void *data, int length)
+{
+  int count = 0, offset = 0;
+  void *pos = data, *new;
+  header_info *header_block = (header_info *)core_file;
+
+  memset(header_block->erase_list, 0xff, 16);
+  while (pos != NULL && length > 0 && count < 16) {
+    new = memmem(pos, length, bitstream_sync_word, SYNC_WORD_LENGTH);
+    if (new == NULL)
+      break;
+    offset = new - pos;
+    length -= offset;
+    pos = new + 4;
+    if (((offset >> 16) & 0xff))
+      header_block->erase_list[count++] = (uint8_t)((offset >> 16) & 0xff);
+  }
+  if (count) {
+    fprintf(stderr, "WARNING: more than one sync word in corefile! Created eraselist\n");
+    header_block->core_installflags |= COREINST_ERASELIST;
+  }
+
+  return count;
+}
 
 void split_out_and_print_m65target_names(m65target_info *m65target)
 {
@@ -560,9 +608,13 @@ int build_core_file(const int bit_size, int *core_len, unsigned char *core_file,
   if ((header_block.core_bootflags & header_block.core_bootcaps) != header_block.core_bootflags)
     fprintf(stderr, "WARNING: bootflags are not supported by bootcaps!\n");
   // parse core install flags
+
   if (install_flags && install_flags[0] == '+') {
     header_block.core_installflags = parse_capability_bits(install_flags + 1, map_m65core_installflags);
     offset = 2;
+    if (count_sync_words((void *)bitstream_data, bit_size) > 1) {
+      fprintf(stderr, "WARNING: more than one sync word in bitstream!\n");
+    }
     if (header_block.core_installflags && strcmp(core_name, "MEGA65")) {
       header_block.core_installflags = 0;
       fprintf(stderr, "WARNING: installflags invalid for '%s' core, forcing 0\n", core_name);
@@ -842,6 +894,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
   else
     // Leave 4 extra zero bytes at end for end of embedded file chain
     core_len += 4;
+
+  create_erase_list((void *)core_file, core_len);
 
   calculate_core_crc32(core_len, core_file);
 
