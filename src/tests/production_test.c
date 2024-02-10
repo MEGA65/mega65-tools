@@ -13,6 +13,7 @@
 unsigned short i;
 unsigned char a, b, c, d, test_line = 3;
 unsigned short interval_length;
+unsigned char retries = 255;
 
 typedef struct {
   int model_id;
@@ -55,7 +56,6 @@ char *get_model_name(uint8_t model_id)
 
 void get_interval(void)
 {
-
   // Make sure we start measuring a fresh interval
   a = PEEK(0xD6AA);
   while (a == PEEK(0xD6AA))
@@ -241,8 +241,8 @@ unsigned char joya_up = 0, joyb_up = 0, joya_down = 0, joyb_down = 0;
 
 void bust_cache(void)
 {
-  lpoke(0xbfffff2, fast_flags & (0xff - cache_bit));
-  lpoke(0xbfffff2, fast_flags | cache_bit);
+  lpoke(0xbfffff2UL, fast_flags & (0xff - cache_bit));
+  lpoke(0xbfffff2UL, fast_flags | cache_bit);
 }
 
 unsigned char check_sdram()
@@ -266,10 +266,9 @@ unsigned char attic_ram_test(unsigned char mode)
    * mode 1 - SDRAM
    *
    */
-  unsigned char retries = 255;
-
+  addr = 0UL;
   if (!mode)
-    POKE(0xD7FEU, 0x04);
+    POKE(0xD7FEU, 0x00);
   else {
     // figure out which sdram mode to use
     POKE(0xD7FEU, 0x30);
@@ -281,21 +280,22 @@ unsigned char attic_ram_test(unsigned char mode)
     }
   }
 
-  lpoke(0x8000000, 0xbd);
-  while (lpeek(0x8000000) != 0xbd) {
-    lpoke(0x8000000, 0xbd);
+  retries = 255;
+  lpoke(0x8000000UL, 0xbd);
+  while (lpeek(0x8000000UL) != 0xbd) {
+    lpoke(0x8000000UL, 0xbd);
     retries--;
     if (!retries)
-      return 1;
+      return 2;
   }
-  for (addr = 0x8001000; (addr != 0x8800000); addr += 0x1000) {
+  for (addr = 0x8001000UL; (addr != 0x8800000UL); addr += 0x1000UL) {
     // XXX There is still some cache consistency bugs,
     // so we bust the cache before checking various things
     bust_cache();
 
-    if (lpeek(0x8000000) != 0xbd) {
+    if (lpeek(0x8000000UL) != 0xbd) {
       // Memory location didn't hold value
-      return 1;
+      return 3;
     }
 
     //      if (!(addr&0xfffff)) printf(".");
@@ -309,34 +309,34 @@ unsigned char attic_ram_test(unsigned char mode)
 
     i = lpeek(addr);
     if (i != 0x55) {
-      if ((addr != 0x8800000) && (addr != 0x9000000)) {
+      if ((addr != 0x8800000UL) && (addr != 0x9000000UL)) {
         // printf("\n$%08lx corrupted != $55\n (saw $%02x, re-read yields $%02x)",addr,i,lpeek(addr));
-        return 1;
+        return 4;
       }
       break;
     }
 
     bust_cache();
 
-    lpoke(addr, 0xAA);
+    lpoke(addr, 0xaa);
 
     bust_cache();
 
     i = lpeek(addr);
     if (i != 0xaa) {
-      if ((addr != 0x8800000) && (addr != 0x9000000)) {
+      if ((addr != 0x8800000UL) && (addr != 0x9000000UL)) {
         // printf("\n$%08lx corrupted != $AA\n  (saw $%02x, re-read yields $%02x)",addr,i,lpeek(addr));
-        return 1;
+        return 5;
       }
       break;
     }
 
     bust_cache();
 
-    i = lpeek(0x8000000);
+    i = lpeek(0x8000000UL);
     if (i != 0xbd) {
       // printf("\n$8000000 corrupted != $BD\n  (saw $%02x, re-read yields $%02x)",i,lpeek(0x8000000));
-      return 1;
+      return 6;
       break;
     }
   }
@@ -344,7 +344,7 @@ unsigned char attic_ram_test(unsigned char mode)
   upper_addr = addr;
 
   if ((addr != 0x8800000) && (addr != 0x9000000)) {
-    return 1;
+    return 7;
   }
 
   lpoke(0xbfffff2, fast_flags | cache_bit);
@@ -492,8 +492,8 @@ void main(void)
   tm.tm_min = 2;
   tm.tm_hour = 3;
   tm.tm_mday = 1;
-  tm.tm_mon = 12;
-  tm.tm_year = 2022-1900;
+  tm.tm_mon = 3;
+  tm.tm_year = 2024-1900;
   setrtc(&tm);
 
   target = detect_target();
@@ -501,23 +501,25 @@ void main(void)
   snprintf(msg, 80, "Hardware model: %s ($%02x)", get_model_name(target), target);
   print_text(0, 1, 1, msg);
 
-  unit_test_setup("r3prodtest", 0);
+  unit_test_setup("prodtest", 0);
 
   floppy_interval_first = PEEK(0xD6AA);
 
   // Draw colour bars
   for (x = 0; x < 640; x++) {
     for (y = 150; y < 200; y++) {
-      plot_pixel(x, y, (x >> 5) & 0xf);
+      plot_pixel(x, y, (x / 40) & 0xf);
     }
   }
   activate_double_buffer();
 
   POKE(0xD020, 1);
   unit_test_set_current_name("hyperram");
-  if (attic_ram_test(0)) {
+  if ((a = attic_ram_test(0))) {
     print_text(0, test_line++, 2, "FAIL HyperRAM Probe");
     unit_test_report(2, 1, TEST_FAIL);
+    snprintf(msg, 80, "%08lx %d %02x %02x", addr, a, i, retries);
+    print_text(0, 15, 1, msg);
     fails++;
   }
   else {
@@ -527,10 +529,12 @@ void main(void)
   if (target < 4 || target >10)
     print_text(0, test_line++, 7, "SKIP SDRAM Probe (unsupported)");
   else {
-    unit_test_set_current_name("SDRAM");
-    if (attic_ram_test(0)) {
+    unit_test_set_current_name("sdram");
+    if ((a = attic_ram_test(0))) {
       print_text(0, test_line++, 2, "FAIL SDRAM Probe");
       unit_test_report(2, 2, TEST_FAIL);
+      snprintf(msg, 80, "%08lx %d %02x %02x", addr, a, i, retries);
+      print_text(0, 16, 1, msg);
       fails++;
     }
     else {
