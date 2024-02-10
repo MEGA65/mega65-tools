@@ -245,7 +245,7 @@ void bust_cache(void)
   lpoke(0xbfffff2UL, fast_flags | cache_bit);
 }
 
-unsigned char check_sdram()
+unsigned char check_sdram_speed()
 {
   for (i = 0; i < 16; i++) {
     lpoke(0x8000000UL + i, i);
@@ -257,7 +257,7 @@ unsigned char check_sdram()
   return 0;
 }
 
-unsigned char attic_ram_test(unsigned char mode)
+unsigned char attic_ram_test(unsigned char test_sdram)
 {
   /*
    * Test AtticRAM
@@ -267,14 +267,14 @@ unsigned char attic_ram_test(unsigned char mode)
    *
    */
   addr = 0UL;
-  if (!mode)
+  if (!test_sdram)
     POKE(0xD7FEU, 0x00);
   else {
     // figure out which sdram mode to use
     POKE(0xD7FEU, 0x30);
-    if (check_sdram()) {
+    if (check_sdram_speed()) {
       POKE(0xD7FEU, 0x10);
-      if (check_sdram()) {
+      if (check_sdram_speed()) {
         return 1;
       }
     }
@@ -288,64 +288,47 @@ unsigned char attic_ram_test(unsigned char mode)
     if (!retries)
       return 2;
   }
-  for (addr = 0x8001000UL; (addr != 0x8800000UL); addr += 0x1000UL) {
+
+  for (addr = 0x8001000UL; addr != (test_sdram ? 0xc000000UL : 0x9000000UL); addr += 0x1000UL) {
     // XXX There is still some cache consistency bugs,
     // so we bust the cache before checking various things
     bust_cache();
-
     if (lpeek(0x8000000UL) != 0xbd) {
       // Memory location didn't hold value
       return 3;
     }
-
-    //      if (!(addr&0xfffff)) printf(".");
-    //      POKE(0xD020,PEEK(0xD020)+1);
-
     bust_cache();
 
     lpoke(addr, 0x55);
 
     bust_cache();
-
     i = lpeek(addr);
     if (i != 0x55) {
-      if ((addr != 0x8800000UL) && (addr != 0x9000000UL)) {
-        // printf("\n$%08lx corrupted != $55\n (saw $%02x, re-read yields $%02x)",addr,i,lpeek(addr));
+      if (test_sdram || ((addr != 0x8800000UL) && (addr != 0x9000000UL))) { // HyperRAM size detection
         return 4;
       }
       break;
     }
-
     bust_cache();
 
     lpoke(addr, 0xaa);
 
     bust_cache();
-
     i = lpeek(addr);
     if (i != 0xaa) {
-      if ((addr != 0x8800000UL) && (addr != 0x9000000UL)) {
-        // printf("\n$%08lx corrupted != $AA\n  (saw $%02x, re-read yields $%02x)",addr,i,lpeek(addr));
+      if (test_sdram || ((addr != 0x8800000UL) && (addr != 0x9000000UL))) { // HyperRAM size detection
         return 5;
       }
       break;
     }
+  }
 
-    bust_cache();
-
-    i = lpeek(0x8000000UL);
-    if (i != 0xbd) {
-      // printf("\n$8000000 corrupted != $BD\n  (saw $%02x, re-read yields $%02x)",i,lpeek(0x8000000));
-      return 6;
-      break;
-    }
+  // check invalid end adresses
+  if ((addr != 0x8800000UL) && (addr != 0x9000000UL) && (addr != 0xc000000UL)) {
+    return 6;
   }
 
   upper_addr = addr;
-
-  if ((addr != 0x8800000) && (addr != 0x9000000)) {
-    return 7;
-  }
 
   lpoke(0xbfffff2, fast_flags | cache_bit);
 
@@ -363,14 +346,17 @@ unsigned char joy_test(
   unit_test_set_current_name(msg);
 
   // Wait for joystick to go idle again
-  while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f)
-    POKE(0xD020, PEEK(0xD020) + 1);
+  usleep(50000l);
+  while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f);
   // Allow for de-bounce
   usleep(50000l);
 
-  while ((PEEK(0xDC00 + port) & 0x1f) == 0x1f)
-    POKE(0xD020, PEEK(0xD020) + 1);
-  if ((PEEK(0xDC00 + port) & 0x1f) != val) {
+  // we only accept single direction pushes!
+  do {
+    a = PEEK(0xDC00 + port) & 0x1f;
+  } while (a != 0x1e && a != 0x1d && a != 0x1b && a != 0x17 && a != 0x0f);
+
+  if (a != val) {
     unit_test_report(maj, min, TEST_FAIL);
     res = 1;
   }
@@ -379,8 +365,7 @@ unsigned char joy_test(
   }
 
   // Wait for joystick to go idle again
-  while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f)
-    POKE(0xD020, PEEK(0xD020) + 1);
+  while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f);
   // Allow for de-bounce
   usleep(50000l);
 
@@ -518,29 +503,29 @@ void main(void)
   if ((a = attic_ram_test(0))) {
     print_text(0, test_line++, 2, "FAIL HyperRAM Probe");
     unit_test_report(2, 1, TEST_FAIL);
-    snprintf(msg, 80, "%08lx %d %02x %02x", addr, a, i, retries);
-    print_text(0, 15, 1, msg);
     fails++;
   }
   else {
     print_text(0, test_line++, 5, "PASS HyperRAM Probe");
     unit_test_report(2, 1, TEST_PASS);
   }
-  if (target < 4 || target >10)
+  snprintf(msg, 80, "%08lx %d %02x %02x", addr, a, i, retries);
+  print_text(0, 15, 12, msg);
+  if (target < 4 || target > 10)
     print_text(0, test_line++, 7, "SKIP SDRAM Probe (unsupported)");
   else {
     unit_test_set_current_name("sdram");
-    if ((a = attic_ram_test(0))) {
+    if ((a = attic_ram_test(1))) {
       print_text(0, test_line++, 2, "FAIL SDRAM Probe");
       unit_test_report(2, 2, TEST_FAIL);
-      snprintf(msg, 80, "%08lx %d %02x %02x", addr, a, i, retries);
-      print_text(0, 16, 1, msg);
       fails++;
     }
     else {
       print_text(0, test_line++, 5, "PASS SDRAM Probe");
       unit_test_report(2, 2, TEST_PASS);
     }
+    snprintf(msg, 80, "%08lx %d %02x %02x", addr, a, i, retries);
+    print_text(0, 16, 12, msg);
   }
 
   // Internal floppy connector
@@ -636,11 +621,13 @@ void main(void)
   }
   else {
     // But try to set it running if it isn't running
-    lpoke(0xffd7118, 0x41);
-    usleep(30000);
-    lpoke(0xffd7110, 0x01);
-    usleep(30000);
-    lpoke(0xffd7118, 0x01);
+    tm.tm_sec = 2;
+    tm.tm_min = 3;
+    tm.tm_hour = 4;
+    tm.tm_mday = 2;
+    tm.tm_mon = 3;
+    tm.tm_year = 2024-1900;
+    setrtc(&tm);
 
     // Now wait a couple of seconds and try again
     for (a = 0; a < 50; a++)
