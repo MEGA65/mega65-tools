@@ -524,6 +524,9 @@ $(TESTDIR)/floppycapacity.prg:       $(TESTDIR)/floppycapacity.c $(TESTDIR)/flop
 $(TESTDIR)/r3_production_test.prg:       $(TESTDIR)/r3_production_test.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
+$(TESTDIR)/production_test.prg:       $(TESTDIR)/production_test.c $(CC65) $(MEGA65LIBCLIB)
+	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
+
 $(TESTDIR)/ultrasoundtest.prg:       $(TESTDIR)/ultrasoundtest.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 

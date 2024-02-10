@@ -11,8 +11,47 @@
 #include <tests.h>
 
 unsigned short i;
-unsigned char a, b, c, d;
+unsigned char a, b, c, d, test_line = 3;
 unsigned short interval_length;
+
+typedef struct {
+  int model_id;
+  uint8_t slot_mb;
+  char *name;
+} mega_models_t;
+
+// clang-format off
+mega_models_t mega_models[] = {
+  { 0x01, 8, "MEGA65 R1" },
+  { 0x02, 4, "MEGA65 R2" },
+  { 0x03, 8, "MEGA65 R3" },
+  { 0x04, 8, "MEGA65 R4" },
+  { 0x05, 8, "MEGA65 R5" },
+  { 0x06, 8, "MEGA65 R6" },
+  { 0x21, 4, "MEGAphone R1" },
+  { 0x22, 4, "MEGAphone R4" },
+  { 0x40, 4, "Nexys4" },
+  { 0x41, 4, "Nexys4DDR" },
+  { 0x42, 4, "Nexys4DDR-widget" },
+  { 0x60, 4, "QMTECH A100T"},
+  { 0x61, 8, "QMTECH A200T"},
+  { 0x62, 8, "QMTECH A325T"},
+  { 0xFD, 4, "Wukong A100T" },
+  { 0xFE, 8, "Simulation" },
+  { 0x00, 0, "Unknown" }
+};
+// clang-format on
+
+char *get_model_name(uint8_t model_id)
+{
+  uint8_t k;
+
+  for (k = 0; mega_models[k].model_id; k++)
+    if (model_id == mega_models[k].model_id)
+      return mega_models[k].name;
+
+  return NULL;
+}
 
 void get_interval(void)
 {
@@ -206,23 +245,50 @@ void bust_cache(void)
   lpoke(0xbfffff2, fast_flags | cache_bit);
 }
 
-unsigned char setup_hyperram(void)
+unsigned char check_sdram()
+{
+  for (i = 0; i < 16; i++) {
+    lpoke(0x8000000UL + i, i);
+  }
+  for (i = 0; i < 16; i++) {
+    if (lpeek(0x8000000UL + i) != i)
+      return 1;
+  }
+  return 0;
+}
+
+unsigned char attic_ram_test(unsigned char mode)
 {
   /*
-    Test complete HyperRAM, including working out the size.
-  */
-
+   * Test AtticRAM
+   *
+   * mode 0 - HyperRAM
+   * mode 1 - SDRAM
+   *
+   */
   unsigned char retries = 255;
 
+  if (!mode)
+    POKE(0xD7FEU, 0x04);
+  else {
+    // figure out which sdram mode to use
+    POKE(0xD7FEU, 0x30);
+    if (check_sdram()) {
+      POKE(0xD7FEU, 0x10);
+      if (check_sdram()) {
+        return 1;
+      }
+    }
+  }
+
   lpoke(0x8000000, 0xbd);
-  while (lpeek(0x8000000) != 0xBD) {
+  while (lpeek(0x8000000) != 0xbd) {
     lpoke(0x8000000, 0xbd);
     retries--;
     if (!retries)
       return 1;
   }
   for (addr = 0x8001000; (addr != 0x8800000); addr += 0x1000) {
-
     // XXX There is still some cache consistency bugs,
     // so we bust the cache before checking various things
     bust_cache();
@@ -311,6 +377,7 @@ unsigned char joy_test(
   else {
     unit_test_report(maj, min, TEST_PASS);
   }
+
   // Wait for joystick to go idle again
   while ((PEEK(0xDC00 + port) & 0x1f) != 0x1f)
     POKE(0xD020, PEEK(0xD020) + 1);
@@ -362,7 +429,7 @@ void test_rtc(void)
 
 void main(void)
 {
-  unsigned char fails = 0;
+  unsigned char fails = 0, target;
 
   // Fast CPU, M65 IO
   POKE(0, 65);
@@ -396,9 +463,26 @@ void main(void)
   POKE(0xD740, 0);
   POKE(0xD750, 0);
 
-  // Audio cross-bar full volume
-  for (i = 0; i < 256; i++)
-    audioxbar_setcoefficient(i, 0xff);
+  // Audio cross-bar to full channel seperation
+  for (i = 0; i < 4; i++) {
+    audioxbar_setcoefficient(0x00 + i, i < 2 ? 0xff : 0x00);
+    audioxbar_setcoefficient(0x10 + i, i < 2 ? 0xff : 0x00);
+    audioxbar_setcoefficient(0xc0 + i, i < 2 ? 0xff : 0x00);
+    audioxbar_setcoefficient(0xd0 + i, i < 2 ? 0xff : 0x00);
+    audioxbar_setcoefficient(0x20 + i, i < 2 ? 0x00 : 0xff);
+    audioxbar_setcoefficient(0x30 + i, i < 2 ? 0x00 : 0xff);
+    audioxbar_setcoefficient(0xe0 + i, i < 2 ? 0x00 : 0xff);
+    audioxbar_setcoefficient(0xf0 + i, i < 2 ? 0x00 : 0xff);
+  }
+  // master full power
+  audioxbar_setcoefficient(0x1e, 0xff);
+  audioxbar_setcoefficient(0x1f, 0xff);
+  audioxbar_setcoefficient(0x3e, 0xff);
+  audioxbar_setcoefficient(0x3f, 0xff);
+  audioxbar_setcoefficient(0xde, 0xff);
+  audioxbar_setcoefficient(0xdf, 0xff);
+  audioxbar_setcoefficient(0xfe, 0xff);
+  audioxbar_setcoefficient(0xff, 0xff);
 
   graphics_mode();
   graphics_clear_double_buffer();
@@ -412,9 +496,10 @@ void main(void)
   tm.tm_year = 2022-1900;
   setrtc(&tm);
 
-  print_text(0, 0, 1, "MEGA65 R3 PCB Production Test V2");
-  snprintf(msg, 80, "Hardware model = %d", detect_target());
-  print_text(0, 15, 1, msg);
+  target = detect_target();
+  print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3");
+  snprintf(msg, 80, "Hardware model: %s ($%02x)", get_model_name(target), target);
+  print_text(0, 1, 1, msg);
 
   unit_test_setup("r3prodtest", 0);
 
@@ -430,14 +515,28 @@ void main(void)
 
   POKE(0xD020, 1);
   unit_test_set_current_name("hyperram");
-  if (setup_hyperram()) {
-    print_text(0, 5, 2, "FAIL HyperRAM Probe");
+  if (attic_ram_test(0)) {
+    print_text(0, test_line++, 2, "FAIL HyperRAM Probe");
     unit_test_report(2, 1, TEST_FAIL);
     fails++;
   }
   else {
-    print_text(0, 5, 5, "PASS HyperRAM Probe");
+    print_text(0, test_line++, 5, "PASS HyperRAM Probe");
     unit_test_report(2, 1, TEST_PASS);
+  }
+  if (target < 4 || target >10)
+    print_text(0, test_line++, 7, "SKIP SDRAM Probe (unsupported)");
+  else {
+    unit_test_set_current_name("SDRAM");
+    if (attic_ram_test(0)) {
+      print_text(0, test_line++, 2, "FAIL SDRAM Probe");
+      unit_test_report(2, 2, TEST_FAIL);
+      fails++;
+    }
+    else {
+      print_text(0, test_line++, 5, "PASS SDRAM Probe");
+      unit_test_report(2, 2, TEST_PASS);
+    }
   }
 
   // Internal floppy connector
@@ -446,12 +545,12 @@ void main(void)
     floppy_active = 1;
   unit_test_set_current_name("floppy");
   if (!floppy_active) {
-    print_text(0, 2, 2, "FAIL Floppy (is a disk inserted?)");
+    print_text(0, test_line++, 2, "FAIL Floppy (is a disk inserted?)");
     unit_test_report(3, 1, TEST_FAIL);
     fails++;
   }
   else {
-    print_text(0, 2, 5, "PASS Floppy                          ");
+    print_text(0, test_line++, 5, "PASS Floppy                          ");
     unit_test_report(3, 1, TEST_PASS);
   }
 
@@ -479,7 +578,7 @@ void main(void)
           unit_test_report(4, 1, TEST_PASS);
         }
         else {
-          print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK+DATA)");
+          print_text(0, test_line, 2, "FAIL IEC CLK+DATA (CLK+DATA)");
           unit_test_report(4, 1, TEST_FAIL);
           fails++;
         }
@@ -490,7 +589,7 @@ void main(void)
         unit_test_set_current_name("iec c+d clk");
         unit_test_report(4, 2, TEST_FAIL);
         fails++;
-        print_text(0, 3, 2, "FAIL IEC CLK+DATA (CLK)");
+        print_text(0, test_line, 2, "FAIL IEC CLK+DATA (CLK)");
       }
       unit_test_set_current_name("iec c+d data");
       unit_test_report(4, 3, TEST_PASS);
@@ -499,7 +598,7 @@ void main(void)
       unit_test_set_current_name("iec c+d data");
       unit_test_report(4, 3, TEST_FAIL);
       fails++;
-      print_text(0, 3, 2, "FAIL IEC CLK+DATA (DATA)");
+      print_text(0, test_line, 2, "FAIL IEC CLK+DATA (DATA)");
     }
     unit_test_set_current_name("iec c+d float");
     unit_test_report(4, 4, TEST_PASS);
@@ -509,17 +608,18 @@ void main(void)
     unit_test_report(4, 4, TEST_FAIL);
     fails++;
     snprintf(msg, 80, "FAIL IEC CLK+DATA (float $%02x)", v);
-    print_text(0, 3, 2, msg);
+    print_text(0, test_line, 2, msg);
   }
   unit_test_set_current_name("iec c+d all");
   if (iec_pass) {
     unit_test_report(4, 5, TEST_PASS);
-    print_text(0, 3, 5, "PASS IEC CLK+DATA                     ");
+    print_text(0, test_line, 5, "PASS IEC CLK+DATA                     ");
   }
   else {
     unit_test_report(4, 5, TEST_FAIL);
     fails++;
   }
+  test_line++;
 
   // Real-time clock
   POKE(0xD020, 5);
@@ -528,10 +628,9 @@ void main(void)
   if (rtc_bad == 0) {
     unit_test_report(5, 1, TEST_PASS);
     snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
-    print_text(0, 4, 5, msg);
+    print_text(0, test_line++, 5, msg);
   }
   else {
-
     // But try to set it running if it isn't running
     lpoke(0xffd7118, 0x41);
     usleep(30000);
@@ -550,12 +649,12 @@ void main(void)
     if (rtc_bad == 0) {
       unit_test_report(5, 1, TEST_PASS);
       snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
-      print_text(0, 4, 5, msg);
+      print_text(0, test_line++, 5, msg);
     }
     else {
       unit_test_report(5, 1, TEST_FAIL);
       fails++;
-      print_text(0, 4, 2, "FAIL RTC Not running             ");
+      print_text(0, test_line++, 2, "FAIL RTC Not running             ");
     }
   }
 
@@ -563,7 +662,7 @@ void main(void)
   POKE(0xD020, 2);
 
   unit_test_set_current_name("speaker left");
-  print_text(0, 6, 7, "TEST Left speaker (P=PASS,F=FAIL)");
+  print_text(0, test_line, 7, "TEST Left speaker (P=PASS,F=FAIL)");
   play_sine(0, 2000);
   play_sine(3, 1);
 
@@ -576,17 +675,18 @@ void main(void)
   case 0x50:
   case 0x70:
     unit_test_report(6, 1, TEST_PASS);
-    print_text(0, 6, 5, "PASS Left speaker                ");
+    print_text(0, test_line, 5, "PASS Left speaker                ");
     break;
   default:
     unit_test_report(6, 1, TEST_FAIL);
-    print_text(0, 6, 2, "FAIL Left speaker                ");
+    print_text(0, test_line, 2, "FAIL Left speaker                ");
     fails++;
   }
   POKE(0xD610, 0);
+  test_line++;
 
   unit_test_set_current_name("speaker right");
-  print_text(0, 7, 7, "TEST Right speaker (P=PASS,F=FAIL)");
+  print_text(0, test_line, 7, "TEST Right speaker (P=PASS,F=FAIL)");
   play_sine(0, 1);
   play_sine(3, 3000);
   while (!PEEK(0xD610))
@@ -595,14 +695,15 @@ void main(void)
   case 0x50:
   case 0x70:
     unit_test_report(6, 2, TEST_PASS);
-    print_text(0, 7, 5, "PASS Right speaker                ");
+    print_text(0, test_line, 5, "PASS Right speaker                ");
     break;
   default:
     unit_test_report(6, 2, TEST_FAIL);
-    print_text(0, 7, 2, "FAIL Right speaker                ");
+    print_text(0, test_line, 2, "FAIL Right speaker                ");
     fails++;
   }
   POKE(0xD610, 0);
+  test_line++;
 
   // Turn off sound after
   play_sine(0, 1);
@@ -614,29 +715,43 @@ void main(void)
   POKE(0xD740, 0);
   POKE(0xD750, 0);
 
-  errs += joy_test(1, 7, 1, 0x1b, 8, "LEFT ", "l");
-  errs += joy_test(1, 7, 2, 0x17, 8, "RIGHT", "r");
-  errs += joy_test(1, 7, 3, 0x1e, 8, "UP   ", "u");
-  errs += joy_test(1, 7, 4, 0x1d, 8, "DOWN ", "d");
-  errs += joy_test(1, 7, 5, 0x0f, 8, "FIRE ", "f");
+  do {
+    errs = 0;
+    errs += joy_test(1, 7, 1, 0x1b, test_line, "LEFT ", "l");
+    errs += joy_test(1, 7, 2, 0x17, test_line, "RIGHT", "r");
+    errs += joy_test(1, 7, 3, 0x1e, test_line, "UP   ", "u");
+    errs += joy_test(1, 7, 4, 0x1d, test_line, "DOWN ", "d");
+    errs += joy_test(1, 7, 5, 0x0f, test_line, "FIRE ", "f");
 
-  errs += joy_test(0, 8, 1, 0x1b, 8, "LEFT ", "l");
-  errs += joy_test(0, 8, 2, 0x17, 8, "RIGHT", "r");
-  errs += joy_test(0, 8, 3, 0x1e, 8, "UP   ", "u");
-  errs += joy_test(0, 8, 4, 0x1d, 8, "DOWN ", "d");
-  errs += joy_test(0, 8, 5, 0x0f, 8, "FIRE ", "f");
+    errs += joy_test(0, 8, 1, 0x1b, test_line, "LEFT ", "l");
+    errs += joy_test(0, 8, 2, 0x17, test_line, "RIGHT", "r");
+    errs += joy_test(0, 8, 3, 0x1e, test_line, "UP   ", "u");
+    errs += joy_test(0, 8, 4, 0x1d, test_line, "DOWN ", "d");
+    errs += joy_test(0, 8, 5, 0x0f, test_line, "FIRE ", "f");
 
-  // XXX Test POT lines
+    // XXX Test POT lines
+
+    i = 0;
+    if (errs) {
+      print_text(0, test_line, 10, "FAILED! press F1 to restart     ");
+      while (PEEK(0xD610U)) {
+        POKE(0xD610U, 0);
+      }
+      while (!(i = PEEK(0xd610U)));
+      POKE(0xD610U, 0);
+    }
+  } while (i == 0xf1);
 
   if (errs) {
     snprintf(msg, 80, "FAIL Joysticks (%d errors)      ", errs);
-    print_text(0, 8, 2, msg);
+    print_text(0, test_line, 2, msg);
     fails++;
   }
   else {
     snprintf(msg, 80, "PASS Joysticks                 ", errs);
-    print_text(0, 8, 5, msg);
+    print_text(0, test_line, 5, msg);
   }
+  test_line++;
 
   // Don't test ethernet, as we test it in ethtest.prg instead now
 #if 0
@@ -652,10 +767,10 @@ void main(void)
       eth_pass = 1;
 #endif
 
-  unit_test_set_current_name("r3prodtest");
+  unit_test_set_current_name("r6prodtest");
   unit_test_report(10, 1, TEST_DONEALL);
 
-  print_text(0, 17, fails>0?2:5, "ALL TESTS COMPLETE");
+  print_text(0, 17, fails > 0 ? 2 : 5, "ALL TESTS COMPLETE");
 
   while (1)
     continue;
