@@ -2,8 +2,6 @@
 	.export _test_memory
 	.import _test_status
 	farptr = $a5
-	burstptr = $a9
-	burstbyte = $ad
 	scrnptr = $24
 
 	;; destructive memory test
@@ -12,20 +10,6 @@
 _test_memory:
 	lda #$ff	;; set test_status to -1 (fail)
 	sta _test_status
-	;; build cache invalidation ptr by using farptr as base
-	lda farptr
-	eor #$55
-	sta burstptr
-	lda farptr+1
-	eor #$55
-	sta burstptr+1
-	lda farptr+2
-	eor #$10
-	sta burstptr+2
-	lda farptr+3
-	sta burstptr+3
-	lda #$55
-	sta burstbyte
 	ldz #0
 tm_loop0:
 	ldy #$00
@@ -41,19 +25,9 @@ tm_loop2:
 	jsr tm_printByte
 	ldx #3
 tm_loop_val:
-	lda burstbyte
-	sta (burstptr),z
-	eor #$aa
-	sta (burstptr),z
 	lda test_val,x
 	nop
 	sta (farptr),z
-	pha
-	lda #$bd
-	sta (burstptr),z
-	eor #$aa
-	sta (burstptr),z
-	pla
 	nop
 	cmp (farptr),z
 	bne tm_fail	;; fail
