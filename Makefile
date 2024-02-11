@@ -497,6 +497,9 @@ $(TESTDIR)/test_710.prg:       $(TESTDIR)/test_710.c $(TESTDIR)/test_710_asm.s $
 $(TESTDIR)/test_719.prg:       $(TESTDIR)/test_719.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
+$(TESTDIR)/test_785.prg:       $(TESTDIR)/test_785.c $(CC65) $(MEGA65LIBCLIB)
+	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
+
 $(TESTDIR)/buffereduart.prg:       $(TESTDIR)/buffereduart.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -Iinclude/ -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 

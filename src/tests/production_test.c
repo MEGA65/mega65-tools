@@ -11,7 +11,7 @@
 #include <tests.h>
 
 unsigned short i;
-unsigned char a, b, c, d, test_line = 3;
+unsigned char a, b, c, d, test_line = 3, target;
 unsigned short interval_length;
 unsigned char retries = 255;
 
@@ -235,14 +235,16 @@ void audioxbar_setcoefficient(uint8_t n, uint8_t value)
 unsigned char fast_flags = 0x70; // 0xb0;
 unsigned char slow_flags = 0x00;
 unsigned char cache_bit = 0x80; // =0x80;
-unsigned long addr, upper_addr, time, speed;
+unsigned long addr, bust_addr, upper_addr, time, speed;
 
 unsigned char joya_up = 0, joyb_up = 0, joya_down = 0, joyb_down = 0;
 
 void bust_cache(void)
 {
-  lpoke(0xbfffff2UL, fast_flags & (0xff - cache_bit));
-  lpoke(0xbfffff2UL, fast_flags | cache_bit);
+  // generate bust_addr inside address range
+  bust_addr = addr ^ 0x105555UL;
+  lpoke(bust_addr, fast_flags & (0xff - cache_bit));
+  lpoke(bust_addr, fast_flags | cache_bit);
 }
 
 unsigned char check_sdram_speed()
@@ -289,7 +291,7 @@ unsigned char attic_ram_test(unsigned char test_sdram)
       return 2;
   }
 
-  for (addr = 0x8001000UL; addr != (test_sdram ? 0xc000000UL : 0x9000000UL); addr += 0x1000UL) {
+  for (addr = 0x8001000UL; addr < (test_sdram ? 0xc000000UL : 0x9000000UL); addr += 0x1000UL) {
     // XXX There is still some cache consistency bugs,
     // so we bust the cache before checking various things
     bust_cache();
@@ -330,7 +332,7 @@ unsigned char attic_ram_test(unsigned char test_sdram)
 
   upper_addr = addr;
 
-  lpoke(0xbfffff2, fast_flags | cache_bit);
+  bust_cache();
 
   return 0;
 }
@@ -414,7 +416,9 @@ void test_rtc(void)
 
 void main(void)
 {
-  unsigned char fails = 0, target;
+  unsigned char fails = 0;
+
+  target = detect_target();
 
   // Fast CPU, M65 IO
   POKE(0, 65);
@@ -481,7 +485,6 @@ void main(void)
   tm.tm_year = 2024-1900;
   setrtc(&tm);
 
-  target = detect_target();
   print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3");
   snprintf(msg, 80, "Hardware model: %s ($%02x)", get_model_name(target), target);
   print_text(0, 1, 1, msg);
@@ -499,34 +502,38 @@ void main(void)
   activate_double_buffer();
 
   POKE(0xD020, 1);
+  print_text(0, test_line, 7, "TEST HyperRAM");
   unit_test_set_current_name("hyperram");
   if ((a = attic_ram_test(0))) {
-    print_text(0, test_line++, 2, "FAIL HyperRAM Probe");
+    print_text(0, test_line, 2, "FAIL HyperRAM");
+    snprintf(msg, 80, "%7lx %d %02x %02x", addr, a, i, retries);
+    print_text(20, test_line++, 12, msg);
     unit_test_report(2, 1, TEST_FAIL);
     fails++;
   }
   else {
-    print_text(0, test_line++, 5, "PASS HyperRAM Probe");
+    print_text(0, test_line++, 5, "PASS HyperRAM");
     unit_test_report(2, 1, TEST_PASS);
   }
-  snprintf(msg, 80, "%08lx %d %02x %02x", addr, a, i, retries);
-  print_text(0, 15, 12, msg);
   if (target < 4 || target > 10)
-    print_text(0, test_line++, 7, "SKIP SDRAM Probe (unsupported)");
+    print_text(0, test_line++, 7, "SKIP SDRAM (unsupported)");
   else {
+    print_text(0, test_line, 7, "TEST SDRAM");
     unit_test_set_current_name("sdram");
     if ((a = attic_ram_test(1))) {
-      print_text(0, test_line++, 2, "FAIL SDRAM Probe");
+      print_text(0, test_line, 2, "FAIL SDRAM");
+      snprintf(msg, 80, "%7lx %d %02x %02x", addr, a, i, retries);
+      print_text(20, test_line++, 12, msg);
       unit_test_report(2, 2, TEST_FAIL);
       fails++;
     }
     else {
-      print_text(0, test_line++, 5, "PASS SDRAM Probe");
+      print_text(0, test_line++, 5, "PASS SDRAM");
       unit_test_report(2, 2, TEST_PASS);
     }
-    snprintf(msg, 80, "%08lx %d %02x %02x", addr, a, i, retries);
-    print_text(0, 16, 12, msg);
   }
+  // switch back to hyperram
+  POKE(0xD7FEU, 0x00);
 
   // Internal floppy connector
   POKE(0xD020, 3);

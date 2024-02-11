@@ -196,14 +196,15 @@ void audioxbar_setcoefficient(uint8_t n, uint8_t value)
 unsigned char fast_flags = 0x70; // 0xb0;
 unsigned char slow_flags = 0x00;
 unsigned char cache_bit = 0x80; // =0x80;
-unsigned long addr, upper_addr, time, speed;
+unsigned long addr, bust_addr, upper_addr, time, speed;
 
 unsigned char joya_up = 0, joyb_up = 0, joya_down = 0, joyb_down = 0;
 
 void bust_cache(void)
 {
-  lpoke(0xbfffff2, fast_flags & (0xff - cache_bit));
-  lpoke(0xbfffff2, fast_flags | cache_bit);
+  bust_addr = addr ^ 0x105555UL;
+  lpoke(bust_addr, fast_flags & (0xff - cache_bit));
+  lpoke(bust_addr, fast_flags | cache_bit);
 }
 
 unsigned char setup_hyperram(void)
@@ -281,7 +282,7 @@ unsigned char setup_hyperram(void)
     return 1;
   }
 
-  lpoke(0xbfffff2, fast_flags | cache_bit);
+  bust_cache();
 
   return 0;
 }
