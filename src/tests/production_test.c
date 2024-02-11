@@ -105,9 +105,6 @@ void graphics_mode(void)
   // Disable hot regs
   POKE(0xD05D, PEEK(0xD05D) & 0x7f);
 
-  // Enable temperature compensation for internal RTC
-  lpoke(0xffd311d, lpeek(0xffd311d) | 0xe0);
-
   // Layout screen so that graphics data comes from $40000 -- $4FFFF
 
   i = 0x40000 / 0x40;
@@ -115,7 +112,6 @@ void graphics_mode(void)
     for (b = 0; b < 25; b++) {
       POKE(0xC000 + b * 80 + a * 2 + 0, i & 0xff);
       POKE(0xC000 + b * 80 + a * 2 + 1, i >> 8);
-
       i++;
     }
 
@@ -220,6 +216,97 @@ void play_sine(unsigned char ch, unsigned long time_base)
   POKE(0xD726 + ch_ofs, time_base >> 16);
 }
 
+unsigned char frames;
+unsigned char note;
+unsigned char sid_num;
+unsigned int sid_addr;
+unsigned int notes[5] = { 5001, 5613, 4455, 2227, 3338 };
+
+unsigned char play_sid_tune(unsigned char side)
+{
+  /*
+   * ripped from freezer AUDIMOIX
+   * side:
+   *  0 = right
+   *  1 = left
+   */
+
+  // clear keyboard buffer
+  while (PEEK(0xD610))
+    POKE(0xD610, 0);
+
+  // Reset all sids
+  while (PEEK(0xD012U) != 0x80); // wait for raster
+  lfill(0xffd3400, 0, 0x80);
+  while (PEEK(0xD012U) != 0x80); // wait for raster
+
+  // Full volume on all SIDs
+  POKE(0xD418U, 0x0f);
+  POKE(0xD438U, 0x0f);
+  POKE(0xD458U, 0x0f);
+  POKE(0xD478U, 0x0f);
+  while (PEEK(0xD012U) != 0x80); // wait for raster
+
+  note = 0;
+  while (1) {
+    sid_num = (note%2) + side*2;
+    sid_addr = 0xd400 + (0x20 * sid_num);
+
+    // Play note
+    POKE(sid_addr + 0, notes[note] & 0xff);
+    POKE(sid_addr + 1, notes[note] >> 8);
+    POKE(sid_addr + 4, 0x10);
+    POKE(sid_addr + 5, 0x0c);
+    POKE(sid_addr + 6, 0x00);
+    POKE(sid_addr + 4, 0x11);
+
+    // Wait 1/2 second before next note
+    // (==25 frames)
+    /*
+      So the trick here, is that we need to decide if we are doing 4-SID mode,
+      where all SIDs are 1/2 volume (gain can of course be increased to compensate),
+      or whether we allow the primary pair of SIDs to be louder.
+      We have to write to 4-SID registers at least every couple of frames to keep them active
+    */
+    for (frames = 0; frames < 35; frames++) {
+      // Make sure all 4 SIDs remain active
+      // by proding while waiting
+      while (PEEK(0xD012U) != 0x80) {
+        POKE(0xD438U, 0x0f);
+        POKE(0xD478U, 0x0f);
+      }
+
+      while (PEEK(0xD012U) == 0x80)
+        continue;
+    }
+
+    // look for a keypress of P or F
+    if ((a = PEEK(0xD610))) {
+      a &= 0x5f;
+      if (a == 0x46 || a == 0x50)
+        break;
+    }
+
+    note++;
+    if (note == 5)
+      note = 0;
+  }
+
+  // Silence SIDs gradually to avoid pops
+  for (frames = 15; frames != 255; frames--) {
+    while (PEEK(0xD012U) != 0x80); // wait for raster
+    POKE(0xD418U, frames);
+    POKE(0xD438U, frames);
+    POKE(0xD458U, frames);
+    POKE(0xD478U, frames);
+  }
+
+  // Reset all sids
+  //lfill(0xffd3400, 0, 0x80);
+
+  return a == 0x50 ? 1 : 0;
+}
+
 void audioxbar_setcoefficient(uint8_t n, uint8_t value)
 {
   // Select the coefficient
@@ -230,6 +317,30 @@ void audioxbar_setcoefficient(uint8_t n, uint8_t value)
   POKE(0xD020U, PEEK(0xD020U));
 
   POKE(0xD6F5U, value);
+}
+
+void setup_mixer()
+{
+  // Audio cross-bar to full channel seperation
+  for (i = 0; i < 4; i++) {
+    audioxbar_setcoefficient(0x00 + i, i < 2 ? 0xff : 0x00);
+    audioxbar_setcoefficient(0x10 + i, i < 2 ? 0xff : 0x00);
+    audioxbar_setcoefficient(0xc0 + i, i < 2 ? 0xff : 0x00);
+    audioxbar_setcoefficient(0xd0 + i, i < 2 ? 0xff : 0x00);
+    audioxbar_setcoefficient(0x20 + i, i < 2 ? 0x00 : 0xff);
+    audioxbar_setcoefficient(0x30 + i, i < 2 ? 0x00 : 0xff);
+    audioxbar_setcoefficient(0xe0 + i, i < 2 ? 0x00 : 0xff);
+    audioxbar_setcoefficient(0xf0 + i, i < 2 ? 0x00 : 0xff);
+  }
+  // master full power
+  audioxbar_setcoefficient(0x1e, 0xff);
+  audioxbar_setcoefficient(0x1f, 0xff);
+  audioxbar_setcoefficient(0x3e, 0xff);
+  audioxbar_setcoefficient(0x3f, 0xff);
+  audioxbar_setcoefficient(0xde, 0xff);
+  audioxbar_setcoefficient(0xdf, 0xff);
+  audioxbar_setcoefficient(0xfe, 0xff);
+  audioxbar_setcoefficient(0xff, 0xff);
 }
 
 unsigned char fast_flags = 0x70; // 0xb0;
@@ -379,6 +490,32 @@ unsigned char errs = 0;
 unsigned char rtc_bad = 1;
 unsigned char frame_prev, frame_count, frame_num;
 
+void setup_rtc(void)
+{
+  if (target == 0x03)
+    // Enable temperature compensation for internal RTC on mega65r3
+    lpoke(0xffd311d, lpeek(0xffd311d) | 0xe0);
+  else if (target > 0x03 && target < 0x06) {
+    // enable backup power on mega65r4-r6
+    a = lpeek(0xffd71d0UL);
+    if (a != 0x22) {
+      // disable eeprom refresh
+      lpoke(0xffd7120UL, 0x04);
+      usleep(20000L); // need to wait for slow RTC getting updated
+      // set backup switchover mode to LSM, TCM 3V (Battery protection)
+      lpoke(0xffd71d0UL, 0x22);
+      usleep(20000L);
+      // EECMD Update EEPROM
+      lpoke(0xffd714fUL, 0x11);
+      usleep(20000L);
+      // enable eeprom refresh
+      lpoke(0xffd7120UL, 0x00);
+      usleep(20000L);
+      a = lpeek(0xffd71d0UL);
+    }
+  }
+}
+
 void test_rtc(void)
 {
   getrtc(&tm);
@@ -452,29 +589,11 @@ void main(void)
   POKE(0xD740, 0);
   POKE(0xD750, 0);
 
-  // Audio cross-bar to full channel seperation
-  for (i = 0; i < 4; i++) {
-    audioxbar_setcoefficient(0x00 + i, i < 2 ? 0xff : 0x00);
-    audioxbar_setcoefficient(0x10 + i, i < 2 ? 0xff : 0x00);
-    audioxbar_setcoefficient(0xc0 + i, i < 2 ? 0xff : 0x00);
-    audioxbar_setcoefficient(0xd0 + i, i < 2 ? 0xff : 0x00);
-    audioxbar_setcoefficient(0x20 + i, i < 2 ? 0x00 : 0xff);
-    audioxbar_setcoefficient(0x30 + i, i < 2 ? 0x00 : 0xff);
-    audioxbar_setcoefficient(0xe0 + i, i < 2 ? 0x00 : 0xff);
-    audioxbar_setcoefficient(0xf0 + i, i < 2 ? 0x00 : 0xff);
-  }
-  // master full power
-  audioxbar_setcoefficient(0x1e, 0xff);
-  audioxbar_setcoefficient(0x1f, 0xff);
-  audioxbar_setcoefficient(0x3e, 0xff);
-  audioxbar_setcoefficient(0x3f, 0xff);
-  audioxbar_setcoefficient(0xde, 0xff);
-  audioxbar_setcoefficient(0xdf, 0xff);
-  audioxbar_setcoefficient(0xfe, 0xff);
-  audioxbar_setcoefficient(0xff, 0xff);
-
   graphics_mode();
   graphics_clear_double_buffer();
+
+  setup_rtc();
+  setup_mixer();
 
   // set rtc, so it can tick
   tm.tm_sec = 1;
@@ -657,25 +776,14 @@ void main(void)
   }
 
   // Play two different tones out of the left and right speakers alternately
-  POKE(0xD020, 2);
-
+  POKE(0xD020, 6);
   unit_test_set_current_name("speaker left");
   print_text(0, test_line, 7, "TEST Left speaker (P=PASS,F=FAIL)");
-  play_sine(0, 2000);
-  play_sine(3, 1);
-
-  while (PEEK(0xD610))
-    POKE(0xD610, 0);
-
-  while (!PEEK(0xD610))
-    POKE(0xD020, PEEK(0xD020 + 1));
-  switch (PEEK(0xD610)) {
-  case 0x50:
-  case 0x70:
+  if (play_sid_tune(1)) {
     unit_test_report(6, 1, TEST_PASS);
     print_text(0, test_line, 5, "PASS Left speaker                ");
-    break;
-  default:
+  }
+  else {
     unit_test_report(6, 1, TEST_FAIL);
     print_text(0, test_line, 2, "FAIL Left speaker                ");
     fails++;
@@ -685,17 +793,11 @@ void main(void)
 
   unit_test_set_current_name("speaker right");
   print_text(0, test_line, 7, "TEST Right speaker (P=PASS,F=FAIL)");
-  play_sine(0, 1);
-  play_sine(3, 3000);
-  while (!PEEK(0xD610))
-    POKE(0xD020, PEEK(0xD020 + 1));
-  switch (PEEK(0xD610)) {
-  case 0x50:
-  case 0x70:
+  if (play_sid_tune(0)) {
     unit_test_report(6, 2, TEST_PASS);
     print_text(0, test_line, 5, "PASS Right speaker                ");
-    break;
-  default:
+  }
+  else {
     unit_test_report(6, 2, TEST_FAIL);
     print_text(0, test_line, 2, "FAIL Right speaker                ");
     fails++;
@@ -713,6 +815,7 @@ void main(void)
   POKE(0xD740, 0);
   POKE(0xD750, 0);
 
+  POKE(0xD020, 7);
   do {
     errs = 0;
     errs += joy_test(1, 7, 1, 0x1b, test_line, "LEFT ", "l");
@@ -731,7 +834,7 @@ void main(void)
 
     i = 0;
     if (errs) {
-      print_text(0, test_line, 10, "FAILED! press F1 to restart     ");
+      print_text(0, test_line, 10, "FAILED! press F1 to retry      ");
       while (PEEK(0xD610U)) {
         POKE(0xD610U, 0);
       }
@@ -764,6 +867,7 @@ void main(void)
     if (PEEK(0xD6E1) & 0x20)
       eth_pass = 1;
 #endif
+  POKE(0xD020, 0);
 
   unit_test_set_current_name("r6prodtest");
   unit_test_report(10, 1, TEST_DONEALL);
