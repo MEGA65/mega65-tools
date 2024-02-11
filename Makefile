@@ -150,6 +150,7 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_719.prg \
 		$(TESTDIR)/test_mandelbrot.prg \
 		$(TESTDIR)/eth_rxd_test.prg \
+		$(TESTDIR)/production_test.prg
 
 TOOLDIR=	$(SRCDIR)/tools
 
