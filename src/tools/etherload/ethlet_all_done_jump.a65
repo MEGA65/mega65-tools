@@ -201,6 +201,10 @@ jump_routine:
 	map
 	eom
 
+	; disable force_fast CPU mode
+	lda #$00
+	sta $00
+
 jump_addr:
 	jmp $0000
 jump_routine_end:

@@ -357,6 +357,10 @@ finalize:
 	; only use 8-bit stack
 	see
 
+	; disable force_fast CPU mode
+	lda #$40
+	sta $00
+
 	jmp reset_mega65
 
 romfilename:
