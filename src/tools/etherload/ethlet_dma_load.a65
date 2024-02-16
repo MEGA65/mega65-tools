@@ -120,10 +120,11 @@ dest_bank:
 	sta $d6e3
 
 	; swap src/dst ip addresses (no need to recalc ip chks as this change won't alter it)
-	; $1c - $1f = rx src ip
-	; $20 - $23 = rx dst ip
-	; $1a - $1d = tx src ip
-	; $1e - $21 = tx dst ip
+	; note that rx is offset by two bytes due to length header, but tx buffer is not
+	; $18 - $27 = rx src ip ----+
+	; $16 - $25 = tx src ip <-+ |
+	; $28 - $37 = rx dst ip --+ |
+	; $26 - $35 = tx dst ip <---+
 	ldx #$0f
 *
 	lda $18,x
