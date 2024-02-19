@@ -176,7 +176,7 @@ unsigned char floppy_active = 0;
 unsigned char eth_pass = 0;
 unsigned char iec_pass = 0, v, y;
 unsigned int x;
-struct m65_tm tm, tm2;
+struct m65_tm tm = {1, 2, 3, 1, 3, 2024-1900}, tm1, tm2;
 char msg[80];
 
 unsigned char sin_table[32] = {
@@ -406,7 +406,8 @@ unsigned char attic_ram_test(unsigned char test_sdram)
     // XXX There is still some cache consistency bugs,
     // so we bust the cache before checking various things
     bust_cache();
-    if (lpeek(0x8000000UL) != 0xbd) {
+    i = lpeek(0x8000000UL);
+    if (i != 0xbd) {
       // Memory location didn't hold value
       return 3;
     }
@@ -518,7 +519,7 @@ void setup_rtc(void)
 
 void test_rtc(void)
 {
-  getrtc(&tm);
+  getrtc(&tm1);
   frame_prev = PEEK(0xD7FA);
   frame_count = 0;
   rtc_bad = 1;
@@ -536,11 +537,13 @@ void test_rtc(void)
       break;
     }
     getrtc(&tm2);
-    if (tm.tm_sec != tm2.tm_sec) {
+    if (tm1.tm_sec != tm2.tm_sec) {
       // Reset frame counter on first tick
       if (frame_count < 48) {
+        tm1 = tm2;
         frame_count = 0;
-        tm = tm2;
+        // getrtc from libc takes a while, so we also need to update this!
+        frame_prev = PEEK(0xD7FA);
       }
       else if (frame_count < 52) {
         // 48--52 frames per tick = seems to be ticking right
@@ -596,12 +599,6 @@ void main(void)
   setup_mixer();
 
   // set rtc, so it can tick
-  tm.tm_sec = 1;
-  tm.tm_min = 2;
-  tm.tm_hour = 3;
-  tm.tm_mday = 1;
-  tm.tm_mon = 3;
-  tm.tm_year = 2024-1900;
   setrtc(&tm);
 
   print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3");
@@ -641,8 +638,8 @@ void main(void)
     unit_test_set_current_name("sdram");
     if ((a = attic_ram_test(1))) {
       print_text(0, test_line, 2, "FAIL SDRAM");
-      snprintf(msg, 80, "%7lx %d %02x %02x", addr, a, i, retries);
-      print_text(20, test_line++, 12, msg);
+      snprintf(msg, 80, "a%07lX b%07lX r%d i%02X t%02X", addr, bust_addr, a, i, retries);
+      print_text(12, test_line++, 12, msg);
       unit_test_report(2, 2, TEST_FAIL);
       fails++;
     }
@@ -742,22 +739,17 @@ void main(void)
 
   if (rtc_bad == 0) {
     unit_test_report(5, 1, TEST_PASS);
-    snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
+    snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm2.tm_hour, tm2.tm_min, tm2.tm_sec);
     print_text(0, test_line++, 5, msg);
   }
   else {
     // But try to set it running if it isn't running
-    tm.tm_sec = 2;
-    tm.tm_min = 3;
-    tm.tm_hour = 4;
-    tm.tm_mday = 2;
-    tm.tm_mon = 3;
-    tm.tm_year = 2024-1900;
+    tm.tm_mday++;
     setrtc(&tm);
 
     // Now wait a couple of seconds and try again
-    for (a = 0; a < 50; a++)
-      usleep(50000l);
+    for (a = 0; a < 30; a++)
+      usleep(100000l);
 
     POKE(0xD020, 6);
     test_rtc();
@@ -765,7 +757,7 @@ void main(void)
     getrtc(&tm);
     if (rtc_bad == 0) {
       unit_test_report(5, 1, TEST_PASS);
-      snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm.tm_hour, tm.tm_min, tm.tm_sec);
+      snprintf(msg, 80, "PASS RTC Ticks (%02d:%02d.%02d)   ", tm2.tm_hour, tm2.tm_min, tm2.tm_sec);
       print_text(0, test_line++, 5, msg);
     }
     else {
