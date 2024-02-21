@@ -125,6 +125,7 @@ char current_dir[1024] = "/";
 #endif
 
 int open_file_system(void);
+int upload_slot(int slot_number, char* src_name);
 int download_slot(int sllot, char *dest_name);
 int download_file(char *dest_name, char *local_name, int showClusters);
 int download_flashslot(int slot_number, char *dest_name);
@@ -523,6 +524,9 @@ int execute_command(char *cmd)
     exit(0);
   }
 
+  if (parse_command(cmd, "putslot %d %s", &slot, src) == 2) {
+    upload_slot(slot, src);
+  }
   if (parse_command(cmd, "getslot %d %s", &slot, dst) == 2) {
     download_slot(slot, dst);
   }
@@ -663,6 +667,7 @@ int execute_command(char *cmd)
     printf("clusters <file> - show cluster chain of specified file.\n");
     printf("mount <d81file> - Mount the specified .d81 file (which resides in the root of the SD card).\n");
     printf("sector <number|$hex number> - display the contents of the specified sector.\n");
+    printf("putslot <slot> <source name> - upload a freeze slot.\n");
     printf("getslot <slot> <destination name> - download a freeze slot.\n");
     printf("dirent_raw 0|1|2 - flag to hide/show 32-byte dump of directory entries. (2=more verbose)\n");
     printf("clustermap <startidx> [<count>] - show cluster-map entries for specified range.\n");
@@ -4732,6 +4737,54 @@ int create_dir(char *dest_name)
 }
 
 unsigned char download_buffer[512];
+
+int upload_slot(int slot_number, char* src_name)
+{
+  int retVal = 0;
+  do {
+
+    if (!syspart_start) {
+      printf("ERROR: No system partition detected.\n");
+      retVal = -1;
+      break;
+    }
+
+    if (slot_number < 0 || slot_number >= syspart_slot_count) {
+      printf("ERROR: Invalid slot number (valid range is 0 -- %d)\n", syspart_slot_count);
+      retVal = -1;
+      break;
+    }
+
+    FILE* f = fopen(src_name, "rb");
+    if (!f) {
+      printf("ERROR: Could not open file '%s' for reading\n", src_name);
+      retVal = -1;
+      break;
+    }
+    printf("Saving %s into slot %d\n", src_name, slot_number);
+
+    for (int i = 0; i < syspart_slot_size; i++) {
+      unsigned char sector[512];
+      int sector_num = syspart_start + syspart_freeze_area + syspart_slotdir_sectors + slot_number * syspart_slot_size + i;
+      fread(sector, 512, 1, f);
+      if (!i)
+        printf("Uploading %d sectors beginning at sector $%08x\n", syspart_slot_size, sector_num);
+      if (write_sector(sector_num, sector)) {
+        printf("ERROR: Could not write sector %d/%d of freeze slot %d (absolute sector %d)\n", i, syspart_slot_size,
+            slot_number, sector_num);
+        retVal = -1;
+        break;
+      }
+      printf(".");
+      fflush(stdout);
+    }
+    fclose(f);
+    printf("\n");
+
+  } while (0);
+
+  return retVal;
+}
 
 int download_slot(int slot_number, char *dest_name)
 {
