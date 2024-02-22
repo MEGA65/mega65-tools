@@ -532,20 +532,20 @@ void test_rtc(void)
     if (frame_num != frame_prev)
       frame_count += (frame_num - frame_prev);
     frame_prev = frame_num;
-    if (frame_count > 52) {
+    if (frame_count > 250) {
       rtc_bad = 1;
       break;
     }
     getrtc(&tm2);
     if (tm1.tm_sec != tm2.tm_sec) {
       // Reset frame counter on first tick
-      if (frame_count < 48) {
+      if (frame_count < 48 || frame_count > 52) {
         tm1 = tm2;
         frame_count = 0;
         // getrtc from libc takes a while, so we also need to update this!
         frame_prev = PEEK(0xD7FA);
       }
-      else if (frame_count < 52) {
+      else  {
         // 48--52 frames per tick = seems to be ticking right
         rtc_bad = 0;
         break;
