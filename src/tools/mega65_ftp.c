@@ -684,7 +684,7 @@ int execute_command(char *cmd)
     printf("fhget <num> [destname] - download a file from the filehost and upload it onto your sd-card\n"
            "                         (to only download to local drive, set destname to -\n");
     printf("fhflash <num> <slotnum> - download a cor file from the filehost and flash it to specified slot via vivado\n");
-    printf("flash <fname> <slotnum> - flash a cor file on your local drive to specified slot via vivado\n");
+    printf("flash <fname> <slotnum> - (DEVKIT only!) flash a cor file on your local drive to specified slot via vivado\n");
     printf("roms - list all MEGA65x.ROM files on your sd-card along with their version information\n");
     printf("exit - leave this programme.\n");
     printf("quit - leave this programme.\n");
@@ -3446,6 +3446,9 @@ models_type models[] = {
     { 0x01,   "MEGA65 R1",                      4,        4,        "xc7a200t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
     { 0x02,   "MEGA65 R2",                      4,        8,        "xc7a100t_0", "s25fl256sxxxxxx0-spi-x1_x2_x4" },
     { 0x03,   "MEGA65 R3",                      8,        4,        "xc7a200t_0", "s25fl256sxxxxxx0-spi-x1_x2_x4" },
+    { 0x04,   "MEGA65 R4",                     -1,        8,        "xc7a200t_0", "s25fl512s-spi-x1_x2_x4" },
+    { 0x05,   "MEGA65 R5",                     -1,        8,        "xc7a200t_0", "s25fl512s-spi-x1_x2_x4" },
+    { 0x06,   "MEGA65 R6",                     -1,        8,        "xc7a200t_0", "s25fl512s-spi-x1_x2_x4" },
     { 0x21,   "MEGAphone R1",                   4,        4,        "xc7a200t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
     { 0x40,   "Nexys4 PSRAM",                   4,        4,        "xc7a100t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
     { 0x41,   "Nexys4DDR",                      4,        4,        "xc7a100t_0", "s25fl128sxxxxxx0-spi-x1_x2_x4" },
@@ -3501,6 +3504,10 @@ int check_model_id_field(char *corefile)
            "Safe to flash.\n");
     return 1;
   }
+
+  if (core_model_id == 0x03)
+    printf("\nNOTE: this is only supported on DEVKITs!\n"
+           "Don't use on Batch 1 or 2 machines!\n\n");
 
   if (core_model_id == 0x00) {
     printf(".COR file is missing model-id field.\n"
@@ -3587,6 +3594,13 @@ BOOL initial_flashing_checks(void)
     return FALSE;
   }
 
+  if (mdl->slot_size == -1) {
+    printf(" Hardware model id: $%02X - %s\n\n"
+           "Flashing of this hardware is not supported!\n"
+           "Please use MEGAFLASH on the device instead (hold NO SCROLL, power on).\n", hardware_model_id, mdl->name);
+    return FALSE;
+  }
+
   return TRUE;
 }
 
@@ -3633,10 +3647,16 @@ void flash_core_to_slot(char *fname, int slotnum)
   system(vivado_cmd);
 
   // After flashing completes, remind user to power cycle their hardware
-  printf("\nIf all went well, \"%s\" has been flashed to slot %d.\n\n"
-         "Please power cycle your device.\n\n"
-         "The 'mega65_ftp' tool will exit now. To start another session, re-run after power-cycling.\n\n",
-      fname, slotnum);
+  printf("\nIf all went well, \"%s\" has been flashed to slot %d.\n\n", fname, slotnum);
+
+  if (hardware_model_id == 0x03)
+    printf("\nIf you see some ERROR line looking like this:\n"
+           "      Flash Programming Unsuccessful. Part selected s25fl256sxxxxxx0, but part s25fl512s detected.\n"
+           "it means that you have a mega65r3a board and can't use the flash command.\n"
+           "Please use MEGAFLASH on your MEGA65 instead!\n\n\n");
+
+  printf("Please power cycle your device.\n\n"
+         "The 'mega65_ftp' tool will exit now. To start another session, re-run after power-cycling.\n\n");
 
   // exit mega65_ftp (as a new session will need to be created after the power-cycle anyway)
   exit(0);
