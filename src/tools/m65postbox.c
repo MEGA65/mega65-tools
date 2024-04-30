@@ -68,6 +68,11 @@
 char serial_port[1024] = "/dev/ttyUSB1";
 char device_name[1024] = "";
 
+enum FILE_STATE { FS_WAIT, FS_WRITE };
+enum FILE_STATE file_state = FS_WAIT;
+static char fname[256] = "";
+static FILE* f = NULL;
+
 extern const char* version_string;
 
 void usage(void)
@@ -81,8 +86,6 @@ void usage(void)
   fprintf(stderr, "\n");
   exit(-3);
 }
-
-enum FILE_STATE { FS_WAIT, FS_WRITE };
 
 void convert_to_pcfile(const char* src_name)
 {
@@ -122,23 +125,24 @@ void convert_to_pcfile(const char* src_name)
   printf("Saved out pc-friendly version as \"%s\"...\n", dest_name);
 }
 
+void FILEpkt(char* pkt)
+{
+  printf("got here...\n");
+  strcpy(fname, pkt+6);
+  // fname[strlen(fname)-1] = '\0';
+  printf("Writing to file \"%s\"...\n", fname);
+  f = fopen(fname, "wb");
+  file_state = FS_WRITE;
+}
+
 void parse_packet(char* pkt) {
-  static enum FILE_STATE file_state = FS_WAIT;
-  static char fname[256] = "";
-  static FILE* f = NULL;
 
   printf("parsing packet: \n%s\n", pkt);
 
   switch(file_state) {
     case FS_WAIT:
-      if (strncmp(pkt, "/FILE:", 6) == 0) {
-        printf("got here...\n");
-        strcpy(fname, pkt+6);
-        // fname[strlen(fname)-1] = '\0';
-        printf("Writing to file \"%s\"...\n", fname);
-        f = fopen(fname, "wb");
-        file_state = FS_WRITE;
-      }
+      if (strncmp(pkt, "/FILE:", 6) == 0)
+        FILEpkt(pkt);
       break;
 
     case FS_WRITE:
