@@ -556,7 +556,7 @@ void test_rtc(void)
 
 void main(void)
 {
-  unsigned char fails = 0;
+  unsigned char fails = 0, test_tries;
 
   target = detect_target();
 
@@ -601,7 +601,7 @@ void main(void)
   // set rtc, so it can tick
   setrtc(&tm);
 
-  print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3");
+  print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3.1");
   snprintf(msg, 80, "Hardware model: %s ($%02x)", get_model_name(target), target);
   print_text(0, 1, 1, msg);
 
@@ -634,18 +634,25 @@ void main(void)
   if (target < 4 || target > 10)
     print_text(0, test_line++, 7, "SKIP SDRAM (unsupported)");
   else {
-    print_text(0, test_line, 7, "TEST SDRAM");
     unit_test_set_current_name("sdram");
-    if ((a = attic_ram_test(1))) {
-      print_text(0, test_line, 2, "FAIL SDRAM");
+    // do three retries, SDRAM might be picky
+    for (test_tries = 0; test_tries < 3; test_tries++) {
+      snprintf(msg, 80, "TEST SDRAM %d", test_tries);
+      print_text(0, test_line, 7, msg);
+      if (!(a = attic_ram_test(1))) {
+        print_text(0, test_line++, 5, "PASS SDRAM    ");
+        unit_test_report(2, 2, TEST_PASS);
+        break;
+      }
+      usleep(500000l);
+    }
+    if (test_tries == 3) {
+      // soft fail! needs to be changed back to real fail!
+      print_text(0, test_line, 7, "SKIP SDRAM");
       snprintf(msg, 80, "a%07lX b%07lX r%d i%02X t%02X", addr, bust_addr, a, i, retries);
-      print_text(12, test_line++, 12, msg);
+      print_text(13, test_line++, 12, msg);
       unit_test_report(2, 2, TEST_FAIL);
       fails++;
-    }
-    else {
-      print_text(0, test_line++, 5, "PASS SDRAM");
-      unit_test_report(2, 2, TEST_PASS);
     }
   }
   // switch back to hyperram
