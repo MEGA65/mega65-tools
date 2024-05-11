@@ -347,6 +347,7 @@ unsigned char fast_flags = 0x70; // 0xb0;
 unsigned char slow_flags = 0x00;
 unsigned char cache_bit = 0x80; // =0x80;
 unsigned long addr, bust_addr, upper_addr, time, speed;
+uint8_t sdram_speed = 0x00;
 
 unsigned char joya_up = 0, joyb_up = 0, joya_down = 0, joyb_down = 0;
 
@@ -379,17 +380,26 @@ unsigned char attic_ram_test(unsigned char test_sdram)
    * mode 1 - SDRAM
    *
    */
-  addr = 0UL;
+  addr = 0x8000000UL;
   if (!test_sdram)
     POKE(0xD7FEU, 0x00);
   else {
-    // figure out which sdram mode to use
-    POKE(0xD7FEU, 0x30);
-    if (check_sdram_speed()) {
-      POKE(0xD7FEU, 0x10);
-      if (check_sdram_speed()) {
-        return 1;
+    // select sdram only if we didn't already do it
+    if (!(PEEK(0xD7FE) & 0x10)) {
+      // figure out which sdram mode to use
+      sdram_speed = 0x10; // select sdram with slow (81MHz) clock
+      POKE(0xD7FEU, sdram_speed);
+      if (check_sdram_speed()) { // this should always succeed!
+        sdram_speed = 0x30; // select sdram with fast clock
+        POKE(0xD7FEU, sdram_speed);
+        if (check_sdram_speed()) {
+          POKE(0xD7FEU, 0);
+          print_text(15, 3, 12, "sdram fails");
+          return 1;
+        }
       }
+      snprintf(msg, 40, "sdram%02X", sdram_speed);
+      print_text(15, 3, 12, msg);
     }
   }
 
@@ -443,8 +453,6 @@ unsigned char attic_ram_test(unsigned char test_sdram)
   }
 
   upper_addr = addr;
-
-  bust_cache();
 
   return 0;
 }
@@ -637,20 +645,23 @@ void main(void)
     unit_test_set_current_name("sdram");
     // do three retries, SDRAM might be picky
     for (test_tries = 0; test_tries < 3; test_tries++) {
-      snprintf(msg, 80, "TEST SDRAM %d", test_tries);
-      print_text(0, test_line, 7, msg);
-      if (!(a = attic_ram_test(1))) {
-        print_text(0, test_line++, 5, "PASS SDRAM    ");
+      snprintf(msg, 80, "TEST SDRAM%d", test_tries);
+      print_text(0, test_line++, 7, msg);
+      a = attic_ram_test( 1 );
+      snprintf(msg, 80, "a%07lX b%07lX r%d i%02X t%02X", addr, bust_addr, a, i, retries);
+      print_text(11, test_line - 1, 12, msg);
+      if (!a) {
+        print_text(0, test_line - 1, 5, "PASS SDRAM ");
         unit_test_report(2, 2, TEST_PASS);
         break;
+      }
+      else {
+        print_text(0, test_line - 1, 7, "SKIP SDRAM");
       }
       usleep(500000l);
     }
     if (test_tries == 3) {
       // soft fail! needs to be changed back to real fail!
-      print_text(0, test_line, 7, "SKIP SDRAM");
-      snprintf(msg, 80, "a%07lX b%07lX r%d i%02X t%02X", addr, bust_addr, a, i, retries);
-      print_text(13, test_line++, 12, msg);
       unit_test_report(2, 2, TEST_FAIL);
       fails++;
     }
