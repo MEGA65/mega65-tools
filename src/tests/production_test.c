@@ -354,9 +354,9 @@ unsigned char joya_up = 0, joyb_up = 0, joya_down = 0, joyb_down = 0;
 void bust_cache(void)
 {
   // generate bust_addr inside address range
-  bust_addr = addr ^ 0x105555UL;
-  lpoke(bust_addr, fast_flags & (0xff - cache_bit));
-  lpoke(bust_addr, fast_flags | cache_bit);
+  bust_addr = (addr ^ 0x105555UL) & 0xbffffffUL;
+  lpoke(bust_addr, 0x55);
+  lpoke(bust_addr, 0xaa);
 }
 
 unsigned char check_sdram_speed()
@@ -647,7 +647,7 @@ void main(void)
     for (test_tries = 0; test_tries < 3; test_tries++) {
       snprintf(msg, 80, "TEST SDRAM%d", test_tries);
       print_text(0, test_line++, 7, msg);
-      a = attic_ram_test( 1 );
+      a = attic_ram_test(1);
       snprintf(msg, 80, "a%07lX b%07lX r%d i%02X t%02X", addr, bust_addr, a, i, retries);
       print_text(11, test_line - 1, 12, msg);
       if (!a) {
