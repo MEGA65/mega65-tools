@@ -697,16 +697,24 @@ class CoreFile:
         if not self.bitstream or not self.bit_target or not self.bit_name or not self.bit_version:
             raise ValueError("need at least bitstream, target, name and version to build core")
 
-        buffer: array = array('B', b'\x00' * self.core_max_size)
+        # calculate full length
+        self.core_length = self.core_max_size
+        if not self.has_banner:
+            if not self.embed_count:
+                self.core_length = 4096 + self.bitstream.raw_data_length
+            else:
+                self.core_length = self.embed_files[-1].next + 40
 
-        embed_offset: int = 4096 + self.bitstream.raw_data_length
+        buffer: array = array('B', b'\x00' * self.core_length)
+
+        embed_offset: int = 4096 + self.bitstream.raw_data_length if self.embed_count else 0
         struct.pack_into("<16s32s32s32sBBBIIBBBHII104s16s", buffer, 0,
                          CORE_MAGIC,
                          self.bit_name.encode('ascii'), self.bit_version.encode('ascii'),
                          self.bit_target.name.encode('ascii'), self.bit_target.code,
                          1 if self.has_banner else 0, self.embed_count, embed_offset, 0,
                          self.boot_caps, self.boot_flags, self.install_flags, 0,
-                         self.core_max_size, CORE_CRC32_I,
+                         self.core_length, CORE_CRC32_I,
                          b'', b'\xff'*16)
 
         buffer[4096:4096+self.bitstream.raw_data_length] = array('B', self.bitstream.raw_data)
@@ -766,7 +774,7 @@ class CoreFile:
 
         self.core_length = res[13]
         if self.core_length != len(data):
-            errors['core_length'] = 'Core length mismatch' if self.core_length > 0 else 'Old bitstream file without length'
+            errors['core_length'] = f'Core length mismatch {len(data)}' if self.core_length > 0 else 'Old bitstream file without length'
         self.core_crc32 = res[14]
         # 15 is filler
 
@@ -780,7 +788,7 @@ class CoreFile:
         if self.core_crc32 != check_core_crc32:
             errors['core_crc32'] = f'CRC32 mismatch, should be {check_core_crc32:08X}' if self.core_crc32 != 0 else 'Old bitstream file without CRC32'
 
-        self.bitstream = FpgaBitStream(self.bit_name, data[4096:next_offset])
+        self.bitstream = FpgaBitStream(self.bit_name, data[4096:next_offset] if next_offset else data[4096:])
         if self.bitstream.target != self.bit_target.fpga:
             errors['bitfile_target'] = f'Core {self.bit_target.fpga} != bitstream {self.bitstream.target}'
 
@@ -825,7 +833,8 @@ class CoreFile:
         for num, embed in enumerate(self.embed_files):
             print(format_error_line(f"    @@ FILE {num:2d}: {embed.name:32s} length {embed.raw_data_length:8d} offset {embed.offset:8d} next {embed.next:8d}", embed.errors))
             embed_next = embed_next
-        print(format_error_line(f"    @@ EOF                                       length        0 offset {embed_next:8d} next        0", self._errors.get('embed_eof')))
+        if self.embed_count:
+            print(format_error_line(f"    @@ EOF                                       length        0 offset {embed_next:8d} next        0", self._errors.get('embed_eof')))
 
 
 class MCSFile:
@@ -1049,7 +1058,7 @@ def build_file(args: argparse.Namespace) -> int:
         print("!Build can currently handle only one bitstream")
         return 1
 
-    core = CoreHeader()
+    core = CoreFile()
 
     bitobj: FpgaBitStream = open_file(bits[0][0])
     if bitobj is None or not isinstance(bitobj, FpgaBitStream) or bitobj.truncated:
