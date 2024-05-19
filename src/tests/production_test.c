@@ -355,8 +355,8 @@ void bust_cache(void)
 {
   // generate bust_addr inside address range
   bust_addr = (addr ^ 0x105555UL) & 0xbffffffUL;
-  lpoke(bust_addr, 0x55);
-  lpoke(bust_addr, 0xaa);
+  lpoke(bust_addr, 0xf0);
+  lpoke(bust_addr, 0x0f);
 }
 
 unsigned char check_sdram_speed()
@@ -382,8 +382,10 @@ unsigned char attic_ram_test(unsigned char test_sdram)
    */
   addr = 0x8000000UL;
   if (!test_sdram)
-    POKE(0xD7FEU, 0x00);
+    POKE(0xD7FEU, 0x04);
   else {
+    POKE(0xD7FEU, 0x10);
+    /*
     // select sdram only if we didn't already do it
     if (!(PEEK(0xD7FE) & 0x10)) {
       // figure out which sdram mode to use
@@ -401,6 +403,7 @@ unsigned char attic_ram_test(unsigned char test_sdram)
       snprintf(msg, 40, "sdram%02X", sdram_speed);
       print_text(15, 3, 12, msg);
     }
+    */
   }
 
   retries = 255;
@@ -609,7 +612,7 @@ void main(void)
   // set rtc, so it can tick
   setrtc(&tm);
 
-  print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3.1");
+  print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3.2");
   snprintf(msg, 80, "Hardware model: %s ($%02x)", get_model_name(target), target);
   print_text(0, 1, 1, msg);
 
