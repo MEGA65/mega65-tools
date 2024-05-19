@@ -14,7 +14,7 @@ from pathlib import Path
 from array import array
 from binascii import crc32
 from itertools import zip_longest
-from typing import Optional, Union, List, Tuple, Dict
+from typing import Optional, Union, List, Tuple, Dict, Generator
 from dataclasses import dataclass
 
 ##
@@ -27,8 +27,10 @@ BANNER_SIZE: int = 32768
 FACTORY_NAME: str = 'MEGA65'
 
 VIVADO_BIT_HEADER: bytes = b'\x00\x09\x0f\xf0\x0f\xf0\x0f\xf0\x0f\xf0\x00\x00\x01'
+# old bit2mcs removes the vivado header from the bitstream before writing it into the MCS...
 TRUNCBIT_MAGIC: bytes = b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
 SYNCWORD: bytes = b'\xaa\x99\x55\x66'
+FLASHSECTOR: int = 64*1024
 
 
 ##
@@ -134,6 +136,9 @@ class ErrorHandler:
     
     def __getitem__(self, key: str) -> List[str]:
         return self._errors[key]
+
+    def __len__(self) -> int:
+        return len(self._errors)
 
     def get(self, key: str) -> List[str]:
         return self._errors.get(key, [])
@@ -244,7 +249,7 @@ class MEGA65flags:
         active = self.get_active(value)
         if not active:
             return empty_str
-        return join_str.join(active)
+        return join_str.join([x for x in active if x[0] != '_'])
 
     def has_invalid_bits(self, value: int) -> bool:
         return (value & self.bad_mask) != 0
@@ -352,20 +357,22 @@ class FpgaBitStream(ContentElement):
     NAMEre = re.compile(r"^(?P<target>.+)-(?P<date>\d{8}\.\d{2})-(?P<branch>.+)-(?P<commit>.{7}~?)\.bit$")
 
     def __init__(self, name: str = None, raw_data: bytes = None, filepath: Union[str, Path] = None):
+        ContentElement.__init__(self, name or '__UNKNOWN__', raw_data or b'')
         self._filepath: Optional[Path] = None
-        if filepath is not None and name is None and raw_data is None:
-            if type(filepath) is str:
-                filepath = Path(filepath)
-            name: str = filepath.name
-            raw_data: bytes = filepath.open('rb').read()
-            self._filepath = filepath
-        ContentElement.__init__(self, name, raw_data)
         self._target: Optional[str] = None
         self._design: Optional[str] = None
         self._date: Optional[datetime.datetime] = None
         self._truncated: bool = False
-        if self._raw_data is not None:
+        if filepath is not None:
+            self.from_file(filepath)
+        elif raw_data is not None:
             self._parse_bs_header()
+
+    def from_file(self, filepath: Path):
+        self.name = filepath.name
+        self.raw_data = filepath.open('rb').read()
+        self._filepath = filepath
+        self._parse_bs_header()
 
     def _parse_bs_header(self):
         REQ_TYPES = {0x61, 0x62, 0x63, 0x64}
@@ -417,7 +424,7 @@ class FpgaBitStream(ContentElement):
         return self._filepath
 
     @property
-    def truncated(self) -> bool:
+    def is_truncated(self) -> bool:
         return self._truncated
 
     @property
@@ -464,7 +471,7 @@ class FpgaBitStream(ContentElement):
         return f'{branch} {self._guess_match["date"]} {self._guess_match["commit"]}'
 
     def print_info(self):
-        print(f'\nBITFILE "{self.name}"{" TRUNCATED" if self.truncated else ""}')
+        print(f'\nBITFILE "{self.name}"{" TRUNCATED" if self.is_truncated else ""}')
         print(f"  Date:   {self.date.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"  Design: {self.design}")
         print(f"  Target: {self.target}")
@@ -499,8 +506,10 @@ class CoreFile:
         self._erase_list: array = array('B', b'\xff'*16)
 
         self._filepath: Path = Path('__BUILDER__')
+
+        self._errors: ErrorHandler = ErrorHandler()
         if filepath:
-            self.load_core(filepath)
+            self.from_file(filepath)
 
     @property
     def filepath(self) -> Path:
@@ -638,14 +647,22 @@ class CoreFile:
     def erase_list(self) -> array:
         return self._erase_list
 
-    @property
-    def erase_list_str(self) -> str:
+    @staticmethod
+    def _format_erase_list(data: array) -> str:
         res: List[str] = []
-        for x in self.erase_list:
+        for x in data:
             if x == 0xff:
                 break
             res.append(f'${x:02X}')
         return ', '.join(res)
+
+    @property
+    def erase_list_str(self) -> str:
+        return self._format_erase_list(self._erase_list)
+
+    @property
+    def has_errors(self) -> bool:
+        return len(self._errors) > 0
 
     def find_file(self, name: str) -> Optional[EmbeddedFile]:
         for file in self._embed_files:
@@ -675,16 +692,16 @@ class CoreFile:
         for file in files:
             self.add_file(file)
 
-    def remove_file(self, pattern: str) -> int:
-        count: int = 0
+    def remove_file(self, pattern: str) -> List[str]:
+        removed: List[str] = []
         new_files: List[EmbeddedFile] = []
         for file in self._embed_files:
             if fnmatch.fnmatch(file.name, pattern):
-                count += 1
+                removed.append(file.name)
                 continue
             new_files.append(file)
         self._embed_files = new_files
-        return count
+        return removed
 
     def rename_file(self, old: str, new: str) -> bool:
         for file in self._embed_files:
@@ -692,6 +709,26 @@ class CoreFile:
                 file.name = new
                 return True
         return False
+
+    @staticmethod
+    def _generate_erase_list(data: bytes) -> array:
+        res: List[int] = []
+        base: int = 0
+        while True:
+            offset: int = data[base:].find(SYNCWORD)
+            if offset == -1:
+                break
+            sec: int = (base + offset) // FLASHSECTOR
+            if sec > 0 and sec not in res:
+                res.append(sec)
+            base += offset + 4
+        res.extend([0xff]*(16 - len(res)))
+        return array('B', res)
+
+    def check(self) -> Optional[str]:
+        if M65_INST.check('factory', self.install_flags) and self.bit_name != 'MEGA65':
+            return f'core name needs to be "MEGA65" not "{self.bit_name}", if FACTORY install flag is set'
+        return None
 
     def generate(self) -> bytes:
         if not self.bitstream or not self.bit_target or not self.bit_name or not self.bit_version:
@@ -708,14 +745,13 @@ class CoreFile:
         buffer: array = array('B', b'\x00' * self.core_length)
 
         embed_offset: int = 4096 + self.bitstream.raw_data_length if self.embed_count else 0
-        struct.pack_into("<16s32s32s32sBBBIIBBBHII104s16s", buffer, 0,
+        struct.pack_into("<16s32s32s32sBBBIIBBBHII", buffer, 0,
                          CORE_MAGIC,
                          self.bit_name.encode('ascii'), self.bit_version.encode('ascii'),
                          self.bit_target.name.encode('ascii'), self.bit_target.code,
                          1 if self.has_banner else 0, self.embed_count, embed_offset, 0,
                          self.boot_caps, self.boot_flags, self.install_flags, 0,
-                         self.core_length, CORE_CRC32_I,
-                         b'', b'\xff'*16)
+                         self.core_length, CORE_CRC32_I)
 
         buffer[4096:4096+self.bitstream.raw_data_length] = array('B', self.bitstream.raw_data)
         buffer[-BANNER_SIZE:] = self.banner_data_array
@@ -727,12 +763,15 @@ class CoreFile:
             buffer[embed_offset + 40:file.next] = array('B', file.raw_data)
             embed_offset = file.next
 
+        buffer[0xf0:0x100] = self._generate_erase_list(buffer.tobytes())
+        if buffer[0xf0] != 0xff:
+            buffer[0x7d] |= M65_INST.get('_eraselist')
+
         struct.pack_into('<I', buffer, 0x84, crc32(buffer.tobytes()))
 
         return buffer.tobytes()
 
-    def load_core(self, filepath: Path):
-        self.filepath = filepath
+    def from_file(self, filepath: Path):
         data: bytes = filepath.open('rb').read()
 
         self._errors = errors = ErrorHandler()
@@ -742,7 +781,11 @@ class CoreFile:
             raise FileError("not a Core file, magic mismatch!")
 
         self.bit_name = res[1]
+        if self.bit_name != zero_string(res[1], 'ascii'):
+            errors['bit_name'] = f'name mangled from "{zero_string(res[1], "ascii")}"'
         self.bit_version = res[2]
+        if self.bit_version != zero_string(res[2], 'ascii'):
+            errors['bit_version'] = f'version mangled from "{zero_string(res[2], "ascii")}"'
         self.bit_target = res[4]
         if self.bit_target is None:
             errors['bit_target'] = f'unknown bit_target code ${res[4]:02X}'
@@ -780,6 +823,9 @@ class CoreFile:
 
         if M65_INST.check('_eraselist', self.install_flags):
             self.erase_list[:] = array('B', res[16])
+        gen_el = self._generate_erase_list(data)
+        if self.erase_list != gen_el:
+            errors['eraselist'] = 'eraselist should be: ' + self._format_erase_list(gen_el)
 
         if M65_INST.check('factory', self.install_flags) and self.bit_name != FACTORY_NAME:
             errors['bit_name'] = f'Factory core name is not "{FACTORY_NAME}"'
@@ -809,6 +855,8 @@ class CoreFile:
         if embed_count != self.embed_count:
             errors['embed_count'] = f'embed count mismatch (header: {embed_count})'
 
+        self.filepath = filepath
+
     def print_info(self):
         # core info
         print(f'\nCOREFILE "{self.filepath.name}"')
@@ -818,12 +866,12 @@ class CoreFile:
         # bitstream 1 info
         print(f"  BITSTREAM 1")
         print(format_error_line(f"  @@ Name:          {self.bit_name}", self._errors.get('bit_name')))
-        print(f"    Version:       {self.bit_version}")
-        print(format_error_line(f"  @@ Target:        {self.bit_target.code:02X} - {self.bit_target.name} - {self.bit_target.fpga}", [self._errors.get('bithdr_target'), self._errors.get('bitfile_target')]))
+        print(format_error_line(f"  @@ Version:       {self.bit_version}", self._errors.get('bit_version')))
+        print(format_error_line(f"  @@ Target:        {self.bit_target.code:02X} - {self.bit_target.name} - {self.bit_target.fpga}", self._errors.get('bithdr_target') + self._errors.get('bitfile_target')))
         print(format_error_line(f"  @@ Capabilities:  {M65_CAPS.get_active_str(self.boot_caps)}", self._errors.get('boot_caps')))
         print(format_error_line(f"  @@ Active Flags:  {M65_CAPS.get_active_str(self.boot_flags)}", self._errors.get('boot_flags')))
         print(format_error_line(f"  @@ Install Flags: {M65_INST.get_active_str(self.install_flags)}", self._errors.get('install_flags')))
-        print(f"    Eraselist:     {'yes - ' + self.erase_list_str if M65_INST.check('_eraselist', self.install_flags) else 'no'}")
+        print(format_error_line(f"  @@ Eraselist:     {'yes - ' + self.erase_list_str if M65_INST.check('_eraselist', self.install_flags) else 'no'}", self._errors.get('eraselist')))
 
         # file info
         print(f"  EMBEDDED FILES")
@@ -846,7 +894,7 @@ class MCSFile:
         if filepath is not None:
             if type(filepath) is str:
                 filepath = Path(filepath)
-            self.load_mcs(filepath)
+            self.from_file(filepath)
 
     @property
     def filepath(self) -> Path:
@@ -900,7 +948,7 @@ class MCSFile:
     def _calc_checksum(data: array) -> int:
         return (((sum(data) & 0xff) ^ 0xff) + 1) & 0xff
 
-    def load_mcs(self, filepath: Path):
+    def from_file(self, filepath: Path):
         self._raw_data = b''
         self._offset = 0
         blob: bytes = b''
@@ -1055,13 +1103,13 @@ def build_file(args: argparse.Namespace) -> int:
 
     bits = [x for x in zip_longest(args.bit, args.name or [], args.version or [])]
     if len(bits) != 1:
-        print("!Build can currently handle only one bitstream")
+        print("!coretool can currently handle only one bitstream")
         return 1
 
     core = CoreFile()
 
     bitobj: FpgaBitStream = open_file(bits[0][0])
-    if bitobj is None or not isinstance(bitobj, FpgaBitStream) or bitobj.truncated:
+    if bitobj is None or not isinstance(bitobj, FpgaBitStream) or bitobj.is_truncated:
         print("!Build requires a full Bitstream to work on.")
         return 1
 
@@ -1108,18 +1156,18 @@ def build_file(args: argparse.Namespace) -> int:
             return 1
 
     if args.flags:
-        core.boot_flags, errs = M65_CAPS.parse_str(args.caps)
+        core.boot_flags, errs = M65_CAPS.parse_str(args.flags)
         if errs:
             for err in errs:
-                print(f"!{err}")
+                print(err)
             print(f"!invalid flags found")
             return 1
 
     if args.install:
-        core.install_flags, errs = M65_CAPS.parse_str(args.caps)
+        core.install_flags, errs = M65_INST.parse_str(args.install)
         if errs:
             for err in errs:
-                print(f"!{err}")
+                print(err)
             print(f"!invalid install flags found")
             return 1
 
@@ -1133,22 +1181,154 @@ def build_file(args: argparse.Namespace) -> int:
             print(f"*embedded \"{filepath.name}\"")
             if filepath.name == 'BANNER.M65':
                 core.banner_data = obj.raw_data
-                print(f"*banner automatically set")            
+                print(f"*banner automatically set")
 
     if args.set_banner:
+        bannerpath: Path = Path(args.set_banner)
         if core.has_banner:
             print("!Banner already set by BANNER.M65 file")
             return 1
         try:
-            core.banner_data = open(args.set_banner, 'rb').read()
+            core.banner_data = bannerpath.open('rb').read()
         except (FileNotFoundError, IOError, ValueError) as err:
-            print("!Error while setting banner: {err}")
+            print(f'!Error while setting banner to "{bannerpath.name}": {err}')
             return 1
+
+    error: Optional[str] = core.check()
+    if error:
+        print(f'!final core check failed: {error}')
+        return 1
 
     core.filepath = Path(args.build)
     core.filepath.open('wb').write(core.generate())
 
+    return 0
+
+
+def modify_file(args: argparse.Namespace) -> int:
+    filepath: Path = Path(args.modify)
+
+    core: Optional[CoreFile] = open_file(filepath)
+    if core is None:
+        return 1
+
+    changed: bool = False
+
+    if not isinstance(core, CoreFile):
+        print(f"!Modify can only bee used on corefile, use convert for other formats")
+        return 1
+
+    if args.bit or args.target:
+        print(f"!Modify will not allow to replace bitstream or target, use --build instead")
+        return 1
+
+    if args.name:
+        core.bit_name = args.name[0]
+        print(f'*changed name to "{core.bit_name}"')
+        changed = True
+
+    if args.version:
+        core.bit_version = args.version[0]
+        print(f'*changed version to "{core.bit_version}"')
+        changed = True
+
+    if args.caps:
+        core.boot_caps, errs = M65_CAPS.parse_str(args.caps)
+        if errs:
+            for err in errs:
+                print(err)
+            print(f"!invalid caps found")
+            return 1
+        print(f'*changed boot caps to {M65_CAPS.get_active_str(core.boot_caps)}')
+        changed = True
+
+    if args.flags:
+        core.boot_flags, errs = M65_CAPS.parse_str(args.flags)
+        if errs:
+            for err in errs:
+                print(f"!{err}")
+            print(f"!invalid flags found")
+            return 1
+        print(f'*changed boot flags to {M65_CAPS.get_active_str(core.boot_flags)}')
+        changed = True
+
+    if args.install:
+        core.install_flags, errs = M65_INST.parse_str(args.install)
+        if errs:
+            for err in errs:
+                print(f"!{err}")
+            print(f"!invalid install flags found")
+            return 1
+        print(f'*changed install flags to {M65_INST.get_active_str(core.install_flags)}')
+        changed = True
+
+    if args.remove_files:
+        for pattern in args.remove_files:
+            removed = core.remove_file(pattern)
+            if not removed:
+                print(f'*remove of "{pattern}" had no matches')
+            else:
+                for file in removed:
+                    print(f'*removed "{file}" for pattern "{pattern}"')
+                changed = True
+
+    if args.add_files:
+        for file in args.add_files:
+            filepath = Path(file)
+            try:
+                obj = core.add_file(filepath)
+            except FileError as err:
+                print(f'!Failed to add "{filepath.name}": {err}')
+            else:
+                print(f"*embedded \"{filepath.name}\"")
+                if filepath.name == 'BANNER.M65':
+                    core.banner_data = obj.raw_data
+                    print(f"*banner automatically set")
+                changed = True
+
+    if args.rename_file:
+        for rename in args.rename_file:
+            if core.rename_file(rename[0], rename[1]):
+                print(f'*renamed "{rename[0]}" to "{rename[1]}"')
+                changed = True
+            else:
+                print(f'!could not rename "{rename[0]}", not found')
+
+    if args.remove_banner:
+        if core.has_banner:
+            core.banner_data = b''
+            print(f'*removed banner')
+            changed = True
+        else:
+            print(f'!no banner to remove')
+    elif args.set_banner:
+        bannerpath: Path = Path(args.set_banner)
+        try:
+            core.banner_data = bannerpath.open('rb').read()
+        except (FileNotFoundError, IOError, ValueError) as err:
+            print(f'!Error while setting banner to "{bannerpath.name}": {err}')
+        else:
+            print(f'*set embedded banner to "{bannerpath.name}"')
+            changed = True
+
+    error: Optional[str] = core.check()
+    if error:
+        print(f'!final core check failed: {error}')
+        return 1
+
+    if changed:
+        print(f'*writing changes')
+        core.filepath.open('wb').write(core.generate())
+        return 0
+
+    if core.has_errors:
+        print(f'*autocorrecting errors, writing core')
+        core.filepath.open('wb').write(core.generate())
+        return 0
+
+    print(f'*nothing changed, leaving file untouched')
     return 1
+
 
 def extract_files(args: argparse.Namespace) -> int:
     filepath: Path = Path(args.extract)
@@ -1396,7 +1576,9 @@ def main():
     group = parser.add_argument_group('Embedded files',
                                       """It is possible to embed files into the core, right after the bitstream. This are used by the Fdisk utilility to populate the SDcard
                                       after formatting, and it allows to add a BANNER.M65 to a special place, so the booting core can access it more quickly from there.""")
-    group.add_argument('--set-banner', metavar="FILE", type=str, help="Add banner file (<32KB) at the end of the corefile. Note: this is not added as an embedded file.")
+    banner = group.add_mutually_exclusive_group()
+    banner.add_argument('--set-banner', metavar="FILE", type=str, help="Add banner file (<32KB) at the end of the corefile. Note: this is not added as an embedded file.")
+    banner.add_argument('--remove-banner', action="store_true", help="(Modify) Remove embedded banner from corefile. Note: will not remove the embedded file.")
     group.add_argument('--add-files', metavar="FILE", type=str, nargs="+", help="List of files to add after the bitstream. Note: a file named \"BANNER.M65\" will be automatically set as banner.")
     group.add_argument('--remove-files', metavar="FILE", type=str, nargs="+", help="(Modify) List of files to remove from the corefile. You can use glob patterns (escape!) or the special keyword ALL (caps!).")
     group.add_argument('--rename-file', metavar="FILE", type=str, nargs=2, action="append", help="(Modify) Rename file found inside the corefile.")
@@ -1429,7 +1611,6 @@ def main():
         print("\nRecognized MEGA65 target specification:")
         print(M65_TARGETS.get_help(indent='    '))
         did_list = True
-    args.target = M65_TARGETS.by_name(args.target)
     
     if did_list:
         print()
@@ -1438,14 +1619,13 @@ def main():
     # do the actions
     if args.verify is not None:
         sys.exit(verify_file(args))
-
-    if args.build:
+    elif args.build:
         sys.exit(build_file(args))
-
-    if args.convert is not None:
+    elif args.modify:
+        sys.exit(modify_file(args))
+    elif args.convert is not None:
         sys.exit(convert_files(args))  
-
-    if args.extract is not None:
+    elif args.extract is not None:
         sys.exit(extract_files(args))
 
 if __name__ == '__main__':
