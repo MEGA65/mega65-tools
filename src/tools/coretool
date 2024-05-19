@@ -4,12 +4,14 @@ import sys
 if sys.version_info < (3, 8):
     sys.exit("This tool requires python 3.8 or later!")
 
+import os
 import argparse
 import struct
 import datetime
 import re
 import shutil
 import fnmatch
+import logging
 from pathlib import Path
 from array import array
 from binascii import crc32
@@ -17,9 +19,13 @@ from itertools import zip_longest
 from typing import Optional, Union, List, Tuple, Dict, Generator
 from dataclasses import dataclass
 
+log = logging.getLogger("coretool")
+
 ##
 ## CONSTANTS
 ##
+LOG_FORMAT = '[%(asctime)-19.19s %(levelname)-4.4s] %(message)s'
+
 CORE_MAGIC: bytes = b'MEGA65BITSTREAM0'
 CORE_CRC32: bytes = b'\xf0\xf0\xf0\xf0'
 CORE_CRC32_I: int = 0xf0f0f0f0
@@ -230,11 +236,11 @@ class MEGA65flags:
             if not key:
                 continue
             if key[0] == '_':
-                errors.append(f'!hidden {self._name} "{key}"')
+                errors.append(f'hidden {self._name} "{key}"')
                 continue
             name: str = self.match(key.lower())
             if name is None:
-                errors.append(f'!unknown {self._name} "{key}"')
+                errors.append(f'unknown {self._name} "{key}"')
                 continue
             flag |= self.get(name)
         return flag, errors
@@ -486,6 +492,8 @@ class CoreFile:
     header_size = 4096
 
     def __init__(self, filepath: Optional[Path] = None):
+        self._raw_data: bytes = b''
+
         self._bit_name: str = ''
         self._bit_version: str = ''
         self._bit_target: Optional[MEGA65target] = None
@@ -510,6 +518,14 @@ class CoreFile:
         self._errors: ErrorHandler = ErrorHandler()
         if filepath:
             self.from_file(filepath)
+
+    @property
+    def raw_data(self) -> bytes:
+        return self._raw_data
+
+    @raw_data.setter
+    def raw_data(self, value: bytes):
+        self._raw_data = value
 
     @property
     def filepath(self) -> Path:
@@ -769,16 +785,18 @@ class CoreFile:
 
         struct.pack_into('<I', buffer, 0x84, crc32(buffer.tobytes()))
 
+        self.raw_data = buffer.tobytes()
         return buffer.tobytes()
 
-    def from_file(self, filepath: Path):
-        data: bytes = filepath.open('rb').read()
+    def from_file(self, filepath: Path, data: Optional[bytes] = None):
+        if data is None:
+            data: bytes = filepath.open('rb').read()
 
         self._errors = errors = ErrorHandler()
 
         res = struct.unpack("<16s32s32s32sBBBIIBBBHII104s16s", data[:256])
         if res[0] != CORE_MAGIC:
-            raise FileError("not a Core file, magic mismatch!")
+            raise FileError("not a Corefile, magic mismatch!")
 
         self.bit_name = res[1]
         if self.bit_name != zero_string(res[1], 'ascii'):
@@ -856,10 +874,11 @@ class CoreFile:
             errors['embed_count'] = f'embed count mismatch (header: {embed_count})'
 
         self.filepath = filepath
+        self.raw_data = data
 
     def print_info(self):
         # core info
-        print(f'\nCOREFILE "{self.filepath.name}"')
+        print(f'COREFILE "{self.filepath.name}"')
         print(format_error_line(f"@@ Core length: {self.core_length} (file {self.core_length})", self._errors.get('core_length')))
         print(format_error_line(f"@@ Core CRC32:  {self.core_crc32:08X}", self._errors.get('core_crc32')))
 
@@ -883,6 +902,8 @@ class CoreFile:
             embed_next = embed_next
         if self.embed_count:
             print(format_error_line(f"    @@ EOF                                       length        0 offset {embed_next:8d} next        0", self._errors.get('embed_eof')))
+        if len(self._errors):
+            log.info('tip: use --modify on this file to fix errors in-place')
 
 
 class MCSFile:
@@ -915,7 +936,7 @@ class MCSFile:
     @offset.setter
     def offset(self, offset: int):
         if offset & 0xffff != 0:
-            print(f"!Warning offset is not aligned to 16 bit, truncating")
+            log.warning("offset is not aligned to 16 bit, truncating")
         self._offset = offset & 0xffff0000
 
     @property
@@ -933,11 +954,10 @@ class MCSFile:
         if self.filetype != 'M65-Core':
             return None
         obj = CoreFile()
-        obj.filepath = self.filepath
         try:
-            obj.parse_coredata(self.raw_data)
+            obj.from_file(self.filepath, self.raw_data)
         except FileError as err:
-            print("!failed to interpret MCS content as Corefile: {err}")
+            log.error(f"failed to interpret MCS content as Corefile: {err}")
             return None
         return obj
 
@@ -966,7 +986,6 @@ class MCSFile:
 
             data = array('B', bytes.fromhex(line[1:]))
             if self._calc_checksum(data[:-1]) != data[-1]:
-                print(data, self._calc_checksum(data[:-1]))
                 raise FileError(f"checksum error in line {linenum}")
 
             if data[3] not in (0, 1, 4):
@@ -1000,13 +1019,13 @@ class MCSFile:
         self._filepath = filepath
 
     def print_info(self):
-        print(f'\nMCSFILE "{self.filepath.name}"')
+        print(f'MCSFILE "{self.filepath.name}"')
         print(f"  Content: {self.filetype}")
         print(f"  Offset:  0x{self.offset:08X}")
         print(f"  Size:    {len(self.raw_data)}")
         core = self.corefile
         if core:
-            print("\nOpened MEGA65 Corefile found inside MCS file")
+            print()
             core.print_info()
 
     def save_data(self, path: Path):
@@ -1036,7 +1055,7 @@ class MCSFile:
                         highaddr += 1
                 fp.write(':00000001FF\n')
             except IOError as err:
-                print(f"!Error while writing MCS file: {err}")
+                log.error(f"Error while writing MCS file: {err}")
 
 def open_file(filepath: Union[str, Path]) -> Optional[Union[CoreFile, MCSFile, FpgaBitStream]]:
     if isinstance(filepath, str):
@@ -1046,44 +1065,45 @@ def open_file(filepath: Union[str, Path]) -> Optional[Union[CoreFile, MCSFile, F
     try:
         header = filepath.open('rb').read(256)
     except (FileNotFoundError, IOError) as err:
-        print(f"!Failed to open file: {err}")
+        log.error(f"Failed to open file: {err}")
         return None
 
     if header[:9] == b':02000004':
         try:
             fileobj = MCSFile(filepath)
         except (FileError, FileNotFoundError, IOError) as err:
-            print('!Failed to load MCSFile "{filepath.name}": {err}')
+            log.error('Failed to load MCSFile "{filepath.name}": {err}')
             return None
         else:
-            print(f'Opened MCS file "{filepath.name}"')
+            log.info(f'Opened MCS file "{filepath.name}"')
 
     elif header[:len(CORE_MAGIC)] == CORE_MAGIC:
         try:
             fileobj = CoreFile(filepath)
         except (FileError, FileNotFoundError, IOError) as err:
-            print(f'!Failed to load Corefile "{filepath.name}": {err}')
+            log.error(f'Failed to load Corefile "{filepath.name}": {err}')
             return None
         else:
-            print(f'Opened Corefile file "{filepath.name}"')
+            log.info(f'Opened Corefile "{filepath.name}"')
 
     elif (header[:len(VIVADO_BIT_HEADER)] == VIVADO_BIT_HEADER or
           (header[:len(TRUNCBIT_MAGIC)] == TRUNCBIT_MAGIC and header.find(SYNCWORD) < 512)):
         try:
             fileobj = FpgaBitStream(filepath=filepath)
         except (FileError, FileNotFoundError, IOError) as err:
-            print(f'!Failed to load FPGA Bitstream "{filepath.name}": {err}')
+            log.error(f'Failed to load FPGA Bitstream "{filepath.name}": {err}')
             return None
         else:
-            print(f'Opened Bitstream file "{filepath.name}"')
+            log.info(f'Opened Bitstream file "{filepath.name}"')
     else:
-        print(f"!Found unknown file header, can't work with \"{filepath.name}\"")
+        log.error(f"Found unknown file header, can't work with \"{filepath.name}\"")
         return None
 
     return fileobj
 
 
 def verify_file(args: argparse.Namespace) -> int:
+    log.debug("Started verify file action")
     fileobj = open_file(args.verify)
     if fileobj:
         fileobj.print_info()
@@ -1091,57 +1111,58 @@ def verify_file(args: argparse.Namespace) -> int:
     return 1
 
 
-def build_file(args: argparse.Namespace) -> int:
+def build_file(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None) -> int:
     if args.bit is None:
-        print("!Please provide a bitstream file using --bit/-b")
+        log.error("Please provide a bitstream file using --bit/-b")
         return 1
 
     filepath: Path = Path(args.build)
     if not args.force and filepath.exists():
-        print("!Target corefile exists, use --force to overwrite")
+        log.error("Target corefile exists, use --force to overwrite")
         return 1
 
     bits = [x for x in zip_longest(args.bit, args.name or [], args.version or [])]
     if len(bits) != 1:
-        print("!coretool can currently handle only one bitstream")
+        log.error("coretool can currently handle only one bitstream")
         return 1
 
     core = CoreFile()
 
-    bitobj: FpgaBitStream = open_file(bits[0][0])
-    if bitobj is None or not isinstance(bitobj, FpgaBitStream) or bitobj.is_truncated:
-        print("!Build requires a full Bitstream to work on.")
-        return 1
+    if bitobj is None:
+        bitobj = open_file(bits[0][0])
+        if bitobj is None or not isinstance(bitobj, FpgaBitStream) or bitobj.is_truncated:
+            log.error("Build requires a full Bitstream to work on")
+            return 1
 
     core.bitstream = bitobj
 
     if args.target is None:
         target = bitobj.guess_target
         if target:
-            print(f"Target guessed to be {target.name}/${target.code:02X}")
+            log.info(f"Target guessed to be {target.name}/${target.code:02X}")
     else:
         target = M65_TARGETS.get(args.target)
     
     if target is None:
-        print("!Failed to guess target, use --target/-t to specify")
+        log.error("Failed to guess target, use --target/-t to specify")
         return 1
 
     name = bits[0][1]
     if not name:
         name = bitobj.guess_name
         if name:
-            print(f'Name guessed to be "{name}"')
+            log.info(f'Name guessed to be "{name}"')
     if not name:
-        print("!Please provide a name for the core using --name/-n")
+        log.error("Please provide a name for the core using --name/-n")
         return 1
 
     version = bits[0][2]
     if not version:
         version = bitobj.guess_version
         if version:
-            print(f'Version guessed to be "{version}"')
+            log.info(f'Version guessed to be "{version}"')
     if not version:
-        print("!Please provide a version for the core using --version/-v")
+        log.error("Please provide a version for the core using --version/-v")
 
     core.bit_target = target
     core.bit_name = name
@@ -1151,24 +1172,24 @@ def build_file(args: argparse.Namespace) -> int:
         core.boot_caps, errs = M65_CAPS.parse_str(args.caps)
         if errs:
             for err in errs:
-                print(err)
-            print(f"!invalid caps found")
+                log.error(err)
+            log.error(f"Invalid boot caps found (use list to show valid options)")
             return 1
 
     if args.flags:
         core.boot_flags, errs = M65_CAPS.parse_str(args.flags)
         if errs:
             for err in errs:
-                print(err)
-            print(f"!invalid flags found")
+                log.error(err)
+            log.error(f"Invalid boot flags found (use list to show valid options)")
             return 1
 
     if args.install:
         core.install_flags, errs = M65_INST.parse_str(args.install)
         if errs:
             for err in errs:
-                print(err)
-            print(f"!invalid install flags found")
+                log.error(err)
+            log.error(f"Invalid install flags found (use list to show valid options)")
             return 1
 
     for file in (args.add_files or []):
@@ -1176,100 +1197,112 @@ def build_file(args: argparse.Namespace) -> int:
         try:
             obj = core.add_file(filepath)
         except FileError as err:
-            print(f'!Failed to add "{filepath.name}": {err}')
+            log.error(f'Failed to add "{filepath.name}": {err}')
         else:
-            print(f"*embedded \"{filepath.name}\"")
+            log.info(f"Embedded \"{filepath.name}\"")
             if filepath.name == 'BANNER.M65':
                 core.banner_data = obj.raw_data
-                print(f"*banner automatically set")
+                log.info(f"File also set as banner")
 
     if args.set_banner:
         bannerpath: Path = Path(args.set_banner)
         if core.has_banner:
-            print("!Banner already set by BANNER.M65 file")
+            log.error("Banner already set by BANNER.M65 file")
             return 1
         try:
             core.banner_data = bannerpath.open('rb').read()
         except (FileNotFoundError, IOError, ValueError) as err:
-            print(f'!Error while setting banner to "{bannerpath.name}": {err}')
+            log.error(f'Error while setting banner to "{bannerpath.name}": {err}')
             return 1
 
     error: Optional[str] = core.check()
     if error:
-        print(f'!final core check failed: {error}')
+        log.error(f'Final core check failed: {error}')
         return 1
 
     core.filepath = Path(args.build)
-    core.filepath.open('wb').write(core.generate())
+    try:
+        core.filepath.open('wb').write(core.generate())
+    except (FileNotFoundError, IOError) as err:
+        log.error(f"Failed to write core file: {err}")
+    else:
+        log.info(f'Wrote corefile to "{core.filepath}"')
 
     return 0
 
 
-def modify_file(args: argparse.Namespace) -> int:
+def modify_file(args: argparse.Namespace, core: Optional[CoreFile] = None, destpath: Optional[Path] = None) -> int:
     filepath: Path = Path(args.modify)
 
-    core: Optional[CoreFile] = open_file(filepath)
     if core is None:
-        return 1
+        core = open_file(filepath)
+        if core is None:
+            return 1
 
     changed: bool = False
 
     if not isinstance(core, CoreFile):
-        print(f"!Modify can only bee used on corefile, use convert for other formats")
+        log.error("Modify can only be used on corefile, use --convert for other formats")
         return 1
 
     if args.bit or args.target:
-        print(f"!Modify will not allow to replace bitstream or target, use --build instead")
+        log.error(f"Modify will not allow to replace bitstream or target, use --build instead")
         return 1
 
+    old_value: str
     if args.name:
+        old_value = core.bit_name
         core.bit_name = args.name[0]
-        print(f'*changed name to "{core.bit_name}"')
+        log.info(f'Changed name to "{core.bit_name}" (was "{old_value}")')
         changed = True
 
     if args.version:
+        old_value = core.bit_version
         core.bit_version = args.version[0]
-        print(f'*changed version to "{core.bit_version}"')
+        log.info(f'Changed version to "{core.bit_version}" (was "{old_value}")')
         changed = True
 
     if args.caps:
+        old_value = M65_CAPS.get_active_str(core.boot_caps)
         core.boot_caps, errs = M65_CAPS.parse_str(args.caps)
         if errs:
             for err in errs:
-                print(err)
-            print(f"!invalid caps found")
+                log.error(err)
+            log.error(f"Invalid boot caps found (use list to show valid options)")
             return 1
-        print(f'*changed boot caps to {M65_CAPS.get_active_str(core.boot_caps)}')
+        log.info(f'Changed boot caps to {M65_CAPS.get_active_str(core.boot_caps)} (was {old_value})')
         changed = True
 
     if args.flags:
+        old_value = M65_CAPS.get_active_str(core.boot_flags)
         core.boot_flags, errs = M65_CAPS.parse_str(args.flags)
         if errs:
             for err in errs:
-                print(f"!{err}")
-            print(f"!invalid flags found")
+                log.error(err)
+            log.error(f"Invalid boot flags found (use list to show valid options)")
             return 1
-        print(f'*changed boot flags to {M65_CAPS.get_active_str(core.boot_flags)}')
+        log.info(f'Changed boot flags to {M65_CAPS.get_active_str(core.boot_flags)} (was {old_value})')
         changed = True
 
     if args.install:
+        old_value = M65_INST.get_active_str(core.install_flags)
         core.install_flags, errs = M65_INST.parse_str(args.install)
         if errs:
             for err in errs:
-                print(f"!{err}")
-            print(f"!invalid install flags found")
+                log.error(err)
+            log.error(f"Invalid install flags found (use list to show valid options)")
             return 1
-        print(f'*changed install flags to {M65_INST.get_active_str(core.install_flags)}')
+        log.info(f'Changed install flags to {M65_INST.get_active_str(core.install_flags)} (was {old_value})')
         changed = True
 
     if args.remove_files:
         for pattern in args.remove_files:
             removed = core.remove_file(pattern)
             if not removed:
-                print(f'*remove of "{pattern}" had no matches')
+                log.warning(f'Remove "{pattern}" had no matches')
             else:
                 for file in removed:
-                    print(f'*removed "{file}" for pattern "{pattern}"')
+                    log.info(f'Removed "{file}" for pattern "{pattern}"')
                 changed = True
 
     if args.add_files:
@@ -1278,55 +1311,57 @@ def modify_file(args: argparse.Namespace) -> int:
             try:
                 obj = core.add_file(filepath)
             except FileError as err:
-                print(f'!Failed to add "{filepath.name}": {err}')
+                log.error(f'Failed to add "{filepath.name}": {err}')
             else:
-                print(f"*embedded \"{filepath.name}\"")
+                log.info(f'Embedded "{filepath.name}"')
                 if filepath.name == 'BANNER.M65':
                     core.banner_data = obj.raw_data
-                    print(f"*banner automatically set")
+                    log.info(f"+ embedded banner automatically set to file data")
                 changed = True
 
     if args.rename_file:
         for rename in args.rename_file:
             if core.rename_file(rename[0], rename[1]):
-                print(f'*renamed "{rename[0]}" to "{rename[1]}"')
+                log.info(f'Renamed "{rename[0]}" to "{rename[1]}"')
                 changed = True
             else:
-                print(f'!could not rename "{rename[0]}", not found')
+                log.error(f'Could not rename "{rename[0]}", not found')
 
     if args.remove_banner:
         if core.has_banner:
             core.banner_data = b''
-            print(f'*removed banner')
+            log.info(f'Removed embedded banner')
             changed = True
         else:
-            print(f'!no banner to remove')
+            log.warning(f'No embedded banner to remove')
     elif args.set_banner:
         bannerpath: Path = Path(args.set_banner)
         try:
             core.banner_data = bannerpath.open('rb').read()
         except (FileNotFoundError, IOError, ValueError) as err:
-            print(f'!Error while setting banner to "{bannerpath.name}": {err}')
+            log.error(f'Error while setting banner to "{bannerpath.name}": {err}')
         else:
-            print(f'*set embedded banner to "{bannerpath.name}"')
+            log.info(f'Set embedded banner to "{bannerpath.name}"')
             changed = True
 
     error: Optional[str] = core.check()
     if error:
-        print(f'!final core check failed: {error}')
+        log.error(f'Final core check failed: {error}')
         return 1
 
-    if changed:
-        print(f'*writing changes')
-        core.filepath.open('wb').write(core.generate())
+    if changed or core.has_errors:
+        if destpath is None:
+            destpath = core.filepath
+        log.info('Changes detected, writing core' if changed else 'Autocorrecting errors, writing core')
+        try:
+            destpath.open('wb').write(core.generate())
+        except (FileNotFoundError, IOError) as err:
+            log.error(f"Failed to write core file: {err}")
+        else:
+            log.info(f'Wrote corefile to "{destpath}"')
         return 0
 
-    if core.has_errors:
-        print(f'*autocorrecting errors, writing core')
-        core.filepath.open('wb').write(core.generate())
-        return 0
-
-    print(f'*nothing changed, leaving file untouched')
+    log.info(f'Nothing changed, leaving file untouched')
     return 1
 
 
@@ -1338,22 +1373,22 @@ def extract_files(args: argparse.Namespace) -> int:
     else:
         destpath = Path(args.extract_path)
     if destpath.exists() and not destpath.is_dir():
-        print("!Destination exists and is not a directory.")
+        log.error("Destination exists and is not a directory")
         return 1
     if not destpath.exists():
         try:
             destpath.mkdir()
         except FileNotFoundError:
-            print("!Failed to create target directory.")
+            log.error("Failed to create target directory")
             return 1
-    print(f"Extracting to {destpath.absolute()}")
+    log.error(f"Extracting to {destpath.absolute()}")
 
     fileobj = open_file(filepath)
     if fileobj is None:
         return 1
 
     if isinstance(fileobj, FpgaBitStream):
-        print("!Can't extract files from a bitstream, abort.")
+        log.error("Can't extract files from a bitstream, abort")
         return 1
 
     if isinstance(fileobj, MCSFile):
@@ -1362,44 +1397,44 @@ def extract_files(args: argparse.Namespace) -> int:
             try:
                 fileobj.save_data(destfile)
             except (IOError, OSError) as err:
-                print(f"!Failed to save bitstream as {destfile.name}: {err}")
+                log.error(f'Failed to save bitstream as "{destfile.name}": {err}')
                 return 1
-            print(f"Saved truncated bitstream as {destfile.name}")
+            log.info(f'Saved truncated bitstream as "{destfile.name}"')
             return 0
         if fileobj.filetype != "M65-Core":
             destfile = destpath.joinpath(sanitize_filename(f'unknown_{filepath.stem}.dat'))
             try:
                 fileobj.save_data(destfile)
             except (IOError, OSError) as err:
-                print(f"!Failed to save content as {destfile.name}: {err}")
+                log.error(f'Failed to save content as "{destfile.name}": {err}')
                 return 1
-            print(f"Saved unknown content as {destfile.name}")
+            log.info(f'Saved unknown content as "{destfile.name}"')
             return 0
-        print(f"Found MEGA65 Corefile stored in MCS")
+        log.info(f"Found MEGA65 Corefile stored in MCS")
         fileobj = fileobj.corefile
 
     if isinstance(fileobj, CoreFile):
         bitnum: str = 'one' if fileobj.bitstream else 'no'
-        print(f"Found {bitnum} bitstream and {fileobj.embed_count} embedded files")
+        log.info(f"Found {bitnum} bitstream and {fileobj.embed_count} embedded files")
         errors: int = 0
         if fileobj.bitstream:
             destfile = destpath.joinpath(sanitize_filename(f"{fileobj.bit_target_name}-{fileobj.bit_version}.bit".replace(' ', '_')))
             try:
                 fileobj.bitstream.save_data(destfile)
             except (IOError, OSError) as err:
-                print(f"!Failed to save bitstream as {destfile.name}: {err}")
+                log.error(f'Failed to save bitstream as "{destfile.name}": {err}')
                 errors += 1
             else:
-                print(f"Saved bitstream as {destfile.name}")
+                log.info(f'Saved bitstream as "{destfile.name}"')
         for embed in fileobj.embedded_files:
             destfile = destpath.joinpath(sanitize_filename(embed.name))
             try:
                 embed.save_data(destfile)
             except (IOError, OSError) as err:
-                print(f"!Failed to save embedded as {destfile.name}: {err}")
+                log.error(f'Failed to save embedded as "{destfile.name}": {err}')
                 errors += 1
             else:
-                print(f"Saved embedded file {destfile.name}")
+                log.info(f'Saved embedded file "{destfile.name}"')
         return errors
 
     return 0
@@ -1408,20 +1443,9 @@ def convert_files(args: argparse.Namespace) -> int:
 
     def _return_if_exists(path) -> bool:
         if path.exists() and not args.force:
-            print("!Target file exists, use --force to overwrite anyway.")
+            log.error(f'Target file "{path.name}" exists, use --force to overwrite anyway')
             return True
         return False
-
-    if args.offset is None:
-        args.offset = 0
-    elif args.offset.startswith('S'):
-        if args.target is None:
-            print("\nOffset in slot format requires --target to be set!")
-            return 1
-        args.offset = args.target.size * int(args.offset[1:]) * 1024
-    else:
-        args.offset = int(args.offset)
-    print(f'0x{args.offset:08x}')
 
     path_from: Path = Path(args.convert[0])
     path_to: Path = Path(args.convert[1])
@@ -1433,12 +1457,30 @@ def convert_files(args: argparse.Namespace) -> int:
     if fileobj is None:
         return 1
 
+    if path_to.suffix.lower() == '.mcs':
+        if args.offset is None:
+            args.offset = 0
+        elif args.offset.startswith('S'):
+            if isinstance(fileobj, CoreFile) and fileobj.bit_target:
+                args.target = fileobj.bit_target
+            if isinstance(args.target, str):
+                args.target = M65_TARGETS.get(args.target)
+            if args.target is None:
+                log.error("Offset in slot format requires --target to be set")
+                return 1
+            args.offset = args.target.size * int(args.offset[1:]) * 1024
+        else:
+            args.offset = int(args.offset, 0)
+        #log.info(f'Corefile offset0x{args.offset:08x}')
+
     if isinstance(fileobj, FpgaBitStream):
         if path_to.suffix.lower() == '.cor':
-            print(f"!Please use --build action to create a Corefile from a FPGA Bitstream.")
-            return 1
+            log.warning('Conversion from FPGA Bitstream to Corefile should be done with --build, trying anyways...')
+            args.build = args.convert[1]
+            args.bit = [args.convert[0]]
+            return build_file(args, bitobj=fileobj)
         if path_to.suffix.lower() != '.mcs':
-            print(f"!Invalid conversion target {path_to.suffix.lower()[1:]} for FPGA Bitstream")
+            log.error(f"Invalid conversion target {path_to.suffix.lower()[1:]} for FPGA Bitstream")
             return 1
         mcs: MCSFile = MCSFile()
         # bit2mcs does remove the bitstream header... so we do the same...
@@ -1447,12 +1489,15 @@ def convert_files(args: argparse.Namespace) -> int:
         try:
             mcs.write_file(path_to)
         except (IOError, OSError) as err:
-            print(f'!Failed to write "{path_to.name}": {err}')
+            log.error(f'Failed to write "{path_to.name}": {err}')
             return 1
-        print(f'Converted bitstream to MCS "{path_to.name}"')
+        log.info(f'Converted bitstream to MCS "{path_to.name}"')
         return 0
 
     if isinstance(fileobj, CoreFile):
+        if path_to.suffix.lower() == '.cor':
+            args.modify = args.convert[0]
+            return modify_file(args, fileobj, destpath=path_to)
         if path_to.suffix.lower() == '.mcs':
             mcs: MCSFile = MCSFile()
             # bit2mcs does remove the bitstream header... so we do the same...
@@ -1461,36 +1506,36 @@ def convert_files(args: argparse.Namespace) -> int:
             try:
                 mcs.write_file(path_to)
             except (IOError, OSError) as err:
-                print(f'!Failed to write "{path_to.name}": {err}')
+                log.error(f'Failed to write "{path_to.name}": {err}')
                 return 1
-            print(f'Converted Corefile to MCS "{path_to.name}"')
+            log.info(f'Converted Corefile to MCS "{path_to.name}" at ${mcs.offset:08X}')
             return 0
         if path_to.suffix.lower() == '.bit':
             # we just save the bitstream...
             try:
                 fileobj.bitstream.save_data(path_to)
             except (IOError, OSError) as err:
-                print(f'!Failed to write "{path_to.name}": {err}')
+                log.error(f'Failed to write "{path_to.name}": {err}')
                 return 1
-            print(f'Converted Corefile to FPGA Bitstream "{path_to.name}"')
+            log.info(f'Converted Corefile to FPGA Bitstream "{path_to.name}"')
             return 0
-        print(f'!Invalid conversion target {path_to.suffix.lower()[1:]} for Corefile')
+        log.error(f'Invalid conversion target {path_to.suffix.lower()[1:]} for Corefile')
         return 1
 
     if isinstance(fileobj, MCSFile):
         if fileobj.filetype == 'M65-Core':
             if path_to.suffix.lower() in ('.bit', '.mcs'):
-                print("!MCS contains MEGA65 Corefile, changing suffix to .cor")
+                log.warning("MCS contains MEGA65 Corefile, changing suffix to .cor")
                 path_to = path_to.with_suffix('.cor')
             target = 'MEGA65 Corefile'
         elif fileobj.filetype == 'Trunc-Bit':
             if path_to.suffix.lower() in ('.mcs', '.cor'):
-                print("!MCS contains truncated FPGA Bitstream, changing suffix to .bit")
+                log.warning("MCS contains truncated FPGA Bitstream, changing suffix to .bit")
                 path_to = path_to.with_suffix('.bit')
             target = 'FPGA Bitstream'
         else:
             if path_to.suffix.lower() in ('.mcs', '.cor', '.bit'):
-                print("!MCS contains unknown data, changing suffix to .dat")
+                log.warning("MCS contains unknown data, changing suffix to .dat")
                 path_to = path_to.with_suffix('.dat')
             target = 'unknown data'
 
@@ -1499,9 +1544,9 @@ def convert_files(args: argparse.Namespace) -> int:
         try:
             path_to.open('wb').write(fileobj.raw_data)
         except (IOError, OSError) as err:
-            print(f'!Failed to write "{path_to.name}": {err}')
+            log.error(f'Failed to write "{path_to.name}": {err}')
             return 1
-        print(f'Converted MCS File to {target} "{path_to.name}"')
+        log.info(f'Converted MCS File to {target} "{path_to.name}"')
         return 0
 
     return 1
@@ -1512,9 +1557,7 @@ class CustomHelpFormatter(argparse.HelpFormatter):
     def _fill_text(self, text, width, indent):
         import textwrap
         result = []
-        print("text", repr(text))
         for paragraph in re.split('\n\n\n+[ \t]*', text):
-            print("para:", repr(paragraph))
             paragraph = self._whitespace_matcher.sub(' ', paragraph).strip()
             result.append(textwrap.fill(paragraph, width,
                                         initial_indent=indent,
@@ -1542,11 +1585,15 @@ def main():
                             help="""Extract all files from a corefile and place them into a path with the name of the corefile minus it's extension. Use --extract-path
                             to specify an alternative path.""")
     actions_ex.add_argument('--convert', '-C', metavar="FILE", type=str, nargs=2,
-                            help="Convert one type of file into the other. Note: only a few direct conversions are supported, but you can always fallback to extract/build  instead.")
+                            help="Convert one type of file into the other. Note: convert will automatically call --build or --modify if needed.")
 
-    group = parser.add_argument_group('Generic', 'Generic options')
+    group = parser.add_argument_group('Logging & Output')
+    group.add_argument('--debug', '-d', action="store_true", help="Enable debug output")
+    group.add_argument('--quiet', '-q', action="store_true", help="Only display errors")
+
+    group = parser.add_argument_group('Generic')
     group.add_argument('--force', '-F', action="store_true", help="Force overwriting existing files.")
-    group.add_argument('--offset', metavar="OFFSET", type=str, help="Offset to be set when converting a corefile to the MCS format. Defaults to 0.")
+    group.add_argument('--offset', metavar="OFFSET", type=str, help="Offset to be set when converting a corefile to the MCS format. Defaults to 0. Use 0x prefix for hex numbers or S prefix for Slot.")
     group.add_argument('--extract-path', metavar="PATH", type=str, help="Target path for the extract action.")
     coloropt = group.add_mutually_exclusive_group()
     coloropt.add_argument('--color', action="store_true", default=None, help="Enable Color on output(autodetect).")
@@ -1584,11 +1631,19 @@ def main():
     group.add_argument('--rename-file', metavar="FILE", type=str, nargs=2, action="append", help="(Modify) Rename file found inside the corefile.")
 
     args = parser.parse_args()
-    print(args)
-    #print(os.get_terminal_size())
 
     if args.color is not None:
         DO_COLOR = args.color
+
+    root_logger = logging.getLogger()
+    log_ch = logging.StreamHandler(sys.stderr)
+    log_ch.setLevel(logging.DEBUG if args.debug else (logging.ERROR if args.quiet else logging.INFO))
+    log_fmt = logging.Formatter(LOG_FORMAT)
+    log_ch.setFormatter(log_fmt)
+    root_logger.addHandler(log_ch)
+    root_logger.setLevel(logging.DEBUG if args.debug else (logging.ERROR if args.quiet else logging.INFO))
+
+    log.debug(f'main: {args=}')
 
     if args.width:
         WIDTH = args.width
@@ -1617,16 +1672,20 @@ def main():
         sys.exit(0)
 
     # do the actions
+    result: int = 1
     if args.verify is not None:
-        sys.exit(verify_file(args))
+        result = verify_file(args)
     elif args.build:
-        sys.exit(build_file(args))
+        result = build_file(args)
     elif args.modify:
-        sys.exit(modify_file(args))
+        result = modify_file(args)
     elif args.convert is not None:
-        sys.exit(convert_files(args))  
+        result = convert_files(args)
     elif args.extract is not None:
-        sys.exit(extract_files(args))
+        result = extract_files(args)
+
+    log.info(f"Exiting coretool ({result})")
+    sys.exit(result)
 
 if __name__ == '__main__':
     main()
