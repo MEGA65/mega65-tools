@@ -1102,6 +1102,13 @@ def open_file(filepath: Union[str, Path]) -> Optional[Union[CoreFile, MCSFile, F
     return fileobj
 
 
+def return_if_exists(args: argparse.Namespace, path: Path) -> bool:
+    if path.exists() and not args.force:
+        log.error(f'Target file "{path.name}" exists, use --force to overwrite anyway')
+        return True
+    return False
+
+
 def verify_file(args: argparse.Namespace) -> int:
     log.debug("Started verify file action")
     fileobj = open_file(args.verify)
@@ -1117,8 +1124,7 @@ def build_file(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None)
         return 1
 
     filepath: Path = Path(args.build)
-    if not args.force and filepath.exists():
-        log.error("Target corefile exists, use --force to overwrite")
+    if return_if_exists(args, filepath):
         return 1
 
     bits = [x for x in zip_longest(args.bit, args.name or [], args.version or [])]
@@ -1367,13 +1373,17 @@ def modify_file(args: argparse.Namespace, core: Optional[CoreFile] = None, destp
 
 def extract_files(args: argparse.Namespace) -> int:
     filepath: Path = Path(args.extract)
+    fileobj = open_file(filepath)
+    if fileobj is None:
+        return 1
+
     destpath: Path
     if args.extract_path is None:
-        destpath = filepath.parent.joinpath(sanitize_filename(filepath.stem))
+        destpath = Path('.').absolute().joinpath(sanitize_filename(filepath.stem))
     else:
         destpath = Path(args.extract_path)
     if destpath.exists() and not destpath.is_dir():
-        log.error("Destination exists and is not a directory")
+        log.error("Destination exists but is not a directory")
         return 1
     if not destpath.exists():
         try:
@@ -1383,10 +1393,6 @@ def extract_files(args: argparse.Namespace) -> int:
             return 1
     log.error(f"Extracting to {destpath.absolute()}")
 
-    fileobj = open_file(filepath)
-    if fileobj is None:
-        return 1
-
     if isinstance(fileobj, FpgaBitStream):
         log.error("Can't extract files from a bitstream, abort")
         return 1
@@ -1394,6 +1400,8 @@ def extract_files(args: argparse.Namespace) -> int:
     if isinstance(fileobj, MCSFile):
         if fileobj.filetype == "Trunc-Bit":
             destfile = destpath.joinpath(sanitize_filename(filepath.stem + '.bit'))
+            if return_if_exists(args, destfile):
+                return 1
             try:
                 fileobj.save_data(destfile)
             except (IOError, OSError) as err:
@@ -1403,6 +1411,8 @@ def extract_files(args: argparse.Namespace) -> int:
             return 0
         if fileobj.filetype != "M65-Core":
             destfile = destpath.joinpath(sanitize_filename(f'unknown_{filepath.stem}.dat'))
+            if return_if_exists(args, destfile):
+                return 1
             try:
                 fileobj.save_data(destfile)
             except (IOError, OSError) as err:
@@ -1418,7 +1428,9 @@ def extract_files(args: argparse.Namespace) -> int:
         log.info(f"Found {bitnum} bitstream and {fileobj.embed_count} embedded files")
         errors: int = 0
         if fileobj.bitstream:
-            destfile = destpath.joinpath(sanitize_filename(f"{fileobj.bit_target_name}-{fileobj.bit_version}.bit".replace(' ', '_')))
+            destfile = destpath.joinpath(sanitize_filename(f"{fileobj.bit_target.name}-{fileobj.bit_version}.bit"))
+            if return_if_exists(args, destfile):
+                return 1
             try:
                 fileobj.bitstream.save_data(destfile)
             except (IOError, OSError) as err:
@@ -1426,8 +1438,10 @@ def extract_files(args: argparse.Namespace) -> int:
                 errors += 1
             else:
                 log.info(f'Saved bitstream as "{destfile.name}"')
-        for embed in fileobj.embedded_files:
+        for embed in fileobj.embed_files:
             destfile = destpath.joinpath(sanitize_filename(embed.name))
+            if return_if_exists(args, destfile):
+                return 1
             try:
                 embed.save_data(destfile)
             except (IOError, OSError) as err:
@@ -1441,16 +1455,10 @@ def extract_files(args: argparse.Namespace) -> int:
 
 def convert_files(args: argparse.Namespace) -> int:
 
-    def _return_if_exists(path) -> bool:
-        if path.exists() and not args.force:
-            log.error(f'Target file "{path.name}" exists, use --force to overwrite anyway')
-            return True
-        return False
-
     path_from: Path = Path(args.convert[0])
     path_to: Path = Path(args.convert[1])
 
-    if _return_if_exists(path_to):
+    if return_if_exists(args, path_to):
         return 1
 
     fileobj = open_file(path_from)
@@ -1460,7 +1468,7 @@ def convert_files(args: argparse.Namespace) -> int:
     if path_to.suffix.lower() == '.mcs':
         if args.offset is None:
             args.offset = 0
-        elif args.offset.startswith('S'):
+        elif isinstance(args.offset, str) and args.offset.startswith('S'):
             if isinstance(fileobj, CoreFile) and fileobj.bit_target:
                 args.target = fileobj.bit_target
             if isinstance(args.target, str):
@@ -1468,10 +1476,17 @@ def convert_files(args: argparse.Namespace) -> int:
             if args.target is None:
                 log.error("Offset in slot format requires --target to be set")
                 return 1
-            args.offset = args.target.size * int(args.offset[1:]) * 1024
+            slot: int = int(args.offset[1:])
+            if slot < 0 or slot > 7:
+                log.errror("Only slot 0 to 7 are supported")
+                return 1
+            args.offset = args.target.size * slot * 1024
         else:
-            args.offset = int(args.offset, 0)
-        #log.info(f'Corefile offset0x{args.offset:08x}')
+            try:
+                args.offset = int(args.offset, 0)
+            except ValueError as err:
+                log.error('Unable to parse --offset "{args.offset}": {err}')
+                return 1
 
     if isinstance(fileobj, FpgaBitStream):
         if path_to.suffix.lower() == '.cor':
@@ -1539,8 +1554,6 @@ def convert_files(args: argparse.Namespace) -> int:
                 path_to = path_to.with_suffix('.dat')
             target = 'unknown data'
 
-        if _return_if_exists(path_to):
-            return 1
         try:
             path_to.open('wb').write(fileobj.raw_data)
         except (IOError, OSError) as err:
@@ -1582,8 +1595,7 @@ def main():
     actions_ex.add_argument('--build', '-B', metavar="COREFILE", type=str, help="Build a new corefile.")
     actions_ex.add_argument('--modify', '-M', metavar="COREFILE", type=str, help="Modify an existing corefile.")
     actions_ex.add_argument('--extract', '-X', metavar="COREFILE", type=str,
-                            help="""Extract all files from a corefile and place them into a path with the name of the corefile minus it's extension. Use --extract-path
-                            to specify an alternative path.""")
+                            help="Extract all files from a corefile. Use --extract-path to specify the destination path.")
     actions_ex.add_argument('--convert', '-C', metavar="FILE", type=str, nargs=2,
                             help="Convert one type of file into the other. Note: convert will automatically call --build or --modify if needed.")
 
@@ -1594,7 +1606,7 @@ def main():
     group = parser.add_argument_group('Generic')
     group.add_argument('--force', '-F', action="store_true", help="Force overwriting existing files.")
     group.add_argument('--offset', metavar="OFFSET", type=str, help="Offset to be set when converting a corefile to the MCS format. Defaults to 0. Use 0x prefix for hex numbers or S prefix for Slot.")
-    group.add_argument('--extract-path', metavar="PATH", type=str, help="Target path for the extract action.")
+    group.add_argument('--extract-path', metavar="PATH", type=str, help="Target path for the extract action. Defaults to current directory (plus filename if corefile)")
     coloropt = group.add_mutually_exclusive_group()
     coloropt.add_argument('--color', action="store_true", default=None, help="Enable Color on output(autodetect).")
     coloropt.add_argument('--no-color', action="store_false", default=None, help="Disable Color on output (autodetect).")
