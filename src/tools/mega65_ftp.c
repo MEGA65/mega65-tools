@@ -190,6 +190,7 @@ unsigned char lfn_checksum(const unsigned char *pFCBName);
 int get_cluster_count(char *filename);
 void wipe_direntries_of_current_file_or_dir(void);
 void determine_ethernet_window_size(void);
+int is_fragmented(char *filename);
 
 int direct_sdcard_device = 0;
 FILE *fsdcard = NULL;
@@ -4348,10 +4349,13 @@ int upload_single_file(char *name, char *dest_name)
 
     if (file_exists) {
       // assess how many contiguous clusters it consumes right now.
+      int is_frag = is_fragmented(dest_name);
       int num_clusters = get_cluster_count(dest_name);
       int clusters_needed = (st.st_size - 1) / (512 * sectors_per_cluster) + 1;
 
-      if (num_clusters != clusters_needed) {
+      if (num_clusters != clusters_needed || is_frag) {
+        if (is_frag)
+          printf("%s is fragmented, deleting to recreate\n", dest_name);
         delete_file_or_dir(dest_name);
         file_exists = FALSE;
       }
