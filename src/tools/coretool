@@ -12,6 +12,7 @@ import re
 import shutil
 import fnmatch
 import logging
+import json
 from pathlib import Path
 from array import array
 from binascii import crc32
@@ -232,8 +233,8 @@ class MEGA65flags:
     def parse_str(self, value: str) -> Tuple[int, List[str]]:
         errors: List[str] = []
         flag: int = 0
-        for key in value.split(','):
-            if not key:
+        for key in re.split(r',\s*', value):
+            if not key or key.lower() == 'none':
                 continue
             if key[0] == '_':
                 errors.append(f'hidden {self._name} "{key}"')
@@ -277,9 +278,9 @@ class MEGA65capflags(MEGA65flags):
 
     _options = {
         0b10000000: ('default', 'Core is booted as the default core.'),
-        0b00000001: ('m65cart', 'Core can handle M65 cartridge, and is started if one is detected.'),
-        0b00000010: ('c64cart', 'Core can handle C64 cartridge, and is started if one is detected.'),
-        0b00000100: ('c128cart', 'Core can handle C128 cartridge, and is started if one is detected.'),
+        0b00000001: ('c64cart', 'Core can handle C64 cartridge, and is started if one is detected.'),
+        0b00000010: ('c128cart', 'Core can handle C128 cartridge, and is started if one is detected.'),
+        0b00000100: ('m65cart', 'Core can handle M65 cartridge, and is started if one is detected.'),
     }
 
 
@@ -486,7 +487,7 @@ class FpgaBitStream(ContentElement):
             print(f"\n  Derived Platforms: {', '.join([x.name for x in M65_TARGETS.by_fpga(self.target)])}")
 
 
-NAMEre = re.compile(r'[^ -Z[\]^_a-z]+')
+NAMEre = re.compile(r'[^ -Z[\]^_a-z~]+')
 class CoreFile:
 
     header_size = 4096
@@ -496,7 +497,7 @@ class CoreFile:
 
         self._bit_name: str = ''
         self._bit_version: str = ''
-        self._bit_target: Optional[MEGA65target] = None
+        self._core_target: Optional[MEGA65target] = None
 
         self._boot_caps: int = 0
         self._boot_flags: int = 0
@@ -554,25 +555,29 @@ class CoreFile:
         if isinstance(value, bytes):
             value = zero_string(value, 'ascii')
         self._bit_version = NAMEre.sub(' ', value).strip()[:31]
-    
-    @property
-    def bit_target(self) -> Optional[MEGA65target]:
-        return self._bit_target
 
-    @bit_target.setter
-    def bit_target(self, value: Union[int, bytes, str, MEGA65target]):
+    @property
+    def core_target(self) -> Optional[MEGA65target]:
+        return self._core_target
+
+    @core_target.setter
+    def core_target(self, value: Union[int, bytes, str, MEGA65target]):
         if isinstance(value, MEGA65target):
-            self._bit_target = value
+            self._core_target = value
             return
         if isinstance(value, bytes):
             value = zero_string(value, 'ascii')
-        self._bit_target = M65_TARGETS.get(value)
+        self._core_target = M65_TARGETS.get(value)
 
     @property
     def core_max_size(self) -> int:
-        if self._bit_target:
-            return self._bit_target.size * 1024
+        if self._core_target:
+            return self._core_target.size * 1024
         return 0
+
+    @property
+    def bit_filename(self) -> str:
+        return sanitize_filename(f"{self.core_target.name}-{self.bit_version}.bit")
 
     @property
     def boot_caps(self) -> int:
@@ -680,6 +685,26 @@ class CoreFile:
     def has_errors(self) -> bool:
         return len(self._errors) > 0
 
+    def todict(self) -> dict:
+        return {
+            'CoreFile': {
+                'version': 0,
+                'length': self.core_length,
+                'crc32': self.core_crc32,
+                'target': self.core_target.name,
+                'bit_name': self.bit_name,
+                'bit_version': self.bit_version,
+                'boot_caps': M65_CAPS.get_active_str(self.boot_caps),
+                'boot_flags': M65_CAPS.get_active_str(self.boot_flags),
+                'install_flags': M65_INST.get_active_str(self.install_flags),
+                'bit_filename': str(self.bit_filename),
+                'embed_files': [x.name for x in self.embed_files],
+            }
+        }
+
+    def tojson(self) -> str:
+        return json.dumps(self.todict(), indent=4)
+
     def find_file(self, name: str) -> Optional[EmbeddedFile]:
         for file in self._embed_files:
             if file.name == name:
@@ -726,6 +751,21 @@ class CoreFile:
                 return True
         return False
 
+    def smart_sort_files(self):
+
+        def embedsmartsort(embed: EmbeddedFile) -> str:
+            if embed.name == 'MEGA65.ROM':
+                return '000000001' + embed.name
+            if embed.name == 'ETHLOAD.M65':
+                return '000000002' + embed.name
+            if embed.name == 'FREEZER.M65':
+                return '000000009' + embed.name
+            if embed.name == 'BANNER.M65':
+                return 'zzzzzzzzz' + embed.name
+            return embed.name
+
+        self._embed_files = [x for x in sorted(self._embed_files, key=embedsmartsort)]
+
     @staticmethod
     def _generate_erase_list(data: bytes) -> array:
         res: List[int] = []
@@ -747,7 +787,7 @@ class CoreFile:
         return None
 
     def generate(self) -> bytes:
-        if not self.bitstream or not self.bit_target or not self.bit_name or not self.bit_version:
+        if not self.bitstream or not self.core_target or not self.bit_name or not self.bit_version:
             raise ValueError("need at least bitstream, target, name and version to build core")
 
         # calculate full length
@@ -764,7 +804,7 @@ class CoreFile:
         struct.pack_into("<16s32s32s32sBBBIIBBBHII", buffer, 0,
                          CORE_MAGIC,
                          self.bit_name.encode('ascii'), self.bit_version.encode('ascii'),
-                         self.bit_target.name.encode('ascii'), self.bit_target.code,
+                         self.core_target.name.encode('ascii'), self.core_target.code,
                          1 if self.has_banner else 0, self.embed_count, embed_offset, 0,
                          self.boot_caps, self.boot_flags, self.install_flags, 0,
                          self.core_length, CORE_CRC32_I)
@@ -804,13 +844,13 @@ class CoreFile:
         self.bit_version = res[2]
         if self.bit_version != zero_string(res[2], 'ascii'):
             errors['bit_version'] = f'version mangled from "{zero_string(res[2], "ascii")}"'
-        self.bit_target = res[4]
-        if self.bit_target is None:
-            errors['bit_target'] = f'unknown bit_target code ${res[4]:02X}'
+        self.core_target = res[4]
+        if self.core_target is None:
+            errors['core_target'] = f'unknown core_target code ${res[4]:02X}'
         else:
             btn = zero_string(res[3], 'ascii')
-            if self.bit_target.name != btn:
-                errors['bit_target'] = f"bit_target name {zero_string(res[3], 'ascii')} does not match ${res[4]:02X}"
+            if self.core_target.name != btn:
+                errors['core_target'] = f"core_target name {zero_string(res[3], 'ascii')} does not match ${res[4]:02X}"
 
         has_banner: bool = res[5] != 0
         if has_banner:
@@ -853,8 +893,8 @@ class CoreFile:
             errors['core_crc32'] = f'CRC32 mismatch, should be {check_core_crc32:08X}' if self.core_crc32 != 0 else 'Old bitstream file without CRC32'
 
         self.bitstream = FpgaBitStream(self.bit_name, data[4096:next_offset] if next_offset else data[4096:])
-        if self.bitstream.target != self.bit_target.fpga:
-            errors['bitfile_target'] = f'Core {self.bit_target.fpga} != bitstream {self.bitstream.target}'
+        if self.bitstream.target != self.core_target.fpga:
+            errors['bitfile_target'] = f'Core {self.core_target.fpga} != bitstream {self.bitstream.target}'
 
         while next_offset > 0:
             res = struct.unpack("<II32s", data[next_offset:next_offset+40])
@@ -881,12 +921,12 @@ class CoreFile:
         print(f'COREFILE "{self.filepath.name}"')
         print(format_error_line(f"@@ Core length: {self.core_length} (file {self.core_length})", self._errors.get('core_length')))
         print(format_error_line(f"@@ Core CRC32:  {self.core_crc32:08X}", self._errors.get('core_crc32')))
+        print(format_error_line(f"@@ Core Target: {self.core_target.code:02X} - {self.core_target.name} - {self.core_target.fpga}", self._errors.get('bithdr_target') + self._errors.get('bitfile_target')))
 
         # bitstream 1 info
         print(f"  BITSTREAM 1")
         print(format_error_line(f"  @@ Name:          {self.bit_name}", self._errors.get('bit_name')))
         print(format_error_line(f"  @@ Version:       {self.bit_version}", self._errors.get('bit_version')))
-        print(format_error_line(f"  @@ Target:        {self.bit_target.code:02X} - {self.bit_target.name} - {self.bit_target.fpga}", self._errors.get('bithdr_target') + self._errors.get('bitfile_target')))
         print(format_error_line(f"  @@ Capabilities:  {M65_CAPS.get_active_str(self.boot_caps)}", self._errors.get('boot_caps')))
         print(format_error_line(f"  @@ Active Flags:  {M65_CAPS.get_active_str(self.boot_flags)}", self._errors.get('boot_flags')))
         print(format_error_line(f"  @@ Install Flags: {M65_INST.get_active_str(self.install_flags)}", self._errors.get('install_flags')))
@@ -1118,13 +1158,13 @@ def verify_file(args: argparse.Namespace) -> int:
     return 1
 
 
-def build_file(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None) -> int:
-    if args.bit is None:
-        log.error("Please provide a bitstream file using --bit/-b")
-        return 1
-
+def build_core(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None) -> int:
     filepath: Path = Path(args.build)
     if return_if_exists(args, filepath):
+        return 1
+
+    if args.bit is None:
+        log.error("Please provide a bitstream file using --bit/-b")
         return 1
 
     bits = [x for x in zip_longest(args.bit, args.name or [], args.version or [])]
@@ -1170,7 +1210,7 @@ def build_file(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None)
     if not version:
         log.error("Please provide a version for the core using --version/-v")
 
-    core.bit_target = target
+    core.core_target = target
     core.bit_name = name
     core.bit_version = version
 
@@ -1198,17 +1238,27 @@ def build_file(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None)
             log.error(f"Invalid install flags found (use list to show valid options)")
             return 1
 
-    for file in (args.add_files or []):
-        filepath = Path(file)
+    add_files: list = []
+    if args.add_files:
+        add_files.extend([Path(x) for x in args.add_files])
+
+    for filepath in add_files:
         try:
             obj = core.add_file(filepath)
         except FileError as err:
             log.error(f'Failed to add "{filepath.name}": {err}')
         else:
-            log.info(f"Embedded \"{filepath.name}\"")
+            logadd: str = ''
             if filepath.name == 'BANNER.M65':
                 core.banner_data = obj.raw_data
-                log.info(f"File also set as banner")
+                logadd = " (embedded as banner)"
+            log.info(f"Embedded \"{filepath.name}\"{logadd}")
+
+    if args.smart_sort:
+        core.smart_sort_files()
+        log.info('Smart sorted embedded files:')
+        for embed in core.embed_files:
+            log.info(f'  {embed.name}')
 
     if args.set_banner:
         bannerpath: Path = Path(args.set_banner)
@@ -1350,6 +1400,9 @@ def modify_file(args: argparse.Namespace, core: Optional[CoreFile] = None, destp
             log.info(f'Set embedded banner to "{bannerpath.name}"')
             changed = True
 
+    if args.smart_sort:
+        core.smart_sort_files()
+
     error: Optional[str] = core.check()
     if error:
         log.error(f'Final core check failed: {error}')
@@ -1427,8 +1480,18 @@ def extract_files(args: argparse.Namespace) -> int:
         bitnum: str = 'one' if fileobj.bitstream else 'no'
         log.info(f"Found {bitnum} bitstream and {fileobj.embed_count} embedded files")
         errors: int = 0
+        destfile = destpath.joinpath(sanitize_filename(f"core.json"))
+        if return_if_exists(args, destfile):
+            return 1
+        try:
+            destfile.open('wt').write(fileobj.tojson())
+        except (IOError, OSError) as err:
+            log.error(f'Failed to save core json as "{destfile.name}": {err}')
+            errors += 1
+        else:
+            log.info(f'Saved core json as "{destfile.name}"')
         if fileobj.bitstream:
-            destfile = destpath.joinpath(sanitize_filename(f"{fileobj.bit_target.name}-{fileobj.bit_version}.bit"))
+            destfile = destpath.joinpath(fileobj.bit_filename)
             if return_if_exists(args, destfile):
                 return 1
             try:
@@ -1454,12 +1517,39 @@ def extract_files(args: argparse.Namespace) -> int:
     return 0
 
 def convert_files(args: argparse.Namespace) -> int:
-
     path_from: Path = Path(args.convert[0])
     path_to: Path = Path(args.convert[1])
 
     if return_if_exists(args, path_to):
         return 1
+
+    if path_from.is_dir() and path_from.joinpath('core.json').exists() and path_to.suffix.lower() == '.cor':
+        log.info('Building core from extraction path')
+        try:
+            coreinfo: dict = json.load(path_from.joinpath('core.json').open('rb'))
+        except (FileNotFoundError, IOError) as err:
+            log.error(f'Failed to load core.json: {err}')
+            return 1
+        args.build = args.convert[1]
+        if not args.bit:
+            args.bit = [path_from.joinpath(coreinfo['CoreFile']['bit_filename'])]
+        if not args.target:
+            args.target = coreinfo['CoreFile']['target']
+        if not args.name:
+            args.name = [coreinfo['CoreFile']['bit_name']]
+        if not args.version:
+            args.version = [coreinfo['CoreFile']['bit_version']]
+        if not args.caps:
+            args.caps = coreinfo['CoreFile']['boot_caps']
+        if not args.flags:
+            args.flags = coreinfo['CoreFile']['boot_flags']
+        if not args.install:
+            args.install = coreinfo['CoreFile']['install_flags']
+        if args.add_files is None:
+            args.add_files = []
+        for file in coreinfo['CoreFile']['embed_files']:
+            args.add_files.append(path_from.joinpath(file))
+        return build_core(args)
 
     fileobj = open_file(path_from)
     if fileobj is None:
@@ -1469,8 +1559,8 @@ def convert_files(args: argparse.Namespace) -> int:
         if args.offset is None:
             args.offset = 0
         elif isinstance(args.offset, str) and args.offset.startswith('S'):
-            if isinstance(fileobj, CoreFile) and fileobj.bit_target:
-                args.target = fileobj.bit_target
+            if isinstance(fileobj, CoreFile) and fileobj.core_target:
+                args.target = fileobj.core_target
             if isinstance(args.target, str):
                 args.target = M65_TARGETS.get(args.target)
             if args.target is None:
@@ -1493,7 +1583,7 @@ def convert_files(args: argparse.Namespace) -> int:
             log.warning('Conversion from FPGA Bitstream to Corefile should be done with --build, trying anyways...')
             args.build = args.convert[1]
             args.bit = [args.convert[0]]
-            return build_file(args, bitobj=fileobj)
+            return build_core(args, bitobj=fileobj)
         if path_to.suffix.lower() != '.mcs':
             log.error(f"Invalid conversion target {path_to.suffix.lower()[1:]} for FPGA Bitstream")
             return 1
@@ -1600,13 +1690,14 @@ def main():
                             help="Convert one type of file into the other. Note: convert will automatically call --build or --modify if needed.")
 
     group = parser.add_argument_group('Logging & Output')
-    group.add_argument('--debug', '-d', action="store_true", help="Enable debug output")
-    group.add_argument('--quiet', '-q', action="store_true", help="Only display errors")
+    group.add_argument('--debug', '-d', action="store_true", help="Enable debug output.")
+    group.add_argument('--quiet', '-q', action="store_true", help="Only display errors.")
 
     group = parser.add_argument_group('Generic')
     group.add_argument('--force', '-F', action="store_true", help="Force overwriting existing files.")
     group.add_argument('--offset', metavar="OFFSET", type=str, help="Offset to be set when converting a corefile to the MCS format. Defaults to 0. Use 0x prefix for hex numbers or S prefix for Slot.")
-    group.add_argument('--extract-path', metavar="PATH", type=str, help="Target path for the extract action. Defaults to current directory (plus filename if corefile)")
+    group.add_argument('--extract-path', metavar="PATH", type=str, help="Target path for the extract action. Defaults to current directory (plus filename if corefile).")
+    group.add_argument('--smart-sort', action="store_true", help="Enable smart sorting of embedded files. This will put often used files at the start for speed improvement.")
     coloropt = group.add_mutually_exclusive_group()
     coloropt.add_argument('--color', action="store_true", default=None, help="Enable Color on output(autodetect).")
     coloropt.add_argument('--no-color', action="store_false", default=None, help="Disable Color on output (autodetect).")
@@ -1688,7 +1779,7 @@ def main():
     if args.verify is not None:
         result = verify_file(args)
     elif args.build:
-        result = build_file(args)
+        result = build_core(args)
     elif args.modify:
         result = modify_file(args)
     elif args.convert is not None:
