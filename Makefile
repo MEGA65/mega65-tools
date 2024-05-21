@@ -160,7 +160,8 @@ TOOLSUNX=	$(BINDIR)/m65 \
 		$(BINDIR)/etherload \
 		$(BINDIR)/bit2core \
 		$(BINDIR)/bit2mcs \
-		$(BINDIR)/romdiff
+		$(BINDIR)/romdiff \
+		$(TOOLDIR)/coretool
 
 # extra tools you can build, but that don't go into the package
 EXTRAUNX=	$(BINDIR)/pngprepare \
