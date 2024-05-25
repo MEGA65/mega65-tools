@@ -409,7 +409,7 @@ class FpgaBitStream(ContentElement):
         self._target = header[98].decode('ascii')
         self._date = datetime.datetime.strptime((header[99]+b'-'+header[100]).decode('ascii'), '%Y/%m/%d-%H:%M:%S')
         self._truncated = False
-        self._guess_match: Optional[Dict[str, str]] = {}
+        self._guess_match: Optional[Dict[str, str]] = None
 
     def __repr__(self) -> str:
         return f'<FpgaBitStream "{self.name}" for {self.target} {len(self.raw_data)} bytes>'
@@ -441,32 +441,40 @@ class FpgaBitStream(ContentElement):
         return self._raw_data[120:]
 
     @property
+    def guess_match(self) -> Optional[dict]:
+        if self._guess_match is not None:
+            return self._guess_match
+        namematch = self.NAMEre.match(self.filepath.name)
+        if not namematch:
+            return None
+        self._guess_match = namematch.groupdict()
+        return self._guess_match
+
+    @property
     def guess_target(self) -> Optional[MEGA65target]:
         if not self.target:
             return None
-        namematch = self._guess_match = self.NAMEre.match(self.filepath.name)
-        if not namematch:
-            return None
+        guess = self.guess_match
         for target in M65_TARGETS.by_fpga(self.target):
-            if target.name == namematch.groupdict()['target'].replace('-', ''):
+            if target.name == guess['target'].replace('-', ''):
                 return target
         return None
 
     @property
     def guess_name(self) -> Optional[str]:
-        if self._guess_match is None:
+        if self.guess_match is None:
             return None
         return 'MEGA65'
 
     @property
     def guess_version(self) -> Optional[str]:
-        if self._guess_match is None:
+        if self.guess_match is None:
             return None
-        branch: str = self._guess_match['branch']
+        branch: str = self.guess_match['branch']
         if branch == 'develo':
             branch = "Development"
         elif branch.startswith('r-'):
-            return f'Release {branch[2:]} {self._guess_match["commit"]}'
+            return f'Release {branch[2:]} {self.guess_match["commit"]}'
         elif '-' in branch:
             try:
                 num = int(branch.split('-',1)[0])
@@ -475,7 +483,7 @@ class FpgaBitStream(ContentElement):
             if num is not None:
                 branch = f'Issue #{num}'
         
-        return f'{branch} {self._guess_match["date"]} {self._guess_match["commit"]}'
+        return f'{branch} {self.guess_match["date"]} {self.guess_match["commit"]}'
 
     def print_info(self):
         print(f'\nBITFILE "{self.name}"{" TRUNCATED" if self.is_truncated else ""}')
