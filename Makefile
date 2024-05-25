@@ -178,7 +178,8 @@ TOOLSWIN=	$(BINDIR)/m65.exe \
 		$(BINDIR)/etherload.exe \
 		$(BINDIR)/bit2core.exe \
 		$(BINDIR)/bit2mcs.exe \
-		$(BINDIR)/romdiff.exe
+		$(BINDIR)/romdiff.exe \
+		$(TOOLDIR)/coretool
 
 EXTRAWIN=	
 
@@ -187,7 +188,8 @@ TOOLSMAC=	$(BINDIR)/m65.osx \
 		$(BINDIR)/etherload.osx \
 		$(BINDIR)/bit2core.osx \
 		$(BINDIR)/bit2mcs.osx \
-		$(BINDIR)/romdiff.osx
+		$(BINDIR)/romdiff.osx \
+		$(TOOLDIR)/coretool
 
 EXTRAMAC=	
 
@@ -728,6 +730,9 @@ $(eval $(call TRIPLE_TARGET, $(BINDIR)/bin2c, $(TOOLDIR)/bin2c.c))
 $(eval $(call TRIPLE_TARGET, $(BINDIR)/map2h, $(TOOLDIR)/map2h.c))
 
 $(eval $(call TRIPLE_TARGET, $(BINDIR)/romdiff, $(TOOLDIR)/romdiff.c))
+
+$(TOOLDIR)/coretool:
+	@echo "coretool is a python script, nothing to do!"
 
 ##
 ## ========== m65 ==========
