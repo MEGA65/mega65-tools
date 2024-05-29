@@ -729,7 +729,7 @@ class CoreFile:
         except (FileNotFoundError, IOError) as err:
             raise FileError(err)
         obj = EmbeddedFile(filepath.name, data)
-        if self.embed_size + self.header_size + self.banner_size + obj.raw_data_length > self.core_max_size:
+        if self.header_size + (self.bitstream.raw_data_length if self.bitstream else 0) + self.embed_size + self.banner_size + obj.raw_data_length > self.core_max_size:
             raise FileError("core size exceeded")
         self._embed_files.append(obj)
         return obj
@@ -818,7 +818,8 @@ class CoreFile:
                          self.core_length, CORE_CRC32_I)
 
         buffer[4096:4096+self.bitstream.raw_data_length] = array('B', self.bitstream.raw_data)
-        buffer[-BANNER_SIZE:] = self.banner_data_array
+        if self.has_banner:
+            buffer[-BANNER_SIZE:] = self.banner_data_array
 
         for file in self.embed_files:
             file.offset = embed_offset
