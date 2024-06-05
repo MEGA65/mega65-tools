@@ -83,6 +83,7 @@ void usage(void)
   fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
   fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
   fprintf(stderr, "       (Almost always 2000000 is the correct answer).\n");
+  fprintf(stderr, "  -z - Convert an ASCII .elpc file into a PETSCII .el file.\n");
   fprintf(stderr, "\n");
   exit(-3);
 }
@@ -125,6 +126,44 @@ void convert_to_pcfile(const char* src_name)
   printf("Saved out pc-friendly version as \"%s\"...\n", dest_name);
 }
 
+void convert_to_petscii_file(const char* src_name)
+{
+  char dest_name[256];
+  char str[16];
+  strcpy(dest_name, src_name);
+  dest_name[strlen(dest_name)-2] = '\0';  // change .ELPC to .EL
+
+  FILE* fin = fopen(src_name, "rb");
+  FILE* fout = fopen(dest_name, "wb");
+
+  int c;
+
+  while (!feof(fin)) {
+    c = fgetc(fin);
+    if (c >= 97 && c <= 122) // ascii-lowercase to petscii-lowercase?
+      c -= 32;
+    else if (c >= 65 && c <= 90) // ascii-uppercase to petscii-uppercase?
+      c += 128;
+    else if (c == '\n') // linux EOL?
+      c = '\r'; // switch to petscii EOL
+    else if (c == '_') // ascii underscore to petscii underscore (mega+p)
+      c = 0xaf;
+    else if (c == '^') // ascii-caret to petscii up-arrow?
+      c = 0x5e;
+/*    else if ((c >= 0 && c <= 12) || (c >= 14 && c <= 31) || (c >= 94 && c <=162)) {
+      sprintf(str, "{x%X}", c);
+      fwrite(str, 1, strlen(str), fout);
+      continue;
+    }*/
+
+    fputc(c, fout);
+  }
+  fclose(fin);
+  fclose(fout);
+
+  printf("Saved out petscii-friendly version as \"%s\"...\n", dest_name);
+}
+
 void FILEpkt(char* pkt)
 {
   printf("got here...\n");
@@ -150,7 +189,8 @@ void parse_packet(char* pkt) {
         fclose(f);
         printf("Closing file \"%s\"...\n", fname);
         file_state = FS_WAIT;
-        if (strcmp(fname+strlen(fname)-3,".EL") == 0)
+	// let's convert 'all' files to pc versions
+        // if (strcmp(fname+strlen(fname)-3,".EL") == 0)
           convert_to_pcfile(fname);
       }
       else {
@@ -212,7 +252,7 @@ int DIRTYMOCK(main)(int argc, char** argv)
 #endif
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:s:l:c:u:p:n")) != -1) {
+  while ((opt = getopt(argc, argv, "b:s:l:c:u:p:n:z:")) != -1) {
     switch (opt) {
     case 'l':
       strcpy(serial_port, optarg);
@@ -229,6 +269,11 @@ int DIRTYMOCK(main)(int argc, char** argv)
       default:
         usage();
       }
+      break;
+    case 'z':
+      strcpy(fname, optarg);
+      convert_to_petscii_file(fname);
+      exit(0);
       break;
     default: /* '?' */
       usage();
