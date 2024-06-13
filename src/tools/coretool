@@ -25,7 +25,9 @@ log = logging.getLogger("coretool")
 ##
 ## CONSTANTS
 ##
-LOG_FORMAT = '[%(asctime)-19.19s %(levelname)-4.4s] %(message)s'
+LOG_FORMAT: str = '[%(asctime)-19.19s %(levelname)-4.4s] %(message)s'
+
+VERSION: str = '@@VERSION@@'
 
 CORE_MAGIC: bytes = b'MEGA65BITSTREAM0'
 CORE_CRC32: bytes = b'\xf0\xf0\xf0\xf0'
@@ -292,7 +294,7 @@ class MEGA65instflags(MEGA65flags):
         0b00000001: ('factory', 'Is suited as SLOT0 FACTORY CORE'),
         0b00000010: ('auto', 'Skips security questions (factory)'),
         0b01000000: ('_eraselist', 'Has eraslist embedded'),
-        0b10000000: ('force', 'Is automatically installed by MEGAFLASH (factory)'),
+        0b10000000: ('force', 'Is automatically installed by MEGAFLASH (factory, BRINGUP.COR)'),
     }
 
 
@@ -1687,13 +1689,12 @@ def main():
     global DO_COLOR, WIDTH
 
     parser = argparse.ArgumentParser("coretool", formatter_class=CustomHelpFormatter,
-                                     description=f"{CBOLD if DO_COLOR else ''}!!!UNFINISHED!!! STILL IN DEVELOPMENT!!!{CST if DO_COLOR else ''}\n\n\nMEGA65 Corefile utility",
+                                     description=f"MEGA65 Corefile utility - Version {VERSION}",
                                      epilog=f"""{CBOLD if DO_COLOR else ''}WARNING:{CST if DO_COLOR else ''} if you are not a developer, this tool is probably not for you!\n\n
                                      This tool allows the construction, modification and verification of MEGA65 core files, as well as the conversion between Corefile,
                                      FPGA Bitstream and the Intel MCS-86 fileformat (also used by Vivado).\n\n
                                      A Corefile is mainly used to flash bistreams in a defined way into your MEGA65 mainboard. This is done with the MEGAFLASH utility,
-                                     which you can bring up by holding down NO-SCROLL and then powering on your mega65.\n\n
-                                     {CBOLD if DO_COLOR else ''}!!!UNFINISHED!!! STILL IN DEVELOPMENT!!!{CST if DO_COLOR else ''}""")
+                                     which you can bring up by holding down NO-SCROLL and then powering on your mega65.""")
     actions = parser.add_argument_group("Action", "The main function that is executed")
     actions_ex = actions.add_mutually_exclusive_group(required=True)
     actions_ex.add_argument('--verify', '-V', metavar="FILE", type=str, help="Display information about a file.")
@@ -1786,8 +1787,9 @@ def main():
         did_list = True
     
     if did_list:
-        print()
         sys.exit(0)
+
+    log.info(f'coretool {VERSION}')
 
     # do the actions
     result: int = 1

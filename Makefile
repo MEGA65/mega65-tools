@@ -735,7 +735,7 @@ $(TOOLDIR)/coretool:
 	@echo "coretool is a python script, nothing to do!"
 
 ${BINDIR}/coretool: $(TOOLDIR)/coretool
-	cp $(TOOLDIR)/coretool ${BINDIR}/coretool
+	cat $(TOOLDIR)/coretool | sed "s/@@VERSION@@/`${SRCDIR}/gitversion.sh`/" > ${BINDIR}/coretool
 
 ##
 ## ========== m65 ==========
