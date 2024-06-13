@@ -35,7 +35,7 @@
  *
  * Parts:
  * Copyright 2002-2010 Guillaume Cottenceau.
- * Copyright 2015-2022 Paul Gardner-Stephen.
+ * Copyright 2015-2023 Paul Gardner-Stephen.
  *
  * This software may be freely redistributed under the terms
  * of the X11 license.
@@ -589,6 +589,7 @@ int link_count = 0;
 
 void register_box(int url_id, int x1, int y1, int x2, int y2)
 {
+  fprintf(stderr,"DEBUG: register_box(%d,%d,%d,%d,%d)\n",url_id,x1,y1,x2,y2);
   for (int i = 0; i < link_count; i++) {
     if (url_boxes[i].url_id == url_id && url_boxes[i].x1 == x1 && url_boxes[i].y1 == y1 && url_boxes[i].x2 == x2
         && url_boxes[i].y2 == y2)
@@ -743,7 +744,7 @@ void next_paragraph(void)
   emit_accumulated_line();
 
   if (in_paragraph) {
-    printf("[YSkip for new paragraph]\n");
+    if (0) printf("[YSkip for new paragraph]\n");
     screen_y++;
     in_paragraph = 0;
     indent = 0;
@@ -796,7 +797,7 @@ struct tile blank_tile = {
 #define BITMAP_BASELINE (MAX_BITMAP_SIZE / 2)
 unsigned char glyph_bitmap[MAX_BITMAP_SIZE][MAX_BITMAP_SIZE];
 
-int encode_glyph_card(int card_x, int card_y, struct tile_set *ts)
+int encode_glyph_card(FT_GlyphSlot glyphSlot, int card_x, int card_y, struct tile_set *ts)
 {
   int base_x = card_x * 16;
   // Y=0 is the card directly above the baseline, Y=-1 is directly below the baseline
@@ -821,7 +822,7 @@ int encode_glyph_card(int card_x, int card_y, struct tile_set *ts)
     }
   }
 
-  if (1) {
+  if (0) {
     printf("card (%d,%d) is:\n", card_x, card_y);
     for (y = 0; y < 8; y++) {
       for (x = 0; x < 8; x++) {
@@ -909,31 +910,25 @@ int render_codepoints(int *code_points, int num)
   int under_rows = 0;
 
   // Work out size of char grid required to fit the glyph(s)
-  char_rows = max_height / 8;
-  if (max_height & 7)
-    char_rows++;
-  char_columns = total_width / 16;
-  if (total_width & 15)
-    char_columns++;
-  under_rows = max_under / 8;
-  if (max_under & 7)
-    under_rows++;
-
-  if (1)
-    printf("Character is %dx%d cards above and %dx%d below, max_height=%d, max_under=%d\n", char_columns, char_rows,
-        char_columns, under_rows, max_height, max_under);
-  int x, y;
-
-  printf("y range = %d..%d, width=%d\n", char_rows - 1, -under_rows, total_width);
-
-  printf("total width of glyph(s) = %d\n", total_width);
-
+  char_rows=max_height/8;      if (max_height&7) char_rows++;
+  char_columns=total_width/16; if (total_width&15) char_columns++;
+  under_rows=max_under/8;      if (max_under&7) under_rows++;
+ 
+  if (0) printf("Character is %dx%d cards above and %dx%d below, max_height=%d, max_under=%d\n",
+		char_columns,char_rows,
+		char_columns,under_rows,
+		max_height,max_under);
+  int x,y;
+    
+  if (0) printf("y range = %d..%d, width=%d\n",char_rows-1,-under_rows,total_width);
+  
+  if (0) printf("total width of glyph(s) = %d\n",total_width);
+    
   // Record number of pixels to trim from right-most tile
-  int trim_pixels = 16 - (total_width & 15);
-  if (!(total_width & 15))
-    trim_pixels = 0;
-  printf("total_width=%d, trim_pixels=%d\n", total_width, trim_pixels);
-
+  int trim_pixels=16-(total_width&15);
+  if (!(total_width&15)) trim_pixels=0;
+  if (0) printf("total_width=%d, trim_pixels=%d\n",total_width,trim_pixels);
+    
   // Now build the glyph map
 
   for (x = 0; x < char_columns; x++) {
@@ -958,21 +953,31 @@ int render_codepoints(int *code_points, int num)
     if (x == (char_columns - 1))
       this_trim = trim_pixels;
 
-    for (y = 0; y < MAX_LINE_HEIGHT + MAX_LINE_DEPTH; y++) {
-      accword_screen_ram[y][accword_len * 2 + 0] = blank_card >> 0;
-      accword_screen_ram[y][accword_len * 2 + 1] = (blank_card >> 8) + (this_trim << 5);
-      accword_colour_ram[y][accword_len * 2 + 0] = 0x20 + 0x08; // ALPHA + NCM glyph
-      if (y == (MAX_LINE_HEIGHT - 1)) {
-        accword_colour_ram[y][accword_len * 2 + 1] = text_colour + attributes;
+    for(y=char_rows-1;y>=-under_rows;y--)
+      {
+	int card_number=encode_glyph_card(glyph_slot,x,y,ts);
+	printf("  encoding tile (%d,%d) using card $%04x in row store y=%d\n",
+	       x,y,card_number,MAX_LINE_HEIGHT-1-y);   
+	// Write tile details into accline_screen_ram and accline_colour_ram
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=card_number>>0;
+	accword_screen_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(card_number>>8)+(this_trim<<5);
+	accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]=0x20+0x08; // ALPHA + NCM glyph
+	if (!y) {
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=text_colour + attributes;
+	} else {
+	  // Do not apply underline to other than the base row
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+1]=(text_colour + attributes) & 0x7f;
+	}
+	if (this_trim&8) {
+	  accword_colour_ram[MAX_LINE_HEIGHT-1-y][accword_len*2+0]|=0x04; // Trim 8 more pixels
+	}
+	else {
+	  // Do not apply underline to other than the base row
+	  accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 1] = (text_colour + attributes) & 0x7f;
+	}
+	if (trim_pixels & 8)
+	  accword_colour_ram[MAX_LINE_HEIGHT - 1 - y][accword_len * 2 + 0] |= 0x04; // Trim 8 more pixels
       }
-      else {
-        // Do not apply underline to other than the base row
-        accword_colour_ram[y][accword_len * 2 + 1] = (text_colour + attributes) & 0x7f;
-      }
-      if (this_trim & 8)
-        accword_colour_ram[y][accword_len * 2 + 0] |= 0x04; // Trim 8 more pixels
-    }
-
     for (y = char_rows - 1; y >= -under_rows; y--) {
       int card_number = encode_glyph_card(x, y, ts);
       printf("  encoding tile (%d,%d) using card $%04x in row store y=%d\n", x, y, card_number, MAX_LINE_HEIGHT - 1 - y);
@@ -1380,8 +1385,9 @@ void emit_text(char *text)
           fprintf(stderr, "ERROR: Markdown contains a word that is too long.\n");
           exit(-1);
         }
-        if (!in_paragraph)
-          printf("[Char '%c' started paragraph]\n", text[i]);
+        if (!in_paragraph) {
+          if (0) printf("[Char '%c' started paragraph]\n", text[i]);
+	}
         in_paragraph = 1;
         in_paragraph = 1;
         in_paragraph = 1;

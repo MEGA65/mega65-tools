@@ -700,7 +700,7 @@ $(BINDIR)/bitinfo:	$(TOOLDIR)/bitinfo.c Makefile
 	$(CC) $(COPT) -g -Wall -o $(BINDIR)/bitinfo $(TOOLDIR)/bitinfo.c
 
 $(BINDIR)/vcdgraph:	$(TOOLDIR)/vcdgraph.c Makefile
-	$(CC) $(COPT) -I/usr/include/cairo -g -Wall -o $(BINDIR)/vcdgraph $(TOOLDIR)/vcdgraph.c -lcairo
+	$(CC) $(COPT) -I/usr/include/cairo -g -Wall -o $(BINDIR)/vcdgraph $(TOOLDIR)/vcdgraph.c -lcairo -lpng
 
 # Create targets for binary (linux), binary.exe (mingw), and binary.osx (osx) easily, minimising repetition
 # arg1 = target name (without .exe)

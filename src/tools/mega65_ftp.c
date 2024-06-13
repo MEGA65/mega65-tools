@@ -781,16 +781,6 @@ int DIRTYMOCK(main)(int argc, char **argv)
       break;
     case 's':
       serial_speed = atoi(optarg);
-      switch (serial_speed) {
-      case 1000000:
-      case 1500000:
-      case 4000000:
-      case 230400:
-      case 2000000:
-        break;
-      default:
-        usage();
-      }
       break;
     case 'b':
       bitstream = strdup(optarg);
@@ -5466,6 +5456,9 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
         remaining_bytes = 0;
     }
 
+    if (showClusters) {
+      printf("LastCluster=%d\n", file_cluster);
+    }
     if (f)
       fclose(f);
 

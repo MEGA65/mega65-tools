@@ -1844,7 +1844,7 @@ int open_the_serial_port(char *serial_port)
 
 #ifdef WINDOWS
   fd.type = WINPORT_TYPE_FILE;
-  fd.fdfile = open_serial_port(serial_port, 2000000);
+  fd.fdfile = open_serial_port(serial_port, serial_speed);
   if (fd.fdfile == INVALID_HANDLE_VALUE) {
     log_crit("could not open serial port '%s'", serial_port);
     log_error("  (could the port be in use by another application?)");
