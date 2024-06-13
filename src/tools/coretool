@@ -142,7 +142,7 @@ class ErrorHandler:
 
     def __setitem__(self, key: str, value: str):
         self._errors.setdefault(key, []).append(value)
-    
+
     def __getitem__(self, key: str) -> List[str]:
         return self._errors[key]
 
@@ -199,7 +199,7 @@ class MEGA65targets:
         if type(key) is int:
             return self._by_code.get(key, None)
         return self._by_name.get(key, self._by_fpga.get(key, None))
-    
+
     def get_help(self, indent: str = '') -> str:
         lines = [('Targetname', 'Code - FPGA Part'), ('===========', '===================')] + [(f"{x.name}", f"0x{x.code:02X} - {x.fpga}") for x in self.targets]
         fmtlen = max([len(x[0]) for x in lines])
@@ -222,7 +222,7 @@ class MEGA65flags:
 
     def get(self, key: str) -> int:
         return self.name2flag.get(key, 0)
-    
+
     def match(self, key: str) -> Optional[str]:
         res = None
         for name in self.name2flag:
@@ -253,7 +253,7 @@ class MEGA65flags:
 
     def get_active(self, value: int) -> List[str]:
         return [y for x, y in self.flag2name.items() if value & x]
-    
+
     def get_active_str(self, value: int, join_str: str = ', ', empty_str: str = 'none') -> str:
         active = self.get_active(value)
         if not active:
@@ -270,7 +270,7 @@ class MEGA65flags:
         if key not in self.name2flag:
             raise KeyError(f"unknown flag key '{key}'")
         return (value & self.name2flag[key]) != 0
-    
+
     def get_help(self, indent: str = '') -> str:
         return '\n'.join([indent + x for x in self.helptext])
 
@@ -331,7 +331,7 @@ class ContentElement:
 
     def __repr__(self) -> str:
         return f'<ContentElement "{self.name}" {len(self.raw_data)} bytes>'
-    
+
     def save_data(self, path: Path):
         path.open('wb').write(self._raw_data)
 
@@ -343,11 +343,11 @@ class EmbeddedFile(ContentElement):
         self._offset: Optional[int] = offset
         self._next: Optional[int] = next
         self.errors: List[Optional[str]] = []
-    
+
     @property
     def offset(self) -> Optional[int]:
         return self._offset
-    
+
     @offset.setter
     def offset(self, value: int):
         self._offset = value
@@ -355,7 +355,7 @@ class EmbeddedFile(ContentElement):
     @property
     def next(self) -> Optional[int]:
         return self._next
-    
+
     @next.setter
     def next(self, value: int):
         self._next = value
@@ -427,7 +427,7 @@ class FpgaBitStream(ContentElement):
     @property
     def date(self) -> Optional[str]:
         return self._date
-    
+
     @property
     def filepath(self) -> Optional[Path]:
         return self._filepath
@@ -484,7 +484,7 @@ class FpgaBitStream(ContentElement):
                 num = None
             if num is not None:
                 branch = f'Issue #{num}'
-        
+
         return f'{branch} {self.guess_match["date"]} {self.guess_match["commit"]}'
 
     def print_info(self):
@@ -624,7 +624,7 @@ class CoreFile:
     @property
     def core_length(self) -> int:
         return self._core_length
-    
+
     @core_length.setter
     def core_length(self, value: int):
         self._core_length = value
@@ -632,7 +632,7 @@ class CoreFile:
     @property
     def core_crc32(self) -> int:
         return self._core_crc32
-    
+
     @core_crc32.setter
     def core_crc32(self, value: int):
         self._core_crc32 = value
@@ -640,7 +640,7 @@ class CoreFile:
     @property
     def banner_data(self) -> bytes:
         return self._banner_data
-    
+
     @banner_data.setter
     def banner_data(self, value: Optional[bytes]):
         if not value:
@@ -971,11 +971,11 @@ class MCSFile:
     @property
     def filepath(self) -> Path:
         return self._filepath
-    
+
     @property
     def raw_data(self) -> bytes:
         return self._raw_data
-    
+
     @raw_data.setter
     def raw_data(self, data: bytes):
         self._raw_data = data
@@ -983,7 +983,7 @@ class MCSFile:
     @property
     def offset(self) -> int:
         return self._offset
-    
+
     @offset.setter
     def offset(self, offset: int):
         if offset & 0xffff != 0:
@@ -1053,14 +1053,14 @@ class MCSFile:
                 self._raw_data += blob
                 blob = b''
                 continue
-            
+
             if data[3] == 1: # end marker
                 self._raw_data += blob
                 break
 
             if highaddr < 0 or nextaddr < 0:
                 raise FileError(f"unexpected nextaddr in line {linenum}")
-            
+
             thisaddr = (data[1] << 8) + data[2]
             if nextaddr != thisaddr:
                 raise FileError(f"address discontinuity error in line {linenum:08d}: {thisaddr} != {nextaddr}")
@@ -1199,7 +1199,7 @@ def build_core(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None)
             log.info(f"Target guessed to be {target.name}/${target.code:02X}")
     else:
         target = M65_TARGETS.get(args.target)
-    
+
     if target is None:
         log.error("Failed to guess target, use --target/-t to specify")
         return 1
@@ -1775,7 +1775,7 @@ def main():
         print("\nAllowed capabilities (list multiple separated by comma):")
         print(M65_CAPS.get_help(indent='    '))
         did_list = True
-    
+
     if args.install == 'list':
         print("\nAllowed install flags (list multiple separated by comma):")
         print(M65_INST.get_help(indent='    '))
@@ -1785,7 +1785,7 @@ def main():
         print("\nRecognized MEGA65 target specification:")
         print(M65_TARGETS.get_help(indent='    '))
         did_list = True
-    
+
     if did_list:
         sys.exit(0)
 
