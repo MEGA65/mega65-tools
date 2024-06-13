@@ -28,6 +28,7 @@ src/tools/map2c
 src/tools/ftphelper.c
 src/tools/ftphelper_eth.c
 src/tools/ascii_font.c
+src/tools/__pycache__/
 
 gtest/bin/*
 
