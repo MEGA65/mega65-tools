@@ -161,7 +161,7 @@ TOOLSUNX=	$(BINDIR)/m65 \
 		$(BINDIR)/bit2core \
 		$(BINDIR)/bit2mcs \
 		$(BINDIR)/romdiff \
-		$(TOOLDIR)/coretool
+		$(BINDIR)/coretool
 
 # extra tools you can build, but that don't go into the package
 EXTRAUNX=	$(BINDIR)/pngprepare \
@@ -179,7 +179,7 @@ TOOLSWIN=	$(BINDIR)/m65.exe \
 		$(BINDIR)/bit2core.exe \
 		$(BINDIR)/bit2mcs.exe \
 		$(BINDIR)/romdiff.exe \
-		$(TOOLDIR)/coretool
+		$(BINDIR)/coretool
 
 EXTRAWIN=	
 
@@ -189,7 +189,7 @@ TOOLSMAC=	$(BINDIR)/m65.osx \
 		$(BINDIR)/bit2core.osx \
 		$(BINDIR)/bit2mcs.osx \
 		$(BINDIR)/romdiff.osx \
-		$(TOOLDIR)/coretool
+		$(BINDIR)/coretool
 
 EXTRAMAC=	
 
@@ -733,6 +733,9 @@ $(eval $(call TRIPLE_TARGET, $(BINDIR)/romdiff, $(TOOLDIR)/romdiff.c))
 
 $(TOOLDIR)/coretool:
 	@echo "coretool is a python script, nothing to do!"
+
+${BINDIR}/coretool: $(TOOLDIR)/coretool
+	cp $(TOOLDIR)/coretool ${BINDIR}/coretool
 
 ##
 ## ========== m65 ==========

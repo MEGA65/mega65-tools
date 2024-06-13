@@ -348,6 +348,14 @@ void show_help(void)
                   "NOTE: Install flags are only valid for <core name> = MEGA65!\n\n");
 }
 
+void deprecation_info(void)
+{
+  fprintf(stderr, "\n"
+                  "WARNING: #####################################################\n"
+                  "WARNING: ### ATTENTION - THIS TOOL IS REPLACED BY CORETOOL ###\n"
+                  "WARNING: #####################################################\n");
+}
+
 int is_match_on_m65targetname_string(const char *m65target, const char *m65targetstring)
 {
   char temp[MAX_M65_TARGET_NAME_LEN]; // strtok() will butcher the string, so make a copy of it
@@ -882,6 +890,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
 
   if (argc < 6) {
     show_help();
+    deprecation_info();
     exit(-1);
   }
 
@@ -920,6 +929,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
   calculate_core_crc32(core_len, core_file);
 
   write_core_file(core_len, core_file, ARG_COREPATH);
+
+  deprecation_info();
 
   return 0;
 }

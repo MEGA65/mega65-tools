@@ -20,6 +20,7 @@ bin/bin2c
 bin/map2h
 bin/bitinfo
 bin/vcdgraph
+bin/coretool
 
 src/tools/version.c
 src/tools/bin2c

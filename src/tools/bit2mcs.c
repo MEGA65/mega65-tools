@@ -3,6 +3,14 @@
 #include <string.h>
 #include <stdarg.h>
 
+void deprecation_info(void)
+{
+  printf("\n"
+         "ATTENTION: #####################################################\n"
+         "ATTENTION: ### ATTENTION - THIS TOOL IS REPLACED BY CORETOOL ###\n"
+         "ATTENTION: #####################################################\n");
+}
+
 void error(char *fmt, ...)
 {
   va_list ap;
@@ -12,6 +20,7 @@ void error(char *fmt, ...)
   vprintf(fmt, ap);
   printf("\n");
   va_end(ap);
+  deprecation_info();
   exit(1);
 }
 
@@ -36,6 +45,7 @@ int main(int argc, char *argv[])
            "    bit2mcs mega65.bit mega65.mcs\n\n"
            "  Core-to-Slot Example:\n"
            "    bit2mcs mega65r3.cor m65r3slot1.mcs 800000\n\n");
+    deprecation_info();
     exit(1);
   }
 
@@ -90,5 +100,8 @@ int main(int argc, char *argv[])
   fprintf(outfile, ":00000001FF\n");
   fclose(infile);
   fclose(outfile);
+
+  deprecation_info();
+
   return 0;
 }
