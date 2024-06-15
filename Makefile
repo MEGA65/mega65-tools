@@ -38,9 +38,12 @@ endif # WIN_CROSS_BUILD
 ##
 ## Linux native build setup
 ##
-COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng` -mno-sse3
+COPT+=`pkg-config --cflags-only-I --libs-only-L libusb-1.0 libpng`
+ifeq (x86_64, $(shell uname -m))
+COPT+=-mno-sse3
 ifneq ($(OS), Darwin)
 COPT:=$(COPT) -march=x86-64
+endif
 endif
 
 ##
@@ -825,7 +828,7 @@ $(BINDIR)/mega65_ftp: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c inc
 	$(CC) $(COPT) -D_FILE_OFFSET_BITS=64 -Iinclude $(LIBUSBINC) -o $(BINDIR)/mega65_ftp $(MEGA65FTP_SRC) $(TOOLDIR)/version.c $(BUILD_STATIC) -lreadline -lncurses -ltinfo -Wl,-Bdynamic -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp.static: $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h Makefile ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a
-	$(CC) $(COPT) -Iinclude $(LIBUSBINC) -mno-sse3 -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap -DINCLUDE_BIT2MCS
+	$(CC) $(COPT) -Iinclude $(LIBUSBINC) -o $(BINDIR)/mega65_ftp.static $(MEGA65FTP_SRC) $(TOOLDIR)/version.c ncurses/lib/libncurses.a readline/libreadline.a readline/libhistory.a -ltermcap -DINCLUDE_BIT2MCS
 
 $(BINDIR)/mega65_ftp.exe: win_build_check $(MEGA65FTP_SRC) $(MEGA65FTP_HDR) $(TOOLDIR)/version.c include/*.h conan_win Makefile
 	$(WINCC) $(WINCOPT) -D_FILE_OFFSET_BITS=64 -g -Wall -Iinclude $(LIBUSBINC) -I$(TOOLDIR)/fpgajtag/ -o $(BINDIR)/mega65_ftp.exe $(MEGA65FTP_SRC) $(TOOLDIR)/version.c -lusb-1.0 $(BUILD_STATIC) -lwsock32 -lws2_32 -liphlpapi -lz -Wl,-Bdynamic -DINCLUDE_BIT2MCS
