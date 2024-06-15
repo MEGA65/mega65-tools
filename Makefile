@@ -552,20 +552,20 @@ $(TESTDIR)/hyperramtest.prg:       $(TESTDIR)/hyperramtest.c $(CC65) $(MEGA65LIB
 $(EXAMPLEDIR)/unicorns.prg:       $(EXAMPLEDIR)/unicorns.c $(CC65)
 	$(CL65) -O -o $*.prg --mapfile $*.map $<
 
-$(EXAMPLEDIR)/bmpview.prg:       $(EXAMPLEDIR)/bmpview.c $(CC65)
+$(EXAMPLEDIR)/bmpview.prg:       $(EXAMPLEDIR)/bmpview.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65)  $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
-$(EXAMPLEDIR)/modplay.prg:       $(EXAMPLEDIR)/modplay.c $(CC65)
+$(EXAMPLEDIR)/modplay.prg:       $(EXAMPLEDIR)/modplay.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
-$(EXAMPLEDIR)/raycaster.prg:       $(EXAMPLEDIR)/raycaster.c $(CC65)
+$(EXAMPLEDIR)/raycaster.prg:       $(EXAMPLEDIR)/raycaster.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
 $(EXAMPLEDIR)/verticalrasters.prg:	$(EXAMPLEDIR)/verticalrasters.asm $(ACME)
 	$(ACME) --setpc 0x0801 --cpu m65 --format cbm --outfile $(EXAMPLEDIR)/verticalrasters.prg $(EXAMPLEDIR)/verticalrasters.asm
 
 # is this still an example?
-$(B65DIR)/wirekrill.prg:       $(EXAMPLEDIR)/wirekrill.c $(CC65)
+$(B65DIR)/wirekrill.prg:       $(EXAMPLEDIR)/wirekrill.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
 $(BINDIR)/wirekrill:	$(EXAMPLEDIR)/wirekrill.c
@@ -579,7 +579,7 @@ $(BINDIR)/wirekrill:	$(EXAMPLEDIR)/wirekrill.c
 	$(info ~~~~~~~~~~~~~~~~> Making: $@)
 	$(OPHIS) $(OPHISOPT) utilities/$< -l $*.list -m $*.map -o $*.prg
 
-$(UTILDIR)/gmod2-tools.prg:       $(UTILDIR)/gmod2-tools.c $(CC65)
+$(UTILDIR)/gmod2-tools.prg:       $(UTILDIR)/gmod2-tools.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
 $(UTILDIR)/mega65_config.o:      $(UTILDIR)/mega65_config.s $(UTILDIR)/mega65_config.inc $(CC65)
