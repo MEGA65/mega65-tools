@@ -9,7 +9,7 @@
 #define ARP_REQUEST 0x0100 // big-endian for 0x0001
 #define ARP_REPLY 0x0200   // big-endian for 0x0002
 
-uint16_t fastcall ip_checksum_recv();
+uint16_t fastcall ip_checksum_recv(void);
 // from checksum.s:
 uint16_t fastcall checksum_fast(uint16_t size);
 extern uint16_t chks_pseudo_hdr, chks_pseudo_length;
@@ -29,8 +29,8 @@ extern uint16_t chks_pseudo_hdr, chks_pseudo_length;
 */
 void fastcall dma_copy_eth_io(void *src, void *dst, uint16_t size);
 
-uint8_t fastcall cmp_c000_c200();
-uint8_t fastcall cmp_c000_c816();
+uint8_t fastcall cmp_c000_c200(void);
+uint8_t fastcall cmp_c000_c816(void);
 
 #define ETH_HDR_SIZE 14
 #define IPV6_HDR_SIZE 40
@@ -215,7 +215,7 @@ void init_pseudo_checksum_ndp(void);
 void init_pseudo_checksum_udp(void);
 void print(uint8_t row, uint8_t col, char *text);
 void stop_fatal(char *text);
-void print_core_commit();
+void print_core_commit(void);
 void print_mac_address(void);
 void print_ip_information(void);
 void update_counters(void);
@@ -374,7 +374,7 @@ void stop_fatal(char *text)
   }
 }
 
-void print_core_commit()
+void print_core_commit(void)
 {
   uint8_t commit[4];
   lcopy(0xffd3632UL, (uint32_t)&commit, 4);
@@ -382,7 +382,7 @@ void print_core_commit()
   print(24, 32, msg);
 }
 
-void print_mac_address()
+void print_mac_address(void)
 {
   // Read MAC address
   lcopy(0xFFD36E9, (unsigned long)&mac_local.b[0], 6);
