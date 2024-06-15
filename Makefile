@@ -401,7 +401,7 @@ $(CBMCONVERT):
 	$(SUBMODULEUPDATE)
 	( cd cbmconvert && make -f Makefile.unix )
 
-$(MEGA65LIBCLIB):
+$(MEGA65LIBCLIB): $(CC65)
 	$(SUBMODULEUPDATE)
 	make -C src/mega65-libc cc65
 	make -C src/mega65-libc clean
@@ -461,7 +461,7 @@ $(TESTDIR)/%.prg:	$(TESTDIR)/%.c include/*.h $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) -I include/ $(MEGA65LIBCINC) -O -o $(TESTDIR)/$*.prg --mapfile $(TESTDIR)/$*.map $< $(MEGA65LIBCLIB)
 
 # asm test rule
-$(TESTDIR)/%.prg:       $(TESTDIR)/%.s $(TESTDIR)/unittestlog.s
+$(TESTDIR)/%.prg:       $(TESTDIR)/%.s $(TESTDIR)/unittestlog.s $(CC65)
 	$(CL65ONLY) -t none -o $@ $<
 
 # tests that need additional pices of code
