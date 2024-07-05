@@ -182,7 +182,7 @@ TOOLSWIN=	$(BINDIR)/m65.exe \
 		$(BINDIR)/bit2core.exe \
 		$(BINDIR)/bit2mcs.exe \
 		$(BINDIR)/romdiff.exe \
-		$(BINDIR)/coretool
+		$(BINDIR)/coretool.py
 
 EXTRAWIN=	
 
@@ -739,6 +739,10 @@ $(TOOLDIR)/coretool:
 
 ${BINDIR}/coretool: $(TOOLDIR)/coretool
 	cat $(TOOLDIR)/coretool | sed "s/@@VERSION@@/`${SRCDIR}/gitversion.sh`/" > ${BINDIR}/coretool
+	chmod a+x ${BINDIR}/coretool
+
+${BINDIR}/coretool.py: $(TOOLDIR)/coretool
+	cat $(TOOLDIR)/coretool | sed "s/@@VERSION@@/`${SRCDIR}/gitversion.sh`/" > ${BINDIR}/coretool.py
 
 ##
 ## ========== m65 ==========

@@ -21,6 +21,7 @@ bin/map2h
 bin/bitinfo
 bin/vcdgraph
 bin/coretool
+bin/coretool.py
 
 src/tools/version.c
 src/tools/bin2c
