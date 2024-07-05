@@ -1178,7 +1178,7 @@ def build_core(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None)
         log.error("Please provide a bitstream file using --bit/-b")
         return 1
 
-    bits = [x for x in zip_longest(args.bit, args.name or [], args.version or [])]
+    bits = [x for x in zip_longest(args.bit, args.bit_name or [], args.bit_version or [])]
     if len(bits) != 1:
         log.error("coretool can currently handle only one bitstream")
         return 1
@@ -1317,15 +1317,15 @@ def modify_file(args: argparse.Namespace, core: Optional[CoreFile] = None, destp
         return 1
 
     old_value: str
-    if args.name:
+    if args.bit_name:
         old_value = core.bit_name
-        core.bit_name = args.name[0]
+        core.bit_name = args.bit_name[0]
         log.info(f'Changed name to "{core.bit_name}" (was "{old_value}")')
         changed = True
 
-    if args.version:
+    if args.bit_version:
         old_value = core.bit_version
-        core.bit_version = args.version[0]
+        core.bit_version = args.bit_version[0]
         log.info(f'Changed version to "{core.bit_version}" (was "{old_value}")')
         changed = True
 
@@ -1552,10 +1552,10 @@ def convert_files(args: argparse.Namespace) -> int:
             args.bit = [path_from.joinpath(coreinfo['CoreFile']['bit_filename'])]
         if not args.target:
             args.target = coreinfo['CoreFile']['target']
-        if not args.name:
-            args.name = [coreinfo['CoreFile']['bit_name']]
-        if not args.version:
-            args.version = [coreinfo['CoreFile']['bit_version']]
+        if not args.bit_name:
+            args.bit_name = [coreinfo['CoreFile']['bit_name']]
+        if not args.bit_version:
+            args.bit_version = [coreinfo['CoreFile']['bit_version']]
         if not args.caps:
             args.caps = coreinfo['CoreFile']['boot_caps']
         if not args.flags:
@@ -1697,6 +1697,7 @@ def main():
                                      which you can bring up by holding down NO-SCROLL and then powering on your mega65.""")
     actions = parser.add_argument_group("Action", "The main function that is executed")
     actions_ex = actions.add_mutually_exclusive_group(required=True)
+    actions_ex.add_argument('--version', action="store_true", help="Display tool version and exit.")
     actions_ex.add_argument('--verify', '-V', metavar="FILE", type=str, help="Display information about a file.")
     actions_ex.add_argument('--build', '-B', metavar="COREFILE", type=str, help="Build a new corefile.")
     actions_ex.add_argument('--modify', '-M', metavar="COREFILE", type=str, help="Modify an existing corefile.")
@@ -1725,8 +1726,8 @@ def main():
                                       in case of ambiguity the tool will ask you to provide the target.""")
     group.add_argument('--target', '-t', metavar="TARGET", type=str, help="Target platform name (list to show allowed values).")
     group.add_argument('--bit', '-b', metavar="BITPATH", type=str, action="append", help="Path to the bitstream to be added into the corefile.")
-    group.add_argument('--name', '-n', metavar="NAME", type=str, action="append", help="Sets the display name for the bitstream.")
-    group.add_argument('--version', '-v', metavar="VERSION", type=str, action="append", help="Sets the display version of the bitstream.")
+    group.add_argument('--bit-name', '-n', metavar="NAME", type=str, action="append", help="Sets the display name for the bitstream.")
+    group.add_argument('--bit-version', '-v', metavar="VERSION", type=str, action="append", help="Sets the display version of the bitstream.")
 
     group = parser.add_argument_group('Corefile flags',
                                       """The core capabilities define special handling through MEGAFLASH on system startup. It is divided in two parts: the capabilities
@@ -1750,6 +1751,10 @@ def main():
     group.add_argument('--rename-file', metavar="FILE", type=str, nargs=2, action="append", help="(Modify) Rename file found inside the corefile.")
 
     args = parser.parse_args()
+
+    if args.version:
+        print("coretool - mega65-tools @@VERSION@@")
+        sys.exit(0)
 
     if args.color is not None:
         DO_COLOR = args.color
