@@ -165,7 +165,7 @@ class MEGA65targets:
 
     targets = [
         MEGA65target("mega65r1",        0x01, 8192, "7a200tfbg484"),
-        MEGA65target("mega65r2",        0x02, 4096, "7a100tcsg324"),
+        MEGA65target("mega65r2",        0x02, 4096, "7a100tfgg484"),
         MEGA65target("mega65r3",        0x03, 8192, "7a200tfbg484"),
         MEGA65target("mega65r4",        0x04, 8192, "7a200tfbg484"),
         MEGA65target("mega65r5",        0x05, 8192, "7a200tfbg484"),
