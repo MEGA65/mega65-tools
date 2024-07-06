@@ -763,16 +763,17 @@ class CoreFile:
 
     def smart_sort_files(self):
 
+        SMART_SORT_SEQ = {
+            'MEGA65.ROM':   '000000001',
+            'ETHLOAD.M65':  '000000002',
+            'FREEZER.M65':  '000000003',
+            'M65THUMB.M65': '000000004',
+            'C65THUMB.M65': '000000005',
+            'C64THUMB.M65': '000000006',
+            'BANNER.M65':   'zzzzzzzzz',
+        }
         def embedsmartsort(embed: EmbeddedFile) -> str:
-            if embed.name == 'MEGA65.ROM':
-                return '000000001' + embed.name
-            if embed.name == 'ETHLOAD.M65':
-                return '000000002' + embed.name
-            if embed.name == 'FREEZER.M65':
-                return '000000009' + embed.name
-            if embed.name == 'BANNER.M65':
-                return 'zzzzzzzzz' + embed.name
-            return embed.name
+            return SMART_SORT_SEQ.get(embed.name, '') + embed.name
 
         self._embed_files = [x for x in sorted(self._embed_files, key=embedsmartsort)]
 
