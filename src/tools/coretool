@@ -426,7 +426,7 @@ class FpgaBitStream(ContentElement):
         return self._target
 
     @property
-    def date(self) -> Optional[datetime]:
+    def date(self) -> Optional[datetime.datetime]:
         return self._date
 
     @property
