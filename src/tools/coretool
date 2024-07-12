@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import sys
 if sys.version_info < (3, 8):
@@ -209,10 +209,10 @@ class MEGA65targets:
 
 class MEGA65flags:
 
-    _name = 'key'
+    _name: str = 'key'
+    _options: Dict[int, Tuple[str, str]] = {}
 
     def __init__(self):
-        self._options: Dict = {}
         self.flag2name = {x: y[0] for x, y in self._options.items()}
         self.name2flag = {y[0]: x for x, y in self._options.items()}
         self.helptext = [f'{x[0]}: {x[1]}' for x in self._options.values() if x[0][0] != '_']
@@ -264,8 +264,8 @@ class MEGA65flags:
     def has_invalid_bits(self, value: int) -> bool:
         return (value & self.bad_mask) != 0
 
-    def make_valid(self, value: int) -> bool:
-        return (value & self.ok_mask) > 0
+    def make_valid(self, value: int) -> int:
+        return value & self.ok_mask
 
     def check(self, key: str, value: int) -> bool:
         if key not in self.name2flag:
