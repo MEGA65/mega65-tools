@@ -158,7 +158,7 @@ class MEGA65target:
     name: str
     code: int
     size: int
-    fpga: int
+    fpga: str
 
 
 class MEGA65targets:
@@ -186,13 +186,13 @@ class MEGA65targets:
             self._by_code[t.code] = t
             self._by_fpga.setdefault(t.fpga, []).append(t)
 
-    def by_name(self, key: str) -> MEGA65target:
+    def by_name(self, key: str) -> Optional[MEGA65target]:
         return self._by_name.get(key, None)
 
-    def by_code(self, key: int) -> MEGA65target:
+    def by_code(self, key: int) -> Optional[MEGA65target]:
         return self._by_code.get(key, None)
 
-    def by_fpga(self, key: str) -> List[MEGA65target]:
+    def by_fpga(self, key: str) -> Optional[List[MEGA65target]]:
         return self._by_fpga.get(key, None)
 
     def get(self, key: any) -> Union[MEGA65target, List[MEGA65target]]:
@@ -212,6 +212,7 @@ class MEGA65flags:
     _name = 'key'
 
     def __init__(self):
+        self._options: Dict = {}
         self.flag2name = {x: y[0] for x, y in self._options.items()}
         self.name2flag = {y[0]: x for x, y in self._options.items()}
         self.helptext = [f'{x[0]}: {x[1]}' for x in self._options.values() if x[0][0] != '_']
@@ -264,7 +265,7 @@ class MEGA65flags:
         return (value & self.bad_mask) != 0
 
     def make_valid(self, value: int) -> bool:
-        return value & self.ok_mask
+        return (value & self.ok_mask) > 0
 
     def check(self, key: str, value: int) -> bool:
         if key not in self.name2flag:
@@ -425,7 +426,7 @@ class FpgaBitStream(ContentElement):
         return self._target
 
     @property
-    def date(self) -> Optional[str]:
+    def date(self) -> Optional[datetime]:
         return self._date
 
     @property
@@ -457,6 +458,8 @@ class FpgaBitStream(ContentElement):
         if not self.target:
             return None
         guess = self.guess_match
+        if not guess:
+            return None
         for target in M65_TARGETS.by_fpga(self.target):
             if target.name == guess['target'].replace('-', ''):
                 return target
@@ -586,7 +589,7 @@ class CoreFile:
         return 0
 
     @property
-    def bit_filename(self) -> str:
+    def bit_filename(self) -> Path:
         return sanitize_filename(f"{self.core_target.name}-{self.bit_version}.bit")
 
     @property
@@ -961,8 +964,8 @@ class CoreFile:
 class MCSFile:
 
     def __init__(self, filepath: Optional[Union[str, Path]] = None):
-        self._filepath: Path = None
-        self._raw_data: bytes = None
+        self._filepath: Optional[Path] = None
+        self._raw_data: Optional[bytes] = None
         self._offset: int = 0
         if filepath is not None:
             if type(filepath) is str:
@@ -1088,7 +1091,7 @@ class MCSFile:
         nextaddr: int = 0
         with path.open('wt', encoding='ascii', buffering=131072) as fp:
             try:
-                data: bytes = array('B', self.raw_data)
+                data: array = array('B', self.raw_data)
                 datalen: int = len(data)
                 offset: int = 0
                 while offset < datalen:
@@ -1113,7 +1116,7 @@ def open_file(filepath: Union[str, Path]) -> Optional[Union[CoreFile, MCSFile, F
     if isinstance(filepath, str):
         filepath = Path(filepath)
 
-    fileobj: Union[CoreFile, MCSFile, FpgaBitStream] = None
+    fileobj: Optional[Union[CoreFile, MCSFile, FpgaBitStream]] = None
     try:
         header = filepath.open('rb').read(256)
     except (FileNotFoundError, IOError) as err:
@@ -1221,6 +1224,7 @@ def build_core(args: argparse.Namespace, bitobj: Optional[FpgaBitStream] = None)
             log.info(f'Version guessed to be "{version}"')
     if not version:
         log.error("Please provide a version for the core using --version/-v")
+        return 1
 
     core.core_target = target
     core.bit_name = name
@@ -1586,14 +1590,14 @@ def convert_files(args: argparse.Namespace) -> int:
                 return 1
             slot: int = int(args.offset[1:])
             if slot < 0 or slot > 7:
-                log.errror("Only slot 0 to 7 are supported")
+                log.error("Only slot 0 to 7 are supported")
                 return 1
             args.offset = args.target.size * slot * 1024
         else:
             try:
                 args.offset = int(args.offset, 0)
             except ValueError as err:
-                log.error('Unable to parse --offset "{args.offset}": {err}')
+                log.error(f'Unable to parse --offset "{args.offset}": {err}')
                 return 1
 
     if isinstance(fileobj, FpgaBitStream):
