@@ -744,8 +744,8 @@ ${BINDIR}/coretool: $(TOOLDIR)/coretool
 	cat $(TOOLDIR)/coretool | sed "s/@@VERSION@@/`${SRCDIR}/gitversion.sh`/" > ${BINDIR}/coretool
 	chmod a+x ${BINDIR}/coretool
 
-${BINDIR}/coretool.py: $(TOOLDIR)/coretool
-	cat $(TOOLDIR)/coretool | sed "s/@@VERSION@@/`${SRCDIR}/gitversion.sh`/" > ${BINDIR}/coretool.py
+${BINDIR}/coretool.py: $(BINDIR)/coretool
+	ln $(BINDIR)/coretool $(BINDIR)/coretool.py
 
 ##
 ## ========== m65 ==========
