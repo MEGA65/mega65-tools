@@ -12,17 +12,25 @@ information.
 
 ## Communication Tools
 
-- `m65`: swiss army knife of tools for automated actions to perform on mega65
-  hardware, requires UART or JTAG USB adapter.
-- `etherload`: communicates with the MEGA65 via Ethernet over IPv6, requires
-  development core.
-- `mega65_ftp`: an ftp tool to more easily put and get files to/from your sd-card,
-  requires either a serial connection (via UART or JTAG USB adapter) or can also
+- `m65`: swiss army knife of tools for automated actions to perform on MEGA65
+  hardware. This requires an UART or JTAG USB adapter.
+- `etherload`: communicates with the MEGA65 via Ethernet over IPv6.
+- `mega65_ftp`: an ftp tool to more easily put and get files to/from your sd-card.
+  This requires either a serial connection (via UART or JTAG USB adapter) or can also
   work over Ethernet (like `ethertool`, IPv6).
 
 ## Build Tools
 
-- `coretool`: a combined tool to work with core container files
-  - `bit2core` *(deprecated!)*: convertes bitstreams into core files (.cor)
+- `coretool`: a combined tool to work with core files.
+  - `bit2core` *(deprecated!)*: converts bitstreams into core files (.cor)
   - `bit2mcs` *(deprecated!)*: converts bitstreams (or core files) into the Vivado MCS format
 - `romdiff`: romdiff can create RDF ROM patches and apply them
+
+## Development Builds
+
+Automatic development builds of mega65-tools are available on filehost. They
+might offer fancier features, but they can also be a bit unstable.
+
+- [MEGA65 Tools Development Build (Linux)](https://files.mega65.org?id=2b7bd912-1181-447c-a489-223f16b764c1)
+- [MEGA65 Tools Development Build (MacOS)](https://files.mega65.org?id=7d96641c-b306-49cf-80ff-ea1e5d00c9d1)
+- [MEGA65 Tools Development Build (Windows)](https://files.mega65.org?id=658322fd-e586-4b4f-a991-89470b269b4a)
