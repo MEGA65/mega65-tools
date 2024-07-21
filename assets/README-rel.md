@@ -1,13 +1,10 @@
 
-# MEGA65 Tools - automatic build
+# MEGA65 Tools - Release 1.00
 
-This package contains a pre-release build of the mega65-tools. Use with caution
-and report errors via [GitHub](https://github.com/MEGA65/mega65-tools/issues). If
-unsure, use the stable builds you can find on Filehost:
+This package contains the 1.00 release build of the mega65-tools.
 
-- [Linux](https://files.mega65.org?id=e97f3bf4-9d55-4ae2-a39a-d31dd15e8d34)
-- [MacOS](https://files.mega65.org?id=57f855b9-a758-49df-ba7c-d120c4d1241d)
-- [Windows](https://files.mega65.org?id=06c55815-7826-4ad6-be0e-b8dc5e721b6d)
+Please report bugs or file feature requests via
+[GitHub](https://github.com/MEGA65/mega65-tools/issues).
 
 All tools have some sort of help, so try starting them with `-h` or without
 parameters to get some idea how to use them, or read the manual to get more

@@ -41,6 +41,12 @@ datetime=$(date +%Y%m%d.%H)
 
 if [[ $1 = arcname ]]; then
     echo "${branch2}-${buildnum}-${version:0:6}"
+elif [[ $1 = devrelext ]]; then
+    if [[ ${branch} =~ ^release-.+$ ]]; then
+      echo "rel"
+    else
+      echo "dev"
+    fi
 else
     echo "${datetime}-${branch2}-${version}"
 fi
