@@ -18,7 +18,7 @@ information.
 - `m65`: swiss army knife of tools for automated actions to perform on MEGA65
   hardware. This requires an UART or JTAG USB adapter.
 - `etherload`: communicates with the MEGA65 via Ethernet over IPv6.
-- `mega65_ftp`: an ftp tool to more easily put and get files to/from your sd-card.
+- `mega65_ftp`: a file transfer tool to easily put and get files to/from your sd-card.
   This requires either a serial connection (via UART or JTAG USB adapter) or can also
   work over Ethernet (like `ethertool`, IPv6).
 
