@@ -235,7 +235,6 @@ char serial_port_set = 0;
 char serial_port[1024] = "/dev/ttyUSB1";
 char device_name[1024] = "";
 char ip_address_and_interface[256] = "";
-char *bitstream = NULL;
 char *username = NULL;
 char *password = NULL;
 
@@ -763,7 +762,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
   log_setup(stderr, LOG_NOTE);
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:ei:0:nFh")) != -1) {
+  while ((opt = getopt(argc, argv, "Ds:l:c:u:p:d:ei:0:nFh")) != -1) {
     switch (opt) {
     case 'h':
       usage();
@@ -806,9 +805,6 @@ int DIRTYMOCK(main)(int argc, char **argv)
       break;
     case 's':
       serial_speed = atoi(optarg);
-      break;
-    case 'b':
-      bitstream = strdup(optarg);
       break;
     case 'c':
       queue_command(optarg);
@@ -926,15 +922,6 @@ int DIRTYMOCK(main)(int argc, char **argv)
     xemu_flag = mega65_peek(0xffd360f) & 0x20 ? 0 : 1;
 
     rxbuff_detect();
-
-    // Load bitstream if file provided
-    if (bitstream) {
-      char cmd[1024];
-      snprintf(cmd, 1024, "fpgajtag -a %s", bitstream);
-      fprintf(stderr, "%s\n", cmd);
-      system(cmd);
-      fprintf(stderr, "[T+%lldsec] Bitstream loaded\n", (long long)time(0) - start_time);
-    }
 
     // We used to push the interface to 4mbit to speed things up, but that's not needed now.
     // In fact, with the RX buffering allowing us to fix a bunch of other problems that were
