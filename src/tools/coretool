@@ -174,7 +174,9 @@ class MEGA65targets:
         MEGA65target("nexys4",          0x40, 4096, "7a100tcsg324"),
         MEGA65target("nexys4ddr",       0x41, 4096, "7a100tcsg324"),
         MEGA65target("nexys4ddrwidget", 0x42, 4096, "7a100tcsg324"),
-        MEGA65target("wukonga100t",     0xFD, 4096, "7a100tcsg324")
+        MEGA65target("wukonga100tv1",   0xFD, 4096, "7a100tcsg324"),
+        MEGA65target("wukonga100tv2",   0xFD, 4096, "7a100tfgg676"),
+        MEGA65target("wukong",          0xFD, 4096, "7a100tfgg676")
     ]
 
     def __init__(self):
