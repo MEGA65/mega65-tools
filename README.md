@@ -1,3 +1,6 @@
+
+**The master branch is old and deprecated! Latest development can be found in the development branch, release are named release plus a version.**
+
 # MEGA65 Tools
 
 Tools and Utilities for the MEGA65 Retro Computers, such as:
