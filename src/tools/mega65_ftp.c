@@ -231,11 +231,10 @@ int first_go64 = 1;
 unsigned char viciv_regs[0x100];
 int mode_report = 0;
 
-int serial_port_set = 0;
+char serial_port_set = 0;
 char serial_port[1024] = "/dev/ttyUSB1";
 char device_name[1024] = "";
 char ip_address_and_interface[256] = "";
-char *bitstream = NULL;
 char *username = NULL;
 char *password = NULL;
 
@@ -305,21 +304,28 @@ extern const char *version_string;
 
 void usage(void)
 {
-  fprintf(stderr, "MEGA65 cross-development tool for FTP-like access to MEGA65 SD card via serial monitor interface\n");
+  fprintf(stderr, "MEGA65 SD card file transfer tool via serial monitor interface or ethernet\n");
   fprintf(stderr, "version: %s\n\n", version_string);
-  fprintf(stderr, "usage: mega65_ftp [-0 <log level>] [-F] [-l <serial port>|-d <device name>|-i <broadcast ip>] [-s "
-                  "<230400|2000000|4000000>]  "
-                  "[-b bitstream] [[-c command] ...]\n");
-  fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything)\n");
-  fprintf(stderr, "  -F - force startup, even if other program is detected\n");
-  fprintf(stderr, "  -l - Name of serial port to use, e.g., /dev/ttyUSB1\n");
-  fprintf(stderr, "  -d - device name of sd-card attached to your pc (e.g. /dev/sdx)\n");
-  fprintf(stderr, "  -e - Use Ethernet for communication. If -i is not provided, will perform auto-discovery of the MEGA65.\n");
-  fprintf(stderr, "  -i - IPv6 address and interface to connect to MEGA65 (e.g. fe80::d5ff:fe16:0%%en0). Automatically implies -e\n");
-  fprintf(stderr, "  -s - Speed of serial port in bits per second. This must match what your bitstream uses.\n");
-  fprintf(stderr, "       (Almost always 2000000 is the correct answer).\n");
-  fprintf(stderr, "  -b - Name of bitstream file to load.\n");
-  fprintf(stderr, "  -n - suppress scanning of 'system' partition (handy when connecting to partial sdcard dump files).\n");
+  fprintf(stderr, "Usage: mega65_ftp [-h] [-0 <log level>] [-F] [-u <fh username>] [-p <fh password>]\n"
+                  "                  [-e] [-i <broadcast ip>] [-d <device name>] [-n]\n"
+                  "                  [-l <serial port>] [-s <230400|2000000|4000000>]\n"
+                  "                  [[-c command] ...]\n");
+  fprintf(stderr, "  -h - display this help.\n");
+  fprintf(stderr, "  -0 - set log level (0 = quiet ... 5 = everything).\n");
+  fprintf(stderr, "  -F - force startup and let helper overwrite program in MEGA65 memory.\n");
+  fprintf(stderr, "  Main modes:\n");
+  fprintf(stderr, "    -e - Use Ethernet for communication. If -i is not provided, will perform auto-discovery of the MEGA65.\n");
+  fprintf(stderr, "    -l - Name of serial port to use (e.g., /dev/ttyUSB1).\n");
+  fprintf(stderr, "    -d - device name of sd-card attached to your pc (e.g. /dev/sdx).\n");
+  fprintf(stderr, "  Mode options:\n");
+  fprintf(stderr, "    -i - (mode -e) IPv6 address and interface to connect to MEGA65 (e.g. fe80::d5ff:fe16:0%%en0). Automatically implies -e.\n");
+  fprintf(stderr, "    -s - (mode -l) Speed of serial port in bits per second. This must match what your bitstream uses.\n");
+  fprintf(stderr, "         (Almost always 2000000 is the correct answer).\n");
+  fprintf(stderr, "    -n - (mode -d) suppress scanning of 'system' partition (handy when connecting to partial sdcard dump files).\n");
+  fprintf(stderr, "  -u - username for Filehost access.\n");
+  fprintf(stderr, "  -p - password for Filehost access (if supplied only username, password will be prompted).\n");
+  fprintf(stderr, "  -c - execute mega65_ftp cli command, exit mega65_ftp afterwards (multiple -c are allowed).\n");
+  fprintf(stderr, "       Note: if you don't specify 'exit' as last command, the helper will stay in memory.\n");
   fprintf(stderr, "\n");
   exit(-3);
 }
@@ -735,6 +741,12 @@ char *getpass(char *prompt)
 }
 #endif
 
+void startup_multimode_error(void)
+{
+  log_error("can't do multiple modes (ethernet, serial and/or direct sd-card) simultaneously!");
+  exit(-1);
+}
+
 int DIRTYMOCK(main)(int argc, char **argv)
 {
 #ifdef WINDOWS
@@ -750,8 +762,11 @@ int DIRTYMOCK(main)(int argc, char **argv)
   log_setup(stderr, LOG_NOTE);
 
   int opt;
-  while ((opt = getopt(argc, argv, "b:Ds:l:c:u:p:d:ei:0:nF")) != -1) {
+  while ((opt = getopt(argc, argv, "Ds:l:c:u:p:d:ei:0:nFh")) != -1) {
     switch (opt) {
+    case 'h':
+      usage();
+      break;
     case '0':
       loglevel = log_parse_level(optarg);
       if (loglevel == -1)
@@ -766,24 +781,30 @@ int DIRTYMOCK(main)(int argc, char **argv)
       debug_serial = 1;
       break;
     case 'l':
+      if (ethernet_mode || direct_sdcard_device)
+        startup_multimode_error();
       strcpy(serial_port, optarg);
+      serial_port_set = 1;
       break;
     case 'd':
+      if (ethernet_mode || serial_port_set)
+        startup_multimode_error();
       strcpy(device_name, optarg);
       direct_sdcard_device = 1;
       break;
     case 'e':
+      if (direct_sdcard_device || serial_port_set)
+        startup_multimode_error();
       ethernet_mode = 1;
       break;
     case 'i':
+      if (direct_sdcard_device || serial_port_set)
+        startup_multimode_error();
       strncpy(ip_address_and_interface, optarg, sizeof(ip_address_and_interface));
       ethernet_mode = 1;
       break;
     case 's':
       serial_speed = atoi(optarg);
-      break;
-    case 'b':
-      bitstream = strdup(optarg);
       break;
     case 'c':
       queue_command(optarg);
@@ -902,15 +923,6 @@ int DIRTYMOCK(main)(int argc, char **argv)
 
     rxbuff_detect();
 
-    // Load bitstream if file provided
-    if (bitstream) {
-      char cmd[1024];
-      snprintf(cmd, 1024, "fpgajtag -a %s", bitstream);
-      fprintf(stderr, "%s\n", cmd);
-      system(cmd);
-      fprintf(stderr, "[T+%lldsec] Bitstream loaded\n", (long long)time(0) - start_time);
-    }
-
     // We used to push the interface to 4mbit to speed things up, but that's not needed now.
     // In fact, with the RX buffering allowing us to fix a bunch of other problems that were
     // slowing things down, at 4mbit/sec we are now too fast for the serial monitor to keep up
@@ -929,6 +941,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
 
     sdhc_check();
   }
+
+  printf("Type 'help' to get a list of commands available.\n");
 
   if (!file_system_found)
     open_file_system();

@@ -6,8 +6,9 @@ Tools and Utilities for the MEGA65 Retro Computers, such as:
 - `mega65_ftp`: an ftp tool to more easily put and get files to/from your sd-card
 - **BETA** `etherload`: communicates with the MEGA65 via Ethernet, requires 
   development core.
-- `bit2core`: convertes bitstreams into core files (.cor)
-- `bit2mcs`: converts bitstreams (or core files) into the Vivado MCS format
+- `coretool`: a combined tool to work with core container files
+  - `bit2core` *(deprecated!)*: convertes bitstreams into core files (.cor)
+  - `bit2mcs` *(deprecated!)*: converts bitstreams (or core files) into the Vivado MCS format
 - `romdiff`: romdiff can create RDF ROM patches and apply them
 
 # Download

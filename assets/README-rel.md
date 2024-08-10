@@ -1,13 +1,10 @@
 
-# MEGA65 Tools - automatic build
+# MEGA65 Tools - Release 1.00
 
-This package contains a pre-release build of the mega65-tools. Use with caution
-and report errors via [GitHub](https://github.com/MEGA65/mega65-tools/issues). If
-unsure, use the stable builds you can find on Filehost:
+This package contains the 1.00 release build of the mega65-tools.
 
-- [MEGA65 Tools Release Package (Linux)](https://files.mega65.org?id=e97f3bf4-9d55-4ae2-a39a-d31dd15e8d34)
-- [MEGA65 Tools Release Package (MacOS)](https://files.mega65.org?id=57f855b9-a758-49df-ba7c-d120c4d1241d)
-- [MEGA65 Tools Release Package (Windows)](https://files.mega65.org?id=06c55815-7826-4ad6-be0e-b8dc5e721b6d)
+Please report bugs or file feature requests via
+[GitHub](https://github.com/MEGA65/mega65-tools/issues).
 
 All tools have some sort of help, so try starting them with `-h` or without
 parameters to get some idea how to use them, or read the manual to get more
@@ -28,3 +25,12 @@ information.
   - `bit2core` *(deprecated!)*: converts bitstreams into core files (.cor)
   - `bit2mcs` *(deprecated!)*: converts bitstreams (or core files) into the Vivado MCS format
 - `romdiff`: romdiff can create RDF ROM patches and apply them
+
+## Development Builds
+
+Automatic development builds of mega65-tools are available on filehost. They
+might offer fancier features, but they can also be a bit unstable.
+
+- [MEGA65 Tools Development Build (Linux)](https://files.mega65.org?id=2b7bd912-1181-447c-a489-223f16b764c1)
+- [MEGA65 Tools Development Build (MacOS)](https://files.mega65.org?id=7d96641c-b306-49cf-80ff-ea1e5d00c9d1)
+- [MEGA65 Tools Development Build (Windows)](https://files.mega65.org?id=658322fd-e586-4b4f-a991-89470b269b4a)

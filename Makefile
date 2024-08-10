@@ -244,7 +244,8 @@ arcunix: $(TOOLSUNX)
 	fi ; \
 	mkdir -p $${arcdir} ; \
 	ln $(TOOLSUNX) $${arcdir}/ ; \
-	ln $(ASSETS)/README-dev.md $${arcdir}/README.md ; \
+	ln $(ASSETS)/README-`$(SRCDIR)/gitversion.sh devrelext`.md $${arcdir}/README.md ; \
+	ln Changelog.md $${arcdir}/Changelog.md ; \
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
@@ -255,7 +256,8 @@ arcwin: $(TOOLSWIN)
 	fi ; \
 	mkdir -p $${arcdir} ; \
 	ln $(TOOLSWIN) $${arcdir} ; \
-	ln $(ASSETS)/README-dev.md $${arcdir}/README.md ; \
+	ln $(ASSETS)/README-`$(SRCDIR)/gitversion.sh devrelext`.md $${arcdir}/README.md ; \
+	ln Changelog.md $${arcdir}/Changelog.md ; \
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
@@ -266,7 +268,8 @@ arcmac: $(TOOLSMAC)
 	fi ; \
 	mkdir -p $${arcdir} ; \
 	ln $(TOOLSMAC) $${arcdir}/ ; \
-	ln $(ASSETS)/README-dev.md $${arcdir}/README.md ; \
+	ln $(ASSETS)/README-`$(SRCDIR)/gitversion.sh devrelext`.md $${arcdir}/README.md ; \
+	ln Changelog.md $${arcdir}/Changelog.md ; \
 	7z a $${arcdir}.7z $${arcdir} ; \
 	rm -rf $${arcdir}
 
@@ -741,8 +744,8 @@ ${BINDIR}/coretool: $(TOOLDIR)/coretool
 	cat $(TOOLDIR)/coretool | sed "s/@@VERSION@@/`${SRCDIR}/gitversion.sh`/" > ${BINDIR}/coretool
 	chmod a+x ${BINDIR}/coretool
 
-${BINDIR}/coretool.py: $(TOOLDIR)/coretool
-	cat $(TOOLDIR)/coretool | sed "s/@@VERSION@@/`${SRCDIR}/gitversion.sh`/" > ${BINDIR}/coretool.py
+${BINDIR}/coretool.py: $(BINDIR)/coretool
+	ln $(BINDIR)/coretool $(BINDIR)/coretool.py
 
 ##
 ## ========== m65 ==========
