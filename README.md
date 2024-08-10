@@ -13,8 +13,15 @@ Tools and Utilities for the MEGA65 Retro Computers, such as:
 
 # Download
 
-Stable builds are available for download on
-[Filehost](https://files.mega65.org?id=e3ec875c-ca31-44fc-a268-ab6f9990e004)
+Development nuilds are available for download on Filehost:
+- [Linux development build](https://files.mega65.org?id=2b7bd912-1181-447c-a489-223f16b764c1)
+- [Windows development build](https://files.mega65.org?id=658322fd-e586-4b4f-a991-89470b269b4a)
+- [MacOS development build](https://files.mega65.org?id=7d96641c-b306-49cf-80ff-ea1e5d00c9d1)
+
+Releases are made via a release-* branch, and you can find those on Filehost, too:
+- [Linux release build](https://files.mega65.org?id=m65tools-linux)
+- [Windows release build](https://files.mega65.org?id=m65tools-windows)
+- [MacOS release build](https://files.mega65.org?id=m65tools-macos)
 
 # Building under Linux
 
