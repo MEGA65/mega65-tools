@@ -807,40 +807,62 @@ void set_send_mem_rom_write_enable()
 
 int send_mem(unsigned int address, unsigned char *buffer, int bytes, int timeout_ms)
 {
-  static int rom_write_enabled = 0;
+    static int rom_write_enabled = 0;
 
-  const int dmaload_len = 1280;
-  uint8_t *payload = (uint8_t *)ethlet_dma_load;
+    const int dmaload_len = 1280;
+    uint8_t *payload = (uint8_t *)ethlet_dma_load;
 
-  if (!rom_write_enabled && dma_load_rom_write_enable) {
-    rom_write_enabled = 1;
-    payload[ethlet_dma_load_offset_rom_write_enable + 1] = 1;
-  }
-  else {
-    payload[ethlet_dma_load_offset_rom_write_enable + 1] = 0;
-  }
+    if (!rom_write_enabled && dma_load_rom_write_enable) {
+        rom_write_enabled = 1;
+        payload[ethlet_dma_load_offset_rom_write_enable + 1] = 1;
+    } 
+    else {
+        payload[ethlet_dma_load_offset_rom_write_enable + 1] = 0;
+    }
 
-  // Set load address of packet
-  payload[ethlet_dma_load_offset_dest_address] = address & 0xff;
-  payload[ethlet_dma_load_offset_dest_address + 1] = (address >> 8) & 0xff;
-  payload[ethlet_dma_load_offset_dest_bank] = (address >> 16) & 0x0f;
-  payload[ethlet_dma_load_offset_dest_mb] = (address >> 20);
-  payload[ethlet_dma_load_offset_byte_count] = bytes;
-  payload[ethlet_dma_load_offset_byte_count + 1] = bytes >> 8;
+    // Calculate the bank boundary
+    unsigned int bank_boundary = (address & 0xFFFF0000) + 0x10000; // Next bank start
 
-  // Copy data into packet
-  memcpy(&payload[ethlet_dma_load_offset_data], buffer, bytes);
+    if (address + bytes > bank_boundary) {
+        // If the transfer would cross a bank boundary, split the transfer
 
-  // Send the packet initially
-  if (0)
-    log_info("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...", gettime_us() - start_time, address, packet_seq,
-        payload[ethlet_dma_load_offset_data], payload[ethlet_dma_load_offset_data + 1]);
-  if (ethl_send_packet(payload, dmaload_len, timeout_ms) < 0) {
-    log_error("Unable to send new packet");
-    return -1;
-  }
-  return 0;
+        // Calculate how many bytes we can send up to the bank boundary
+        int bytes_until_boundary = bank_boundary - address;
+
+        // Send the first part up to the bank boundary
+        if (send_mem(address, buffer, bytes_until_boundary, timeout_ms) < 0) {
+            return -1; // If sending fails, return an error
+        }
+
+        // Send the remaining part starting from the next bank
+        address = bank_boundary;
+        buffer += bytes_until_boundary;
+        bytes -= bytes_until_boundary;
+    }
+
+    // Set load address of packet
+    payload[ethlet_dma_load_offset_dest_address] = address & 0xff;
+    payload[ethlet_dma_load_offset_dest_address + 1] = (address >> 8) & 0xff;
+    payload[ethlet_dma_load_offset_dest_bank] = (address >> 16) & 0x0f;
+    payload[ethlet_dma_load_offset_dest_mb] = (address >> 20);
+    payload[ethlet_dma_load_offset_byte_count] = bytes;
+    payload[ethlet_dma_load_offset_byte_count + 1] = bytes >> 8;
+
+    // Copy data into packet
+    memcpy(&payload[ethlet_dma_load_offset_data], buffer, bytes);
+
+    // Send the packet
+    if (0)
+        log_info("T+%lld : TX addr=$%x, seq=$%04x, data=%02x %02x ...", gettime_us() - start_time, address, packet_seq,
+            payload[ethlet_dma_load_offset_data], payload[ethlet_dma_load_offset_data + 1]);
+    if (ethl_send_packet(payload, dmaload_len, timeout_ms) < 0) {
+        log_error("Unable to send new packet");
+        return -1;
+    }
+
+    return 0;
 }
+
 
 void ethl_setup_dmaload(void)
 {
