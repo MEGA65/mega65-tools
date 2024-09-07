@@ -386,7 +386,8 @@ void read_idcode(int prereset)
     memcpy(&idcode_presult[1], idcode_ppattern + 1, idcode_ppattern[0]);
     memcpy(&idcode_vresult[1], idcode_vpattern + 1, idcode_vpattern[0]);
     while (memcmp(idcode_presult + 1, rdata, idcode_presult[0]) && offset < sizeof(uint32_t) * (IDCODE_ARRAY_SIZE - 1)) {
-      memcpy(&temp[idcode_count++], rdata + offset, sizeof(uint32_t));
+      temp[idcode_count++] = rdata[offset+0] | (rdata[offset+1] << 8) |
+	(rdata[offset+2] << 16) | (rdata[offset+3] << 24);
       memcpy(idcode_presult + offset + 1, rdata + offset, sizeof(uint32_t)); // copy 2nd idcode
       memcpy(idcode_vresult + offset + 1, rdata + offset, sizeof(uint32_t)); // copy 2nd idcode
       offset += sizeof(uint32_t);
