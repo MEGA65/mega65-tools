@@ -300,7 +300,7 @@ finalize:
 	trb $d054
 
 	; reset palette selections
-	lda #$00
+	lda #$ff
 	sta $d070
 
 	; disable SPRENV400

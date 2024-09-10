@@ -241,7 +241,7 @@ restore_write_protection:
 	eom
 
 	; reset palette
-	lda #$00
+	lda #$ff
 	sta $d070 ; reset palette indices
 	jsr $e027 ; init_palette
 
