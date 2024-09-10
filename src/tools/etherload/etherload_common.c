@@ -820,22 +820,22 @@ int send_mem(unsigned int address, unsigned char *buffer, int bytes, int timeout
         payload[ethlet_dma_load_offset_rom_write_enable + 1] = 0;
     }
 
-    // Calculate the bank boundary
-    unsigned int bank_boundary = (address & 0xFFFF0000) + 0x10000; // Next bank start
+    // Calculate the Megabyte boundary
+    unsigned int mb_boundary = (address & 0xFFF00000) + 0x100000; // Next Megabyte start
 
-    if (address + bytes > bank_boundary) {
-        // If the transfer would cross a bank boundary, split the transfer
+    if (address + bytes > mb_boundary) {
+        // If the transfer would cross a Megabyte boundary, split the transfer
 
-        // Calculate how many bytes we can send up to the bank boundary
-        int bytes_until_boundary = bank_boundary - address;
+        // Calculate how many bytes we can send up to the Megabyte boundary
+        int bytes_until_boundary = mb_boundary - address;
 
-        // Send the first part up to the bank boundary
+        // Send the first part up to the Megabyte boundary
         if (send_mem(address, buffer, bytes_until_boundary, timeout_ms) < 0) {
             return -1; // If sending fails, return an error
         }
 
-        // Send the remaining part starting from the next bank
-        address = bank_boundary;
+        // Send the remaining part starting from the next Megabyte
+        address = mb_boundary;
         buffer += bytes_until_boundary;
         bytes -= bytes_until_boundary;
     }
