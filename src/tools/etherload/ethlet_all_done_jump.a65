@@ -10,7 +10,7 @@
 	.alias start_address $6800 + 2 + 14 + 40 + 8
 	.org start_address
 
-	.alias tmpbuffer $dbf0
+	.alias tmpbuffer $dbe8
 
 entry:
 
