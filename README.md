@@ -28,7 +28,7 @@ Releases are made via a release-* branch, and you can find those on Filehost, to
 To build on e.g. Debian Linux, install the following packages:
 
 ```
-sudo apt-get install build-essential pkg-config git gh wget python3 cc65 sshpass unzip imagemagick p7zip-full libgtest-dev libgmock-dev libreadline-dev libtinfo5 libcairo2-dev
+sudo apt-get install build-essential pkg-config git gh wget python3 cc65 sshpass unzip imagemagick p7zip-full libgtest-dev libgmock-dev libreadline-dev libtinfo5 libcairo2-dev libusb-1.0-0-dev libgif-dev
 ```
 
 After cloning the repository, enter its directory and call
