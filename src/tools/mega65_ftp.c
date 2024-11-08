@@ -144,6 +144,7 @@ void perform_filehost_flash(int fhnum, int slotnum);
 void perform_flash(char *fname, int slotnum);
 void list_all_roms(void);
 int show_directory(char *path);
+int count_directory(char *path, int * dir_count, int * file_count);
 void show_local_directory(char *searchpattern);
 void change_local_dir(char *path);
 void change_dir(char *path);
@@ -3153,6 +3154,52 @@ int show_directory(char *path)
   return retVal;
 }
 
+// same as above but no output, only returns stats
+int count_directory(char *path, int * dir_count, int * file_count)
+{
+  *dir_count = 0;
+  *file_count = 0;
+
+  if (!path || strlen(path) == 0)
+    path = current_dir;
+
+  llist *lst_dirents = llist_new();
+  char *searchterm = NULL;
+
+  int retVal = 0;
+
+  do {
+    if (!read_remote_dirents(lst_dirents, path, &searchterm)) {
+      retVal = -1;
+      break;
+    }
+
+    llist *cur = lst_dirents;
+    while (cur != NULL && cur->item != NULL) {
+      struct m65dirent *itm = (struct m65dirent *)cur->item;
+
+      if (searchterm && !is_match(itm->d_name, searchterm, TRUE) && !is_match(itm->d_longname, searchterm, TRUE)) {
+        cur = cur->next;
+        continue;
+      }
+
+      if (itm->d_attr & 0x10) {
+        if ((strcmp(itm->d_name, "..") != 0) &&
+            (strcmp(itm->d_name, ".") != 0))
+          (*dir_count)++;  // only count usable subdirs
+      }
+      else if (itm->d_name[0] && itm->d_filelen >= 0) {
+        (*file_count)++;
+      }
+
+      cur = cur->next;
+    }
+  } while (0);
+
+  llist_free(lst_dirents);
+  return retVal;
+}
+
 int check_file_system_access(void)
 {
   int retVal = 0;
@@ -3808,6 +3855,10 @@ unsigned int get_first_cluster_of_file(void)
 int delete_single_file(char *name)
 {
   struct m65dirent de;
+  int dir_count;  // used to give user stats on non-empty dirs
+  int file_count;
+  char inp[128];  // keyboard input
+  char msg[15] = "File";
 
   if (check_file_system_access() == -1)
     return -1;
@@ -3826,13 +3877,37 @@ int delete_single_file(char *name)
   int attrib = dir_sector_buffer[dir_sector_offset + 0x0b];
 
   if (attrib == DE_ATTRIB_DIR) {
-    printf("TODO: Unable to delete directories as yet. Raise a ticket\n");
-    // NOTE: Will need to assess if directory is empty.
-    //      If not empty, then tell use the dir has xxx dirs and xxx files, are they sure they want to delete?
-    //      If yes, then will need a recursive strategy to delete files within dirs first before deleting dir
-    return -1;
+    // keep original values before peeking into subdir:
+    unsigned int backup_dir_sector = dir_sector;
+    int backup_dir_cluster = dir_cluster;
+    int backup_dir_sector_in_cluster = dir_sector_in_cluster;
+    int backup_dir_sector_offset = dir_sector_offset;
+
+    if (count_directory(name, &dir_count, &file_count) != 0)  {
+      printf("ERROR: Unable to examine directories to be deleted. Maybe a filesystem problem.\n");
+      return -1;
+    }
+    // restore nasty globals:
+    dir_sector = backup_dir_sector;
+    dir_cluster = backup_dir_cluster;
+    dir_sector_in_cluster = backup_dir_sector_in_cluster;
+    dir_sector_offset = backup_dir_sector_offset;
+
+    if ((dir_count > 0) || (file_count > 0))  {
+      printf("ALERT: %d subdirectories and %d files found!\n",
+             dir_count, file_count);
+      printf("Do you want to delete the directory '%s' with all its contents (y/n)? ", name);
+      scanf("%s", inp);
+#ifdef WINDOWS
+      fflush(stdin);
+#endif
+      if (!(strcmp(inp, "Y") == 0 || strcmp(inp, "y") == 0))
+        return FALSE;
+    }
+    strcpy(msg, "Directory");
   }
 
+  // no matter whether it was a dir or file, now
   // remove dir-entry from FAT table (including any preceding vfat-lfn entries)
   wipe_direntries_of_current_file_or_dir();
 
@@ -3852,7 +3927,7 @@ int delete_single_file(char *name)
   // Flush any pending sector writes out
   execute_write_queue();
 
-  printf("File '%s' successfully deleted\n", name);
+  printf("%s '%s' successfully deleted\n", msg, name);
   return 0;
 }
 
@@ -3862,6 +3937,7 @@ int delete_file_or_dir(char *name)
   char *searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
 
   // if no wildcards in name, then just delete a single file
+  // or single directory:
   if (!strstr(name, "*"))
     return delete_single_file(name);
 
@@ -3891,7 +3967,7 @@ int delete_file_or_dir(char *name)
     }
 
     if (itm->d_attr & 0x10) {
-      ; // this is a DIR
+      ; // this is a DIR, don't delete it here in wildcard mode
     }
     else if (itm->d_name[0] && itm->d_filelen >= 0) {
       if (itm->d_longname[0])
