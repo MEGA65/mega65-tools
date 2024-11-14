@@ -357,7 +357,7 @@ TEST_F(Mega65FtpTestFixture, PutCommandWritesFileToContiguousClusters)
   //         +----------+----------+----------+----------+----------+-----
   //         | 4KB1.TMP |    ---   | 4BK3.TMP |    ---   |    ---   | ...
   //         +----------+----------+----------+----------+----------+-----
-  delete_file_or_dir("4kb2.tmp", FALSE);
+  delete_file_or_dir("4kb2.tmp", false);
 
   // write a two cluster file
   // CLUSTER       2          3          4          5          6      ...
@@ -609,7 +609,7 @@ TEST_F(Mega65FtpTestFixture, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
 
   // dump_sdcard_to_file("sdcard_after1.bin");
 
-  delete_file_or_dir("LongFileName.d81", FALSE);
+  delete_file_or_dir("LongFileName.d81", false);
   // now assess that dir-entries have been removed
 
   // dump_sdcard_to_file("sdcard_after2.bin");
@@ -879,7 +879,7 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
   // dump_sdcard_to_file("sdcard_after2.bin");
 
   // "LongFileName43.d81" direntry crosses a cluster boundary, so let's try delete it
-  delete_file_or_dir("LongFileName43.d81", FALSE);
+  delete_file_or_dir("LongFileName43.d81", false);
 
   assess_100_files_exist(43);
 
@@ -904,7 +904,7 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
 
   // TODO: Unable to delete directories as yet. When that's possible, re-enable this test
   /*
-  delete_file_or_dir("LongDirectory", FALSE);
+  delete_file_or_dir("LongDirectory", false);
 
   // dump_sdcard_to_file("sdcard_after6.bin");
 
