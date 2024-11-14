@@ -58,7 +58,7 @@
 #define DE_ATTRIB_DIR 0x10
 #define DE_ATTRIB_FILE 0x20
 
-#define BYTES_PER_MB 1048576
+#define BYTES_PER_MB 1048576  // used for slots in proprietary partition
 
 #define SECTOR_CACHE_SIZE 4096
 int sector_cache_count = 0;
@@ -145,11 +145,12 @@ void perform_flash(char *fname, int slotnum);
 void list_all_roms(void);
 int show_directory(char *path);
 int count_directory(char *path, int * dir_count, int * file_count);
+int purge_directory_or_file(char *path);
 void show_local_directory(char *searchpattern);
 void change_local_dir(char *path);
 void change_dir(char *path);
 void show_local_pwd(void);
-int delete_file_or_dir(char *name);
+int delete_file_or_dir(char *name, BOOL consent);
 int rename_file_or_dir(char *name, char *dest_name);
 int upload_file(char *name, char *dest_name);
 int sdhc_check(void);
@@ -189,6 +190,7 @@ void write_cluster_number_into_direntry(int a_cluster);
 int calculate_needed_direntries_for_vfat(char *filename);
 unsigned char lfn_checksum(const unsigned char *pFCBName);
 int get_cluster_count(char *filename);
+int delete_single_file(char *name, BOOL consent);
 void wipe_direntries_of_current_file_or_dir(void);
 void determine_ethernet_window_size(void);
 int is_fragmented(char *filename);
@@ -551,7 +553,7 @@ int execute_command(char *cmd)
     wrap_upload(src);
   }
   else if (parse_command(cmd, "del %s", src) == 1) {
-    delete_file_or_dir(src);
+    delete_file_or_dir(src, FALSE);
   }
   else if (parse_command(cmd, "rename %s %s", src, dst) == 2) {
     rename_file_or_dir(src, dst);
@@ -2759,6 +2761,106 @@ unsigned int find_free_cluster(unsigned int first_cluster)
   return retVal;
 }
 
+unsigned int count_free_clusters(unsigned int first_cluster)
+{
+  unsigned int cluster = 0;
+  unsigned int freecount = 0;
+
+  int retVal = 0;
+
+  do {
+    int i, o;
+
+    i = first_cluster / (512 / 4);
+    o = (first_cluster % (512 / 4)) * 4;
+
+    for (; i < sectors_per_fat; i++) {
+      // Read FAT sector
+      //      printf("Checking FAT sector $%x for free clusters.\n",i);
+      if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
+        log_error("failed to read sector $%x of first FAT", i);
+        retVal = -1;
+        break;
+      }
+
+      if (retVal)
+        break;
+
+      // Count free sectors
+      for (; o < 512; o += 4) {
+        if (!(fat_sector[o] | fat_sector[o + 1] | fat_sector[o + 2] | fat_sector[o + 3])) {
+          // Found a free cluster.
+          cluster = i * (512 / 4) + (o / 4);
+          freecount++;
+//          log_info("cluster sector %d, offset %d yields cluster %d\n",i,o,cluster);
+//          break;
+        }
+      }
+      o = 0;
+
+      if ( /* cluster || */ retVal)
+        break;
+    }
+
+    // printf("I believe cluster $%x is free.\n",cluster);
+
+    retVal = cluster;
+    retVal = freecount;
+  } while (0);
+
+  return retVal;
+}
+
+unsigned int count_total_clusters(unsigned int first_cluster)
+{
+  unsigned int cluster = 0;
+  unsigned int totalcount = 0;
+
+  int retVal = 0;
+
+  do {
+    int i, o;
+
+    i = first_cluster / (512 / 4);
+    o = (first_cluster % (512 / 4)) * 4;
+
+    for (; i < sectors_per_fat; i++) {
+      // Read FAT sector
+      //      printf("Checking FAT sector $%x for free clusters.\n",i);
+      if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
+        log_error("failed to read sector $%x of first FAT", i);
+        retVal = -1;
+        break;
+      }
+
+      if (retVal)
+        break;
+
+      // Count free sectors
+      for (; o < 512; o += 4) {
+        if (!(fat_sector[o] | fat_sector[o + 1] | fat_sector[o + 2] | fat_sector[o + 3])) {
+          // Found a free cluster.
+          cluster = i * (512 / 4) + (o / 4);
+//          log_info("cluster sector %d, offset %d yields cluster %d\n",i,o,cluster);
+//          break;
+        }
+        totalcount++;
+      }
+      o = 0;
+
+      if ( /* cluster || */ retVal)
+        break;
+    }
+
+    // printf("I believe cluster $%x is free.\n",cluster);
+
+    retVal = cluster;
+    retVal = totalcount;
+  } while (0);
+
+  return retVal;
+}
+
 unsigned int find_contiguous_clusters(unsigned int total_clusters)
 {
   unsigned int start_cluster = 0;
@@ -3074,14 +3176,17 @@ int read_remote_dirents(llist *lst_dirents, char *path, char **psearchterm)
   }
   // if not abs-path, then assume it's a file/dir/wildcard for the current working directory
   else {
+    // log_info("relative path remote dirent reading...\n");
     if (!read_direntries(lst_dirents, current_dir))
       return FALSE;
 
     // check if the user wants to 'dir' a sub-folder
+    // log_info("relative path remote contains dir test...\n");
     if (contains_dir(lst_dirents, path)) {
       llist_free(lst_dirents);
       lst_dirents = llist_new();
 
+      // log_info("relative path remote contains dir now reading dirents...\n");
       if (!read_direntries(lst_dirents, path))
         return FALSE;
     }
@@ -3089,6 +3194,7 @@ int read_remote_dirents(llist *lst_dirents, char *path, char **psearchterm)
       *psearchterm = path;
   }
 
+  // log_info("read_remote_dirents done.\n");
   return TRUE;
 }
 
@@ -3147,7 +3253,11 @@ int show_directory(char *path)
       cur = cur->next;
     }
   } while (0);
-  printf("%d Dir(s), %d File(s)\n", dir_count, file_count);
+  printf("%d Dir(s), %d File(s), ", dir_count, file_count);
+  printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
+                                   count_total_clusters(0) * 4 / 1024);
+  printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
+                                   count_total_clusters(0));
 
   llist_free(lst_dirents);
 
@@ -3169,6 +3279,7 @@ int count_directory(char *path, int * dir_count, int * file_count)
   int retVal = 0;
 
   do {
+    // log_info("trying to read_remote_dirents(%s)...\n", path);
     if (!read_remote_dirents(lst_dirents, path, &searchterm)) {
       retVal = -1;
       break;
@@ -3197,6 +3308,89 @@ int count_directory(char *path, int * dir_count, int * file_count)
   } while (0);
 
   llist_free(lst_dirents);
+  return retVal;
+}
+
+int purge_directory_or_file(char *path)
+{
+  int ret;
+
+  if (!path || strlen(path) == 0)
+    path = current_dir;
+
+  llist *lst_dirents = llist_new();
+  char *searchterm = NULL;
+
+  int retVal = 0;
+
+  do {
+    if (!read_remote_dirents(lst_dirents, path, &searchterm)) {
+      retVal = -1;
+      break;
+    }
+
+    llist *cur = lst_dirents;
+    while (cur != NULL && cur->item != NULL) {
+      struct m65dirent *itm = (struct m65dirent *)cur->item;
+
+      if (searchterm && !is_match(itm->d_name, searchterm, TRUE) && !is_match(itm->d_longname, searchterm, TRUE)) {
+        cur = cur->next;
+        continue;
+      }
+
+      // skip directory management entries:
+      if ((strcmp(itm->d_name, "..") == 0) || (strcmp(itm->d_name, ".") == 0)) {
+        cur = cur->next;
+        continue;
+      }
+
+      if (itm->d_attr & 0x10) {
+        log_info("deleting <DIR> | %-20s | %-12s | %s\n", get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
+      }
+      else if (itm->d_name[0] && itm->d_filelen >= 0) {
+        log_info("deleting %12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
+            itm->d_longname);
+      }
+
+      // backup current directory and recursively change into subdirs
+      // to be able to delete files and dirs in those:
+      char current_dir_backup[1024];
+      strcpy(current_dir_backup, current_dir);
+      change_dir(path);
+      // log_info("changed into %s as now %s\n", path, current_dir);
+
+      // try deleting the long name first:
+      // log_info("calling delete_file_or_dir(%s)...\n", itm->d_name);
+      ret = -1;
+      if (itm->d_longname[0])
+        ret = delete_file_or_dir(itm->d_longname, TRUE);
+      else if (itm->d_name[0])
+        ret = delete_file_or_dir(itm->d_name, TRUE);
+
+      // Flush any pending sector writes out
+      execute_write_queue();
+
+      // restore previous state:
+      change_dir(current_dir_backup);
+
+      // stop iterations on single fails:
+      if (ret != 0) {
+        retVal = -1;
+        break;
+      }
+
+      cur = cur->next;
+    }
+  } while (0);
+
+//  printf("%d Dir(s), %d File(s), ", dir_count, file_count);
+  printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
+                                   count_total_clusters(0) * 4 / 1024);
+  printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
+                                   count_total_clusters(0));
+
+  llist_free(lst_dirents);
+
   return retVal;
 }
 
@@ -3852,7 +4046,7 @@ unsigned int get_first_cluster_of_file(void)
        | (dir_sector_buffer[dir_sector_offset + 0x14] << 16) | (dir_sector_buffer[dir_sector_offset + 0x15] << 24);
 }
 
-int delete_single_file(char *name)
+int delete_single_file(char *name, BOOL consent)
 {
   struct m65dirent de;
   int dir_count;  // used to give user stats on non-empty dirs
@@ -3877,23 +4071,39 @@ int delete_single_file(char *name)
   int attrib = dir_sector_buffer[dir_sector_offset + 0x0b];
 
   if (attrib == DE_ATTRIB_DIR) {
-    // keep original values before peeking into subdir:
+    // keep original values before working in the subdir:
+    unsigned char dir_sector_buffer_backup[512];
+    memcpy(dir_sector_buffer_backup, dir_sector_buffer, 512);
     unsigned int backup_dir_sector = dir_sector;
     int backup_dir_cluster = dir_cluster;
     int backup_dir_sector_in_cluster = dir_sector_in_cluster;
     int backup_dir_sector_offset = dir_sector_offset;
+    BOOL vfatEntry_backup = vfatEntry;
+    int vfat_entry_count_backup = vfat_entry_count;
+    int vfat_dir_cluster_backup = vfat_dir_cluster;
+    int vfat_dir_sector_backup = vfat_dir_sector;
+    int vfat_dir_sector_in_cluster_backup = vfat_dir_sector_in_cluster;
+    int vfat_dir_sector_offset_backup = vfat_dir_sector_offset;
 
-    if (count_directory(name, &dir_count, &file_count) != 0)  {
+    // form an absolute path because dirent reading functions
+    // presently can't handle relative ones:
+    char dir[1024];
+
+    if (strcmp(current_dir, "/") == 0) {
+      sprintf(dir, "/%s", name);
+    } else {
+      sprintf(dir, "%s/%s", current_dir, name);
+    }
+    // log_info("using calling path as %s while current is %s ", dir, current_dir);
+
+    // log_info("counting directories in %s\n", dir);
+    if (count_directory(dir, &dir_count, &file_count) != 0)  {
       printf("ERROR: Unable to examine directories to be deleted. Maybe a filesystem problem.\n");
       return -1;
     }
-    // restore nasty globals:
-    dir_sector = backup_dir_sector;
-    dir_cluster = backup_dir_cluster;
-    dir_sector_in_cluster = backup_dir_sector_in_cluster;
-    dir_sector_offset = backup_dir_sector_offset;
 
-    if ((dir_count > 0) || (file_count > 0))  {
+    // ask only once because this routine is also recursively called:
+    if (((dir_count > 0) || (file_count > 0)) && !consent)  {
       printf("ALERT: %d subdirectories and %d files found!\n",
              dir_count, file_count);
       printf("Do you want to delete the directory '%s' with all its contents (y/n)? ", name);
@@ -3904,11 +4114,30 @@ int delete_single_file(char *name)
       if (!(strcmp(inp, "Y") == 0 || strcmp(inp, "y") == 0))
         return FALSE;
     }
+
+    // now recursively delete what is below the current directory:
+    // log_info("Calling delete_directory(%s)...\n", name);
+    if (purge_directory_or_file(dir))
+      return FALSE;
+
+    // restore nasty globals:
+    memcpy(dir_sector_buffer, dir_sector_buffer_backup, 512);
+    dir_sector = backup_dir_sector;
+    dir_cluster = backup_dir_cluster;
+    dir_sector_in_cluster = backup_dir_sector_in_cluster;
+    dir_sector_offset = backup_dir_sector_offset;
+    vfatEntry = vfatEntry_backup;
+    vfat_entry_count = vfat_entry_count_backup;
+    vfat_dir_cluster = vfat_dir_cluster_backup;
+    vfat_dir_sector = vfat_dir_sector_backup;
+    vfat_dir_sector_in_cluster = vfat_dir_sector_in_cluster_backup;
+    vfat_dir_sector_offset = vfat_dir_sector_offset_backup;
+
     strcpy(msg, "Directory");
   }
 
-  // no matter whether it was a dir or file, now
-  // remove dir-entry from FAT table (including any preceding vfat-lfn entries)
+  // no matter whether it was a dir or file, now remove this
+  // level's dir-entry from FAT table (including any preceding vfat-lfn entries)
   wipe_direntries_of_current_file_or_dir();
 
   // remove cluster-chain from cluster-map in FAT tables #1 and #2
@@ -3916,10 +4145,10 @@ int delete_single_file(char *name)
   unsigned int next_cluster = 0;
   do {
     next_cluster = chained_cluster(current_cluster);
-    if (0) {
-      printf("current_cluster=0x%08X\n", current_cluster);
-      printf("next_cluster=0x%08X\n", next_cluster);
-    }
+
+    log_debug("current_cluster=0x%08X  ", current_cluster);
+    log_debug("next_cluster=0x%08X\n", next_cluster);
+
     deallocate_cluster(current_cluster);
     current_cluster = next_cluster;
   } while (current_cluster > 0 && current_cluster < FAT32_MIN_END_OF_CLUSTER_MARKER);
@@ -3931,7 +4160,7 @@ int delete_single_file(char *name)
   return 0;
 }
 
-int delete_file_or_dir(char *name)
+int delete_file_or_dir(char *name, BOOL consent)
 {
   llist *lst_dirents = llist_new();
   char *searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
@@ -3939,7 +4168,7 @@ int delete_file_or_dir(char *name)
   // if no wildcards in name, then just delete a single file
   // or single directory:
   if (!strstr(name, "*"))
-    return delete_single_file(name);
+    return delete_single_file(name, consent);
 
   // if wildcard on delete, confirm with user first
   char inp[128];
@@ -3971,9 +4200,9 @@ int delete_file_or_dir(char *name)
     }
     else if (itm->d_name[0] && itm->d_filelen >= 0) {
       if (itm->d_longname[0])
-        delete_single_file(itm->d_longname);
+        delete_single_file(itm->d_longname, consent);
       else
-        delete_single_file(itm->d_name);
+        delete_single_file(itm->d_name, consent);
     }
 
     cur = cur->next;
@@ -4436,7 +4665,7 @@ int upload_single_file(char *name, char *dest_name)
       if (num_clusters != clusters_needed || is_frag) {
         if (is_frag)
           printf("%s is fragmented, deleting to recreate\n", dest_name);
-        delete_file_or_dir(dest_name);
+        delete_file_or_dir(dest_name, FALSE);
         file_exists = FALSE;
       }
     }
