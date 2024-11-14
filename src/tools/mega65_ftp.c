@@ -150,7 +150,8 @@ void show_local_directory(char *searchpattern);
 void change_local_dir(char *path);
 void change_dir(char *path);
 void show_local_pwd(void);
-int delete_file_or_dir(char *name, BOOL consent);
+int delete_file_or_dir(char *name);
+int delete_file_or_dir_consent(char *name, BOOL consent);
 int rename_file_or_dir(char *name, char *dest_name);
 int upload_file(char *name, char *dest_name);
 int sdhc_check(void);
@@ -553,7 +554,7 @@ int execute_command(char *cmd)
     wrap_upload(src);
   }
   else if (parse_command(cmd, "del %s", src) == 1) {
-    delete_file_or_dir(src, FALSE);
+    delete_file_or_dir(src);
   }
   else if (parse_command(cmd, "rename %s %s", src, dst) == 2) {
     rename_file_or_dir(src, dst);
@@ -3363,9 +3364,9 @@ int purge_directory_or_file(char *path)
       // log_info("calling delete_file_or_dir(%s)...\n", itm->d_name);
       ret = -1;
       if (itm->d_longname[0])
-        ret = delete_file_or_dir(itm->d_longname, TRUE);
+        ret = delete_file_or_dir_consent(itm->d_longname, TRUE);
       else if (itm->d_name[0])
-        ret = delete_file_or_dir(itm->d_name, TRUE);
+        ret = delete_file_or_dir_consent(itm->d_name, TRUE);
 
       // Flush any pending sector writes out
       execute_write_queue();
@@ -3384,10 +3385,10 @@ int purge_directory_or_file(char *path)
   } while (0);
 
 //  printf("%d Dir(s), %d File(s), ", dir_count, file_count);
-  printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
-                                   count_total_clusters(0) * 4 / 1024);
-  printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
-                                   count_total_clusters(0));
+//  printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
+//                                   count_total_clusters(0) * 4 / 1024);
+//  printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
+//                                   count_total_clusters(0));
 
   llist_free(lst_dirents);
 
@@ -4160,7 +4161,11 @@ int delete_single_file(char *name, BOOL consent)
   return 0;
 }
 
-int delete_file_or_dir(char *name, BOOL consent)
+int delete_file_or_dir(char *name)  {
+  return delete_file_or_dir_consent(name, FALSE);
+}
+
+int delete_file_or_dir_consent(char *name, BOOL consent)
 {
   llist *lst_dirents = llist_new();
   char *searchterm = NULL; // ignore this for now (borrowed it from elsewhere)
@@ -4665,7 +4670,7 @@ int upload_single_file(char *name, char *dest_name)
       if (num_clusters != clusters_needed || is_frag) {
         if (is_frag)
           printf("%s is fragmented, deleting to recreate\n", dest_name);
-        delete_file_or_dir(dest_name, FALSE);
+        delete_file_or_dir(dest_name);
         file_exists = FALSE;
       }
     }
