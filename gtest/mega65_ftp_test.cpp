@@ -6,7 +6,7 @@
 int parse_command(const char *str, const char *format, ...);
 int upload_file(char *name, char *dest_name);
 int rename_file_or_dir(char *name, char *dest_name);
-int delete_file_or_dir(char *name, BOOL consent);
+int delete_file_or_dir(char *name, bool consent);
 int download_file(char *dest_name, char *local_name, int showClusters);
 int open_file_system(void);
 int contains_file_or_dir(char *name);
