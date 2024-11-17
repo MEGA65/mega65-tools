@@ -2,6 +2,11 @@
 #include "gmock/gmock.h"
 #include <stdarg.h>
 #include <stdio.h>
+#include <cstdio>    // to use keyboard input towards the testing programme
+#include <fstream>   // to use keyboard input towards the testing programme
+#include <thread>    // to use keyboard input towards the testing programme
+#include <chrono>    // to use keyboard input towards the testing programme
+#include <iostream>  // to use keyboard input towards the testing programme
 
 int parse_command(const char *str, const char *format, ...);
 int upload_file(char *name, char *dest_name);
@@ -226,6 +231,33 @@ void generate_dummy_file_embed_name(const char *name, int size)
 void delete_local_file(const char *name)
 {
   remove(name);
+}
+
+// This only works for simulated input towards the testing application
+// in case low level scanf() type input handling is used:
+template <typename Func, typename Param>
+void testWithSimulatedInput(const Func& functionToTest,
+                            const Param& param,
+                            const std::string& simulatedInput) {
+  // save original stdin data:
+  FILE* originalStdin = stdin;
+
+  // simulate by writing keystrokes into a file:
+  std::ofstream inputFile("test_input.txt");
+  inputFile << simulatedInput;
+  inputFile.close();
+
+  // divert stdin into the file:
+  freopen("test_input.txt", "r", stdin);
+
+  // execute function in test:
+  functionToTest(param);
+
+  // restore stdin:
+  stdin = originalStdin;
+
+  // delete temporary file:
+  std::remove("test_input.txt");
 }
 
 class Mega65FtpTestFixture : public ::testing::Test {
@@ -625,6 +657,54 @@ TEST_F(Mega65FtpTestFixture, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
   show_directory("LongFileName.d81");
   output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
+}
+
+TEST_F(Mega65FtpTestFixture, CreateDeleteDirectoryWithFiles)
+{
+  char *topleveldir = "test_dir_on_top_level";
+  char *subleveldir = "sub_directory_test";
+  char *longfilename = "LongFileName.d81";
+
+  init_sdcard_data();
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
+  // also check for the before amount of regained available clusters:
+  EXPECT_THAT(output, testing::ContainsRegex("253 out of 256 Cluster"));
+
+  ReleaseStdOut();
+  CaptureStdOut();
+
+  create_dir(topleveldir);
+  change_dir(topleveldir);
+  generate_dummy_file_embed_name(longfilename, 4096);
+  upload_file(longfilename, longfilename);
+  // go one level deeper:
+  create_dir(subleveldir);
+  change_dir(subleveldir);
+  generate_dummy_file_embed_name(longfilename, 4096);
+  upload_file(longfilename, longfilename);
+
+  // dump_sdcard_to_file("sdcard_after1.bin");
+
+  // perform this on the directory now:
+  change_dir("/");
+
+  // this replaces: delete_file_or_dir(topleveldir);
+  testWithSimulatedInput(delete_file_or_dir, topleveldir, "y\n");
+
+  // now assess that dir-entries have been removed
+
+  // dump_sdcard_to_file("sdcard_after2.bin");
+
+  show_directory("");
+  /* std::string */ output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
+  // also check for the before amount of regained available clusters:
+  EXPECT_THAT(output, testing::ContainsRegex("253 out of 256 Cluster"));
 }
 
 TEST_F(Mega65FtpTestFixture, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDirEntries)
