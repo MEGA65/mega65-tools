@@ -50,3 +50,7 @@ matrix:
           tags: false
           all_branches: true
           condition: $TRAVIS_BRANCH =~ ^(master|development)$
+        # workaround for ruby "rvm use / Error installing dpl" issue
+        # - https://github.com/travis-ci/dpl/issues/1281
+        edge:
+          branch: v2.0.3-beta.4
