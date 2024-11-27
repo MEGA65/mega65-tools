@@ -274,6 +274,13 @@ void init(void)
 
 void init_screen()
 {
+  // Assure all SID volume registers are to same level
+  // (to avoid annoying buzz sound in c64 mode when they differ)
+  POKE(0xD418, 0x0F);
+  POKE(0xD458, 0x0F);
+  POKE(0xD498, 0x0F);
+  POKE(0xD4d8, 0x0F);
+
   // Cursor off
   POKE(204, 0x80);
 

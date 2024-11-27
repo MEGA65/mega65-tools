@@ -313,6 +313,13 @@ void main(void)
   POKE(0xD02F, 0x53);
   POKE(0xD689, PEEK(0xD689) | 128);
 
+  // Assure all SID volume registers are to same level
+  // (to avoid annoying buzz sound in c64 mode when they differ)
+  POKE(0xD418, 0x0F);
+  POKE(0xD458, 0x0F);
+  POKE(0xD498, 0x0F);
+  POKE(0xD4d8, 0x0F);
+
   // Cursor off
   POKE(204, 0x80);
 
