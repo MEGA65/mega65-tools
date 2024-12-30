@@ -202,7 +202,7 @@ jump_routine:
 	eom
 
 	; disable force_fast CPU mode
-	lda #$00
+	lda #$40
 	sta $00
 
 jump_addr:
