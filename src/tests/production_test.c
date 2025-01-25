@@ -507,7 +507,7 @@ void setup_rtc(void)
   if (target == 0x03)
     // Enable temperature compensation for internal RTC on mega65r3
     lpoke(0xffd311d, lpeek(0xffd311d) | 0xe0);
-  else if (target > 0x03 && target < 0x06) {
+  else if (target > 0x03 && target <= 0x06) {
     // enable backup power on mega65r4-r6
     a = lpeek(0xffd71d0UL);
     if (a != 0x22) {
