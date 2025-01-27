@@ -151,7 +151,7 @@ I'll try sort out that error at some later stage...
 To build for macOS, install the following packages using [Homebrew](https://brew.sh/):
 
 ```
-brew install conan
+brew install conan cmake
 ```
 
 To build all of the tools currently available for macOS:
