@@ -3256,11 +3256,15 @@ int show_directory(char *path)
       cur = cur->next;
     }
   } while (0);
+#ifdef VERBOSE_AND_SLOW_DIR
   printf("%d Dir(s), %d File(s), ", dir_count, file_count);
   printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
                                    count_total_clusters(0) * 4 / 1024);
   printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
                                    count_total_clusters(0));
+#else
+  printf("%d Dir(s), %d File(s)\n", dir_count, file_count);
+#endif
 
   llist_free(lst_dirents);
 
