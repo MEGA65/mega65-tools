@@ -998,6 +998,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
       if (ret < 0)
         ; // suppressing gcc-8 -Wformat-truncation warning like this for now...
     }
+    // Let's "mimic" an exit if mega65-ftp prompt is left via EOF (CTRL-D pressed, stdin redirected from file, etc)
+    execute_command("exit");
 #endif
   }
 
