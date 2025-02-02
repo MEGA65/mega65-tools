@@ -538,7 +538,7 @@ int execute_command(char *cmd)
   if (parse_command(cmd, "putslot %d %s", &slot, src) == 2) {
     upload_slot(slot, src);
   }
-  if (parse_command(cmd, "getslot %d %s", &slot, dst) == 2) {
+  else if (parse_command(cmd, "getslot %d %s", &slot, dst) == 2) {
     download_slot(slot, dst);
   }
   else if (parse_command(cmd, "getflash %d %s", &slot, dst) == 2) {
