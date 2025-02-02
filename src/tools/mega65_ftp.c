@@ -1510,7 +1510,7 @@ uint8_t write_sector_count = 0;
 uint8_t write_batch_counter = 0;
 
 /**
- * This function processes a job for writing multiple sectors over Ethernet. 
+ * This function processes a job for writing multiple sectors over Ethernet.
  *
  * @param[in] job A pointer to the job to be processed.
  * @param[in] batch_size The number of sectors to be written in a batch.
@@ -1682,7 +1682,7 @@ void process_jobs_ethernet(void)
       log_debug("read flash job not implemented for ethernet");
       exit(-1);
       break;
-    
+
     case 0x11: // read mem
       ptr += 9;
       log_debug("read mem job not implemented for ethernet");
@@ -5854,3 +5854,6 @@ int download_file(char *name, char *local_name, int showClusters)
 
   return 0;
 }
+
+/* please leave this comment as the last line: used by vim */
+/* vim:set ts=2 sw=2 et: */
