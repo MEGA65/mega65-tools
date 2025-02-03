@@ -538,7 +538,7 @@ int execute_command(char *cmd)
   if (parse_command(cmd, "putslot %d %s", &slot, src) == 2) {
     upload_slot(slot, src);
   }
-  if (parse_command(cmd, "getslot %d %s", &slot, dst) == 2) {
+  else if (parse_command(cmd, "getslot %d %s", &slot, dst) == 2) {
     download_slot(slot, dst);
   }
   else if (parse_command(cmd, "getflash %d %s", &slot, dst) == 2) {
@@ -998,6 +998,8 @@ int DIRTYMOCK(main)(int argc, char **argv)
       if (ret < 0)
         ; // suppressing gcc-8 -Wformat-truncation warning like this for now...
     }
+    // Let's "mimic" an exit if mega65-ftp prompt is left via EOF (CTRL-D pressed, stdin redirected from file, etc)
+    execute_command("exit");
 #endif
   }
 
@@ -1510,7 +1512,7 @@ uint8_t write_sector_count = 0;
 uint8_t write_batch_counter = 0;
 
 /**
- * This function processes a job for writing multiple sectors over Ethernet. 
+ * This function processes a job for writing multiple sectors over Ethernet.
  *
  * @param[in] job A pointer to the job to be processed.
  * @param[in] batch_size The number of sectors to be written in a batch.
@@ -1682,7 +1684,7 @@ void process_jobs_ethernet(void)
       log_debug("read flash job not implemented for ethernet");
       exit(-1);
       break;
-    
+
     case 0x11: // read mem
       ptr += 9;
       log_debug("read mem job not implemented for ethernet");
@@ -3254,11 +3256,15 @@ int show_directory(char *path)
       cur = cur->next;
     }
   } while (0);
+#ifdef TESTING
   printf("%d Dir(s), %d File(s), ", dir_count, file_count);
   printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
                                    count_total_clusters(0) * 4 / 1024);
   printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
                                    count_total_clusters(0));
+#else
+  printf("%d Dir(s), %d File(s)\n", dir_count, file_count);
+#endif
 
   llist_free(lst_dirents);
 
@@ -5854,3 +5860,6 @@ int download_file(char *name, char *local_name, int showClusters)
 
   return 0;
 }
+
+/* please leave this comment as the last line: used by vim */
+/* vim:set ts=2 sw=2 et: */
