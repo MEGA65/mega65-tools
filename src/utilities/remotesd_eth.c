@@ -1399,6 +1399,7 @@ void process()
     wait_for_sd_ready();
     while (!(PEEK(0xD6E0) & 0x80))
       continue;
+    POKE(0, 64);
     __asm__("jmp 58552");
     // Should never get here
     stop_fatal("error: failed to execute rom reset routine");
