@@ -24,9 +24,9 @@ if [[ -n $JENKINS_SERVER_COOKIE ]]; then
   version=${GIT_COMMIT:0:7}
   buildnum=${BUILD_NUMBER}
 else
-  if [[ -n $ADJUSTED_RUN_NUMBER ]]; then
+  if [[ -n $adjusted_run_number ]]; then
     branch=$(git rev-parse --abbrev-ref HEAD)
-    buildnum=$ADJUSTED_RUN_NUMBER
+    buildnum=$adjusted_run_number
   else
     branch=`git rev-parse --abbrev-ref HEAD`
     buildnum=man
