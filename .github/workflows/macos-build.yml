@@ -46,9 +46,9 @@ jobs:
       env:
         FH_API_KEY: ${{ secrets.FH_API_KEY }}
       run: |
-        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+        if [[ "${{ github.ref }}" == "refs/heads/development" ]]; then
           python3 filehost-upload -i 7d96641c-b306-49cf-80ff-ea1e5d00c9d1 -a addversion -V ${{ env.adjusted_run_number }} -I "`git log -1 --pretty=tformat:'dev@%h: %s'`" m65tools-*-macos.7z
-        elif [[ "${{ github.ref }}" == "refs/heads/development" ]]; then
+        elif [[ "${{ github.ref }}" =~ ^refs/heads/release-.+$ ]]; then
           python3 filehost-upload -i 0dee985e-5bc1-404b-adb0-fc7989aef346 -a addversion -V ${{ env.adjusted_run_number }} -I "`git log -1 --pretty=tformat:'reltemp@%h: %s'`" m65tools-*-macos.7z
         fi
 
