@@ -294,6 +294,7 @@ int poke_value = 0;
 int fhnum = 0;
 int slotnum = 0;
 unsigned char force_helper_push = 0;
+int ignore_security_questions = 0;
 
 #define M65DT_REG 1
 #define M65DT_DIR 2
@@ -330,6 +331,7 @@ void usage(void)
   fprintf(stderr, "  -p - password for Filehost access (if supplied only username, password will be prompted).\n");
   fprintf(stderr, "  -c - execute mega65_ftp cli command, exit mega65_ftp afterwards (multiple -c are allowed).\n");
   fprintf(stderr, "       Note: if you don't specify 'exit' as last command, the helper will stay in memory.\n");
+  fprintf(stderr, "  -y - don't ask for confirmation before executing commands.\n");
   fprintf(stderr, "\n");
   exit(-3);
 }
@@ -766,7 +768,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
   log_setup(stderr, LOG_NOTE);
 
   int opt;
-  while ((opt = getopt(argc, argv, "Ds:l:c:u:p:d:ei:0:nFh")) != -1) {
+  while ((opt = getopt(argc, argv, "Ds:l:c:u:p:d:ei:0:nFhy")) != -1) {
     switch (opt) {
     case 'h':
       usage();
@@ -821,6 +823,9 @@ int DIRTYMOCK(main)(int argc, char **argv)
       break;
     case 'n':
       nosys = 1;
+      break;
+    case 'y':
+      ignore_security_questions = 1;
       break;
     default: /* '?' */
       usage();
@@ -3763,6 +3768,10 @@ int check_model_id_field(char *corefile)
            "Don't use on Batch 1 or 2 machines!\n\n");
 
   if (core_model_id == 0x00) {
+    if (ignore_security_questions) {
+      return 1;
+    }
+
     printf(".COR file is missing model-id field.\n"
            "Cannot confirm if .COR matches hardware.\n"
            "Are you sure you want to flash? (y/n)\n\n");
@@ -4110,7 +4119,7 @@ int delete_single_file(char *name, BOOL consent)
     }
 
     // ask only once because this routine is also recursively called:
-    if (((dir_count > 0) || (file_count > 0)) && !consent)  {
+    if (((dir_count > 0) || (file_count > 0)) && !consent && !ignore_security_questions)  {
       printf("ALERT: %d subdirectories and %d files found!\n",
              dir_count, file_count);
       printf("Do you want to delete the directory '%s' with all its contents (y/n)? ", name);
@@ -4181,15 +4190,17 @@ int delete_file_or_dir_consent(char *name, BOOL consent)
   if (!strstr(name, "*"))
     return delete_single_file(name, consent);
 
-  // if wildcard on delete, confirm with user first
-  char inp[128];
-  printf("Are you sure (y/n)? ");
-  scanf("%s", inp);
+  if (!ignore_security_questions) {
+    // if wildcard on delete, confirm with user first
+    char inp[128];
+    printf("Are you sure (y/n)? ");
+    scanf("%s", inp);
 #ifdef WINDOWS
-  fflush(stdin);
+    fflush(stdin);
 #endif
-  if (!(strcmp(inp, "Y") == 0 || strcmp(inp, "y") == 0))
-    return FALSE;
+    if (!(strcmp(inp, "Y") == 0 || strcmp(inp, "y") == 0))
+      return FALSE;
+  }
 
   // handle wildcards
   if (!read_remote_dirents(lst_dirents, current_dir, &searchterm)) {
