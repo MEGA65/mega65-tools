@@ -775,6 +775,8 @@ class CoreFile:
             'M65THUMB.M65': '000000004',
             'C65THUMB.M65': '000000005',
             'C64THUMB.M65': '000000006',
+            'README.txt':   'zzzzzzzzx',
+            'README.md':    'zzzzzzzzy',
             'BANNER.M65':   'zzzzzzzzz',
         }
         def embedsmartsort(embed: EmbeddedFile) -> str:
