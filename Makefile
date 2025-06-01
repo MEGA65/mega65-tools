@@ -151,6 +151,7 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_696.prg \
 		$(TESTDIR)/test_710.prg \
 		$(TESTDIR)/test_719.prg \
+		$(TESTDIR)/test_790.prg \
 		$(TESTDIR)/test_826.prg \
 		$(TESTDIR)/test_mandelbrot.prg \
 		$(TESTDIR)/eth_rxd_test.prg \
@@ -308,7 +309,10 @@ clean:	cleantest
 	rm -f m65tools-*.7z
 	rm -rf $(PKGDIR)
 
-cleanall:	clean
+cleantest:
+	rm -f dummy.txt *.d81
+
+cleanall:	clean cleantest
 	for path in `git submodule | awk '{ print "./" $$2 }'`; do \
 		if [ -e $$path/Makefile ]; then \
 			if [[ $$path =~ src/mega65-libc ]]; then \
@@ -318,9 +322,6 @@ cleanall:	clean
 			fi; \
 		fi; \
 	done
-
-cleantest:
-	rm -f dummy.txt *.d81
 
 # testing
 test: $(GTESTFILES)

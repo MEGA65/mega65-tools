@@ -36,6 +36,9 @@ fi
 if [[ ! -d ${LOGPATH} ]]; then
     usage "logpath does not exist or is not directory"
 fi
+if [[ ! -x ${SCRIPTPATH}/../../bin/m65 ]]; then
+    usage "bin/m65 was not build within this mega65-tools copy!"
+fi
 
 # extract bitstream name for logfiles
 LOGNAME=${BITSTREAM%%.bit}
@@ -98,6 +101,7 @@ main () {
     echo "  ${BITSTREAM}"
     echo
 
+    SKIP=0
     while read -r test timeout validmodel; do
         # skip comments and empty lines
         if [[ $test =~ ^# || -z $test ]]; then
@@ -105,6 +109,15 @@ main () {
         fi
         if [[ ! ( $validmodel == "all" || $validmodel =~ ${MODEL} ) ]]; then
             echo "skipping ${test} (${MODEL} not in $validmodel)"
+            continue
+        fi
+        if [[ ! -e ${SCRIPTPATH}/${test} ]]; then
+            echo "skipping ${test}, because program was not found"
+            if [[ $SKIP -gt 2 && $COUNT -eq 0 ]]; then
+                echo "test programs not build? aboting (please do make tests)"
+                exit 1
+            fi
+            SKIP+=1
             continue
         fi
         # check if timeout is an number or use default timeout
