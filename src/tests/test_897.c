@@ -1,0 +1,41 @@
+/*
+Issue #897 - 
+*/
+#define ISSUE_NUM 897
+#define ISSUE_NAME "hyppo system resource access"
+
+#include <stdio.h>
+#include <stdint.h>
+#include <memory.h>
+#include <tests.h>
+
+extern int test_resource_read(void);
+
+char msg[80];
+int i;
+
+void main(void)
+{
+  printf("%c%c", 147, 5); // clear screen; color white
+  printf("issue #%d - %s\n", ISSUE_NUM, ISSUE_NAME);
+
+  // Fast CPU, M65 IO
+  mega65_io_enable();
+
+  unit_test_setup(ISSUE_NAME, ISSUE_NUM);
+
+  // 
+  
+  if (test_resource_read() == 0) {
+    unit_test_ok("");
+  }
+  else {
+    unit_test_fail("rts immediate mode simple test failed");
+  }
+
+  if (i == 256) {
+    unit_test_ok("rts immediate mode extended stack test passed");
+  }
+
+  unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);
+}
