@@ -9,7 +9,7 @@
 	ldx $7f1
 	ldy $7f2
 	ldz $7f3
-	sta $d644 		; Trigger Hypervisor trap
+	sta $d645 		; Trigger Hypervisor trap
 	nop			; CPU delay slot required after any hypervisor trap
 	sta $7f4
 	stx $7f5
