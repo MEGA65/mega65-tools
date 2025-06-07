@@ -12,7 +12,10 @@ Issue #897 -
 extern int test_resource_read(void);
 
 char msg[80];
-int i;
+int i = 0;
+
+unsigned long resource_sector = 0;
+unsigned long return_value = 0;
 
 void main(void)
 {
@@ -24,17 +27,26 @@ void main(void)
 
   unit_test_setup(ISSUE_NAME, ISSUE_NUM);
 
-  // 
+  //
+  *(unsigned long *)0x7f0 = resource_sector;
   
   if (test_resource_read() == 0) {
     unit_test_ok("");
   }
   else {
-    unit_test_fail("rts immediate mode simple test failed");
+    unit_test_fail("hyppo call helper failed");
   }
 
+  return_value = *(unsigned long *)0x7f4;
+
+  printf("Return value = $%08lx, P=$%02x, Carry=%d\n",
+	 return_value,PEEK(0x7f8),
+	 PEEK(0x7f8)&0x01);
+  
   if (i == 256) {
-    unit_test_ok("rts immediate mode extended stack test passed");
+    unit_test_ok("hyppo resource read test passed");
+  } else {
+    unit_test_ok("hyppo resource read test passed");
   }
 
   unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);
