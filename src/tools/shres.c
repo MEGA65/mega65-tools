@@ -40,16 +40,15 @@ void usage(void)
 }
 
 int parse_flags(char *flag_string) {
-  // Simple comma-separated numeric flags, or you can extend to use named flags
   int flags = 0;
   char *token = strtok(flag_string, ",");
   while (token) {
-    int flag_num=atoi(token);
+    int flag_num = atoi(token);
     if (flag_num<0||flag_num>31) {
-      fprintf(stderr,"ERROR: Valid flag numbers are 0 -- 31 inclusive.\n");
+      fprintf(stderr,"ERROR: Flag numbers must be in range [0..31]\n");
       exit(-1);
     }
-    flags |= 1<<atoi(token);
+    flags |= 1<<flag_num;  // Extend this if needed
     token = strtok(NULL, ",");
   }
   return flags;
@@ -57,35 +56,54 @@ int parse_flags(char *flag_string) {
 
 int prepare_resources(int argc, char **argv)
 {
-  int i;
-  for (i = 1; i < argc; i++) {
+  for (int i = 0; i < argc; i++) {
     if (resource_count >= MAX_RESOURCES) {
       fprintf(stderr, "Too many resources (max %d)\n", MAX_RESOURCES);
       exit(1);
     }
 
-    char *arg = strdup(argv[i]);
-    char *filename = arg;
+    char *arg_copy = strdup(argv[i]);
+    if (!arg_copy) {
+      perror("strdup");
+      exit(1);
+    }
+
+    char *filename = NULL;
     char *name = NULL;
     char *flag_string = NULL;
 
-    // Parse the filename=alias,flag,... format
-    char *eq = strchr(arg, '=');
+    char *eq = strchr(arg_copy, '=');
+
     if (eq) {
+      // filename=name[,flags]
       *eq = '\0';
+      filename = arg_copy;
       name = eq + 1;
+
       char *comma = strchr(name, ',');
       if (comma) {
         *comma = '\0';
         flag_string = comma + 1;
       }
+    } else {
+      // filename[,flags]
+      char *comma = strchr(arg_copy, ',');
+      if (comma) {
+        *comma = '\0';
+        filename = arg_copy;
+        flag_string = comma + 1;
+        name = filename;
+      } else {
+        filename = arg_copy;
+        name = filename;
+      }
     }
 
-    // Open the file
+    // Validate file exists
     int fd = open(filename, O_RDONLY);
     if (fd < 0) {
       perror(filename);
-      free(arg);
+      free(arg_copy);
       exit(1);
     }
 
@@ -93,7 +111,7 @@ int prepare_resources(int argc, char **argv)
     if (fstat(fd, &st) < 0) {
       perror("fstat");
       close(fd);
-      free(arg);
+      free(arg_copy);
       exit(1);
     }
 
@@ -105,37 +123,38 @@ int prepare_resources(int argc, char **argv)
     if (body == MAP_FAILED) {
       perror("mmap");
       close(fd);
-      free(arg);
+      free(arg_copy);
       exit(1);
     }
 
     close(fd);
 
-    // Fill resource entry
     struct resource *res = &resources[resource_count];
-    res->start_sector = 0; // to be filled in write_resources()
+    res->start_sector = 0;
     res->length_in_bytes = st.st_size;
     res->length_in_sectors = (st.st_size + SECTOR_SIZE - 1) / SECTOR_SIZE;
     res->flags = flag_string ? parse_flags(flag_string) : 0;
-    snprintf(res->name, sizeof(res->name), "%s", name ? name : filename);
+    snprintf(res->name, sizeof(res->name), "%s", name);
     res->body = body;
 
     resource_count++;
-    free(arg);
+    free(arg_copy);
   }
 
   return 0;
 }
 
+
+
 void dump_resources(void)
 {
   printf("Resource Table (%d entries):\n", resource_count);
-  printf("Idx  Start   Sectors  Bytes      Flags   Name\n");
-  printf("---- ------- -------- ---------- ------- -------------------------\n");
+  printf("Idx  Start   Sectors  Bytes      Flags      Name\n");
+  printf("---- ------- -------- ---------- ---------- -------------------------\n");
 
   for (int i = 0; i < resource_count; i++) {
     struct resource *res = &resources[i];
-    printf("%-4d %-7u %-8u %-10u 0x%05x %s\n",
+    printf("%-4d %-7u %-8u %-10u 0x%08x %s\n",
            i,
            res->start_sector,
            res->length_in_sectors,
@@ -245,7 +264,7 @@ int main(int argc, char **argv)
 
   if (argc<3) usage();
   
-  prepare_resources(argc-1,&argv[1]);
+  prepare_resources(argc-2,&argv[2]);
   dump_resources();
   
   write_resources(argv[1]);
