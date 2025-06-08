@@ -92,34 +92,30 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    printf("MEGA65 Shared Resource File: %s\n", argv[1]);
-    printf("Declared resources: %u\n\n", declared_count);
-    printf("%-40s %-10s %-10s %s\n", "SHA1", "Bytes", "Check", "Name");
-    printf("--------------------------------------------------------------------------------\n");
+    // Prepare storage for metadata
+    uint32_t start_sectors[MAX_RESOURCES];
+    uint32_t length_in_sectors[MAX_RESOURCES];
+    uint32_t length_in_bytes[MAX_RESOURCES];
+    uint32_t flags_array[MAX_RESOURCES];
+    char names[MAX_RESOURCES][240];
 
-    if (fseek(f, SECTOR_SIZE, SEEK_SET) != 0) {
-        perror("fseek to metadata");
-        fclose(f);
-        return 1;
-    }
-
+    // Parse metadata sectors
     int metadata_seen = 0;
     int terminator_seen = 0;
-    for (int index = 0; index < MAX_RESOURCES; index++) {
-      long metadata_offset = (1 + index) * SECTOR_SIZE;
-      if (fseek(f, metadata_offset, SEEK_SET) != 0) {
-        fprintf(stderr, "Failed to seek to metadata sector %d\n", index);
-        break;
-      }
-      
-      unsigned char sector[SECTOR_SIZE];
-      if (fread(sector, 1, SECTOR_SIZE, f) != SECTOR_SIZE) {
-	fprintf(stderr, "Failed to read metadata sector %d\n", index);
-	break;
-      }
-      
 
-	
+    for (int index = 0; index < MAX_RESOURCES; index++) {
+        long metadata_offset = (1 + index) * SECTOR_SIZE;
+        if (fseek(f, metadata_offset, SEEK_SET) != 0) {
+            fprintf(stderr, "Failed to seek to metadata sector %d\n", index);
+            break;
+        }
+
+        unsigned char sector[SECTOR_SIZE];
+        if (fread(sector, 1, SECTOR_SIZE, f) != SECTOR_SIZE) {
+            fprintf(stderr, "Failed to read metadata sector %d\n", index);
+            break;
+        }
+
         int all_zero = 1;
         for (int i = 0; i < METADATA_ENTRY_SIZE; i++) {
             if (sector[i] != 0) {
@@ -133,39 +129,59 @@ int main(int argc, char **argv) {
             break;
         }
 
-        metadata_seen++;
-        if (metadata_seen > declared_count) {
+        if (metadata_seen >= declared_count) {
             fprintf(stderr, "Error: More metadata entries than declared in header\n");
             fclose(f);
             return 1;
         }
 
-        uint32_t start_sector, length_in_sectors, length_in_bytes, flags;
-        uint8_t name_len;
-        char name[240] = {0};
+        memcpy(&start_sectors[metadata_seen], sector + 0x00, sizeof(uint32_t));
+        memcpy(&length_in_sectors[metadata_seen], sector + 0x04, sizeof(uint32_t));
+        memcpy(&length_in_bytes[metadata_seen], sector + 0x08, sizeof(uint32_t));
+        memcpy(&flags_array[metadata_seen], sector + 0x0C, sizeof(uint32_t));
 
-        memcpy(&start_sector, sector + 0x00, sizeof(uint32_t));
-        memcpy(&length_in_sectors, sector + 0x04, sizeof(uint32_t));
-        memcpy(&length_in_bytes, sector + 0x08, sizeof(uint32_t));
-        memcpy(&flags, sector + 0x0C, sizeof(uint32_t));
-        name_len = sector[0x10];
-        memcpy(name, sector + 0x11, (name_len < sizeof(name)) ? name_len : sizeof(name) - 1);
-        name[name_len] = '\0';
+        uint8_t name_len = sector[0x10];
+        memcpy(names[metadata_seen], sector + 0x11, name_len);
+        names[metadata_seen][name_len] = '\0';
 
-        long data_offset = (long)start_sector * SECTOR_SIZE;
+        metadata_seen++;
+    }
+
+    printf("MEGA65 Shared Resource File: %s\n", argv[1]);
+    printf("Declared resources: %u\n\n", declared_count);
+
+    // Print metadata table
+    printf("Resource Table (%d entries):\n", metadata_seen);
+    printf("Idx  Start   Sectors  Bytes      Flags      Name\n");
+    printf("---- ------- -------- ---------- ---------- -------------------------\n");
+    for (int i = 0; i < metadata_seen; i++) {
+        printf("%-4d %-7u %-8u %-10u 0x%08x %s\n",
+               i,
+               start_sectors[i],
+               length_in_sectors[i],
+               length_in_bytes[i],
+               flags_array[i],
+               names[i]);
+    }
+
+    printf("\nSHA1                                     Bytes      Check      Name\n");
+    printf("--------------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < metadata_seen; i++) {
+        long data_offset = (long)start_sectors[i] * SECTOR_SIZE;
         if (fseek(f, data_offset, SEEK_SET) != 0) {
-            fprintf(stderr, "Seek error for resource %s\n", name);
+            fprintf(stderr, "Seek error for resource %s\n", names[i]);
             continue;
         }
 
-        unsigned char *body = malloc(length_in_bytes);
+        unsigned char *body = malloc(length_in_bytes[i]);
         if (!body) {
             fprintf(stderr, "Memory allocation failed\n");
             continue;
         }
 
-        if (fread(body, 1, length_in_bytes, f) != length_in_bytes) {
-            fprintf(stderr, "Failed to read data for resource %s\n", name);
+        if (fread(body, 1, length_in_bytes[i], f) != length_in_bytes[i]) {
+            fprintf(stderr, "Failed to read data for resource %s\n", names[i]);
             free(body);
             continue;
         }
@@ -173,20 +189,20 @@ int main(int argc, char **argv) {
         unsigned char embedded_hash[20];
         EVP_MD_CTX *ctx = EVP_MD_CTX_new();
         EVP_DigestInit_ex(ctx, EVP_sha1(), NULL);
-        EVP_DigestUpdate(ctx, body, length_in_bytes);
+        EVP_DigestUpdate(ctx, body, length_in_bytes[i]);
         EVP_DigestFinal_ex(ctx, embedded_hash, NULL);
         EVP_MD_CTX_free(ctx);
         free(body);
 
         print_sha1(embedded_hash);
-        printf("  %-10u ", length_in_bytes);
+        printf("  %-10u ", length_in_bytes[i]);
 
         struct stat st;
-        if (stat(name, &st) == 0 && S_ISREG(st.st_mode)) {
+        if (stat(names[i], &st) == 0 && S_ISREG(st.st_mode)) {
             unsigned char local_hash[20];
             size_t local_size;
-            if (sha1_of_file(name, local_hash, &local_size) == 0) {
-                if (local_size != length_in_bytes) {
+            if (sha1_of_file(names[i], local_hash, &local_size) == 0) {
+                if (local_size != length_in_bytes[i]) {
                     printf("SIZE MISM ");
                 } else if (memcmp(embedded_hash, local_hash, 20) == 0) {
                     printf("MATCH     ");
@@ -200,7 +216,7 @@ int main(int argc, char **argv) {
             printf("NO FILE   ");
         }
 
-        printf(" %s\n", name);
+        printf(" %s\n", names[i]);
     }
 
     if (metadata_seen != declared_count) {
