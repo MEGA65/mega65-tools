@@ -140,7 +140,8 @@ int file_check(char *filename, unsigned long long *area_start, unsigned long lon
             *area_start  = (unsigned long long)(syspart_start + rel_start) * SECTOR_SIZE;
             *area_length = (unsigned long long)rel_size * SECTOR_SIZE;
 
-	    fprintf(stderr,"INFO: Found MEGA65 SYSPART shared resource area of %lld MiB.\n",(*area_length)>>20);
+	    fprintf(stderr,"INFO: Found MEGA65 SYSPART shared resource area of %lld MiB at sector %d of SYSPART.\n",
+		    (*area_length)>>20, rel_start);
 	    
             return fd;
         }
@@ -232,7 +233,7 @@ int main(int argc, char **argv) {
 
     for (int index = 0; index < MAX_RESOURCES; index++) {
         long metadata_offset = (1 + index) * SECTOR_SIZE;
-        if (fseek(f, metadata_offset, SEEK_SET) != 0) {
+        if (fseek(f, area_start + metadata_offset, SEEK_SET) != 0) {
             fprintf(stderr, "Failed to seek to metadata sector %d\n", index);
             break;
         }
@@ -296,7 +297,7 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < metadata_seen; i++) {
         long data_offset = (long)start_sectors[i] * SECTOR_SIZE;
-        if (fseek(f, data_offset, SEEK_SET) != 0) {
+        if (fseek(f, area_start + data_offset, SEEK_SET) != 0) {
             fprintf(stderr, "Seek error for resource %s\n", names[i]);
             continue;
         }

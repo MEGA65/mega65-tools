@@ -39,14 +39,18 @@ void usage(void)
   exit(-1);
 }
 
-
 int file_check(char *filename, unsigned long long *area_start, unsigned long long *area_length) {
+
+  fprintf(stderr,"INFO: Attempting to open shared resource file or disk image '%s'\n",filename);
+  
     int fd = open(filename, O_RDWR);
     if (fd < 0) {
         if (errno == ENOENT) {
             *area_length = 0xFFFFFFFFULL; // File doesn't exist yet
+	    fprintf(stderr,"INFO: File does not exist.\n");
             return -1;
         } else {
+	    fprintf(stderr,"INFO: Failed to open file.\n");
             perror("open");
             return -1;
         }
@@ -63,10 +67,10 @@ int file_check(char *filename, unsigned long long *area_start, unsigned long lon
 
     // Check for MBR signature
     if (sector[510] != 0x55 || sector[511] != 0xAA) {
-        fprintf(stderr, "Not an MBR - assuming raw resource file\n");
+        fprintf(stderr, "INFO: Not an MBR - assuming raw resource file\n");
 
         if (memcmp(sector, "MEGA65SHAREDRESOURCES", 22) != 0) {
-            fprintf(stderr, "Missing MEGA65 shared resource magic\n");
+            fprintf(stderr, "ERROR: Missing MEGA65 shared resource magic\n");
             close(fd);
             return -1;
         }
@@ -92,6 +96,8 @@ int file_check(char *filename, unsigned long long *area_start, unsigned long lon
             uint32_t syspart_start = *(uint32_t *)&sector[entry + 8];
             unsigned long long syspart_offset = (unsigned long long)syspart_start * SECTOR_SIZE;
 
+	    fprintf(stderr,"INFO: Found MEGA65 SYSPART at sector 0x%08x\n",syspart_start);
+	    
             if (pread(fd, sector, SECTOR_SIZE, syspart_offset) != SECTOR_SIZE) {
                 perror("reading system partition header");
                 close(fd);
@@ -110,15 +116,17 @@ int file_check(char *filename, unsigned long long *area_start, unsigned long lon
             *area_start  = (unsigned long long)(syspart_start + rel_start) * SECTOR_SIZE;
             *area_length = (unsigned long long)rel_size * SECTOR_SIZE;
 
+	    fprintf(stderr,"INFO: Found MEGA65 SYSPART shared resource area of %lld MiB at sector %d of SYSPART.\n",
+		    (*area_length)>>20, rel_start);
+	    
             return fd;
         }
     }
 
-    fprintf(stderr, "No MEGA65 system partition found in MBR\n");
+    fprintf(stderr, "ERROR: No MEGA65 system partition found in MBR\n");
     close(fd);
     return -1;
 }
-
 
 int parse_flags(char *flag_string) {
   int flags = 0;
