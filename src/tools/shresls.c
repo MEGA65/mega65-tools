@@ -5,6 +5,11 @@
 #include <openssl/evp.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <strings.h>
+#include <errno.h>
+#include <sys/mman.h>
+
 
 #define SECTOR_SIZE 512
 #define METADATA_ENTRY_SIZE 256
@@ -58,27 +63,149 @@ int sha1_of_file(const char *filename, unsigned char *digest_out, size_t *size_o
     return 0;
 }
 
+int file_check(char *filename, unsigned long long *area_start, unsigned long long *area_length) {
+
+  fprintf(stderr,"INFO: Attempting to open shared resource file or disk image '%s'\n",filename);
+  
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        if (errno == ENOENT) {
+            *area_length = 0xFFFFFFFFULL; // File doesn't exist yet
+	    fprintf(stderr,"INFO: File does not exist.\n");
+            return -1;
+        } else {
+	    fprintf(stderr,"INFO: Failed to open file.\n");
+            perror("open");
+            return -1;
+        }
+    }
+
+    unsigned char sector[SECTOR_SIZE];
+
+    // Read first sector (MBR or shared resource header)
+    if (pread(fd, sector, SECTOR_SIZE, 0) != SECTOR_SIZE) {
+        perror("reading sector 0");
+        close(fd);
+        return -1;
+    }
+
+    // Check for MBR signature
+    if (sector[510] != 0x55 || sector[511] != 0xAA) {
+        fprintf(stderr, "INFO: Not an MBR - assuming raw resource file\n");
+
+        if (memcmp(sector, "MEGA65SHAREDRESOURCES", 22) != 0) {
+            fprintf(stderr, "ERROR: Missing MEGA65 shared resource magic\n");
+            close(fd);
+            return -1;
+        }
+
+        *area_start = 0ULL;
+        off_t length = lseek(fd, 0, SEEK_END);
+        if (length < 0) {
+            perror("lseek");
+            close(fd);
+            return -1;
+        }
+        *area_length = (unsigned long long)length;
+        lseek(fd, 0, SEEK_SET);
+        return fd;
+    }
+
+    // Scan partition table entries
+    for (int i = 0; i < 4; i++) {
+        int entry = 0x1BE + i * 16;
+        uint8_t p_type = sector[entry + 4];
+
+        if (p_type == 0x41) {  // MEGA65 system partition
+            uint32_t syspart_start = *(uint32_t *)&sector[entry + 8];
+            unsigned long long syspart_offset = (unsigned long long)syspart_start * SECTOR_SIZE;
+
+	    fprintf(stderr,"INFO: Found MEGA65 SYSPART at sector 0x%08x\n",syspart_start);
+	    
+            if (pread(fd, sector, SECTOR_SIZE, syspart_offset) != SECTOR_SIZE) {
+                perror("reading system partition header");
+                close(fd);
+                return -1;
+            }
+
+            if (memcmp(sector, "MEGA65SYS00", 11) != 0) {
+                fprintf(stderr, "Invalid system partition magic\n");
+                close(fd);
+                return -1;
+            }
+
+            uint32_t rel_start = *(uint32_t *)&sector[0x30];
+            uint32_t rel_size  = *(uint32_t *)&sector[0x34];
+
+            *area_start  = (unsigned long long)(syspart_start + rel_start) * SECTOR_SIZE;
+            *area_length = (unsigned long long)rel_size * SECTOR_SIZE;
+
+	    fprintf(stderr,"INFO: Found MEGA65 SYSPART shared resource area of %lld MiB.\n",(*area_length)>>20);
+	    
+            return fd;
+        }
+    }
+
+    fprintf(stderr, "ERROR: No MEGA65 system partition found in MBR\n");
+    close(fd);
+    return -1;
+}
+
+int dump_bytes(char *msg, unsigned char *bytes, int length)
+{
+  fprintf(stdout, "%s:\n", msg);
+  for (int i = 0; i < length; i += 16) {
+    fprintf(stdout, "%04X: ", i);
+    for (int j = 0; j < 16; j++)
+      if (i + j < length)
+        fprintf(stdout, " %02X", bytes[i + j]);
+    fprintf(stdout, "\n");
+  }
+  return 0;
+}
+
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <shared-resource-file>\n", argv[0]);
         return 1;
     }
 
-    FILE *f = fopen(argv[1], "rb");
+    unsigned long long area_start = 0;
+    unsigned long long area_length = 0;
+    int fd = file_check(argv[1], &area_start, &area_length);
+
+    FILE *f = fdopen(fd,"rb");
+    
     if (!f) {
         perror(argv[1]);
         return 1;
     }
 
+    if (fseek(f, area_start, SEEK_SET) != 0) {
+      fprintf(stderr,"ERROR: Could not seek to start of shared resource area.\n");
+      exit(-1);
+    }
+    
     unsigned char header[SECTOR_SIZE];
     if (fread(header, 1, SECTOR_SIZE, f) != SECTOR_SIZE) {
         fprintf(stderr, "Failed to read header\n");
         fclose(f);
         return 1;
-    }
+    }    
 
+    int non_zero=0;
+    for(int i=0;i<SECTOR_SIZE;i++) if (header[i]) non_zero++;
+
+    if (!non_zero) {
+      fprintf(stderr,"INFO: Shared resource file or partition lacks magic block.\n");
+      exit(-1);
+    }
+    
+    
     if (memcmp(header, "MEGA65SHAREDRESOURCES", 22) != 0) {
         fprintf(stderr, "Invalid shared resource file format\n");
+	dump_bytes("sector",header,512);
         fclose(f);
         return 1;
     }

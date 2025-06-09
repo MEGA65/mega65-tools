@@ -676,7 +676,7 @@ $(BINDIR)/utilpacker:	$(BINDIR)/utilpacker.c Makefile
 $(BINDIR)/shres:	$(TOOLDIR)/shres.c Makefile
 	$(CC) $(COPT) -o $(BINDIR)/shres $(TOOLDIR)/shres.c
 
-$(BINDIR)/shresls:	$(TOOLDIR)/shres.c Makefile
+$(BINDIR)/shresls:	$(TOOLDIR)/shresls.c Makefile
 	$(CC) $(COPT) -o $(BINDIR)/shresls $(TOOLDIR)/shresls.c -lssl -lcrypto
 
 $(SDCARD_DIR)/BANNER.M65:	$(BINDIR)/pngprepare $(ASSETS)/mega65_320x64.png /usr/bin/convert
