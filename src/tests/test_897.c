@@ -21,6 +21,14 @@ unsigned long return_value = 0;
 
 char message[81];
 
+unsigned char sector_buffer[512];
+unsigned char magic_string[]={
+  0x4d,0x45,0x47,0x41,'6','5',                   // MEGA65
+  0x53,0x48,0x41,0x52,0x45,0x44,                 // SHARED
+  0x52,0x45,0x53,0x4f,0x55,0x52,0x43,0x45,0x53,  // RESOURCES
+  0x00};
+
+
 void main(void)
 {
   printf("%c%c", 147, 5); // clear screen; color white
@@ -108,7 +116,8 @@ void main(void)
   POKE(0xD684,0x00);
   lpoke(0xffd6000UL,0x42);
   lpoke(0xffd6001UL,0x23);
-  
+
+  // Read first sector of the shared resource area
   resource_sector = 0;
   *(unsigned long *)0x7f0 = resource_sector;
   
@@ -134,6 +143,23 @@ void main(void)
   if (lpeek(0xffd6001UL)!=0x23) carry=1;
   if (!carry) unit_test_fail("sd card buffer contents did not change");
   else unit_test_ok("sd card buffer contents change");
+
+  // Now check if the read sector contains the magic string for the shared resource section.
+  {
+    sector_buffer[0]=0;
+    lcopy(0xffd6e00L,&sector_buffer,512);
+    for(i=0;magic_string[i];i++) {
+      if (sector_buffer[i]!=magic_string[i]) break;      
+    }
+    if (magic_string[i]) {
+      unit_test_fail("read magic string from shared resource area");
+      printf("i=%d, 0x%x vs 0x%x\n",i,sector_buffer[i],magic_string[i]);
+    } else {
+      unit_test_ok("read magic string from shared resource area");
+    }
+  }
+
+
   
   unit_test_report(ISSUE_NUM, 0, TEST_DONEALL);
 }
