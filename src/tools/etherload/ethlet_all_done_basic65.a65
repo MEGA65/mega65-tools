@@ -304,6 +304,7 @@ finalize:
 	sta $d070
 
 	; disable SPRENV400
+	lda #$00
 	sta $d076
 	
 	; NOBUGCOMPAT
