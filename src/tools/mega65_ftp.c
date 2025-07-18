@@ -4704,8 +4704,7 @@ int upload_single_file(char *name, char *dest_name)
 
     if (dir_sector == -1) {
       printf("ERROR: Drive is full.\n");
-      retVal = -1;
-      break;
+      return -1;
     }
     else {
       //      printf("Directory entry is at offset $%03x of sector $%x\n",dir_sector_offset,dir_sector);
@@ -4849,19 +4848,43 @@ int upload_file(char *name, char *dest_name)
 
   // if no wildcards in name, then just upload a single file
   if (!strstr(name, "*"))
+  {
+    d = opendir(name);
+    if ((d) && ((dir = readdir(d)) != NULL)) {
+      printf("\nCreating remote directory \"%s\"...\n", dest_name);
+      create_dir(dest_name);
+      change_dir(dest_name);
+      change_local_dir(name);
+      // recursion within the directory:
+      upload_file("*", "*");
+      change_dir("..");
+      change_local_dir("..");
+      closedir(d);
+      return 0;
+    }
+    closedir(d);
+    // it is not a directory:
     return upload_single_file(name, dest_name);
+  }
 
   // check for wildcards in name
   // list directory first
   d = opendir(".");
   if (d) {
     while ((dir = readdir(d)) != NULL) {
-      if (!is_match(dir->d_name, name, 1))
+      // skip directory management entries and non matching ones:
+      if ((strcmp(dir->d_name, "..") == 0) ||
+          (strcmp(dir->d_name, ".") == 0) ||
+          (!is_match(dir->d_name, name, 1)))
         continue;
 
       struct stat file_stats;
       if (!stat(dir->d_name, &file_stats)) {
-        if (!S_ISDIR(file_stats.st_mode)) {
+        if (S_ISDIR(file_stats.st_mode)) {
+          // printf("\nrecursing for directory \"%s\"...\n", dir->d_name);
+          // recursion for a directory:
+          upload_file(dir->d_name, dir->d_name);
+        } else {
           printf("\nUploading \"%s\"...\n", dir->d_name);
           upload_single_file(dir->d_name, dir->d_name);
         }
