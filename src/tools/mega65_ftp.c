@@ -4852,7 +4852,7 @@ int upload_file(char *name, char *dest_name)
     d = opendir(name);
     if ((d) && ((dir = readdir(d)) != NULL)) {
       printf("\nCreating remote directory \"%s\"...\n", dest_name);
-      create_dir(dest_name);
+      if (create_dir(dest_name) != 0)  return -1;
       change_dir(dest_name);
       change_local_dir(name);
       // recursion within the directory:
