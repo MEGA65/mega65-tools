@@ -4679,6 +4679,13 @@ int upload_single_file(char *name, char *dest_name)
     BOOL file_exists = find_file_in_curdir(dest_name, &de);
 
     if (file_exists) {
+      // skipping already existing files if 'y' option to skip user consent
+      // is used as suggested by Tayger:
+      if (ignore_security_questions) {
+        printf("%s already existing, skip option 'y' given, skipping...\n", dest_name);
+        return 0;
+      }
+
       // assess how many contiguous clusters it consumes right now.
       int is_frag = is_fragmented(dest_name);
       int num_clusters = get_cluster_count(dest_name);
@@ -4852,7 +4859,10 @@ int upload_file(char *name, char *dest_name)
     d = opendir(name);
     if ((d) && ((dir = readdir(d)) != NULL)) {
       printf("\nCreating remote directory \"%s\"...\n", dest_name);
-      if (create_dir(dest_name) != 0)  return -1;
+      // if option 'y' to skip user consent on overwriting is set diving into
+      // directories to add non existing files and structures is desired as
+      // suggested by Tayger:
+      if (create_dir(dest_name) != 0 && !ignore_security_questions)  return -1;
       change_dir(dest_name);
       change_local_dir(name);
       // recursion within the directory:
@@ -4944,7 +4954,9 @@ int create_dir(char *dest_name)
 
     BOOL file_exists = contains_file_or_dir(dest_name);
     if (file_exists) {
-      fprintf(stderr, "ERROR: File or directory '%s' already exists.\n", dest_name);
+      fprintf(stderr, "%s: File or directory '%s' already exists.\n",
+                      (ignore_security_questions ? "WARNING" : "ERROR"),
+                      dest_name);
       retVal = -1;
       break;
     }
