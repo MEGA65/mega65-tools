@@ -525,6 +525,11 @@ irq_exit:
 	jmp ($314)
 
 main:
+	; skip restoring of basic start bytes if no regular prg was loaded to $0801 (i.e. filesize = 0)
+	lda data_end_address_copy
+	ora data_end_address_copy+1
+	beq main_exit
+	
 	; restore bytes of loaded program
 	lda basic_program_start_backup
 	sta $801

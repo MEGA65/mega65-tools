@@ -563,9 +563,11 @@ int main(int argc, char **argv)
 
   if (reset64) {
     log_note("Reset to C64 mode");
-    // patch in end address
-    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address] = address & 0xff;
-    ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address + 1] = address >> 8;
+    // patch in end address if regular BASIC program was loaded
+    if (start_addr == 0x801) {
+      ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address] = address & 0xff;
+      ethlet_all_done_basic2[ethlet_all_done_basic2_offset_data_end_address + 1] = address >> 8;
+    }
 
     // patch in do_run
     ethlet_all_done_basic2[ethlet_all_done_basic2_offset_do_run] = do_run;
@@ -604,9 +606,11 @@ int main(int argc, char **argv)
   }
   else if (reset65) {
     log_note("Reset to MEGA65 mode");
-    // patch in end address
-    ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart] = address & 0xff;
-    ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 1] = address >> 8;
+    // patch in end address if regular BASIC program was loaded
+    if (start_addr == 0x2001) {
+      ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart] = address & 0xff;
+      ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 1] = address >> 8;
+    }
 
     // patch in do_run
     ethlet_all_done_basic65[ethlet_all_done_basic65_offset_autostart + 2] = do_run;
