@@ -8,11 +8,9 @@
 #endif
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <unistd.h>
 #include <libgen.h>
 #include <limits.h> // PATH_MAX
 
@@ -669,3 +667,4 @@ int main(int argc, char **argv)
 
   return 0;
 }
+

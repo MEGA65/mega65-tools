@@ -26,6 +26,10 @@ entry:
 	lda #$53
 	sta $d02f
 
+	; disable audio dma as early as possible to prevent stuck samples from playing
+	lda #$00
+	sta $d711
+
 	; Wait for TX ready
 *
 	lda $d6e1
@@ -124,3 +128,4 @@ entry:
 	.advance start_address + $3fe, $00
 seq_num:
 	.advance start_address + $400, $00
+
