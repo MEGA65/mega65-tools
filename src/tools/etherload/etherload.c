@@ -13,6 +13,7 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <limits.h> // PATH_MAX
+#include <unistd.h>
 
 #include <logging.h>
 
