@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # very simple test runner: find all *.prg files in the current directory
 # and run them.
