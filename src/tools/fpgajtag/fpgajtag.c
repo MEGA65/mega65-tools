@@ -418,7 +418,13 @@ static void init_device(int extra)
   write_item(DITEM(LOOPBACK_END, DIS_DIV_5));
   LOGNOTE("Set clock divisor");
   set_clock_divisor();
-  write_item(DITEM(SET_BITS_LOW, 0xe8, 0xeb, SET_BITS_HIGH, 0x20, 0x30));
+  if (extra)
+    write_item(DITEM(SET_BITS_LOW, 0xe8, 0xeb, SET_BITS_HIGH, 0x20, 0x30));
+  else
+    // FT232H-based Digilent cables (e.g. JTAG-HS2): ACBUS 0x00/0x60 per
+    // openFPGALoader's digilent_hs2 entry; with 0x20/0x30 the HS2 reads
+    // TDO stuck at 0 (all-zero IDCODEs)
+    write_item(DITEM(SET_BITS_LOW, 0xe8, 0xeb, SET_BITS_HIGH, 0x00, 0x60));
   if (extra)
     write_item(DITEM(SET_BITS_HIGH, 0x30, 0x00, SET_BITS_HIGH, 0x00, 0x00));
   LOGNOTE("For TAP to reset state.");
