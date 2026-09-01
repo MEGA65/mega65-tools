@@ -2280,7 +2280,21 @@ int main(int argc, char **argv)
     if (hyppo) {
       log_info("replacing hyppo...");
       real_stop_cpu();
-      load_file(hyppo, 0xfff8000, patchKS);
+
+      // Reset CPU, and then stop it quickly so that we know it's still in the hypervisor
+      monitor_sync();
+      slow_write(fd, "\r!\r", 3);
+      usleep(100000);
+      slow_write(fd, "\rt1\r", 4);      
+      monitor_sync();
+      sleep(1);
+      
+      load_file(hyppo, 0xfff8000, patchKS);      
+
+      // Reset CPU after loading new HYPPO
+      slow_write(fd, "\r!\r", 3);
+      monitor_sync();
+      sleep(2);
     }
     if (flashmenufile) {
       log_info("replacing flashmenu");
