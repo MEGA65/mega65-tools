@@ -2877,11 +2877,25 @@ unsigned int count_total_clusters(unsigned int first_cluster)
 unsigned int find_contiguous_clusters(unsigned int total_clusters)
 {
   unsigned int start_cluster = 0;
+  unsigned int start_cluster_before = 0;
 
   while (1) {
     BOOL is_contiguous = TRUE;
     unsigned int cnt;
+
+    start_cluster_before = start_cluster;
     start_cluster = find_free_cluster(start_cluster);
+    
+    // printf("start_cluster=%u start_cluster_before=%u\n",
+    //        start_cluster, start_cluster_before);
+    
+    // find_free_cluster() above returns a lower number on rollover, so
+    // quitting on variable overflow indicating storage could be full:
+    if (start_cluster < start_cluster_before)  {
+      fprintf(stderr, "ERROR: Could not allocate enough contiguous clusters %s",
+                      "to create file/dir. Storage device may be full.\n");
+      return FALSE;  // 0 is caught in the caller method
+    }
 
     for (cnt = 1; cnt < total_clusters; cnt++) {
       if (!is_free_cluster(start_cluster + cnt)) {
