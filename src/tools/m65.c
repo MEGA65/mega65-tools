@@ -339,6 +339,7 @@ void init_cmd_options(void)
   CMD_OPTION("speed",     1, 0,         's', "230400|1000000|1500000|2000000|4000000",
                   "Speed of serial port in <bits per second> (defaults to 2000000). This needs to match the speed your bitstream uses!");
   CMD_OPTION("usedk",     0, 0,         'K', "",      "Use DK backend for libUSB, if available.");
+  CMD_OPTION("desync-jtag", 0, &fpgajtag_desync, 1, "", "Desync JTAG. This is the proper mode after programming, but it breaks MEGAFLASH push detection!");
 
   CMD_OPTION("bootslot",  1, 0,         'Z', "slot|addr", "Reconfigure FPGA from specified <slot> (argument<8) or <addr>ess (hex) in flash.");
   CMD_OPTION("bit",       1, 0,         'b', "file",  "name of a FPGA bitstream <file> to load.");

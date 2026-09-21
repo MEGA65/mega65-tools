@@ -61,6 +61,8 @@
 #define IDCODE_ARRAY_SIZE 20
 #define SEGMENT_LENGTH 256 /* sizes above 256bytes seem to get more bytes back in response than were requested */
 
+int fpgajtag_desync = 0;
+
 uint8_t *input_fileptr;
 int input_filesize, found_cortex = -1, jtag_index = -1, dcount, idcode_count;
 int tracep; //= 1;
@@ -431,6 +433,7 @@ static void init_device(int extra)
   write_tms_transition("XR11111"); /*** Force TAP controller to Reset state ***/
   EXIT();
 }
+
 static void get_deviceid(int device_index, int interface_id)
 {
   ENTER();
@@ -1010,7 +1013,21 @@ int fpgajtag_main(char *bitstream)
    * designs and core selectors silently stop working after every JTAG
    * push. STAT was already read (and properly desynced) via
    * read_config_reg above; the engine must be left desynced here.
+   *
+   * As this is currently the method by which MEGAFLASH detects that the
+   * bitstream was started via JTAG, we need to make the desync optional.
+   * It can be enabled using the --desync-jtag cmdline option.
    */
+  if (!fpgajtag_desync) {
+    reset_mark_clock(0);
+    ret = readout_seq(jtag_index, rstatus, sizeof(uint32_t), -1);
+    int status = ret >> 8;
+    if (bitswap[M(ret)] != 2 || status != 0xf07910)
+      log_debug("[%s:%d] expect %x mismatch %x", __FUNCTION__, __LINE__, 0xf07910, ret);
+    log_debug("STATUS %08x done %x release_done %x eos %x startup_state %x", status, status & 0x4000, status & 0x2000,
+        status & 0x10, (status >> 18) & 7);
+  }
+
   access_mdm(0, 0, 1);
   // rescan = 1;
 
