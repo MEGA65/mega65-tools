@@ -4686,6 +4686,13 @@ int upload_single_file(char *name, char *dest_name)
     BOOL file_exists = find_file_in_curdir(dest_name, &de);
 
     if (file_exists) {
+      // skipping already existing files if 'y' option to skip user consent
+      // is used as suggested by Tayger:
+      if (ignore_security_questions) {
+        printf("%s already existing, skip option 'y' given, skipping...\n", dest_name);
+        return 0;
+      }
+
       // assess how many contiguous clusters it consumes right now.
       int is_frag = is_fragmented(dest_name);
       int num_clusters = get_cluster_count(dest_name);
@@ -4711,8 +4718,7 @@ int upload_single_file(char *name, char *dest_name)
 
     if (dir_sector == -1) {
       printf("ERROR: Drive is full.\n");
-      retVal = -1;
-      break;
+      return -1;
     }
     else {
       //      printf("Directory entry is at offset $%03x of sector $%x\n",dir_sector_offset,dir_sector);
@@ -4856,19 +4862,46 @@ int upload_file(char *name, char *dest_name)
 
   // if no wildcards in name, then just upload a single file
   if (!strstr(name, "*"))
+  {
+    d = opendir(name);
+    if ((d) && ((dir = readdir(d)) != NULL)) {
+      printf("\nCreating remote directory \"%s\"...\n", dest_name);
+      // if option 'y' to skip user consent on overwriting is set diving into
+      // directories to add non existing files and structures is desired as
+      // suggested by Tayger:
+      if (create_dir(dest_name) != 0 && !ignore_security_questions)  return -1;
+      change_dir(dest_name);
+      change_local_dir(name);
+      // recursion within the directory:
+      upload_file("*", "*");
+      change_dir("..");
+      change_local_dir("..");
+      closedir(d);
+      return 0;
+    }
+    closedir(d);
+    // it is not a directory:
     return upload_single_file(name, dest_name);
+  }
 
   // check for wildcards in name
   // list directory first
   d = opendir(".");
   if (d) {
     while ((dir = readdir(d)) != NULL) {
-      if (!is_match(dir->d_name, name, 1))
+      // skip directory management entries and non matching ones:
+      if ((strcmp(dir->d_name, "..") == 0) ||
+          (strcmp(dir->d_name, ".") == 0) ||
+          (!is_match(dir->d_name, name, 1)))
         continue;
 
       struct stat file_stats;
       if (!stat(dir->d_name, &file_stats)) {
-        if (!S_ISDIR(file_stats.st_mode)) {
+        if (S_ISDIR(file_stats.st_mode)) {
+          // printf("\nrecursing for directory \"%s\"...\n", dir->d_name);
+          // recursion for a directory:
+          upload_file(dir->d_name, dir->d_name);
+        } else {
           printf("\nUploading \"%s\"...\n", dir->d_name);
           upload_single_file(dir->d_name, dir->d_name);
         }
@@ -4928,7 +4961,9 @@ int create_dir(char *dest_name)
 
     BOOL file_exists = contains_file_or_dir(dest_name);
     if (file_exists) {
-      fprintf(stderr, "ERROR: File or directory '%s' already exists.\n", dest_name);
+      fprintf(stderr, "%s: File or directory '%s' already exists.\n",
+                      (ignore_security_questions ? "WARNING" : "ERROR"),
+                      dest_name);
       retVal = -1;
       break;
     }

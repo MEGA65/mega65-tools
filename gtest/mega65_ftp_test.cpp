@@ -707,6 +707,61 @@ TEST_F(Mega65FtpTestFixture, CreateDeleteDirectoryWithFiles)
   EXPECT_THAT(output, testing::ContainsRegex("253 out of 256 Cluster"));
 }
 
+TEST_F(Mega65FtpTestFixture, PutDeleteDirectorystructureWithFiles)
+{
+  char *topleveldir = "test_dir_on_top_level";
+  char *subleveldir = "sub_directory_test";
+  char *subsubleveldir = "subsub_directory_test";
+  char *longfilename = "LongFileName.d81";
+
+  init_sdcard_data();
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
+  // also check for the before amount of regained available clusters:
+  EXPECT_THAT(output, testing::ContainsRegex("253 out of 256 Cluster"));
+
+  ReleaseStdOut();
+  CaptureStdOut();
+
+  create_dir(topleveldir);
+  change_dir(topleveldir);
+  generate_dummy_file_embed_name(longfilename, 4096);
+
+  // go one level deeper:
+  create_dir(subleveldir);
+  change_dir(subleveldir);
+  generate_dummy_file_embed_name(longfilename, 4096);
+
+  // go one level deeper:
+  create_dir(subleveldir);
+  change_dir(subleveldir);
+  generate_dummy_file_embed_name(longfilename, 4096);
+
+  // dump_sdcard_to_file("sdcard_after1.bin");
+
+  // perform this on the directory now:
+  change_dir("/");
+  // upload the directory structure as a whole:
+  upload_file(topleveldir, topleveldir);
+
+  // this replaces: delete_file_or_dir(topleveldir);
+  testWithSimulatedInput(delete_file_or_dir, topleveldir, "y\n");
+
+  // now assess that dir-entries have been removed
+
+  // dump_sdcard_to_file("sdcard_after2.bin");
+
+  show_directory("");
+  /* std::string */ output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
+  // also check for the before amount of regained available clusters:
+  EXPECT_THAT(output, testing::ContainsRegex("253 out of 256 Cluster"));
+}
+
 TEST_F(Mega65FtpTestFixture, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDirEntries)
 {
   init_sdcard_data();
