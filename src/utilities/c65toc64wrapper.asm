@@ -29,6 +29,9 @@ program_start
 	sta $d02f
 	lda #$53
 	sta $d02f
+        ;; Clear $D030 for C64 mode programs
+        lda #0
+        sta $d030
 	
 	;; Copy a helper routine to $0380 that DMAs the
 	;; memory down.

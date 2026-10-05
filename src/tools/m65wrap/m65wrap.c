@@ -26,10 +26,10 @@
  * length are generated at build time from that PRG by the existing bin2c
  * host utility, so c65toc64wrapper.asm remains the source of truth.
  */
-#define C65TOC64WRAPPER_JMP_OFFSET 0x00a7u
-#define C65TOC64WRAPPER_DMA_COUNT_OFFSET 0x00b0u
+#define C65TOC64WRAPPER_JMP_OFFSET 0x00acu
+#define C65TOC64WRAPPER_DMA_COUNT_OFFSET 0x00b5u
 #define C65TOC64WRAPPER_LEGACY_DMA_COUNT 0xdfffu
-#define C65TOC64WRAPPER_EXPECTED_SIZE 0x00bau
+#define C65TOC64WRAPPER_EXPECTED_SIZE 0x00bfu
 #define C65TOC64WRAPPER_SIZE ((size_t)c65toc64wrapper_len)
 
 #define C64_BASIC_LOAD_ADDR 0x0801u
