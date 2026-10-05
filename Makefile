@@ -683,6 +683,7 @@ $(SDCARD_DIR)/BANNER.M65:	$(BINDIR)/pngprepare $(ASSETS)/mega65_320x64.png /usr/
 ##
 ## ========== Unsorted Tools ==========
 ##
+
 $(TOOLDIR)/merge-issue:	$(TOOLDIR)/merge-issue.c
 	$(CC) $(COPT) -o $(TOOLDIR)/merge-issue $(TOOLDIR)/merge-issue.c
 
@@ -747,6 +748,14 @@ $(eval $(call TRIPLE_TARGET, $(BINDIR)/bin2c, $(TOOLDIR)/bin2c.c))
 $(eval $(call TRIPLE_TARGET, $(BINDIR)/map2h, $(TOOLDIR)/map2h.c))
 
 $(eval $(call TRIPLE_TARGET, $(BINDIR)/romdiff, $(TOOLDIR)/romdiff.c))
+
+$(TOOLDIR)/m65wrap/c65toc64wrapper.h: \
+		$(UTILDIR)/c65toc64wrapper.prg $(BINDIR)/bin2c
+	$(BINDIR)/bin2c $< c65toc64wrapper $@
+
+$(eval $(call TRIPLE_TARGET, $(BINDIR)/m65wrap, \
+	$(TOOLDIR)/m65wrap/m65wrap.c \
+	$(TOOLDIR)/m65wrap/c65toc64wrapper.h))
 
 $(TOOLDIR)/coretool:
 	@echo "coretool is a python script, nothing to do!"
