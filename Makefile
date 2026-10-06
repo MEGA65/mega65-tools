@@ -153,6 +153,7 @@ TESTS=		$(TESTDIR)/ascii.prg \
 		$(TESTDIR)/test_719.prg \
 		$(TESTDIR)/test_790.prg \
 		$(TESTDIR)/test_826.prg \
+		$(TESTDIR)/test_873.prg \
 		$(TESTDIR)/test_mandelbrot.prg \
 		$(TESTDIR)/eth_rxd_test.prg \
 		$(TESTDIR)/production_test.prg
@@ -510,6 +511,9 @@ $(TESTDIR)/test_719.prg:       $(TESTDIR)/test_719.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
 $(TESTDIR)/test_826.prg:       $(TESTDIR)/test_826.c $(CC65) $(MEGA65LIBCLIB)
+	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
+
+$(TESTDIR)/test_873.prg:       $(TESTDIR)/test_873.c $(CC65) $(MEGA65LIBCLIB)
 	$(CL65) $(MEGA65LIBCINC) -O -o $*.prg --mapfile $*.map $< $(MEGA65LIBCLIB)
 
 $(TESTDIR)/test_785.prg:       $(TESTDIR)/test_785.c $(CC65) $(MEGA65LIBCLIB)
