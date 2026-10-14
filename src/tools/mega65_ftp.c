@@ -143,6 +143,7 @@ void perform_filehost_get(int num, char *destname);
 void perform_filehost_flash(int fhnum, int slotnum);
 void perform_flash(char *fname, int slotnum);
 void list_all_roms(void);
+void disk_free(void);
 int show_directory(char *path);
 int count_directory(char *path, int * dir_count, int * file_count);
 int purge_directory_or_file(char *path);
@@ -572,6 +573,9 @@ int execute_command(char *cmd)
   else if (sscanf(cmd, "dirent_raw %d", &dirent_raw) == 1) {
     printf("dirent_raw = %d\n", dirent_raw);
   }
+  else if (!strcmp(cmd, "df")) {
+    disk_free();
+  }
   else if (parse_command(cmd, "dir %s", src) == 1) {
     show_directory(src);
   }
@@ -668,6 +672,7 @@ int execute_command(char *cmd)
     printf("dir [directory|wildcardpattern] - show contents of current or specified sdcard directory. Can use a wildcard "
            "pattern on current directory.\n");
     printf("ldir [wildcardpattern] - shows the contents of current local directory.\n");
+    printf("df - shows total disk usage on the sdcard.\n");
     printf("cd [directory] - change current sdcard working directory.\n");
     printf("lcd [directory] - change current local working directory.\n");
     printf("put <file> [destination name] - upload file to SD card, and optionally rename it destination file.\n");
@@ -3214,6 +3219,16 @@ char *get_datetime_str(struct tm *tm)
   return s;
 }
 
+void disk_free(void)
+{
+  printf("This will take a while on larger cards.\n");
+  printf("sdcard totals: ");
+  printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
+                                   count_total_clusters(0) * 4 / 1024);
+  printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
+                                   count_total_clusters(0));
+}
+
 int show_directory(char *path)
 {
   int dir_count = 0;
@@ -3261,15 +3276,7 @@ int show_directory(char *path)
       cur = cur->next;
     }
   } while (0);
-#ifdef TESTING
-  printf("%d Dir(s), %d File(s), ", dir_count, file_count);
-  printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
-                                   count_total_clusters(0) * 4 / 1024);
-  printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
-                                   count_total_clusters(0));
-#else
   printf("%d Dir(s), %d File(s)\n", dir_count, file_count);
-#endif
 
   llist_free(lst_dirents);
 

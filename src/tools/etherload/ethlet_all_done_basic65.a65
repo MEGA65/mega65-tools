@@ -18,15 +18,6 @@ entry:
 ;*
 ;	jmp -
 
-	; Production routine that skips the jmp *-3 loop
-	lda #$00
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-
 	; Enable mega65 I/O personality
 	lda #$47
 	sta $d02f
@@ -422,6 +413,12 @@ autostart_entry:
 	sei
 	lda #>autostart_target
 	tab
+
+	; skip restoring of basic start bytes if no regular prg was loaded to $2001 (i.e. filesize = 0)
+	lda filesize
+	ora filesize+1
+	beq restore_cartridge_bytes
+
 	; restore basic start bytes
 	; ldq basic_program_start_backup
 	neg
@@ -433,6 +430,7 @@ autostart_entry:
 	nop
 	sta (<basic_program_start_pointer),z
 
+restore_cartridge_bytes:
 	; restore cartridge signature byte
 	ldz #$00
 	lda cartridge_backup
@@ -463,6 +461,10 @@ autostart_entry:
 
 	lda #$00
 	tab
+
+	lda filesize
+	ora filesize+1
+	beq back_to_basic
 
 	; set top of basic text pointer
 	lda filesize

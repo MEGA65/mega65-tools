@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 SCRIPT="$(readlink --canonicalize-existing "$0")"
 SCRIPTPATH="$(dirname "${SCRIPT}")"

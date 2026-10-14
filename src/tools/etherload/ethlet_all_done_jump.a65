@@ -20,15 +20,6 @@ entry:
 ;*
 ;	jmp -
 
-	; Production routine that skips the jmp *-3 loop
-	lda #$00
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-
 	; Enable mega65 I/O personality
 	lda #$47
 	sta $d02f

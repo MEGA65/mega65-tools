@@ -61,6 +61,8 @@
 #define IDCODE_ARRAY_SIZE 20
 #define SEGMENT_LENGTH 256 /* sizes above 256bytes seem to get more bytes back in response than were requested */
 
+int fpgajtag_desync = 0;
+
 uint8_t *input_fileptr;
 int input_filesize, found_cortex = -1, jtag_index = -1, dcount, idcode_count;
 int tracep; //= 1;
@@ -418,13 +420,20 @@ static void init_device(int extra)
   write_item(DITEM(LOOPBACK_END, DIS_DIV_5));
   LOGNOTE("Set clock divisor");
   set_clock_divisor();
-  write_item(DITEM(SET_BITS_LOW, 0xe8, 0xeb, SET_BITS_HIGH, 0x20, 0x30));
+  if (extra)
+    write_item(DITEM(SET_BITS_LOW, 0xe8, 0xeb, SET_BITS_HIGH, 0x20, 0x30));
+  else
+    // FT232H-based Digilent cables (e.g. JTAG-HS2): ACBUS 0x00/0x60 per
+    // openFPGALoader's digilent_hs2 entry; with 0x20/0x30 the HS2 reads
+    // TDO stuck at 0 (all-zero IDCODEs)
+    write_item(DITEM(SET_BITS_LOW, 0xe8, 0xeb, SET_BITS_HIGH, 0x00, 0x60));
   if (extra)
     write_item(DITEM(SET_BITS_HIGH, 0x30, 0x00, SET_BITS_HIGH, 0x00, 0x00));
   LOGNOTE("For TAP to reset state.");
   write_tms_transition("XR11111"); /*** Force TAP controller to Reset state ***/
   EXIT();
 }
+
 static void get_deviceid(int device_index, int interface_id)
 {
   ENTER();
@@ -994,13 +1003,31 @@ int fpgajtag_main(char *bitstream)
   else
     log_debug("fpgajtag: bypass unknown %x", ret);
 
-  reset_mark_clock(0);
-  ret = readout_seq(jtag_index, rstatus, sizeof(uint32_t), -1);
-  int status = ret >> 8;
-  if (bitswap[M(ret)] != 2 || status != 0xf07910)
-    log_debug("[%s:%d] expect %x mismatch %x", __FUNCTION__, __LINE__, 0xf07910, ret);
-  log_debug("STATUS %08x done %x release_done %x eos %x startup_state %x", status, status & 0x4000, status & 0x2000,
-      status & 0x10, (status >> 18) & 7);
+  /*
+   * Do NOT re-read STAT here with the raw rstatus request: that request
+   * syncs the config packet processor to the JTAG port and (unlike
+   * read_config_reg) never desyncs it - and its malformed padding leaves
+   * the engine in a state where even an explicitly appended or standalone
+   * DESYNC is not honored. A synced engine ignores all other config
+   * interfaces including fabric ICAPE2 (UG470 port arbitration), so DFX
+   * designs and core selectors silently stop working after every JTAG
+   * push. STAT was already read (and properly desynced) via
+   * read_config_reg above; the engine must be left desynced here.
+   *
+   * As this is currently the method by which MEGAFLASH detects that the
+   * bitstream was started via JTAG, we need to make the desync optional.
+   * It can be enabled using the --desync-jtag cmdline option.
+   */
+  if (!fpgajtag_desync) {
+    reset_mark_clock(0);
+    ret = readout_seq(jtag_index, rstatus, sizeof(uint32_t), -1);
+    int status = ret >> 8;
+    if (bitswap[M(ret)] != 2 || status != 0xf07910)
+      log_debug("[%s:%d] expect %x mismatch %x", __FUNCTION__, __LINE__, 0xf07910, ret);
+    log_debug("STATUS %08x done %x release_done %x eos %x startup_state %x", status, status & 0x4000, status & 0x2000,
+        status & 0x10, (status >> 18) & 7);
+  }
+
   access_mdm(0, 0, 1);
   // rescan = 1;
 

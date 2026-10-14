@@ -11,6 +11,9 @@ extern int fpgajtag_libusb_open_failed;
 // enable USBDK interface
 extern int fpgajtag_usbdk_enable;
 
+// properly desync JTAG interface
+extern int fpgajtag_desync;
+
 /*
  * init_fpgajtag(serialno, serialport, fpga_id)
  *   returns usb device string

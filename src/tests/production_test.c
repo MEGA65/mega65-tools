@@ -11,9 +11,10 @@
 #include <tests.h>
 
 unsigned short i;
-unsigned char a, b, c, d, test_line = 3, target;
+unsigned char a, b, c, d, test_line = 3, board_major, board_minor;
 unsigned short interval_length;
 unsigned char retries = 255;
+char *model_name = "                                ";
 
 typedef struct {
   int model_id;
@@ -43,13 +44,20 @@ mega_models_t mega_models[] = {
 };
 // clang-format on
 
-char *get_model_name(uint8_t model_id)
+char *get_model_name(void)
 {
   uint8_t k;
 
   for (k = 0; mega_models[k].model_id; k++)
-    if (model_id == mega_models[k].model_id)
-      return mega_models[k].name;
+    if (board_major == mega_models[k].model_id) {
+      strncpy(model_name, mega_models[k].name, 32);
+      if (board_minor) {
+        k = strlen(model_name);
+        model_name[k++] = 64 + board_minor;
+        model_name[k] = 0;
+      }
+      return model_name;
+    }
 
   return NULL;
 }
@@ -384,8 +392,7 @@ unsigned char attic_ram_test(unsigned char test_sdram)
   if (!test_sdram)
     POKE(0xD7FEU, 0x04);
   else {
-    POKE(0xD7FEU, 0x10);
-    /*
+    // POKE(0xD7FEU, 0x30);
     // select sdram only if we didn't already do it
     if (!(PEEK(0xD7FE) & 0x10)) {
       // figure out which sdram mode to use
@@ -396,14 +403,13 @@ unsigned char attic_ram_test(unsigned char test_sdram)
         POKE(0xD7FEU, sdram_speed);
         if (check_sdram_speed()) {
           POKE(0xD7FEU, 0);
-          print_text(15, 3, 12, "sdram fails");
+          print_text(15, 3, 12, "sdram00");
           return 1;
         }
       }
       snprintf(msg, 40, "sdram%02X", sdram_speed);
       print_text(15, 3, 12, msg);
     }
-    */
   }
 
   retries = 255;
@@ -504,10 +510,10 @@ unsigned char frame_prev, frame_count, frame_num;
 
 void setup_rtc(void)
 {
-  if (target == 0x03)
+  if (board_major == 0x03)
     // Enable temperature compensation for internal RTC on mega65r3
     lpoke(0xffd311d, lpeek(0xffd311d) | 0xe0);
-  else if (target > 0x03 && target <= 0x06) {
+  else if (board_major > 0x03 && board_major <= 0x0e) {
     // enable backup power on mega65r4-r6
     a = lpeek(0xffd71d0UL);
     if (a != 0x22) {
@@ -569,7 +575,8 @@ void main(void)
 {
   unsigned char fails = 0, test_tries;
 
-  target = detect_target();
+  board_major = detect_target();
+  board_minor = (lpeek(0xffd3628) >> 4) & 0xf;
 
   // Fast CPU, M65 IO
   POKE(0, 65);
@@ -589,6 +596,11 @@ void main(void)
   // switch CIA TOD 50/60
   POKE(0xDD0E, PEEK(0xDC0E) | 0x80);
   POKE(0xDD0E, PEEK(0xDD0E) | 0x80);
+
+  // attach real drive 0
+  POKE(0xD68A, PEEK(0xD68A) & 0b01000000);
+  POKE(0xD68B, PEEK(0xD68B) & 0b00000111);
+  POKE(0xD6A1, PEEK(0xD6A1) | 0b00000001);
 
   // Floppy motor on
   POKE(0xD080, 0x60);
@@ -612,9 +624,11 @@ void main(void)
   // set rtc, so it can tick
   setrtc(&tm);
 
-  print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3.2");
-  snprintf(msg, 80, "Hardware model: %s ($%02x)", get_model_name(target), target);
+  print_text(0, 0, 1, "MEGA65 R3+ PCB Production Test V3.3");
+  snprintf(msg, 80, "Hardware model: %s ($%02x.$%01x)", get_model_name(), board_major, board_minor);
   print_text(0, 1, 1, msg);
+  snprintf(msg, 80, "$%02x", (PEEK(0xD628) >> 4) & 0xf);
+  print_text(0, 2, 1, msg);
 
   unit_test_setup("prodtest", 0);
 
@@ -642,7 +656,7 @@ void main(void)
     print_text(0, test_line++, 5, "PASS HyperRAM");
     unit_test_report(2, 1, TEST_PASS);
   }
-  if (target < 4 || target > 10)
+  if (board_major < 4 || board_major > 0xe)
     print_text(0, test_line++, 7, "SKIP SDRAM (unsupported)");
   else {
     unit_test_set_current_name("sdram");
@@ -674,8 +688,14 @@ void main(void)
 
   // Internal floppy connector
   POKE(0xD020, 3);
-  if (PEEK(0xD6AA) != floppy_interval_first)
-    floppy_active = 1;
+  // the last gap LSB should be changing constatly why floppy motor is on
+  // we read multiple times, just to make sure that we don't get the same
+  // value by accident
+  for (test_tries = 0; test_tries < 10; test_tries++)
+    if (PEEK(0xD6AA) != floppy_interval_first) {
+      floppy_active = 1;
+      break;
+    }
   unit_test_set_current_name("floppy");
   if (!floppy_active) {
     print_text(0, test_line++, 2, "FAIL Floppy (is a disk inserted?)");
