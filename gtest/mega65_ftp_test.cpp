@@ -8,8 +8,11 @@
 #include <chrono>    // to use keyboard input towards the testing programme
 #include <iostream>  // to use keyboard input towards the testing programme
 
+#define BOOL int
+
 int parse_command(const char *str, const char *format, ...);
 int upload_file(char *name, char *dest_name);
+int upload_single_file(char *name, char *dest_name, BOOL skipcluster);
 int rename_file_or_dir(char *name, char *dest_name);
 int delete_file_or_dir(char *name);
 int download_file(char *dest_name, char *local_name, int showClusters);
@@ -17,7 +20,9 @@ int open_file_system(void);
 int contains_file_or_dir(char *name);
 int is_fragmented(char *filename);
 int create_dir(char *);
-int show_directory(char *path);
+int show_directory(char *path, BOOL showext);
+int fraginfo_directory_or_file(char *path);
+void disk_free(void);
 void change_dir(char *path);
 void put_tilde_number_in_shortname(char *short_name, int i);
 char *get_current_short_name(void);
@@ -324,7 +329,7 @@ class Mega65FtpTestFixture : public ::testing::Test {
 
       ReleaseStdOut();
       CaptureStdOut();
-      show_directory(filename);
+      show_directory(filename, false);
       std::string output = RetrieveStdOut();
       if (i == skip) {
         ASSERT_THAT(output, Not(testing::ContainsRegex(filename)));
@@ -440,7 +445,7 @@ TEST_F(Mega65FtpTestFixture, AssessRenameFileRemovesOldName)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("");
+  show_directory("", false);
   std::string output = RetrieveStdOut();
   ASSERT_THAT(output, testing::ContainsRegex(file8kb));
   ASSERT_THAT(output, Not(testing::ContainsRegex(file4kb)));
@@ -458,7 +463,7 @@ TEST_F(Mega65FtpTestFixture, CanShowDirContentsForAbsolutePath)
   ReleaseStdOut();
 
   CaptureStdOut();
-  show_directory("/test");
+  show_directory("/test", false);
 
   std::string output = RetrieveStdOut();
 
@@ -546,7 +551,7 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldOfferShortName)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGFI~1.D81");
+  show_directory("LONGFI~1.D81", false);
   std::string output = RetrieveStdOut();
 
   // dump_sdcard_to_file("sdcard_after.bin");
@@ -576,7 +581,7 @@ TEST_F(Mega65FtpTestFixture, ReUploadOfVfatFileButLargerStillHasContiguousCluste
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGFI*.D81");
+  show_directory("LONGFI*.D81", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 
@@ -616,13 +621,13 @@ TEST_F(Mega65FtpTestFixture, UploadNewLFNShouldCreateLFNAndShortNameDirEntries)
   // examine dir-entries for file and assess validity of LFN and 8.3 ShortName
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGFI*.D81");
+  show_directory("LONGFI*.D81", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LongFileName.d81");
+  show_directory("LongFileName.d81", false);
   output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 
@@ -648,13 +653,13 @@ TEST_F(Mega65FtpTestFixture, DeleteLFNShouldDeleteLFNAndShortNameDirEntries)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGFI*.D81");
+  show_directory("LONGFI*.D81", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LongFileName.d81");
+  show_directory("LongFileName.d81", false);
   output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
 }
@@ -669,7 +674,8 @@ TEST_F(Mega65FtpTestFixture, CreateDeleteDirectoryWithFiles)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("");
+  show_directory("", false);
+  disk_free();
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
   // also check for the before amount of regained available clusters:
@@ -700,7 +706,8 @@ TEST_F(Mega65FtpTestFixture, CreateDeleteDirectoryWithFiles)
 
   // dump_sdcard_to_file("sdcard_after2.bin");
 
-  show_directory("");
+  show_directory("", false);
+  disk_free();
   /* std::string */ output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
   // also check for the before amount of regained available clusters:
@@ -726,25 +733,25 @@ TEST_F(Mega65FtpTestFixture, RenameLFNToAnotherLFNShouldRenameLFNAndShortNameDir
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGFI*.D81");
+  show_directory("LONGFI*.D81", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LongFileName.d81");
+  show_directory("LongFileName.d81", false);
   output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 0 File"));
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("ANOTHE~1.D81");
+  show_directory("ANOTHE~1.D81", false);
   output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("AnotherLongFileName.d81");
+  show_directory("AnotherLongFileName.d81", false);
   output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 }
@@ -765,7 +772,7 @@ TEST_F(Mega65FtpTestFixture, UploadSameLFNWithExistingShortNameShouldOverwrite)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGFI*.D81");
+  show_directory("LONGFI*.D81", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 
@@ -788,10 +795,28 @@ TEST_F(Mega65FtpTestFixture, UploadDifferentLFNWithExistingShortNameShouldUseDif
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGFI~2.D81");
+  show_directory("LONGFI~2.D81", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
   EXPECT_THAT(output, testing::ContainsRegex("LongFishyFishy.d81"));
+}
+
+TEST_F(Mega65FtpTestFixture, UploadFileWithWrongClusterSqeuenceToTriggerFraginfo)
+{
+  init_sdcard_data();
+  generate_dummy_file_embed_name("LongFileName.d81", 30 * 4096); // bigger than one
+
+  upload_single_file("LongFileName.d81", "LongFileName.d81", true); // wrong size
+  // dump_sdcard_to_file("sdcard_before.bin");
+
+  // dump_sdcard_to_file("sdcard_after.bin");
+
+  ReleaseStdOut();
+  CaptureStdOut();
+  show_directory("", true); //
+  fraginfo_directory_or_file("");
+  std::string output = RetrieveStdOut();
+  EXPECT_THAT(output, testing::ContainsRegex("fragmented file\\(s\\) found"));
 }
 
 TEST_F(Mega65FtpTestFixture, CanChangeDirectoryIntoLFNDirectory)
@@ -804,7 +829,7 @@ TEST_F(Mega65FtpTestFixture, CanChangeDirectoryIntoLFNDirectory)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("");
+  show_directory("", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, Not(testing::ContainsRegex("LongDirectory")));
   EXPECT_THAT(output, testing::ContainsRegex("LongFileName.d81"));
@@ -820,7 +845,7 @@ TEST_F(Mega65FtpTestFixture, DisallowCreatingDirectoryWithSameNameButDifferentCa
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGDI*");
+  show_directory("LONGDI*", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex("\n1 Dir"));
 }
@@ -843,7 +868,7 @@ TEST_F(Mega65FtpTestFixture, UploadSameLFNWithDifferentCasingShouldOverwrite)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("LONGFI*.D81");
+  show_directory("LONGFI*.D81", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, testing::ContainsRegex(" 1 File"));
 
@@ -863,7 +888,7 @@ TEST_F(Mega65FtpTestFixture, AssessIfRenamingVfatDirectoryWorks)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("");
+  show_directory("", false);
   std::string output = RetrieveStdOut();
   EXPECT_THAT(output, Not(testing::ContainsRegex("LongDirectory")));
   EXPECT_THAT(output, testing::ContainsRegex("EvenLongerDirectory"));
@@ -929,7 +954,7 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
 
     ReleaseStdOut();
     CaptureStdOut();
-    show_directory(filename);
+    show_directory(filename, false);
     std::string output = RetrieveStdOut();
     ASSERT_THAT(output, testing::ContainsRegex(short_name));
     ReleaseStdOut();
@@ -947,7 +972,7 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("EvenSuperDuperLongerFileName43.d81");
+  show_directory("EvenSuperDuperLongerFileName43.d81", false);
   std::string output = RetrieveStdOut();
   ASSERT_THAT(output, testing::ContainsRegex("EvenSuperDuperLongerFileName43.d81"));
   ReleaseStdOut();
@@ -975,15 +1000,14 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("");
+  show_directory("", false);
   output = RetrieveStdOut();
   ASSERT_THAT(output, testing::ContainsRegex("LongDirectory"));
   ASSERT_THAT(output, testing::ContainsRegex("\n1 Dir"));
   ReleaseStdOut();
   CaptureStdOut();
 
-  // TODO: Unable to delete directories as yet. When that's possible, re-enable this test
-  /*
+  // delete directories, check for none to exist:
   delete_file_or_dir("LongDirectory");
 
   // dump_sdcard_to_file("sdcard_after6.bin");
@@ -992,11 +1016,10 @@ TEST_F(Mega65FtpTestFixture, BashTestAutoShortNames)
 
   ReleaseStdOut();
   CaptureStdOut();
-  show_directory("");
+  show_directory("", false);
   output = RetrieveStdOut();
   ASSERT_THAT(output, Not(testing::ContainsRegex("LongDirectory")));
   ASSERT_THAT(output, testing::ContainsRegex("\n0 Dir"));
-  */
 }
 
 // Further test ideas:

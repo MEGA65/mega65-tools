@@ -144,7 +144,8 @@ void perform_filehost_flash(int fhnum, int slotnum);
 void perform_flash(char *fname, int slotnum);
 void list_all_roms(void);
 void disk_free(void);
-int show_directory(char *path);
+int fraginfo_directory_or_file(char *path);
+int show_directory(char *path, BOOL showext);
 int count_directory(char *path, int * dir_count, int * file_count);
 int purge_directory_or_file(char *path);
 void show_local_directory(char *searchpattern);
@@ -562,6 +563,9 @@ int execute_command(char *cmd)
   else if (parse_command(cmd, "rename %s %s", src, dst) == 2) {
     rename_file_or_dir(src, dst);
   }
+  else if (parse_command(cmd, "fraginfo %s", src) == 1) {
+    fraginfo_directory_or_file(src);
+  }
   else if (parse_command(cmd, "sector %d", &sector_num) == 1) {
     // Clear cache to force re-reading
     sector_cache_count = 0;
@@ -576,11 +580,18 @@ int execute_command(char *cmd)
   else if (!strcmp(cmd, "df")) {
     disk_free();
   }
+  // direx --> showext=true, dir --> showext=false
+  else if (parse_command(cmd, "direx %s", src) == 1) {
+    show_directory(src, TRUE);
+  }
+  else if (!strcmp(cmd, "direx")) {
+    show_directory(current_dir, TRUE);
+  }
   else if (parse_command(cmd, "dir %s", src) == 1) {
-    show_directory(src);
+    show_directory(src, FALSE);
   }
   else if (!strcmp(cmd, "dir")) {
-    show_directory(current_dir);
+    show_directory(current_dir, FALSE);
   }
   else if (parse_command(cmd, "ldir %s", src) == 1) {
     show_local_directory(src);
@@ -671,17 +682,18 @@ int execute_command(char *cmd)
 
     printf("dir [directory|wildcardpattern] - show contents of current or specified sdcard directory. Can use a wildcard "
            "pattern on current directory.\n");
+    printf("direx [directory|wildcardpattern] - like \"dir\" with an extra column showing fragmentation if any.\n");
     printf("ldir [wildcardpattern] - shows the contents of current local directory.\n");
-    printf("df - shows total disk usage on the sdcard.\n");
+    printf("df - shows total disk usage on the sdcard, may take a while.\n");
     printf("cd [directory] - change current sdcard working directory.\n");
     printf("lcd [directory] - change current local working directory.\n");
     printf("put <file> [destination name] - upload file to SD card, and optionally rename it destination file.\n");
     printf("get <file> [destination name] - download file from SD card, and optionally rename it destination file.\n");
     printf("dput <file> - upload .prg file wrapped into a .d81 file\n");
-    printf("del <file> - delete a file from SD card.\n");
+    printf("del <directory|file> - delete a file or directory from SD card.\n");
     printf("mkdir <dirname> - create a directory on the SD card.\n");
-    printf("cd <dirname> - change directory on the SD card. (aka. 'chdir')\n");
-    printf("rename <oldname> <newname> - rename a file on the SD card.\n");
+    printf("fraginfo [directory] - fragmentation report, may take a while.\n");
+    printf("rename <oldname> <newname> - rename a file or directory on the SD card.\n");
     printf("clusters <file> - show cluster chain of specified file.\n");
     printf("mount <d81file> - Mount the specified .d81 file (which resides in the root of the SD card).\n");
     printf("sector <number|$hex number> - display the contents of the specified sector.\n");
@@ -961,7 +973,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
   if (!file_system_found)
     open_file_system();
 
-  char prompt[1024];
+  char prompt[1024 + 25];
 
   if (queued_command_count) {
     for (int i = 0; i < queued_command_count; i++)
@@ -973,7 +985,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
     char cmd[8192];
     int len = 0;
     int c;
-    snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
+    snprintf(prompt, sizeof(prompt), "MEGA65 SD-Card:%s> ", current_dir);
     printf("%s", prompt);
     fflush(stdout);
     while (1) {
@@ -982,7 +994,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
         execute_command(cmd);
         len = 0;
         cmd[0] = 0;
-        snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
+        snprintf(prompt, sizeof(prompt), "MEGA65 SD-Card:%s> ", current_dir);
         printf("%s", prompt);
         fflush(stdout);
       }
@@ -996,7 +1008,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
 #else
     char *cmd = NULL;
     using_history();
-    int ret = snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
+    int ret = snprintf(prompt, sizeof(prompt), "MEGA65 SD-Card:%s> ", current_dir);
     if (ret < 0)
       ; // suppressing gcc-8 -Wformat-truncation warning like this for now...
 
@@ -1004,7 +1016,7 @@ int DIRTYMOCK(main)(int argc, char **argv)
       execute_command(cmd);
       add_history(cmd);
       free(cmd);
-      ret = snprintf(prompt, 1024, "MEGA65 SD-Card:%s> ", current_dir);
+      ret = snprintf(prompt, sizeof(prompt), "MEGA65 SD-Card:%s> ", current_dir);
       if (ret < 0)
         ; // suppressing gcc-8 -Wformat-truncation warning like this for now...
     }
@@ -3229,10 +3241,13 @@ void disk_free(void)
                                    count_total_clusters(0));
 }
 
-int show_directory(char *path)
+// params: dir/wildcard string, flag to show extra column
+int show_directory(char *path, BOOL showext)
 {
   int dir_count = 0;
   int file_count = 0;
+  char dirspacer[20];
+  char fraginfo[20];
 
   if (!path || strlen(path) == 0)
     path = current_dir;
@@ -3256,15 +3271,31 @@ int show_directory(char *path)
         cur = cur->next;
         continue;
       }
+      
+      // prepare "direx" extra column to be printed in one go:
+      if (showext)  {
+        strcpy(dirspacer, "|              ");
+
+        if (is_fragmented(itm->d_name) == 1)  {
+          strcpy(fraginfo, "|  fragmented  ");
+        } else {
+          strcpy(fraginfo, "|              ");
+        }
+      } else {
+        strcpy(dirspacer, "");
+        strcpy(fraginfo, "");
+      }
 
       if (itm->d_attr & 0x10) {
         dir_count++;
-        printf("       <DIR> | %-20s | %-12s | %s\n", get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
+        printf("       <DIR> | %-20s %s| %-12s | %s\n",
+               get_datetime_str(&itm->d_time), dirspacer, itm->d_name, itm->d_longname);
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
         file_count++;
-        printf("%12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
-            itm->d_longname);
+        printf("%12d | %-20s %s| %-12s | %s\n",
+               (int)itm->d_filelen, get_datetime_str(&itm->d_time), fraginfo,
+               itm->d_name, itm->d_longname);
       }
       if (dirent_raw == 1) {
         dump_bytes(0, "dirent raw", itm->de_raw, 32);
@@ -3411,6 +3442,121 @@ int purge_directory_or_file(char *path)
   llist_free(lst_dirents);
 
   return retVal;
+}
+
+int fraginfo_directory_or_file_recur(char *path, int count)
+{
+  int ret;
+  char current_dir_backup[1024];
+  char callpath[1024 + FILENAME_MAX + 1];
+  char chosenname[FILENAME_MAX];  // long if available else short 8.3 filename
+
+  if (!path || strlen(path) == 0)
+    path = current_dir;
+
+  llist *lst_dirents = llist_new();
+  char *searchterm = NULL;
+
+  int retVal = 0;
+
+  do {
+    if (!read_remote_dirents(lst_dirents, path, &searchterm)) {
+      fprintf(stderr, "ERROR: Could not read directory %s\n", path);
+      retVal = -1;
+      break;
+    }
+
+    llist *cur = lst_dirents;
+    while (cur != NULL && cur->item != NULL) {
+      struct m65dirent *itm = (struct m65dirent *)cur->item;
+
+      if (searchterm && !is_match(itm->d_name, searchterm, TRUE) && !is_match(itm->d_longname, searchterm, TRUE)) {
+        cur = cur->next;
+        continue;
+      }
+
+      // skip directory management entries:
+      if ((strcmp(itm->d_name, "..") == 0) || (strcmp(itm->d_name, ".") == 0)) {
+        cur = cur->next;
+        continue;
+      }
+
+      // backup current directory and recursively change into subdirs
+      // to be able to delete files and dirs in those:
+      strcpy(current_dir_backup, current_dir);
+
+      // use long or if not available the short name for files and directories:
+      if (itm->d_longname[0])
+        strcpy(chosenname, itm->d_longname);
+      else if (itm->d_name[0])
+        strcpy(chosenname, itm->d_name);
+
+      // complete path for files and directories:
+      snprintf(callpath, sizeof(callpath), "%s/%s", path, chosenname);
+
+      // try deleting the long name first:
+      // log_info("calling delete_file_or_dir(%s)...\n", itm->d_name);
+      ret = -1;
+      if (itm->d_attr & 0x10) {
+        // log_info("changed into %s as now %s\n", path, current_dir);
+        count = fraginfo_directory_or_file_recur(callpath, count);
+
+        ret = 0;
+      }
+      else if (itm->d_name[0] && itm->d_filelen >= 0) {
+        // is_fragmented() only works in current_dir, so:
+        change_dir(path);
+
+        if (is_fragmented(chosenname) == 1)  {
+          printf("%12d | %-20s | %s\n", (int)itm->d_filelen,
+                 get_datetime_str(&itm->d_time), callpath);
+          count++;
+        }
+
+        // restore previous state:
+        change_dir(current_dir_backup);
+
+        ret = 0;
+      }
+
+      // Flush any pending sector writes out
+//      execute_write_queue();
+
+      // stop iterations on single fails:
+      if (ret != 0) {
+        retVal = -1;
+        break;
+      }
+
+      cur = cur->next;
+    }
+  } while (0);
+
+//  printf("%d Dir(s), %d File(s), ", dir_count, file_count);
+//  printf("%d out of %d MB free ", count_free_clusters(0) * 4 / 1024,
+//                                   count_total_clusters(0) * 4 / 1024);
+//  printf("(%d out of %d Cluster(s) free)\n", count_free_clusters(0),
+//                                   count_total_clusters(0));
+
+  llist_free(lst_dirents);
+
+  return ( (retVal < 0) ? retVal : count );
+}
+int fraginfo_directory_or_file(char *path)
+{
+  int fragcount = 0;
+  
+  fragcount = fraginfo_directory_or_file_recur(path, fragcount);
+  
+  if (fragcount < 0)  {
+    fprintf(stderr, "ERROR: Could not access provided path/files.\n");
+  } else if (fragcount > 0)  {
+    printf("%d fragmented file(s) found.\n", fragcount);
+  } else {
+    printf("no fragmented files found.\n");
+  }
+  
+  return fragcount;
 }
 
 int check_file_system_access(void)
@@ -4110,7 +4256,7 @@ int delete_single_file(char *name, BOOL consent)
 
     // form an absolute path because dirent reading functions
     // presently can't handle relative ones:
-    char dir[1024];
+    char dir[2048];
 
     if (strcmp(current_dir, "/") == 0) {
       sprintf(dir, "/%s", name);
@@ -4665,7 +4811,8 @@ BOOL create_direntry_with_attrib(char *dest_name, int attrib)
   return TRUE;
 }
 
-int upload_single_file(char *name, char *dest_name)
+// "skipcluster" must be set to false unless to provoke faulty files for testing!
+int upload_single_file(char *name, char *dest_name, BOOL skipcluster)
 {
   struct m65dirent de;
   int retVal = 0;
@@ -4776,6 +4923,10 @@ int upload_single_file(char *name, char *dest_name)
         int next_cluster = chained_cluster(file_cluster);
         if (next_cluster == 0 || next_cluster >= FAT32_MIN_END_OF_CLUSTER_MARKER) {
           next_cluster = find_free_cluster(file_cluster);
+          // fake it for gtest's fraginfo test:
+          if (skipcluster)  {
+            next_cluster++; // skip this to frag
+          }
           if (allocate_cluster(next_cluster)) {
             printf("ERROR: Could not allocate cluster $%x\n", next_cluster);
             retVal = -1;
@@ -4856,7 +5007,7 @@ int upload_file(char *name, char *dest_name)
 
   // if no wildcards in name, then just upload a single file
   if (!strstr(name, "*"))
-    return upload_single_file(name, dest_name);
+    return upload_single_file(name, dest_name, FALSE);
 
   // check for wildcards in name
   // list directory first
@@ -4870,7 +5021,7 @@ int upload_file(char *name, char *dest_name)
       if (!stat(dir->d_name, &file_stats)) {
         if (!S_ISDIR(file_stats.st_mode)) {
           printf("\nUploading \"%s\"...\n", dir->d_name);
-          upload_single_file(dir->d_name, dir->d_name);
+          upload_single_file(dir->d_name, dir->d_name, FALSE);
         }
       }
     }
