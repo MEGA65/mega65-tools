@@ -1774,10 +1774,24 @@ int execute_write_queue(void)
       push_ram(0x50000, write_buffer_offset, &write_data_buffer[0]);
     }
 
-    // XXX - Sort sector number order and merge consecutive writes into
-    // multi-sector writes would be a good idea here.
+    // Issue the jobs in ascending sector order. FAT and directory sectors get
+    // appended to the queue part-way through a run of file data, which used to
+    // split one contiguous run into several small batches (each batch boundary
+    // costs a full ack drain + verify on the MEGA65). The data buffer stays where
+    // it is; each job just points at its slot.
+    int order[65536 / 512];
+    for (int i = 0; i < write_sector_count; i++)
+      order[i] = i;
+    for (int i = 1; i < write_sector_count; i++) {
+      int v = order[i], j = i - 1;
+      while (j >= 0 && write_sector_numbers[order[j]] > write_sector_numbers[v]) {
+        order[j + 1] = order[j];
+        j--;
+      }
+      order[j + 1] = v;
+    }
     for (int i = 0; i < write_sector_count; i++) {
-      queue_physical_write_sector(write_sector_numbers[i], 0x50000 + (i << 9));
+      queue_physical_write_sector(write_sector_numbers[order[i]], 0x50000 + (order[i] << 9));
     }
     // printf("Execute write queue with %d entries\n", write_sector_count);
     queue_execute();
@@ -1803,7 +1817,9 @@ void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
   // Purge pending jobs when they are banked up
   // (only 32KB at a time, as the l command for fast pushing data
   // can't do 64KB
-  if (write_buffer_offset >= 32768)
+  // Over Ethernet there is no 'l' command limit, and the helper accepts batches
+  // of up to 128 sectors (64KB), so use the whole buffer there.
+  if (write_buffer_offset >= (ethernet_mode ? 65536 : 32768))
     execute_write_queue();
 
   // printf("adding sector $%08x to the write queue (pos#%d)\n", sector_number, write_sector_count);
@@ -5622,6 +5638,8 @@ void determine_ethernet_window_size(void)
   case 0x01:
   case 0x03:
   case 0x04:
+  case 0x05: // R5 and R6 are also xc7a200t with 32 ETH RX buffers (see mega65r5/r6.vhdl)
+  case 0x06:
   case 0x21:
     ethernet_window_size = 28; // xc7a200t_0 models have more Ethernet receive buffers
     break;
