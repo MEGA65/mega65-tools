@@ -126,6 +126,7 @@ char current_dir[1024] = "/";
 
 int open_file_system(void);
 void update_fsinfo_next_free(void);
+void confirm_writes_verified(void);
 int upload_slot(int slot_number, char* src_name);
 int download_slot(int sllot, char *dest_name);
 int download_file(char *dest_name, char *local_name, int showClusters);
@@ -4267,6 +4268,7 @@ int delete_single_file(char *name, BOOL consent)
 
   // Flush any pending sector writes out
   execute_write_queue();
+  confirm_writes_verified();
 
   printf("%s '%s' successfully deleted\n", msg, name);
   return 0;
@@ -4931,6 +4933,7 @@ int upload_single_file(char *name, char *dest_name)
 
     // Flush any pending sector writes out
     execute_write_queue();
+    confirm_writes_verified();
 
     if (time(0) == upload_start)
       upload_start = time(0) - 1;
@@ -5184,6 +5187,7 @@ int create_dir(char *dest_name)
 
     // Flush any pending sector writes out
     execute_write_queue();
+    confirm_writes_verified();
 
     if (time(0) == upload_start)
       upload_start = time(0) - 1;
@@ -5696,6 +5700,16 @@ unsigned char peek(unsigned long addr)
   else {
     return mega65_peek(addr);
   }
+}
+
+// The MEGA65 helper acks a write batch before reading it back to verify it, so the
+// PC can keep going. Doing one more round trip makes sure the last batch passed its
+// verify: the helper only answers once verification is done, and halts (so we time
+// out with an error) if it failed.
+void confirm_writes_verified(void)
+{
+  if (ethernet_mode)
+    peek(0xFFD3629);
 }
 
 void poke(unsigned long addr, unsigned char value)
