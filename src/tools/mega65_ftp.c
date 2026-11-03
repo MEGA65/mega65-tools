@@ -125,6 +125,7 @@ char current_dir[1024] = "/";
 #endif
 
 int open_file_system(void);
+void update_fsinfo_next_free(void);
 int upload_slot(int slot_number, char* src_name);
 int download_slot(int sllot, char *dest_name);
 int download_file(char *dest_name, char *local_name, int showClusters);
@@ -255,6 +256,12 @@ unsigned int sectors_per_fat = 0;
 unsigned int data_sectors = 0;
 unsigned int first_cluster = 0;
 unsigned int fsinfo_sector = 0;
+// Where to start looking for free clusters. Seeded from the FAT32 FSInfo "next free"
+// hint, then kept up to date as we allocate, so we don't rescan the whole FAT from
+// cluster 2 on every upload (on a large card with 4KB clusters that is many MB of reads).
+unsigned int free_cluster_hint = 0;
+int free_cluster_delta = 0; // clusters freed(+)/allocated(-) since FSInfo was last written
+#define FAT_SCAN_READAHEAD 128
 unsigned int reserved_sectors = 0;
 unsigned int fat1_sector = 0, fat2_sector = 0;
 unsigned int first_cluster_sector; // Slightly confusing name, as the first cluster is actually cluster #2
@@ -2157,8 +2164,50 @@ int open_file_system(void)
 
     file_system_found = 1;
 
+    free_cluster_hint = 0;
+    if (fsinfo_sector && fsinfo_sector < reserved_sectors) {
+      unsigned char fsi[512];
+      if (!read_sector(partition_start + fsinfo_sector, fsi, CACHE_YES, 0) && fsi[0] == 'R' && fsi[1] == 'R'
+          && fsi[2] == 'a' && fsi[3] == 'A' && fsi[484] == 'r' && fsi[485] == 'r' && fsi[486] == 'A' && fsi[487] == 'a') {
+        unsigned int hint = fsi[492] | (fsi[493] << 8) | (fsi[494] << 16) | ((unsigned int)fsi[495] << 24);
+        if (hint >= 2 && hint < sectors_per_fat * (512 / 4))
+          free_cluster_hint = hint;
+      }
+    }
+    log_info("Free cluster search starts at cluster %u", free_cluster_hint);
+
   } while (0);
   return retVal;
+}
+
+void update_fsinfo_next_free(void)
+{
+  if (!fsinfo_sector || fsinfo_sector >= reserved_sectors || free_cluster_hint < 2)
+    return;
+  unsigned char fsi[512];
+  if (read_sector(partition_start + fsinfo_sector, fsi, CACHE_YES, 0))
+    return;
+  if (!(fsi[0] == 'R' && fsi[1] == 'R' && fsi[2] == 'a' && fsi[3] == 'A' && fsi[484] == 'r' && fsi[485] == 'r'
+          && fsi[486] == 'A' && fsi[487] == 'a'))
+    return;
+  // Keep the free cluster count in step with what we allocated/freed (if it is known)
+  unsigned int free_count = fsi[488] | (fsi[489] << 8) | (fsi[490] << 16) | ((unsigned int)fsi[491] << 24);
+  if (free_count != 0xffffffff) {
+    long long n = (long long)free_count + free_cluster_delta;
+    if (n < 0 || n > (long long)sectors_per_fat * (512 / 4))
+      n = 0xffffffff; // out of range: mark as unknown, the FAT32 spec allows that
+    free_count = (unsigned int)n;
+    fsi[488] = free_count;
+    fsi[489] = free_count >> 8;
+    fsi[490] = free_count >> 16;
+    fsi[491] = free_count >> 24;
+  }
+  free_cluster_delta = 0;
+  fsi[492] = free_cluster_hint;
+  fsi[493] = free_cluster_hint >> 8;
+  fsi[494] = free_cluster_hint >> 16;
+  fsi[495] = free_cluster_hint >> 24;
+  write_sector(partition_start + fsinfo_sector, fsi);
 }
 
 unsigned char buf[512];
@@ -2645,6 +2694,16 @@ int set_fat_cluster_ptr(unsigned int cluster, unsigned int value)
       log_debug("marking cluster $%x in use by writing to offset $%x of FAT sector $%x", cluster, fat_sector_offset,
           fat_sector_num);
 
+    {
+      unsigned int old = (fat_sector[fat_sector_offset + 0] | (fat_sector[fat_sector_offset + 1] << 8)
+                             | (fat_sector[fat_sector_offset + 2] << 16) | (fat_sector[fat_sector_offset + 3] << 24))
+                       & 0x0fffffff;
+      if (old == 0 && (value & 0x0fffffff) != 0)
+        free_cluster_delta--;
+      else if (old != 0 && (value & 0x0fffffff) == 0)
+        free_cluster_delta++;
+    }
+
     // Set the bytes for this cluster to $0FFFFF8 to mark end of chain and in use
     fat_sector[fat_sector_offset + 0] = (value)&0xff;
     fat_sector[fat_sector_offset + 1] = (value >> 8) & 0xff;
@@ -2731,7 +2790,7 @@ BOOL is_free_cluster(unsigned int cluster)
   i = cluster / (512 / 4);
   o = cluster % (512 / 4) * 4;
 
-  if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
+  if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, FAT_SCAN_READAHEAD)) {
     log_error("failed to read sector $%x of first FAT", i);
     exit(-1);
   }
@@ -2758,7 +2817,7 @@ unsigned int find_free_cluster(unsigned int first_cluster)
     for (; i < sectors_per_fat; i++) {
       // Read FAT sector
       //      printf("Checking FAT sector $%x for free clusters.\n",i);
-      if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
+      if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, FAT_SCAN_READAHEAD)) {
         log_error("failed to read sector $%x of first FAT", i);
         retVal = -1;
         break;
@@ -2892,12 +2951,23 @@ unsigned int count_total_clusters(unsigned int first_cluster)
 
 unsigned int find_contiguous_clusters(unsigned int total_clusters)
 {
-  unsigned int start_cluster = 0;
+  unsigned int max_cluster = sectors_per_fat * (512 / 4);
+  unsigned int start_cluster = free_cluster_hint;
+  int wrapped = (start_cluster < 2);
 
   while (1) {
     BOOL is_contiguous = TRUE;
     unsigned int cnt;
     start_cluster = find_free_cluster(start_cluster);
+
+    if (start_cluster == 0 || start_cluster + total_clusters > max_cluster) {
+      // ran off the end of the FAT: retry once from the beginning
+      if (wrapped)
+        return 0;
+      wrapped = 1;
+      start_cluster = 0;
+      continue;
+    }
 
     for (cnt = 1; cnt < total_clusters; cnt++) {
       if (!is_free_cluster(start_cluster + cnt)) {
@@ -2912,6 +2982,7 @@ unsigned int find_contiguous_clusters(unsigned int total_clusters)
     start_cluster += cnt;
   }
 
+  free_cluster_hint = start_cluster + total_clusters;
   return start_cluster;
 }
 
@@ -4192,6 +4263,8 @@ int delete_single_file(char *name, BOOL consent)
     current_cluster = next_cluster;
   } while (current_cluster > 0 && current_cluster < FAT32_MIN_END_OF_CLUSTER_MARKER);
 
+  update_fsinfo_next_free();
+
   // Flush any pending sector writes out
   execute_write_queue();
 
@@ -4853,6 +4926,9 @@ int upload_single_file(char *name, char *dest_name)
       break;
     }
 
+    // Remember where free space continues, so the next session doesn't rescan the FAT
+    update_fsinfo_next_free();
+
     // Flush any pending sector writes out
     execute_write_queue();
 
@@ -4974,7 +5050,7 @@ int create_dir(char *dest_name)
     if (!first_cluster_of_file) {
       //      printf("File currently has no first cluster allocated.\n");
 
-      int a_cluster = find_free_cluster(0);
+      int a_cluster = find_contiguous_clusters(1);
       if (!a_cluster) {
         printf("ERROR: Failed to find a free cluster.\n");
         retVal = -1;
@@ -5063,6 +5139,8 @@ int create_dir(char *dest_name)
 
         assemble_time_into_raw(&buffer[0x20], tm);
 
+        if (parent_cluster == first_cluster)
+          parent_cluster = 0; // FAT spec: '..' in a subdirectory of the root points to cluster 0
         buffer[0x20 + 0x1A] = (parent_cluster >> 0) & 0xff;
         buffer[0x20 + 0x1B] = (parent_cluster >> 8) & 0xff;
         buffer[0x20 + 0x14] = (parent_cluster >> 16) & 0xff;
@@ -5101,6 +5179,8 @@ int create_dir(char *dest_name)
       retVal = -1;
       break;
     }
+
+    update_fsinfo_next_free();
 
     // Flush any pending sector writes out
     execute_write_queue();
