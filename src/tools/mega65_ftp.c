@@ -3178,7 +3178,7 @@ void show_local_directory(char *searchpattern)
       if (!stat(dir->d_name, &file_stats)) {
         if (!S_ISDIR(file_stats.st_mode)) {
           if (dir->d_name[0] && file_stats.st_size >= 0)
-            printf("%12d %s\n", (int)file_stats.st_size, dir->d_name);
+            printf("%12lld %s\n", (long long)file_stats.st_size, dir->d_name);
         }
       }
     }
