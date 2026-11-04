@@ -73,7 +73,7 @@ char *usbdev_get_next_device(const int start)
 
 struct m65dirent {
   long d_ino;                    /* start cluster */
-  long d_filelen;                /* length of file */
+  long long d_filelen;           /* length of file (FAT32: 0 .. 4GB-1) */
   unsigned short d_reclen;       /* Always sizeof struct dirent. */
   unsigned short d_namlen;       /* Length of name in d_name. */
   unsigned char d_attr;          /* FAT file attributes */
@@ -2590,8 +2590,12 @@ int fat_readdir(struct m65dirent *d, int extend_dir_flag)
     if (dirent_raw == 2 && d->d_name[0])
       dump_bytes(0, "dirent raw", &dir_sector_buffer[dir_sector_offset], 32);
 
-    d->d_filelen = (dir_sector_buffer[dir_sector_offset + 0x1C] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1D] << 8)
-                 | (dir_sector_buffer[dir_sector_offset + 0x1E] << 16) | (dir_sector_buffer[dir_sector_offset + 0x1F] << 24);
+    // Assemble as unsigned 32-bit: with int arithmetic, sizes >= 2GB came out negative and the
+    // file was then hidden from dir/get/del (they skip entries with d_filelen < 0).
+    d->d_filelen = (long long)((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1C]
+                             | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1D] << 8)
+                             | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1E] << 16)
+                             | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1F] << 24));
     d->d_attr = dir_sector_buffer[dir_sector_offset + 0xb];
 
     if (d->d_attr & 0xC8)
@@ -3351,7 +3355,7 @@ int show_directory(char *path)
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
         file_count++;
-        printf("%12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
+        printf("%12lld | %-20s | %-12s | %s\n", itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
             itm->d_longname);
       }
       if (dirent_raw == 1) {
@@ -3455,7 +3459,7 @@ int purge_directory_or_file(char *path)
         log_info("deleting <DIR> | %-20s | %-12s | %s\n", get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
-        log_info("deleting %12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
+        log_info("deleting %12lld | %-20s | %-12s | %s\n", itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
             itm->d_longname);
       }
 
@@ -4769,6 +4773,12 @@ int upload_single_file(char *name, char *dest_name)
       perror("stat() failed");
       return -1;
     }
+
+    if ((long long)st.st_size > 0xFFFFFFFFLL) {
+      fprintf(stderr, "ERROR: '%s' is %lld bytes. FAT32 files can be at most 4294967295 bytes (4GB - 1).\n", name,
+          (long long)st.st_size);
+      return -1;
+    }
     //    printf("File '%s' is %ld bytes long.\n",name,(long)st.st_size);
 
     if (!safe_open_dir())
@@ -4846,7 +4856,7 @@ int upload_single_file(char *name, char *dest_name)
     } // else printf("First cluster of file is $%x\n",first_cluster_of_file);
 
     // Now write the file out sector by sector, and allocate new clusters as required
-    int remaining_length = st.st_size;
+    long long remaining_length = st.st_size;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
     unsigned long long last_status_output = 0;
@@ -5835,7 +5845,7 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
     unsigned int first_cluster_of_file = calc_first_cluster_of_file();
 
     // Now write the file to local disk sector by sector
-    int remaining_bytes = de.d_filelen;
+    long long remaining_bytes = de.d_filelen;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
     unsigned long long last_status_output = 0;
