@@ -2168,8 +2168,8 @@ int open_file_system(void)
     free_cluster_hint = 0;
     if (fsinfo_sector && fsinfo_sector < reserved_sectors) {
       unsigned char fsi[512];
-      if (!read_sector(partition_start + fsinfo_sector, fsi, CACHE_YES, 0) && fsi[0] == 'R' && fsi[1] == 'R'
-          && fsi[2] == 'a' && fsi[3] == 'A' && fsi[484] == 'r' && fsi[485] == 'r' && fsi[486] == 'A' && fsi[487] == 'a') {
+      if (!read_sector(partition_start + fsinfo_sector, fsi, CACHE_YES, 0) && fsi[0] == 'R' && fsi[1] == 'R' && fsi[2] == 'a'
+          && fsi[3] == 'A' && fsi[484] == 'r' && fsi[485] == 'r' && fsi[486] == 'A' && fsi[487] == 'a') {
         unsigned int hint = fsi[492] | (fsi[493] << 8) | (fsi[494] << 16) | ((unsigned int)fsi[495] << 24);
         if (hint >= 2 && hint < sectors_per_fat * (512 / 4))
           free_cluster_hint = hint;
@@ -2593,9 +2593,9 @@ int fat_readdir(struct m65dirent *d, int extend_dir_flag)
     // Assemble as unsigned 32-bit: with int arithmetic, sizes >= 2GB came out negative and the
     // file was then hidden from dir/get/del (they skip entries with d_filelen < 0).
     d->d_filelen = (long long)((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1C]
-                             | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1D] << 8)
-                             | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1E] << 16)
-                             | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1F] << 24));
+                               | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1D] << 8)
+                               | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1E] << 16)
+                               | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1F] << 24));
     d->d_attr = dir_sector_buffer[dir_sector_offset + 0xb];
 
     if (d->d_attr & 0xC8)
@@ -3355,8 +3355,8 @@ int show_directory(char *path)
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
         file_count++;
-        printf("%12lld | %-20s | %-12s | %s\n", itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
-            itm->d_longname);
+        printf(
+            "%12lld | %-20s | %-12s | %s\n", itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
       }
       if (dirent_raw == 1) {
         dump_bytes(0, "dirent raw", itm->de_raw, 32);
