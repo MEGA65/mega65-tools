@@ -177,6 +177,10 @@ uint8_t sector_reading, sector_buffered;
 uint32_t sector_number_read, sector_number_buf, sector_number_write;
 uint8_t read_batch_active = 0;
 uint8_t write_batch_active = 0;
+// Set when a write batch has been fully written to SD. The read-back verify then runs
+// from process() after the ack has gone out, so the PC isn't stalled waiting for it.
+uint8_t verify_pending = 0;
+void verify_written_batch(void);
 uint8_t slot_ids_received[256];
 uint8_t slots_written;
 uint8_t write_batch_max_id = 0;
@@ -706,9 +710,6 @@ void init_new_write_batch()
 
 void multi_sector_write_next()
 {
-  static uint32_t verify_sector_number = 0;
-  static uint32_t verify_cache_position = 0x40000ul;
-  static uint8_t i;
 
   int cmd = 5; // Multi-sector mid
 
@@ -741,7 +742,17 @@ void multi_sector_write_next()
     return;
   }
 
-  // verify complete batch written against cache
+  // all slots written: verify later, after the ack for this packet has been sent
+  verify_pending = 1;
+}
+
+void verify_written_batch(void)
+{
+  static uint32_t verify_sector_number;
+  static uint32_t verify_cache_position;
+  static uint8_t i;
+
+  verify_pending = 0;
   verify_sector_number = sector_number_write;
   verify_cache_position = 0x40000ul;
   wait_for_sd_ready();
@@ -1355,6 +1366,13 @@ void process()
       multi_sector_write_next();
     }
     write_batch_active = 0;
+  }
+
+  // The ack for the batch's last packet has already been handed to the TX
+  // controller above, so verify now. New packets wait in the RX buffers meanwhile,
+  // and the batch cache at $40000 is not touched until we have finished.
+  if (verify_pending) {
+    verify_written_batch();
   }
 
   if (sector_buffered) {

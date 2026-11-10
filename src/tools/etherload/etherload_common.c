@@ -237,7 +237,7 @@ int probe_mega65_ipv6_address(int timeout_ms)
   for (int idx = 0; idx < num_if; ++idx) {
     // creating an IPv6 UDP server socket and listen on port 4510 for incoming packets
     discoverfd[idx] = socket(AF_INET6, SOCK_DGRAM, 0);
-    if (discoverfd < 0) {
+    if (discoverfd[idx] < 0) {
       log_crit("Unable to create socket");
       goto leave_probe_mega65;
     }

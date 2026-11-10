@@ -73,7 +73,7 @@ char *usbdev_get_next_device(const int start)
 
 struct m65dirent {
   long d_ino;                    /* start cluster */
-  long d_filelen;                /* length of file */
+  long long d_filelen;           /* length of file (FAT32: 0 .. 4GB-1) */
   unsigned short d_reclen;       /* Always sizeof struct dirent. */
   unsigned short d_namlen;       /* Length of name in d_name. */
   unsigned char d_attr;          /* FAT file attributes */
@@ -125,6 +125,8 @@ char current_dir[1024] = "/";
 #endif
 
 int open_file_system(void);
+void update_fsinfo_next_free(void);
+void confirm_writes_verified(void);
 int upload_slot(int slot_number, char* src_name);
 int download_slot(int sllot, char *dest_name);
 int download_file(char *dest_name, char *local_name, int showClusters);
@@ -255,6 +257,12 @@ unsigned int sectors_per_fat = 0;
 unsigned int data_sectors = 0;
 unsigned int first_cluster = 0;
 unsigned int fsinfo_sector = 0;
+// Where to start looking for free clusters. Seeded from the FAT32 FSInfo "next free"
+// hint, then kept up to date as we allocate, so we don't rescan the whole FAT from
+// cluster 2 on every upload (on a large card with 4KB clusters that is many MB of reads).
+unsigned int free_cluster_hint = 0;
+int free_cluster_delta = 0; // clusters freed(+)/allocated(-) since FSInfo was last written
+#define FAT_SCAN_READAHEAD 128
 unsigned int reserved_sectors = 0;
 unsigned int fat1_sector = 0, fat2_sector = 0;
 unsigned int first_cluster_sector; // Slightly confusing name, as the first cluster is actually cluster #2
@@ -1774,10 +1782,24 @@ int execute_write_queue(void)
       push_ram(0x50000, write_buffer_offset, &write_data_buffer[0]);
     }
 
-    // XXX - Sort sector number order and merge consecutive writes into
-    // multi-sector writes would be a good idea here.
+    // Issue the jobs in ascending sector order. FAT and directory sectors get
+    // appended to the queue part-way through a run of file data, which used to
+    // split one contiguous run into several small batches (each batch boundary
+    // costs a full ack drain + verify on the MEGA65). The data buffer stays where
+    // it is; each job just points at its slot.
+    int order[65536 / 512];
+    for (int i = 0; i < write_sector_count; i++)
+      order[i] = i;
+    for (int i = 1; i < write_sector_count; i++) {
+      int v = order[i], j = i - 1;
+      while (j >= 0 && write_sector_numbers[order[j]] > write_sector_numbers[v]) {
+        order[j + 1] = order[j];
+        j--;
+      }
+      order[j + 1] = v;
+    }
     for (int i = 0; i < write_sector_count; i++) {
-      queue_physical_write_sector(write_sector_numbers[i], 0x50000 + (i << 9));
+      queue_physical_write_sector(write_sector_numbers[order[i]], 0x50000 + (order[i] << 9));
     }
     // printf("Execute write queue with %d entries\n", write_sector_count);
     queue_execute();
@@ -1803,7 +1825,9 @@ void queue_write_sector(uint32_t sector_number, uint8_t *buffer)
   // Purge pending jobs when they are banked up
   // (only 32KB at a time, as the l command for fast pushing data
   // can't do 64KB
-  if (write_buffer_offset >= 32768)
+  // Over Ethernet there is no 'l' command limit, and the helper accepts batches
+  // of up to 128 sectors (64KB), so use the whole buffer there.
+  if (write_buffer_offset >= (ethernet_mode ? 65536 : 32768))
     execute_write_queue();
 
   // printf("adding sector $%08x to the write queue (pos#%d)\n", sector_number, write_sector_count);
@@ -2141,8 +2165,50 @@ int open_file_system(void)
 
     file_system_found = 1;
 
+    free_cluster_hint = 0;
+    if (fsinfo_sector && fsinfo_sector < reserved_sectors) {
+      unsigned char fsi[512];
+      if (!read_sector(partition_start + fsinfo_sector, fsi, CACHE_YES, 0) && fsi[0] == 'R' && fsi[1] == 'R' && fsi[2] == 'a'
+          && fsi[3] == 'A' && fsi[484] == 'r' && fsi[485] == 'r' && fsi[486] == 'A' && fsi[487] == 'a') {
+        unsigned int hint = fsi[492] | (fsi[493] << 8) | (fsi[494] << 16) | ((unsigned int)fsi[495] << 24);
+        if (hint >= 2 && hint < sectors_per_fat * (512 / 4))
+          free_cluster_hint = hint;
+      }
+    }
+    log_info("Free cluster search starts at cluster %u", free_cluster_hint);
+
   } while (0);
   return retVal;
+}
+
+void update_fsinfo_next_free(void)
+{
+  if (!fsinfo_sector || fsinfo_sector >= reserved_sectors || free_cluster_hint < 2)
+    return;
+  unsigned char fsi[512];
+  if (read_sector(partition_start + fsinfo_sector, fsi, CACHE_YES, 0))
+    return;
+  if (!(fsi[0] == 'R' && fsi[1] == 'R' && fsi[2] == 'a' && fsi[3] == 'A' && fsi[484] == 'r' && fsi[485] == 'r'
+          && fsi[486] == 'A' && fsi[487] == 'a'))
+    return;
+  // Keep the free cluster count in step with what we allocated/freed (if it is known)
+  unsigned int free_count = fsi[488] | (fsi[489] << 8) | (fsi[490] << 16) | ((unsigned int)fsi[491] << 24);
+  if (free_count != 0xffffffff) {
+    long long n = (long long)free_count + free_cluster_delta;
+    if (n < 0 || n > (long long)sectors_per_fat * (512 / 4))
+      n = 0xffffffff; // out of range: mark as unknown, the FAT32 spec allows that
+    free_count = (unsigned int)n;
+    fsi[488] = free_count;
+    fsi[489] = free_count >> 8;
+    fsi[490] = free_count >> 16;
+    fsi[491] = free_count >> 24;
+  }
+  free_cluster_delta = 0;
+  fsi[492] = free_cluster_hint;
+  fsi[493] = free_cluster_hint >> 8;
+  fsi[494] = free_cluster_hint >> 16;
+  fsi[495] = free_cluster_hint >> 24;
+  write_sector(partition_start + fsinfo_sector, fsi);
 }
 
 unsigned char buf[512];
@@ -2524,8 +2590,12 @@ int fat_readdir(struct m65dirent *d, int extend_dir_flag)
     if (dirent_raw == 2 && d->d_name[0])
       dump_bytes(0, "dirent raw", &dir_sector_buffer[dir_sector_offset], 32);
 
-    d->d_filelen = (dir_sector_buffer[dir_sector_offset + 0x1C] << 0) | (dir_sector_buffer[dir_sector_offset + 0x1D] << 8)
-                 | (dir_sector_buffer[dir_sector_offset + 0x1E] << 16) | (dir_sector_buffer[dir_sector_offset + 0x1F] << 24);
+    // Assemble as unsigned 32-bit: with int arithmetic, sizes >= 2GB came out negative and the
+    // file was then hidden from dir/get/del (they skip entries with d_filelen < 0).
+    d->d_filelen = (long long)((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1C]
+                               | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1D] << 8)
+                               | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1E] << 16)
+                               | ((uint32_t)dir_sector_buffer[dir_sector_offset + 0x1F] << 24));
     d->d_attr = dir_sector_buffer[dir_sector_offset + 0xb];
 
     if (d->d_attr & 0xC8)
@@ -2629,6 +2699,16 @@ int set_fat_cluster_ptr(unsigned int cluster, unsigned int value)
       log_debug("marking cluster $%x in use by writing to offset $%x of FAT sector $%x", cluster, fat_sector_offset,
           fat_sector_num);
 
+    {
+      unsigned int old = (fat_sector[fat_sector_offset + 0] | (fat_sector[fat_sector_offset + 1] << 8)
+                             | (fat_sector[fat_sector_offset + 2] << 16) | (fat_sector[fat_sector_offset + 3] << 24))
+                       & 0x0fffffff;
+      if (old == 0 && (value & 0x0fffffff) != 0)
+        free_cluster_delta--;
+      else if (old != 0 && (value & 0x0fffffff) == 0)
+        free_cluster_delta++;
+    }
+
     // Set the bytes for this cluster to $0FFFFF8 to mark end of chain and in use
     fat_sector[fat_sector_offset + 0] = (value)&0xff;
     fat_sector[fat_sector_offset + 1] = (value >> 8) & 0xff;
@@ -2715,7 +2795,7 @@ BOOL is_free_cluster(unsigned int cluster)
   i = cluster / (512 / 4);
   o = cluster % (512 / 4) * 4;
 
-  if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
+  if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, FAT_SCAN_READAHEAD)) {
     log_error("failed to read sector $%x of first FAT", i);
     exit(-1);
   }
@@ -2742,7 +2822,7 @@ unsigned int find_free_cluster(unsigned int first_cluster)
     for (; i < sectors_per_fat; i++) {
       // Read FAT sector
       //      printf("Checking FAT sector $%x for free clusters.\n",i);
-      if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, 0)) {
+      if (read_sector(partition_start + fat1_sector + i, fat_sector, CACHE_YES, FAT_SCAN_READAHEAD)) {
         log_error("failed to read sector $%x of first FAT", i);
         retVal = -1;
         break;
@@ -2876,12 +2956,23 @@ unsigned int count_total_clusters(unsigned int first_cluster)
 
 unsigned int find_contiguous_clusters(unsigned int total_clusters)
 {
-  unsigned int start_cluster = 0;
+  unsigned int max_cluster = sectors_per_fat * (512 / 4);
+  unsigned int start_cluster = free_cluster_hint;
+  int wrapped = (start_cluster < 2);
 
   while (1) {
     BOOL is_contiguous = TRUE;
     unsigned int cnt;
     start_cluster = find_free_cluster(start_cluster);
+
+    if (start_cluster == 0 || start_cluster + total_clusters > max_cluster) {
+      // ran off the end of the FAT: retry once from the beginning
+      if (wrapped)
+        return 0;
+      wrapped = 1;
+      start_cluster = 0;
+      continue;
+    }
 
     for (cnt = 1; cnt < total_clusters; cnt++) {
       if (!is_free_cluster(start_cluster + cnt)) {
@@ -2896,6 +2987,7 @@ unsigned int find_contiguous_clusters(unsigned int total_clusters)
     start_cluster += cnt;
   }
 
+  free_cluster_hint = start_cluster + total_clusters;
   return start_cluster;
 }
 
@@ -3086,7 +3178,7 @@ void show_local_directory(char *searchpattern)
       if (!stat(dir->d_name, &file_stats)) {
         if (!S_ISDIR(file_stats.st_mode)) {
           if (dir->d_name[0] && file_stats.st_size >= 0)
-            printf("%12d %s\n", (int)file_stats.st_size, dir->d_name);
+            printf("%12lld %s\n", (long long)file_stats.st_size, dir->d_name);
         }
       }
     }
@@ -3263,8 +3355,8 @@ int show_directory(char *path)
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
         file_count++;
-        printf("%12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
-            itm->d_longname);
+        printf(
+            "%12lld | %-20s | %-12s | %s\n", itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
       }
       if (dirent_raw == 1) {
         dump_bytes(0, "dirent raw", itm->de_raw, 32);
@@ -3367,7 +3459,7 @@ int purge_directory_or_file(char *path)
         log_info("deleting <DIR> | %-20s | %-12s | %s\n", get_datetime_str(&itm->d_time), itm->d_name, itm->d_longname);
       }
       else if (itm->d_name[0] && itm->d_filelen >= 0) {
-        log_info("deleting %12d | %-20s | %-12s | %s\n", (int)itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
+        log_info("deleting %12lld | %-20s | %-12s | %s\n", itm->d_filelen, get_datetime_str(&itm->d_time), itm->d_name,
             itm->d_longname);
       }
 
@@ -4176,8 +4268,11 @@ int delete_single_file(char *name, BOOL consent)
     current_cluster = next_cluster;
   } while (current_cluster > 0 && current_cluster < FAT32_MIN_END_OF_CLUSTER_MARKER);
 
+  update_fsinfo_next_free();
+
   // Flush any pending sector writes out
   execute_write_queue();
+  confirm_writes_verified();
 
   printf("%s '%s' successfully deleted\n", msg, name);
   return 0;
@@ -4678,6 +4773,12 @@ int upload_single_file(char *name, char *dest_name)
       perror("stat() failed");
       return -1;
     }
+
+    if ((long long)st.st_size > 0xFFFFFFFFLL) {
+      fprintf(stderr, "ERROR: '%s' is %lld bytes. FAT32 files can be at most 4294967295 bytes (4GB - 1).\n", name,
+          (long long)st.st_size);
+      return -1;
+    }
     //    printf("File '%s' is %ld bytes long.\n",name,(long)st.st_size);
 
     if (!safe_open_dir())
@@ -4755,7 +4856,7 @@ int upload_single_file(char *name, char *dest_name)
     } // else printf("First cluster of file is $%x\n",first_cluster_of_file);
 
     // Now write the file out sector by sector, and allocate new clusters as required
-    int remaining_length = st.st_size;
+    long long remaining_length = st.st_size;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
     unsigned long long last_status_output = 0;
@@ -4837,8 +4938,12 @@ int upload_single_file(char *name, char *dest_name)
       break;
     }
 
+    // Remember where free space continues, so the next session doesn't rescan the FAT
+    update_fsinfo_next_free();
+
     // Flush any pending sector writes out
     execute_write_queue();
+    confirm_writes_verified();
 
     if (time(0) == upload_start)
       upload_start = time(0) - 1;
@@ -4958,7 +5063,7 @@ int create_dir(char *dest_name)
     if (!first_cluster_of_file) {
       //      printf("File currently has no first cluster allocated.\n");
 
-      int a_cluster = find_free_cluster(0);
+      int a_cluster = find_contiguous_clusters(1);
       if (!a_cluster) {
         printf("ERROR: Failed to find a free cluster.\n");
         retVal = -1;
@@ -5047,6 +5152,8 @@ int create_dir(char *dest_name)
 
         assemble_time_into_raw(&buffer[0x20], tm);
 
+        if (parent_cluster == first_cluster)
+          parent_cluster = 0; // FAT spec: '..' in a subdirectory of the root points to cluster 0
         buffer[0x20 + 0x1A] = (parent_cluster >> 0) & 0xff;
         buffer[0x20 + 0x1B] = (parent_cluster >> 8) & 0xff;
         buffer[0x20 + 0x14] = (parent_cluster >> 16) & 0xff;
@@ -5086,8 +5193,11 @@ int create_dir(char *dest_name)
       break;
     }
 
+    update_fsinfo_next_free();
+
     // Flush any pending sector writes out
     execute_write_queue();
+    confirm_writes_verified();
 
     if (time(0) == upload_start)
       upload_start = time(0) - 1;
@@ -5602,6 +5712,16 @@ unsigned char peek(unsigned long addr)
   }
 }
 
+// The MEGA65 helper acks a write batch before reading it back to verify it, so the
+// PC can keep going. Doing one more round trip makes sure the last batch passed its
+// verify: the helper only answers once verification is done, and halts (so we time
+// out with an error) if it failed.
+void confirm_writes_verified(void)
+{
+  if (ethernet_mode)
+    peek(0xFFD3629);
+}
+
 void poke(unsigned long addr, unsigned char value)
 {
   if (ethernet_mode) {
@@ -5622,6 +5742,8 @@ void determine_ethernet_window_size(void)
   case 0x01:
   case 0x03:
   case 0x04:
+  case 0x05: // R5 and R6 are also xc7a200t with 32 ETH RX buffers (see mega65r5/r6.vhdl)
+  case 0x06:
   case 0x21:
     ethernet_window_size = 28; // xc7a200t_0 models have more Ethernet receive buffers
     break;
@@ -5723,7 +5845,7 @@ int download_single_file(char *dest_name, char *local_name, int showClusters)
     unsigned int first_cluster_of_file = calc_first_cluster_of_file();
 
     // Now write the file to local disk sector by sector
-    int remaining_bytes = de.d_filelen;
+    long long remaining_bytes = de.d_filelen;
     int sector_in_cluster = 0;
     int file_cluster = first_cluster_of_file;
     unsigned long long last_status_output = 0;
