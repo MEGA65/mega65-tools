@@ -1509,11 +1509,9 @@ size_t do_serial_port_read(int fd, uint8_t *buffer, size_t size, const char *fun
   int count;
 
   if (serial_port_is_tcp) {
-#ifndef __APPLE__
+    // Non-blocking like the serial port: callers such as purge_input()
+    // read until nothing is left, and a blocking recv() would hang there.
     count = recv(fd, buffer, size, MSG_DONTWAIT);
-#else
-    count = recv(fd, buffer, size, 0);
-#endif
   }
   else
     count = read(fd, buffer, size);
